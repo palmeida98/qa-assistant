@@ -1,0 +1,10 @@
+﻿projeto: ""
+empresa: ""
+ambientes:
+  teste: ""
+roles: []
+tracker: ""          # azure-devops | jira | excel
+formato_bug: ""
+bugs_resolvidos: "remover"   # ou "arquivar"
+evidencia: "texto"           # ou "texto+screenshot"
+modulos: [funcional-web]
