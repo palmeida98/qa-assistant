@@ -1,0 +1,13 @@
+﻿.env
+*.env
+__pycache__/
+*.pyc
+node_modules/
+test-results/
+playwright-report/
+.venv/
+dist/
+build/
+*.log
+.DS_Store
+Thumbs.db
