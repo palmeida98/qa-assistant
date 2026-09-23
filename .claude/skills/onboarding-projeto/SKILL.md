@@ -37,7 +37,20 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    e. Valida: ExcelAdapter.from_projeto(<workspace>).load() tem de passar (falha se faltar uma sheet
       ou coluna) e cross_check() so para mostrar problemas que ja existam no workbook. Nao aplica
       lotes nem grava o workbook durante o onboarding.
-5. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
-6. Confirma que .env esta no .gitignore do workspace.
-7. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
-8. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).
+5. Se um modulo de browser estiver ativo (ex.: funcional-web), regista o Playwright MCP NO WORKSPACE
+   (tecnica-browser.md seccao 1, nivel N1). O comando corre a partir da pasta do workspace, porque
+   --scope project escreve o .mcp.json na pasta atual:
+   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@latest
+     (sem o "cmd /c" o Claude Code nao consegue lancar o npx no Windows)
+   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@latest
+   Depois:
+   a. Confirma que o .mcp.json ficou na pasta do workspace e NUNCA na raiz do qa-assistant
+      (unica excecao: o demo, em examples/demo/).
+   b. Confirma que o .mcp.json nao tem credenciais nem URLs de clientes.
+   c. Diz ao utilizador que, ao abrir o claude no workspace pela primeira vez, tem de aprovar o
+      servidor (servidores de projeto pedem confirmacao) e confirmar com /mcp que "playwright"
+      aparece ligado. Esta sessao nao ve as ferramentas do MCP registado agora.
+6. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
+7. Confirma que .env esta no .gitignore do workspace.
+8. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
+9. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).
