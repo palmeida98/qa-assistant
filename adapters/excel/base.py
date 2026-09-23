@@ -127,6 +127,15 @@ class ExcelAdapter:
             data = data[secao]
         return cls(data, base_dir=os.path.dirname(os.path.abspath(path)))
 
+    @classmethod
+    def from_projeto(cls, workspace: str = ".") -> "ExcelAdapter":
+        """Le a secao `excel:` do projeto.yaml do workspace (tarefa 1.3 do
+        plano). O caminho do workbook e relativo ao workspace."""
+        path = os.path.join(workspace, "projeto.yaml")
+        if not os.path.exists(path):
+            raise ConfigError(f"nao existe {path}")
+        return cls.from_yaml(path, secao="excel")
+
     @staticmethod
     def _validate(cfg: dict) -> dict:
         cfg = copy.deepcopy(cfg)
@@ -148,35 +157,40 @@ class ExcelAdapter:
         _req(dcol, "id", "defeitos.colunas.")
         _req(dcol, "estado", "defeitos.colunas.")
         _req(d, "estados", "defeitos.")
-        d.setdefault("estados_fechados", [])
         _req(d, "estado_inicial", "defeitos.")
-        for key in ("estados_fechados",):
-            bad = [e for e in d[key] if e not in d["estados"]]
-            if bad:
-                raise ConfigError(f"configuracao: defeitos.{key} fora de defeitos.estados: {bad}")
+        d.setdefault("linha_cabecalho", 1)
+        for key in ("campos_lote", "valores_omissao"):
+            d[key] = d.get(key) or {}
+        d["prioridades"] = d.get("prioridades") or []
+        d["estados_fechados"] = d.get("estados_fechados") or []
+        bad = [e for e in d["estados_fechados"] if e not in d["estados"]]
+        if bad:
+            raise ConfigError(f"configuracao: defeitos.estados_fechados fora de defeitos.estados: {bad}")
         if d["estado_inicial"] not in d["estados"]:
             raise ConfigError("configuracao: defeitos.estado_inicial fora de defeitos.estados")
-        d.setdefault("linha_cabecalho", 1)
-        d.setdefault("campos_lote", {})
-        d.setdefault("valores_omissao", {})
-        d.setdefault("prioridades", [])
         pre, _, pos = fmt.partition("{n}")
         d["_id_re"] = re.compile("^" + re.escape(pre) + r"(\d+)" + re.escape(pos) + "$")
 
+        # blocos opcionais deixados em branco (como no template) contam como ausentes
         v = cfg.get("vista_ativos")
-        if v:
-            _req(v, "sheet", "vista_ativos.")
+        if v and v.get("sheet"):
             v.setdefault("linha_cabecalho", 1)
-            v.setdefault("colunas", {})
+            v["colunas"] = v.get("colunas") or {}
+            if not (v.get("resumo") or {}).get("celula"):
+                v["resumo"] = None
+        else:
+            cfg["vista_ativos"] = None
 
-        cfg.setdefault("notas", {})
-        cfg["notas"].setdefault("resultado", "Resultado: {resultado}")
-        cfg["notas"].setdefault("defeito_novo", "Defeito novo: {id}.")
-        cfg.setdefault("controlo_lotes", {})
-        cfg["controlo_lotes"].setdefault("sheet", CONTROL_SHEET_DEFAULT)
-        cfg.setdefault("recalc", {})
-        cfg["recalc"].setdefault("mecanismo", "libreoffice")
-        cfg["recalc"].setdefault("timeout", 60)
+        defaults = {
+            "notas": {"resultado": "Resultado: {resultado}", "defeito_novo": "Defeito novo: {id}."},
+            "controlo_lotes": {"sheet": CONTROL_SHEET_DEFAULT},
+            "recalc": {"mecanismo": "libreoffice", "timeout": 60},
+        }
+        for block, vals in defaults.items():
+            cfg[block] = cfg.get(block) or {}
+            for k, val in vals.items():
+                if cfg[block].get(k) in (None, ""):
+                    cfg[block][k] = val
         return cfg
 
     @property

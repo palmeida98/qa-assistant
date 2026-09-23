@@ -18,7 +18,23 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    - politica de evidencia (texto ou texto+screenshot)
    - modulos de teste ativos
 3. Preenche o CLAUDE.md e o projeto.yaml com as respostas.
-4. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
-5. Confirma que .env esta no .gitignore do workspace.
-6. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
-7. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).
+4. Se tracker for "excel", preenche a seccao excel: do projeto.yaml INSPECIONANDO o workbook real
+   (tecnica-excel.md seccao 1; nunca adivinhar nomes de sheets, colunas ou estados):
+   a. Corre, a partir da raiz do qa-assistant, sobre uma COPIA local do workbook (nunca o oficial
+      numa pasta sincronizada; o script so le, mas a copia evita bloqueios):
+      python -m adapters.excel.inspecionar <copia.xlsx> --yaml-out <scratchpad>/proposta.yaml
+   b. Mostra ao utilizador a evidencia encontrada e a proposta. Tudo o que vier como
+      "CONFIRMAR: ..." e PERGUNTADO, com as opcoes que o script listou: coluna de estado,
+      resultado obtido e observacoes, estados validos, estados fechados (alinhados com a regra
+      bugs_resolvidos), estado inicial de um defeito novo, ordem das prioridades, correspondencia
+      das colunas da vista de ativos, texto de resumo (se existir).
+   c. Mostra tambem as inconsistencias que a inspecao revelar (ex.: IDs fora do formato, listas de
+      validacao que nao batem com os valores usados) -- registam-se, nao se corrigem aqui.
+   d. Escreve a seccao excel: no projeto.yaml, sem nenhum "CONFIRMAR" por resolver.
+   e. Valida: ExcelAdapter.from_projeto(<workspace>).load() tem de passar (falha se faltar uma sheet
+      ou coluna) e cross_check() so para mostrar problemas que ja existam no workbook. Nao aplica
+      lotes nem grava o workbook durante o onboarding.
+5. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
+6. Confirma que .env esta no .gitignore do workspace.
+7. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
+8. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).

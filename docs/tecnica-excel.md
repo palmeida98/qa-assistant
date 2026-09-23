@@ -11,6 +11,8 @@
 
 Cobre a automação de workbooks Excel usados como fonte de verdade de casos de teste e defeitos (via `openpyxl`), incluindo o recálculo seguro de fórmulas. A implementação é o **adaptador universal** `adapters/excel/base.py` (`ExcelAdapter`), que não contém nenhum nome de sheet, coluna ou estado: cada projeto dá-lhe uma **configuração** com o layout real do seu workbook (ver `adapters/excel/exemplo.yaml`, fictício). Os nomes de sheets, colunas e estados vivem **só** no workspace do projeto. Projetos ainda não migrados podem manter um `scripts/qa_lib.py` próprio no workspace.
 
+A configuração vive na secção `excel:` do `projeto.yaml` do workspace (campos comentados no template `docs/projeto.yaml`) e lê-se com `ExcelAdapter.from_projeto(<workspace>)`. No onboarding, preenche-se inspecionando o workbook real com `python -m adapters.excel.inspecionar <cópia.xlsx>`, que só lê o ficheiro e propõe a secção: o que não consegue detetar com segurança fica como `CONFIRMAR: …` para o utilizador decidir.
+
 ## 1. Fluxo de aplicação de um lote
 
 O padrão que funciona na prática, por esta ordem, nunca escrevendo linha a linha durante a execução (metodologia §7.1):

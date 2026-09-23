@@ -9,3 +9,62 @@ bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
 modulos: [funcional-web]
 registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
+
+# ---------------------------------------------------------------------------
+# excel: layout do workbook, lido pelo adaptador (adapters/excel/base.py).
+# Preencher SO quando tracker: "excel". Nunca adivinhar: o /onboarding-projeto
+# corre `python -m adapters.excel.inspecionar <workbook>` e confirma cada valor
+# com o utilizador. Exemplo preenchido (ficticio): adapters/excel/exemplo.yaml
+# (obrig.) = obrigatorio; (opc.) = opcional, pode apagar-se a linha.
+# ---------------------------------------------------------------------------
+excel:
+  ficheiro: ""                 # (obrig.) caminho do workbook, relativo a este projeto.yaml
+
+  casos:
+    sheets: {}                 # (obrig.) prefixo do ID do caso -> sheet, ex. {"CT-LOJA-": "Loja"}
+    linha_cabecalho: 1         # (opc.) linha dos cabecalhos nas sheets de casos
+    colunas:
+      id: ""                   # (obrig.) coluna com o ID do caso
+      estado: ""               # (obrig.) coluna com o estado do caso
+      resultado_obtido: ""     # (opc.) so se usa nas sheets onde existir
+      observacoes: ""          # (opc.) notas da sessao; so se usa nas sheets onde existir
+    estados: []                # (obrig.) estados validos de caso, exatamente como no workbook
+
+  defeitos:
+    sheet: ""                  # (obrig.) sheet com o registo completo de defeitos
+    linha_cabecalho: 1         # (opc.)
+    formato_id: ""             # (obrig.) formato do ID com {n} no lugar do numero, ex. "BUG-{n}"
+    colunas:
+      id: ""                   # (obrig.) coluna com o ID do defeito
+      estado: ""               # (obrig.) coluna com o estado do defeito
+      caso: ""                 # (opc.) coluna com o(s) caso(s) relacionado(s); usada no cross-check
+      severidade: ""           # (opc.)
+      prioridade: ""           # (opc.) usada para ordenar a vista de ativos
+      reportado_por: ""        # (opc.)
+      data_report: ""          # (opc.) preenchida com a data do dia (AAAA-MM-DD)
+    campos_lote: {}            # (opc.) chave do defeito no lote -> coluna, ex. {titulo: "Summary", descricao: "Description"}
+    valores_omissao: {}        # (opc.) chave do defeito no lote -> valor usado quando o lote nao o traz
+    estados: []                # (obrig.) estados validos de defeito
+    estados_fechados: []       # (opc.) estados que tiram o defeito da vista de ativos (regra bugs_resolvidos)
+    estado_inicial: ""         # (obrig.) estado de um defeito novo; tem de estar em estados
+    prioridades: []            # (opc.) ordem das prioridades, da mais alta para a mais baixa
+
+  vista_ativos:                # (opc.) sheet com a lista de defeitos ativos, regenerada; apagar o bloco se nao existir
+    sheet: ""
+    linha_cabecalho: 1         # as linhas acima desta ficam intactas; os dados comecam na seguinte
+    colunas: {}                # cabecalho da vista -> coluna dos defeitos (cabecalhos iguais nao precisam de estar aqui)
+    ordenar_por: ""            # (opc.) coluna dos defeitos usada como 2.o criterio de ordenacao
+    resumo:                    # (opc.) celula com um texto de resumo; apagar se nao existir
+      celula: ""               # ex. "A2"
+      modelo: ""               # ex. "{abertos} abertos, {fechados} fechados, {severidade[Alta]} de severidade Alta, {data:%d.%m.%Y}"
+
+  notas:                       # (opc.) texto acrescentado as observacoes do caso, depois da etiqueta da sessao
+    resultado: "Resultado: {resultado}"   # usado nas sheets sem coluna resultado_obtido
+    defeito_novo: "Defeito novo: {id}."
+
+  controlo_lotes:
+    sheet: "_qa_lotes"         # (opc.) sheet escondida onde o adaptador regista os lotes aplicados
+
+  recalc:
+    mecanismo: "libreoffice"   # (opc.) "libreoffice" ou "excel-com" (so Windows com Excel desktop)
+    timeout: 60                # (opc.) segundos
