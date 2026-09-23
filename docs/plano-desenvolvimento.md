@@ -24,7 +24,7 @@
 | Fase | Objetivo | Estado |
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
-| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Por fazer |
+| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída, com 2 critérios de verificação manual por fechar (1.1: `/` mostra as skills; 1.3: onboarding interativo, no demo 2.1) |
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Por fazer |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
 | 4 | CI da própria framework | Por fazer |
@@ -118,12 +118,17 @@ Notas:
 - Também verificado: desligar a deteção de lote repetido no adaptador faz o golden falhar; sem LibreOffice o golden sai com código 2 e mensagem clara (simulado). O CI da Fase 4 precisa de instalar o LibreOffice.
 - O golden com lote histórico real via `QA_GOLDEN_DIR` (metodologia §15) ainda não existe; nota acrescentada à metodologia.
 
-### 1.5 Golden no pre-commit
+### 1.5 Golden no pre-commit — `8feece0`
 Hook local no `.pre-commit-config.yaml` que corre `golden_check.py` quando mudam ficheiros em `adapters/`, `tests/golden/` ou `docs/tecnica-excel.md`.
 
 Critérios de aceitação:
-- [ ] Commit que só toca em `docs/metodologia-core.md` não corre o golden.
-- [ ] Commit que parte o adaptador é bloqueado.
+- [x] Commit que só toca em `docs/metodologia-core.md` não corre o golden.
+- [x] Commit que parte o adaptador é bloqueado.
+
+Notas:
+- O hook também corre quando muda o próprio `scripts/golden_check.py` (decisão do utilizador, 23.09.2026).
+- Validado num branch temporário, apagado no fim: só `metodologia-core.md` → `Skipped`; adaptador partido → `Failed` e commit bloqueado (HEAD inalterado); alteração válida em `tests/golden/` → `Passed`.
+- Sem LibreOffice o golden sai com 2 e bloqueia o commit: instalar o LibreOffice, nunca `--no-verify`.
 
 ---
 
