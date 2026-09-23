@@ -12,3 +12,13 @@
         entry: python scripts/check_denylist.py
         language: system
         pass_filenames: true
+
+      # teste golden do adaptador Excel (plano 1.5; metodologia-core seccao 15):
+      # so corre quando o commit toca no adaptador, na fixture ou no proprio teste.
+      # Sem LibreOffice sai com 2 e bloqueia o commit -- instalar, nunca --no-verify.
+      - id: golden
+        name: golden do adaptador Excel
+        entry: python scripts/golden_check.py
+        language: system
+        pass_filenames: false
+        files: ^(adapters/|tests/golden/|docs/tecnica-excel\.md$|scripts/golden_check\.py$)
