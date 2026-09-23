@@ -100,7 +100,7 @@ Notas:
 - Na cópia de um workbook real acertou sheets de casos e prefixos, colunas de ID, estados de caso (pela validação de dados), sheet de defeitos, formato do ID e 6 das 10 colunas da vista; deixou por confirmar a coluna de estado dos defeitos (várias listas de validação), resultado obtido/observações e as colunas ambíguas da vista.
 - `ExcelAdapter.from_projeto(workspace)`; blocos opcionais em branco contam como ausentes.
 
-### 1.4 Teste golden
+### 1.4 Teste golden — `c0ec70b`
 Criar `tests/golden/`:
 
 - `gerar_fixture.py` — gera um workbook fictício pequeno (ex.: 3 sheets de casos, 12 casos, 3 defeitos, uma aba de resumo com fórmulas).
@@ -109,9 +109,14 @@ Criar `tests/golden/`:
 - `scripts/golden_check.py` — gera a fixture numa pasta temporária, aplica o lote pelo adaptador, recalcula e compara com `esperado.json`.
 
 Critérios de aceitação:
-- [ ] `python scripts/golden_check.py` passa.
-- [ ] Alterar de propósito um valor em `esperado.json` faz o teste falhar com uma mensagem clara (e depois repor).
-- [ ] Nenhum dado real: nomes de casos, defeitos e sheets são genéricos.
+- [x] `python scripts/golden_check.py` passa.
+- [x] Alterar de propósito um valor em `esperado.json` faz o teste falhar com uma mensagem clara (e depois repor).
+- [x] Nenhum dado real: nomes de casos, defeitos e sheets são genéricos.
+
+Notas:
+- `esperado.json` escrito à mão a partir das regras (não gerado pelo adaptador); `{hoje}` é substituído pela data do dia. `--mostrar` imprime o obtido para revisão, mas nunca reescreve o esperado.
+- Também verificado: desligar a deteção de lote repetido no adaptador faz o golden falhar; sem LibreOffice o golden sai com código 2 e mensagem clara (simulado). O CI da Fase 4 precisa de instalar o LibreOffice.
+- O golden com lote histórico real via `QA_GOLDEN_DIR` (metodologia §15) ainda não existe; nota acrescentada à metodologia.
 
 ### 1.5 Golden no pre-commit
 Hook local no `.pre-commit-config.yaml` que corre `golden_check.py` quando mudam ficheiros em `adapters/`, `tests/golden/` ou `docs/tecnica-excel.md`.
