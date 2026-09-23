@@ -51,7 +51,7 @@ Lições do piloto já incorporadas na framework: recálculo nunca em pasta sinc
 
 ## Fase 1 — Completar o núcleo
 
-### 1.1 Skills em falta
+### 1.1 Skills em falta — `4e2da2a` (falta confirmar o critério do `/`)
 O `CLAUDE.md` lista 8 comandos, mas só existem 4 skills. Criar as que faltam em `.claude/skills/<nome>/SKILL.md`:
 
 - `analisar-funcionalidade` — analisa uma funcionalidade por role/perfil e produz a lista de comportamentos a testar (metodologia-core §5).
@@ -60,11 +60,13 @@ O `CLAUDE.md` lista 8 comandos, mas só existem 4 skills. Criar as que faltam em
 - `checkpoint` — grava o registo leve, atualiza o `contexto.md` no formato da §12.2 e faz commit local no workspace.
 
 Critérios de aceitação:
-- [ ] `dir .claude\skills` mostra 8 pastas, cada uma com `SKILL.md` e frontmatter `name` + `description`.
-- [ ] Cada skill cita a secção da metodologia que implementa e não contém nada específico de um projeto.
-- [ ] Dentro do `claude`, escrever `/` mostra as 8 skills com a etiqueta `(project)`.
-- [ ] Cópia atualizada em `~/.claude/skills/`.
-- [ ] Commit passa os dois guards.
+- [x] `dir .claude\skills` mostra 8 pastas, cada uma com `SKILL.md` e frontmatter `name` + `description`.
+- [x] Cada skill cita a secção da metodologia que implementa e não contém nada específico de um projeto.
+- [ ] Dentro do `claude`, escrever `/` mostra as 8 skills com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] Cópia atualizada em `~/.claude/skills/`.
+- [x] Commit passa os dois guards.
+
+Nota: acrescentado `registo_leve` ao template `docs/projeto.yaml` (caminho do registo leve usado pelo `checkpoint`; por omissão `runs/`, nunca `historico/`).
 
 ### 1.2 Adaptador Excel universal
 Criar `adapters/excel/base.py`, generalizando o padrão da `tecnica-excel.md` §1: carregar preservando fórmulas, aplicar lote, regenerar a aba de defeitos, cross-check, gravar só se limpo (senão `.REVISTO.xlsx`), recalcular em segurança.
