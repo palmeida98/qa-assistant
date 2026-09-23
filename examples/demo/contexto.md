@@ -1,5 +1,5 @@
 # Contexto de sessão — demo-saucedemo
-Atualizado: 2026-09-23
+Atualizado: 2026-09-23 (preparação da 2.3)
 
 ## Estado atual
 Onboarding concluído com `/onboarding-projeto` (plano, tarefa 2.1). `CLAUDE.md`, `projeto.yaml` (incluindo a secção `excel:`) e `.env` (sem valores) criados. Workbook `workbook/plano-demo.xlsx` gerado com 18 casos aprovados, todos em `Por testar`; sem defeitos registados.
@@ -27,7 +27,12 @@ Nenhum lote executado.
 
 ## Trabalho pendente
 - 2.2: confirmar `/mcp` com playwright ligado e um login com `standard_user` pelo MCP.
-- 2.3: primeiro lote (5–10 casos) com `/planear-lote` e `/executar-lote`, aplicado pelo adaptador, e `/checkpoint`.
+- 2.3: primeiro lote, a executar numa sessão aberta nesta pasta (com o Playwright MCP). Seleção aprovada pelo utilizador (23.09.2026), ainda a passar por `/planear-lote`:
+  - sem sessão: CT-LOGIN-003, CT-LOGIN-006
+  - locked_out_user: CT-LOGIN-002
+  - standard_user: CT-LOGIN-001, CT-PROD-001, CT-PROD-002, CT-CHK-001
+  - problem_user: CT-PROD-005 (esperado Fail → `/registar-bug`, com aprovação do utilizador antes de escrever)
+  - Registo leve em `runs/lote_20260923_01.json`, no formato do adaptador; aplicar com `python -m adapters.excel.aplicar examples/demo runs/lote_20260923_01.json` a partir da raiz do qa-assistant; depois `/checkpoint`.
 
 ## Estado da validação
 Configuração validada pelo adaptador (load + cross-check). Nenhum caso executado.
