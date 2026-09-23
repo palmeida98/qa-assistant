@@ -87,13 +87,18 @@ Notas:
 - Mecanismo `excel-com` implementado mas **não validado** (sem Excel na máquina de desenvolvimento).
 - Fora de âmbito: exportação para outras equipas (`tecnica-excel.md` §6) e regra "arquivar" de bugs resolvidos.
 
-### 1.3 Configuração Excel no `projeto.yaml`
+### 1.3 Configuração Excel no `projeto.yaml` — `259fbfc` (falta um onboarding real para fechar o 2.º critério)
 Acrescentar ao template `docs/projeto.yaml` uma secção `excel:` com os campos que o adaptador precisa. Atualizar a skill `onboarding-projeto` para preencher esta secção **inspecionando os headers reais do workbook** (nunca adivinhar).
 
 Critérios de aceitação:
-- [ ] Template com comentários a explicar cada campo.
-- [ ] `onboarding-projeto` pergunta/inspeciona e preenche `excel:`.
-- [ ] O adaptador lê esta secção sem mais configuração.
+- [x] Template com comentários a explicar cada campo.
+- [ ] `onboarding-projeto` pergunta/inspeciona e preenche `excel:`. *(passo escrito na skill e inspeção validada; falta correr um onboarding interativo completo — fazê-lo no demo, 2.1)*
+- [x] O adaptador lê esta secção sem mais configuração.
+
+Notas:
+- `adapters/excel/inspecionar.py` só lê o workbook e propõe a secção; o que não é seguro fica `CONFIRMAR: …` (e faz o `load()` falhar se ficar esquecido).
+- Na cópia de um workbook real acertou sheets de casos e prefixos, colunas de ID, estados de caso (pela validação de dados), sheet de defeitos, formato do ID e 6 das 10 colunas da vista; deixou por confirmar a coluna de estado dos defeitos (várias listas de validação), resultado obtido/observações e as colunas ambíguas da vista.
+- `ExcelAdapter.from_projeto(workspace)`; blocos opcionais em branco contam como ausentes.
 
 ### 1.4 Teste golden
 Criar `tests/golden/`:
