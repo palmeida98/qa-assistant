@@ -1,4 +1,4 @@
-# Metodologia Core
+﻿# Metodologia Core
 
 > **Camada 1 — Metodologia universal de QA**
 > Versão 2.0 · 2026-09-22 · Substitui a versão usada no Claude.ai Projects.
@@ -413,6 +413,7 @@ Qualquer alteração ao `qa_core`, aos adaptadores, às skills ou às camadas un
 2. Alterar primeiro a especificação (Markdown), depois o código.
 3. Correr os testes da framework, em especial:
    - **teste golden**: um lote histórico real (lido do workspace via `QA_GOLDEN_DIR`) tem de produzir uma saída idêntica à guardada;
+     - hoje existe o golden **fictício** do adaptador Excel (`python scripts/golden_check.py`: fixture, lote e resultado esperado em `tests/golden/`, escritos à mão). O golden com lote histórico real via `QA_GOLDEN_DIR` ainda não está implementado; até lá, uma alteração que afete um projeto real valida-se também por comparação direta numa cópia do workbook desse projeto (nunca no original);
    - **teste de round-trip**: importar → exportar sem perda.
 4. Investigar todas as diferenças relevantes.
 5. Confirmar que cada diferença é intencional.

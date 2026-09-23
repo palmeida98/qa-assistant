@@ -1,0 +1,28 @@
+{
+  "resultados": [
+    {
+      "tc": "CT-LOJA-002",
+      "estado": "Pass",
+      "resultado_obtido": "Checkout completed",
+      "defeito_novo": null
+    },
+    {
+      "tc": "CT-CONTA-001",
+      "estado": "Fail",
+      "resultado_obtido": "Error 500 on save",
+      "defeito_novo": {
+        "titulo": "Account save fails",
+        "descricao": "HTTP 500 when saving profile",
+        "severidade": "High",
+        "prioridade": "P1",
+        "area": "Conta"
+      }
+    },
+    {
+      "tc": "CT-ADMIN-003",
+      "estado": "Blocked",
+      "resultado_obtido": "No test data",
+      "defeito_novo": null
+    }
+  ]
+}
