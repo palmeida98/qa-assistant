@@ -8,3 +8,4 @@ formato_bug: ""
 bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
 modulos: [funcional-web]
+registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
