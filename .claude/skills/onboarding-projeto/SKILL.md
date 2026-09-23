@@ -3,9 +3,12 @@ name: onboarding-projeto
 description: Configura um novo workspace de projeto - ambientes, roles, tracker, formato de bug - seguindo metodologia-core.md seccao 4.
 ---
 
-1. Confirma se existem CLAUDE.md e projeto.yaml no workspace atual. Se nao existirem, copia-os de:
-   - ../../../qa-assistant/docs/contexto-template.md -> CLAUDE.md
-   - ../../../qa-assistant/docs/projeto.yaml -> projeto.yaml
+1. Identifica a raiz do qa-assistant (<qa>) a partir do workspace atual: normalmente ../../../qa-assistant
+   (workspace em qa-workspaces/<empresa>/<projeto>/); no demo, dentro do proprio repositorio, e ../..
+   (examples/demo/). Confirma que <qa>/docs/metodologia-core.md existe antes de continuar.
+   Confirma se existem CLAUDE.md e projeto.yaml no workspace atual. Se nao existirem, copia-os de:
+   - <qa>/docs/contexto-template.md -> CLAUDE.md (e ajusta os imports @ para o mesmo <qa>)
+   - <qa>/docs/projeto.yaml -> projeto.yaml
 2. Le o CLAUDE.md e o projeto.yaml. Para cada campo em branco, PERGUNTA ao utilizador
    (nao assumas nem inventes):
    - ambientes (confirma qual e o ambiente de TESTE, nao producao)

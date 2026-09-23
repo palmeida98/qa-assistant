@@ -34,15 +34,19 @@ def _cfm(msg: str, opcoes=None) -> str:
 
 
 def detect_header_row(ws) -> int | None:
-    """Linha (nas primeiras 15) com mais celulas de texto curto, seguida de dados."""
-    best, best_score = None, 1
+    """Linha (nas primeiras 15) com mais celulas de texto curto, de preferencia
+    seguida de dados; numa sheet so com cabecalhos (projeto a comecar), a linha
+    com mais texto curto, se tiver pelo menos 3 celulas."""
+    best, best_score, fallback, fb_score = None, 1, None, 2
     for r in range(1, min(ws.max_row, MAX_HEADER_SCAN) + 1):
         vals = [c.value for c in ws[r]]
         score = sum(1 for v in vals if isinstance(v, str) and 0 < len(v.strip()) <= 60)
         nxt = [c.value for c in ws[r + 1]] if r < ws.max_row else []
         if score > best_score and any(v not in (None, "") for v in nxt):
             best, best_score = r, score
-    return best
+        if score > fb_score:
+            fallback, fb_score = r, score
+    return best or fallback
 
 
 def dv_lists(ws, wb) -> list[tuple[set, list[str]]]:
@@ -119,11 +123,13 @@ def classify(profiles: list[dict]) -> dict:
     - vista: sheet cujos IDs estao todos contidos nos IDs de outra sheet;
     - defeitos: sheet (nao vista) com uma coluna que aponta para IDs de outras sheets;
     - casos: as restantes sheets com ID."""
-    res = {"casos": [], "defeitos": [], "vistas": [], "outras": []}
+    res = {"casos": [], "defeitos": [], "vistas": [], "outras": [], "vazias": []}
     com_id = []
     for p in profiles:
         ids = [c for c in p["colunas"] if c["id_ratio"] >= 0.9 and c["unico"] and c["n"] >= 1]
-        if ids:
+        if p["colunas"] and all(c["n"] == 0 for c in p["colunas"]):
+            res["vazias"].append(p)       # so cabecalhos: candidata a defeitos ou vista
+        elif ids:
             p["_id"] = ids[0]
             p["_ids"] = set(ids[0]["todos"])
             p["_prefixo"] = common_token_prefix(ids[0]["todos"])
@@ -209,7 +215,8 @@ def propose(path: str) -> tuple[dict, list[str]]:
         estados_caso += [e for e in (estados or []) if e not in estados_caso]
         notas.append(f"casos '{p['sheet']}': cabecalho na linha {p['linha_cabecalho']}, ID '{idc['nome']}' "
                      f"(prefixo '{pre}'), estado '{nome}' ({como})")
-    livres = sorted({c["nome"] for p in cls["casos"] for c in p["colunas"] if c["texto_longo"]})
+    livres = sorted({c["nome"] for p in cls["casos"] for c in p["colunas"]
+                     if c["texto_longo"] or c["n"] == 0})
     linhas_cab = {p["linha_cabecalho"] for p in cls["casos"]}
 
     casos = {
@@ -261,8 +268,34 @@ def propose(path: str) -> tuple[dict, list[str]]:
             vs = c["lista_validacao"] or [v for v, _ in c["valores"]]
             notas.append(f"   coluna '{c['nome']}': {vs}")
 
+    # ---- sem sheet de defeitos com dados: propor a partir das sheets so com cabecalhos
+    if not cls["defeitos"] and cls["vazias"]:
+        nomes = [p["sheet"] for p in cls["vazias"]]
+        cab = {p["sheet"]: [c["nome"] for c in p["colunas"]] for p in cls["vazias"]}
+        opc = lambda what: _cfm(what, cab)  # noqa: E731
+        defeitos = {
+            "sheet": _cfm("sheet de defeitos (sem defeitos ainda)", nomes),
+            "linha_cabecalho": _cfm("linha dos cabecalhos", {p["sheet"]: p["linha_cabecalho"] for p in cls["vazias"]}),
+            "formato_id": _cfm("formato do ID de defeito com {n}, ex. BUG-{n}"),
+            "colunas": {k: opc(f"coluna de {k}") for k in
+                        ("id", "estado", "caso", "severidade", "prioridade", "reportado_por", "data_report")},
+            "campos_lote": {"titulo": opc("coluna do titulo"), "descricao": opc("coluna da descricao")},
+            "valores_omissao": {},
+            "estados": [_cfm("estados validos de defeito")],
+            "estados_fechados": [_cfm("estados que contam como resolvidos")],
+            "estado_inicial": _cfm("estado de um defeito novo"),
+            "prioridades": [_cfm("ordem das prioridades, da mais alta para a mais baixa")],
+        }
+        notas.append(f"sem defeitos registados: sheets so com cabecalhos {cab} -- "
+                     f"uma deve ser a de defeitos e, se existir, outra a vista de ativos")
+
     # ---- vista de ativos: outra sheet cujo ID e do mesmo formato dos defeitos
     vista = None
+    if not cls["defeitos"] and len(cls["vazias"]) > 1:
+        vista = {"sheet": _cfm("sheet da vista de ativos (opcional)", [p["sheet"] for p in cls["vazias"]]),
+                 "linha_cabecalho": _cfm("linha dos cabecalhos da vista"),
+                 "colunas": _cfm("cabecalho da vista -> coluna dos defeitos (so os que tiverem nome diferente)"),
+                 "ordenar_por": "", "resumo": None}
     for p in cls["vistas"]:
         base = p["_vista_de"]
         base_cols = [x["nome"] for x in base["colunas"]]

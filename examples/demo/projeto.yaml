@@ -1,0 +1,81 @@
+﻿projeto: "demo-saucedemo"
+empresa: "demo"               # workspace de demonstracao dentro do qa-assistant (examples/demo)
+ambientes:
+  teste: "https://www.saucedemo.com/"   # site publico de pratica; nao ha producao
+roles:
+  - standard_user
+  - locked_out_user
+  - problem_user
+  - performance_glitch_user
+  - error_user
+  - visual_user
+tracker: "excel"             # azure-devops | jira | excel
+formato_bug: "BUG-{n}"       # campos = colunas da sheet Defeitos
+bugs_resolvidos: "remover"   # ou "arquivar"
+evidencia: "texto"           # ou "texto+screenshot"
+modulos: [funcional-web, exploratorio, api, acessibilidade]
+registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
+
+# ---------------------------------------------------------------------------
+# excel: layout do workbook, lido pelo adaptador (adapters/excel/base.py).
+# Preenchido no onboarding de 23.09.2026 com `python -m adapters.excel.inspecionar`
+# + respostas do utilizador. Campos comentados no template docs/projeto.yaml.
+# ---------------------------------------------------------------------------
+excel:
+  ficheiro: "workbook/plano-demo.xlsx"
+
+  casos:
+    sheets:
+      "CT-LOGIN-": "Login"
+      "CT-PROD-": "Produtos"
+      "CT-CHK-": "Checkout"
+    linha_cabecalho: 1
+    colunas:
+      id: "ID"
+      estado: "Estado"
+      resultado_obtido: "Resultado Obtido"
+      observacoes: "Observações"
+    estados: ["Por testar", "Pass", "Fail", "Blocked", "N/A"]
+
+  defeitos:
+    sheet: "Defeitos"
+    linha_cabecalho: 1
+    formato_id: "BUG-{n}"
+    colunas:
+      id: "ID"
+      estado: "Estado"
+      caso: "Caso"
+      severidade: "Severidade"
+      prioridade: "Prioridade"
+      reportado_por: "Reportado por"
+      data_report: "Data"
+    campos_lote:
+      titulo: "Título"
+      descricao: "Descrição"
+      area: "Área"
+      role: "Role"
+    valores_omissao: {}
+    estados: ["Aberto", "Em análise", "Em correção", "Corrigido", "Reaberto", "Fechado", "Não é defeito"]
+    estados_fechados: ["Corrigido", "Fechado", "Não é defeito"]
+    estado_inicial: "Aberto"
+    prioridades: ["Crítica", "Alta", "Média", "Baixa"]
+
+  vista_ativos:
+    sheet: "Defeitos Ativos"
+    linha_cabecalho: 3
+    colunas: {}                # cabecalhos iguais aos da sheet Defeitos
+    ordenar_por: "Área"
+    resumo:
+      celula: "A2"
+      modelo: "{abertos} abertos ({severidade[Crítica]} Crítica, {severidade[Alta]} Alta, {severidade[Média]} Média, {severidade[Baixa]} Baixa) · {fechados} fechados · atualizado a {data:%d.%m.%Y}"
+
+  notas:
+    resultado: "Resultado: {resultado}"
+    defeito_novo: "Defeito novo: {id}."
+
+  controlo_lotes:
+    sheet: "_qa_lotes"
+
+  recalc:
+    mecanismo: "libreoffice"
+    timeout: 60
