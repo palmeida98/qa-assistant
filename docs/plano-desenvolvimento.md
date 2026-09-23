@@ -24,8 +24,8 @@
 | Fase | Objetivo | Estado |
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
-| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída, com 2 critérios de verificação manual por fechar (1.1: `/` mostra as skills; 1.3: onboarding interativo, no demo 2.1) |
-| 2 | Browser automation com Playwright MCP, demo público, piloto real | Por fazer |
+| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída, com 1 critério de verificação manual por fechar (1.1: `/` mostra as skills) |
+| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
 | 4 | CI da própria framework | Por fazer |
 | 5 | Interface: painel de progresso por workspace | Por fazer |
@@ -87,12 +87,12 @@ Notas:
 - Mecanismo `excel-com` implementado mas **não validado** (sem Excel na máquina de desenvolvimento).
 - Fora de âmbito: exportação para outras equipas (`tecnica-excel.md` §6) e regra "arquivar" de bugs resolvidos.
 
-### 1.3 Configuração Excel no `projeto.yaml` — `259fbfc` (falta um onboarding real para fechar o 2.º critério)
+### 1.3 Configuração Excel no `projeto.yaml` — `259fbfc` (2.º critério fechado no onboarding do demo, `5afda66`)
 Acrescentar ao template `docs/projeto.yaml` uma secção `excel:` com os campos que o adaptador precisa. Atualizar a skill `onboarding-projeto` para preencher esta secção **inspecionando os headers reais do workbook** (nunca adivinhar).
 
 Critérios de aceitação:
 - [x] Template com comentários a explicar cada campo.
-- [ ] `onboarding-projeto` pergunta/inspeciona e preenche `excel:`. *(passo escrito na skill e inspeção validada; falta correr um onboarding interativo completo — fazê-lo no demo, 2.1)*
+- [x] `onboarding-projeto` pergunta/inspeciona e preenche `excel:`. *(verificado no onboarding interativo do demo, 2.1)*
 - [x] O adaptador lê esta secção sem mais configuração.
 
 Notas:
@@ -134,14 +134,20 @@ Notas:
 
 ## Fase 2 — Browser automation (Playwright MCP)
 
-### 2.1 Workspace de demonstração
+### 2.1 Workspace de demonstração — `5afda66`
 Criar `examples/demo/` dentro do repositório: um workspace completo (`CLAUDE.md`, `projeto.yaml`, `contexto.md`, workbook gerado pela fixture) apontado a um site público de prática de testes (ex.: saucedemo.com ou the-internet.herokuapp.com). Sem credenciais reais: só as contas de demonstração publicadas pelo próprio site, e mesmo essas no `.env` local.
 
 Serve para desenvolver e validar a framework sem tocar em dados de clientes, e é a base do portefólio (Fase 6).
 
 Critérios de aceitação:
-- [ ] Onboarding do demo feito com `/onboarding-projeto`.
-- [ ] Nada no demo passa a denylist nem o detect-secrets.
+- [x] Onboarding do demo feito com `/onboarding-projeto`.
+- [x] Nada no demo passa a denylist nem o detect-secrets.
+
+Notas:
+- Site: saucedemo.com (contas de demonstração por role). Workbook com 18 casos próprios do site, aprovados pelo utilizador, no formato da fixture do golden (em vez da fixture tal como está); gerado por `examples/demo/gerar_workbook.py`.
+- O onboarding revelou duas lacunas, corrigidas: caminhos fixos para o qa-assistant na skill (o demo vive dentro do repositório) e a inspeção não reconhecia uma sheet de defeitos ainda vazia.
+- Credenciais só no `.env` local (ignorado pelo git); a palavra-passe de demonstração não aparece em nenhum ficheiro do repositório.
+- Resultados esperados ainda não confirmados no browser: confirmar em 2.3.
 
 ### 2.2 Playwright MCP no onboarding
 Acrescentar à skill `onboarding-projeto` o registo do Playwright MCP no workspace:
