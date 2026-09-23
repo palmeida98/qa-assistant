@@ -28,6 +28,8 @@ Este é o mesmo padrão de "validar antes de adotar" da metodologia (§15), apli
 
 No adaptador: `load()` → `apply_lote()` → `regenerate_active_defects()` → `save_if_clean()` (inclui o `cross_check()`) → `recalc()`. O `load()` falha logo se a configuração não corresponder ao workbook (sheet ou coluna obrigatória em falta), e o `apply_lote()` verifica todos os IDs de caso antes de escrever o que quer que seja. As colunas opcionais de caso (resultado obtido, observações) só se usam nas sheets onde existem.
 
+Para correr o fluxo completo num workspace: `python -m adapters.excel.aplicar <workspace> <lote.json>` (a partir da raiz do qa-assistant). Sai com 0 (gravado, ou lote já aplicado), 2 (cross-check com problemas: original intacto, `.REVISTO.xlsx` à parte) ou 3 (gravado, mas o recálculo falhou).
+
 ## 2. Recalcular fórmulas em segurança
 
 **Regra de ouro, descoberta a doer:** nunca recalcular um workbook a correr diretamente num caminho dentro de uma pasta sincronizada ou montada (pasta conectada do Cowork, OneDrive, uma unidade de rede, qualquer montagem FUSE). O LibreOffice fica pendurado indefinidamente nesse filesystem, de forma 100% reprodutível — não é o ficheiro, é o tipo de montagem.

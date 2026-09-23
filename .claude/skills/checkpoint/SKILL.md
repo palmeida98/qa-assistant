@@ -14,5 +14,8 @@ description: Grava o registo leve, atualiza o contexto.md do workspace no format
 5. Nao reconstruas o progresso do zero: acrescenta ao que ja esta registado (seccao 12.1).
 6. Se o workspace for um repositorio git, faz um commit local por checkpoint (seccao 12.1),
    so com os ficheiros do registo leve e o contexto.md. Nunca faz push.
-7. Nao passa resultados para o workbook/tracker principal sem confirmacao do utilizador.
+7. Nao passa resultados para o workbook/tracker principal sem confirmacao do utilizador. Com tracker
+   excel e confirmacao dada, aplica o lote pelo adaptador (tecnica-excel.md seccao 1), a partir da raiz
+   do qa-assistant: python -m adapters.excel.aplicar <workspace> <registo_leve>/<lote>.json
+   e so segue se sair com 0 (2 = cross-check com problemas, original intacto; 3 = recalculo falhou).
 8. Indica ao utilizador o ponto exato onde a execucao ficou.
