@@ -4,6 +4,7 @@ Referências:
 - @docs/metodologia-core.md — metodologia universal
 - @docs/tecnica-browser.md — técnica de automação browser
 - @docs/tecnica-excel.md — técnica de automação de workbooks Excel
+- docs/plano-desenvolvimento.md — roadmap da framework (ler em sessões de desenvolvimento)
 
 ## Regras fixas
 - Nunca escrever dados de clientes (URLs, contas, nomes, credenciais) neste repositório.
