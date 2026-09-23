@@ -172,6 +172,8 @@ Critérios de aceitação:
 - [ ] `contexto.md` do demo atualizado.
 
 ### 2.4 Piloto num projeto real
+*Estado (23.09.2026): preparado no workspace do projeto (Playwright MCP registado, lote de 16 casos só de consulta proposto, capturas fora do git); execução à espera de 2.2/2.3 e das credenciais. Detalhe no `contexto.md` desse workspace.*
+
 No workspace do projeto real (fora deste repositório): `.env` preenchido localmente, Playwright MCP registado, lote de 10–20 casos já conhecidos, comparação com os resultados anteriores. Todo o registo fica no `contexto.md` desse workspace.
 
 Aqui só se marca feito e, se surgirem, lições **genéricas** para a metodologia ou técnica (sem nomes).
