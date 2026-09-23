@@ -68,7 +68,7 @@ Critérios de aceitação:
 
 Nota: acrescentado `registo_leve` ao template `docs/projeto.yaml` (caminho do registo leve usado pelo `checkpoint`; por omissão `runs/`, nunca `historico/`).
 
-### 1.2 Adaptador Excel universal
+### 1.2 Adaptador Excel universal — `158d310`
 Criar `adapters/excel/base.py`, generalizando o padrão da `tecnica-excel.md` §1: carregar preservando fórmulas, aplicar lote, regenerar a aba de defeitos, cross-check, gravar só se limpo (senão `.REVISTO.xlsx`), recalcular em segurança.
 
 - Toda a informação de layout (ficheiro, mapa prefixo → sheet, nomes de colunas, estados válidos de casos e defeitos, estados de defeito "fechados") vem de uma configuração, nunca hardcoded.
@@ -76,10 +76,16 @@ Criar `adapters/excel/base.py`, generalizando o padrão da `tecnica-excel.md` §
 - Deteção de lote reaplicado (a `tecnica-excel.md` §5 exige que reaplicar o mesmo lote não duplique notas nem defeitos).
 
 Critérios de aceitação:
-- [ ] Nenhum nome de sheet, coluna ou estado no código (verificável por grep).
-- [ ] Funciona com uma configuração fictícia (usada no 1.4).
-- [ ] Reaplicar o mesmo lote duas vezes não altera o resultado da segunda vez.
-- [ ] `docs/tecnica-excel.md` atualizado para apontar para o adaptador.
+- [x] Nenhum nome de sheet, coluna ou estado no código (verificável por grep).
+- [x] Funciona com uma configuração fictícia (usada no 1.4).
+- [x] Reaplicar o mesmo lote duas vezes não altera o resultado da segunda vez.
+- [x] `docs/tecnica-excel.md` atualizado para apontar para o adaptador.
+
+Notas:
+- Validado também por equivalência com um `qa_lib.py` real (cópia do workbook, lote sintético): 0 diferenças de valores, fórmulas e estilos. Diferenças intencionais: a sheet de controlo `_qa_lotes` e a verificação extra de "caso relacionado inexistente" no cross-check.
+- Único nome de sheet no código: `_qa_lotes`, a sheet de controlo do próprio adaptador (por omissão; configurável).
+- Mecanismo `excel-com` implementado mas **não validado** (sem Excel na máquina de desenvolvimento).
+- Fora de âmbito: exportação para outras equipas (`tecnica-excel.md` §6) e regra "arquivar" de bugs resolvidos.
 
 ### 1.3 Configuração Excel no `projeto.yaml`
 Acrescentar ao template `docs/projeto.yaml` uma secção `excel:` com os campos que o adaptador precisa. Atualizar a skill `onboarding-projeto` para preencher esta secção **inspecionando os headers reais do workbook** (nunca adivinhar).
