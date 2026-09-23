@@ -149,14 +149,19 @@ Notas:
 - Credenciais só no `.env` local (ignorado pelo git); a palavra-passe de demonstração não aparece em nenhum ficheiro do repositório.
 - Resultados esperados ainda não confirmados no browser: confirmar em 2.3.
 
-### 2.2 Playwright MCP no onboarding
+### 2.2 Playwright MCP no onboarding — `0024c37` (critérios 2 e 3 por confirmar pelo utilizador)
 Acrescentar à skill `onboarding-projeto` o registo do Playwright MCP no workspace:
 `claude mcp add playwright --scope project -- npx @playwright/mcp@latest`
 
 Critérios de aceitação:
-- [ ] `.mcp.json` criado no workspace (não no repositório da framework, exceto no demo).
-- [ ] `/mcp` dentro do `claude` mostra `playwright` ligado.
-- [ ] Um login no site de demonstração funciona pelo MCP.
+- [x] `.mcp.json` criado no workspace (não no repositório da framework, exceto no demo).
+- [ ] `/mcp` dentro do `claude` mostra `playwright` ligado. *(verificação do utilizador numa sessão nova em `examples/demo/`: aprovar o servidor e correr `/mcp`)*
+- [ ] Um login no site de demonstração funciona pelo MCP. *(verificação do utilizador, na mesma sessão, com `standard_user` lido do `.env`)*
+
+Notas:
+- No Windows o comando é `claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@latest`; sem o `cmd /c` o Claude Code não lança o `npx`. A skill escolhe o comando conforme o sistema.
+- `@latest` mantido por agora; fixar a versão na passagem para N2 (2.5). Versão verificada nesta máquina: 0.0.82.
+- `claude mcp list` mostra o servidor como `Pending approval` até ser aprovado no primeiro arranque do `claude` no workspace.
 
 ### 2.3 Primeiro lote no demo
 Executar 5–10 casos do demo com `/planear-lote` e `/executar-lote`, aplicar pelo adaptador, `/checkpoint`.

@@ -23,10 +23,10 @@ Nenhum lote executado.
 
 ## Problemas conhecidos / bloqueios
 - `.env` sem valores: preencher localmente com as contas de demonstração publicadas na página de login do site antes de executar.
-- Playwright MCP ainda não registado (tarefa 2.2).
+- Playwright MCP registado em `.mcp.json` (2.2), à espera de aprovação: abrir o `claude` nesta pasta, aprovar o servidor e confirmar com `/mcp`.
 
 ## Trabalho pendente
-- 2.2: registar o Playwright MCP no workspace.
+- 2.2: confirmar `/mcp` com playwright ligado e um login com `standard_user` pelo MCP.
 - 2.3: primeiro lote (5–10 casos) com `/planear-lote` e `/executar-lote`, aplicado pelo adaptador, e `/checkpoint`.
 
 ## Estado da validação
