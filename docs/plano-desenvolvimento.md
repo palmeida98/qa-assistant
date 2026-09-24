@@ -277,3 +277,4 @@ Decidir se o repositório passa a público. Antes disso, obrigatório:
 | Data | Alteração |
 |---|---|
 | 2026-09-23 | Versão inicial |
+| 2026-09-24 | Revisão geral (`994fa8b`): denylist passa a ler ficheiros Office e nomes de ficheiros (antes um `.xlsx` de cliente passava o guard; histórico verificado, limpo); adaptador valida o lote inteiro antes de escrever (`validar_lote`, código 4 no `aplicar`) e aceita `bug` existente; um só formato de registo leve (metodologia §7.1 = técnica-excel §4); 27 testes `unittest` no CI e no pre-commit (inclui a verificação do painel da 5.1); ruff no pre-commit; skills alinhadas com o fluxo. |
