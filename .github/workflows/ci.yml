@@ -58,3 +58,35 @@ jobs:
       - run: python scripts/golden_check.py
       # testes que recalculam formulas reais (resumo vs contagem direta); no job testes ficam skipped
       - run: python -m unittest tests.test_resumo -v
+
+  demo-e2e:
+    # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)
+    runs-on: ubuntu-latest
+    env:
+      DEMO_SAUCE_STANDARD_USER: ${{ secrets.DEMO_SAUCE_STANDARD_USER }}
+      DEMO_SAUCE_LOCKED_OUT_USER: ${{ secrets.DEMO_SAUCE_LOCKED_OUT_USER }}
+      DEMO_SAUCE_PASSWORD: ${{ secrets.DEMO_SAUCE_PASSWORD }}
+    defaults:
+      run:
+        working-directory: examples/demo/e2e
+    steps:
+      - uses: actions/checkout@v5
+      - name: Secrets do demo presentes?
+        id: segredos
+        run: |
+          if [ -z "$DEMO_SAUCE_PASSWORD" ] || [ -z "$DEMO_SAUCE_STANDARD_USER" ] || [ -z "$DEMO_SAUCE_LOCKED_OUT_USER" ]; then
+            echo "::warning title=demo-e2e nao correu::secrets DEMO_SAUCE_* em falta no repositorio (Settings > Secrets and variables > Actions)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v5
+        if: steps.segredos.outputs.ok == 'true'
+        with:
+          node-version: "22"
+      - if: steps.segredos.outputs.ok == 'true'
+        run: npm ci
+      - if: steps.segredos.outputs.ok == 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.segredos.outputs.ok == 'true'
+        run: npx playwright test
