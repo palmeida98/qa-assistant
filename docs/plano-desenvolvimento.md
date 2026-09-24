@@ -379,7 +379,7 @@ Notas (1.º critério, adiantado sem o piloto por decisão do utilizador, 24.09.
 - O fictício corre sempre primeiro: com `QA_GOLDEN_DIR` no ambiente, o hook do `pre-commit` não o perde.
 - `tests/test_golden_real.py` (dados fictícios, workspace temporário): passa com o `depois` certo, falha a apontar a célula alterada, deteta outro instante nas datas escritas, corre várias pastas e a variável de ambiente, recusa pastas incompletas. No CI, no job `golden`.
 - Especificado na metodologia §15.
-- [ ] Golden real do piloto a passar; a nota de "ainda não implementado" sai da metodologia §15.
+- [ ] Golden real do piloto a passar (a nota de "ainda não implementado" já saiu da metodologia §15 com o mecanismo, em `e74c281`).
 
 ### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13) — `3563f24`
 Hoje a metodologia promete a proteção por permissões do Claude Code, mas nada a cria.
