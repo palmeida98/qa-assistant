@@ -26,7 +26,7 @@
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
-| 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
+| 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
 | 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Por fazer |
@@ -242,14 +242,17 @@ Notas:
 - Por fazer, quando houver emulador: um exemplo numa app nativa (ex.: a app de demonstração da Sauce Labs).
 - 8 testes do `testar_mobile.py` com o Maestro e o adb simulados (o formato JUnit é o real do Maestro 2.10).
 
-### 3.4 Módulos no `projeto.yaml`
+### 3.4 Módulos no `projeto.yaml` — `abfddc4`
 Lista fechada de valores válidos em `modulos:` (`funcional-web`, `api`, `acessibilidade`, `mobile`, `exploratorio`) e `onboarding-projeto` a perguntar quais ativar.
 
-Critérios de aceitação (para cada módulo):
-- [ ] Documento agnóstico de projeto, passa os guards.
-- [ ] Skill funcional e visível com `/`.
-- [ ] Exemplo executado no demo.
-- [ ] Referência acrescentada ao `CLAUDE.md`.
+Critérios de aceitação (3.4):
+- [x] Lista fechada na metodologia §4.1 (módulo → técnica → skill → secção do `projeto.yaml`) e comentada no template.
+- [x] `onboarding-projeto` mostra a lista, pergunta quais ativar, preenche as secções dos módulos ativos e acaba com `scripts/validar_projeto.py` sem problemas.
+- [x] `scripts/validar_projeto.py` recusa módulos fora da lista e módulos ativos sem secção; o demo passa (0 problemas, 0 avisos). 7 testes.
+
+Notas:
+- A `tecnica-browser.md` listava como módulos `smoke`, `roles`, `visual`, `cross-browser` e `formularios`, que não existem: passam a variantes dentro dos módulos, não valores de `modulos:`. Referências antigas a `modulos/*.md` corrigidas.
+- Os critérios comuns da Fase 3 (documento, skill, exemplo no demo, `CLAUDE.md`) ficaram verificados em cada tarefa (3.1–3.3); falta só a verificação manual do `/`.
 
 ---
 
