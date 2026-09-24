@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Aplica um lote (registo leve) ao workbook de um workspace, num so passo
 (tecnica-excel.md secao 1; plano, tarefa 2.3):

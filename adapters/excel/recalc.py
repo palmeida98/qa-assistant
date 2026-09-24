@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Recalculo seguro de formulas de um workbook (tecnica-excel.md secao 2).
 
@@ -83,7 +82,7 @@ def _run_with_timeout(cmd: list[str], timeout: int) -> tuple[int, str, str]:
     except subprocess.TimeoutExpired:
         # soffice.com / Excel lancam processos filhos -- matar a arvore toda
         if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)
         else:
             proc.kill()
         proc.communicate()
@@ -117,7 +116,7 @@ def _recalc_libreoffice(path: str, timeout: int) -> None:
 def _recalc_excel_com(path: str, timeout: int) -> None:
     if os.name != "nt":
         raise RuntimeError("mecanismo 'excel-com' so existe no Windows")
-    rc, stdout, stderr = _run_with_timeout(
+    rc, _stdout, stderr = _run_with_timeout(
         [sys.executable, "-c", _COM_SCRIPT, os.path.abspath(path)], timeout
     )
     if rc != 0:
@@ -137,7 +136,7 @@ def recalc_safe(path: str, mecanismo: str = "libreoffice", timeout: int = 60) ->
         shutil.copy(path, tmp_path)
         try:
             fn(tmp_path, timeout)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- qualquer falha vira ok=False; o original fica intacto
             return {"ok": False, "mecanismo": mecanismo, "erro": str(e)}
         shutil.copy(tmp_path, path)
     return {"ok": True, "mecanismo": mecanismo}

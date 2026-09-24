@@ -1,0 +1,47 @@
+# CI da framework (plano 4.1): lint, segredos e teste golden em cada push.
+# A denylist pessoal nao corre aqui de proposito -- vive so no pre-commit local.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.16.8
+      - run: ruff check --output-format github .
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pre-commit
+      # so o hook detect-secrets do .pre-commit-config.yaml (mesma versao e baseline)
+      - run: pre-commit run detect-secrets --all-files --show-diff-on-failure
+
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar LibreOffice (recalculo do golden)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libreoffice-calc-nogui
+      - run: pip install -r requirements.txt
+      - run: python scripts/golden_check.py

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Teste golden do adaptador Excel (plano, tarefa 1.4; metodologia-core secao 15).
 
@@ -27,12 +26,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests", "golden"))
 
-import openpyxl  # noqa: E402
-import yaml  # noqa: E402
+import openpyxl
+import yaml
+from gerar_fixture import gerar
 
-from adapters.excel import ExcelAdapter, load_lote  # noqa: E402
-from adapters.excel.recalc import find_soffice  # noqa: E402
-from gerar_fixture import gerar  # noqa: E402
+from adapters.excel import ExcelAdapter, load_lote
+from adapters.excel.recalc import find_soffice
 
 GOLDEN = os.path.join(ROOT, "tests", "golden")
 CONFIG = os.path.join(ROOT, "adapters", "excel", "exemplo.yaml")
@@ -64,7 +63,8 @@ def _snapshot(path):
 
 
 def run(workdir: str) -> dict:
-    cfg = yaml.safe_load(open(CONFIG, encoding="utf-8"))
+    with open(CONFIG, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
     gerar(os.path.join(workdir, cfg["ficheiro"]))
     lote = load_lote(os.path.join(GOLDEN, "lote.json"))
 

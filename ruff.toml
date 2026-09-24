@@ -1,0 +1,6 @@
+# Lint da framework (plano 4.1). Versao fixada no CI: .github/workflows/ci.yml
+target-version = "py312"
+
+[lint]
+# DTZ: as datas do tracker sao locais (dia de execucao) de proposito.
+extend-ignore = ["DTZ"]

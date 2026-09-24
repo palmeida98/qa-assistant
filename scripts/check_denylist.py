@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Bloqueia commits que contenham nomes de clientes/empresas da denylist pessoal.
 A lista fica em ~/.qa-denylist.txt (uma entrada por linha), fora do repositorio.
 """
@@ -25,7 +25,7 @@ def main():
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore").lower()
-        except Exception:
+        except OSError:  # ficheiro ilegivel nao tem texto a verificar
             continue
         for term in denylist:
             if term in text:

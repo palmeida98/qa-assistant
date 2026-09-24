@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Inspeciona um workbook e propoe a secao `excel:` do projeto.yaml
 (plano, tarefa 1.3; usado pelo /onboarding-projeto).
@@ -272,7 +271,7 @@ def propose(path: str) -> tuple[dict, list[str]]:
     if not cls["defeitos"] and cls["vazias"]:
         nomes = [p["sheet"] for p in cls["vazias"]]
         cab = {p["sheet"]: [c["nome"] for c in p["colunas"]] for p in cls["vazias"]}
-        opc = lambda what: _cfm(what, cab)  # noqa: E731
+        opc = lambda what: _cfm(what, cab)
         defeitos = {
             "sheet": _cfm("sheet de defeitos (sem defeitos ainda)", nomes),
             "linha_cabecalho": _cfm("linha dos cabecalhos", {p["sheet"]: p["linha_cabecalho"] for p in cls["vazias"]}),

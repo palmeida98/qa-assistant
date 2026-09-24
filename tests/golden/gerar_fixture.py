@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Gera o workbook FICTICIO do teste golden (plano, tarefa 1.4).
 

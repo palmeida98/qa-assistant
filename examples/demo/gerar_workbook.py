@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Gera o workbook inicial do workspace de demonstracao (plano, tarefa 2.1).
 

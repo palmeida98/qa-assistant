@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Adaptador Excel universal (tecnica-excel.md secao 1).
 
@@ -81,7 +80,7 @@ class ExcelAdapter:
         self.wb: openpyxl.Workbook | None = None
 
     @classmethod
-    def from_dict(cls, config: dict, base_dir: str | None = None) -> "ExcelAdapter":
+    def from_dict(cls, config: dict, base_dir: str | None = None) -> ExcelAdapter:
         """Campos (obrigatorios salvo indicacao):
 
         ficheiro: caminho do workbook (relativo a base_dir)
@@ -116,7 +115,7 @@ class ExcelAdapter:
         return cls(config, base_dir)
 
     @classmethod
-    def from_yaml(cls, path: str, secao: str | None = None) -> "ExcelAdapter":
+    def from_yaml(cls, path: str, secao: str | None = None) -> ExcelAdapter:
         import yaml
 
         with open(path, encoding="utf-8-sig") as f:
@@ -128,7 +127,7 @@ class ExcelAdapter:
         return cls(data, base_dir=os.path.dirname(os.path.abspath(path)))
 
     @classmethod
-    def from_projeto(cls, workspace: str = ".") -> "ExcelAdapter":
+    def from_projeto(cls, workspace: str = ".") -> ExcelAdapter:
         """Le a secao `excel:` do projeto.yaml do workspace (tarefa 1.3 do
         plano). O caminho do workbook e relativo ao workspace."""
         path = os.path.join(workspace, "projeto.yaml")
@@ -374,7 +373,7 @@ class ExcelAdapter:
         alterar nada (tecnica-excel.md secao 5).
 
         Todos os IDs de caso sao verificados antes de qualquer escrita."""
-        wb = self._need_wb()
+        self._need_wb()
         h_lote = lote_hash(lote)
         anterior = self.lote_ja_aplicado(lote)
         if anterior:
@@ -431,9 +430,9 @@ class ExcelAdapter:
                 vals = dict(d["valores_omissao"])
                 vals.update(def_novo)
 
-                def put(col, value):
+                def put(col, value, row=last_def_row):
                     if col:
-                        ws_def.cell(last_def_row, h_def[col]).value = value
+                        ws_def.cell(row, h_def[col]).value = value
 
                 put(dcol["id"], def_id)
                 put(dcol.get("caso"), vals.get("tc_relacionado", tc))
