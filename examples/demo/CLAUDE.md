@@ -11,7 +11,8 @@ Referencias universais:
 
 ## Ambientes
 - Teste: https://www.saucedemo.com/ — site público de prática de testes. Não há produção.
-- Respeitar o site: sem testes de carga nem de segurança ativos; ritmo normal de utilizador.
+- API (módulo `api`): https://restful-booker.herokuapp.com — API pública de prática; documentação em `/apidoc` (fonte do esperado). Não há produção.
+- Respeitar os dois sites: sem testes de carga nem de segurança ativos; ritmo normal de utilizador.
 
 ## Roles / perfis
 Contas de demonstração publicadas pelo próprio site (comportamento documentado na página de login):
@@ -25,6 +26,7 @@ Contas de demonstração publicadas pelo próprio site (comportamento documentad
 Variáveis de credenciais (valores só no `.env` local, nunca aqui):
 - `DEMO_SAUCE_<ROLE>_USER` para cada role (ex.: `DEMO_SAUCE_STANDARD_USER`)
 - `DEMO_SAUCE_PASSWORD` (a mesma palavra-passe de demonstração para todas as contas)
+- API: `DEMO_BOOKER_USER` e `DEMO_BOOKER_PASSWORD` (conta admin publicada na documentação da API). O token vai só para `.api-sessao.env` (ignorado pelo git), via `api_pedido.py --guardar-segredo`.
 
 ## Documentacao de referencia
 - Não há especificação: o workbook `workbook/plano-demo.xlsx` (casos aprovados a 23.09.2026) é a fonte de verdade.
@@ -35,6 +37,7 @@ Variáveis de credenciais (valores só no `.env` local, nunca aqui):
 - `workbook/plano-demo.xlsx` (gerado por `gerar_workbook.py`):
   - **Resumo** — totais por área e estado (fórmulas; não editar à mão)
   - **Login**, **Produtos**, **Checkout** — casos `CT-LOGIN-…`, `CT-PROD-…`, `CT-CHK-…`
+  - **API** — casos `CT-API-…` (restful-booker; `/testar-api`)
   - **Defeitos** — registo completo (`BUG-{n}`), incluindo resolvidos
   - **Defeitos Ativos** — vista regenerada pelo adaptador (só abertos)
 - Estados de caso: `Por testar`, `Pass`, `Fail`, `Blocked`, `N/A` (os da metodologia §2)
@@ -50,6 +53,6 @@ Variáveis de credenciais (valores só no `.env` local, nunca aqui):
 ## Regras especificas deste projeto
 - Política de evidência: **texto** (screenshot só quando o problema é visual).
 - Módulos ativos: `funcional-web`, `exploratorio`, `api`, `acessibilidade`.
-  - `api`: o site não expõe uma API pública documentada; o módulo terá pouca aplicação aqui.
+  - `api`: o saucedemo não tem API; o módulo usa a API de prática restful-booker (secção `api:` do `projeto.yaml`).
   - `acessibilidade`: o módulo ainda não existe (plano, tarefa 3.2).
 - Nada do demo pode passar a denylist nem o detect-secrets: nem a palavra-passe de demonstração vai para o repositório.

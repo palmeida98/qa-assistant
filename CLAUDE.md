@@ -6,6 +6,7 @@ Referências:
 - @docs/metodologia-core.md — metodologia universal
 - @docs/tecnica-browser.md — técnica de automação browser
 - @docs/tecnica-excel.md — técnica de automação de workbooks Excel
+- docs/tecnica-api.md — técnica de testes de API (ler quando o módulo `api` estiver ativo; `/testar-api`)
 - docs/plano-desenvolvimento.md — roadmap da framework (ler em sessões de desenvolvimento)
 
 ## Regras fixas
@@ -17,10 +18,12 @@ Referências:
 ## Comandos disponíveis
 /onboarding-projeto · /analisar-funcionalidade · /gerar-casos · /planear-lote
 /executar-lote · /registar-bug · /checkpoint · /fim-sessao · /painel
+/testar-api
 
 ## Scripts (a partir da raiz do qa-assistant)
 - `python -m adapters.excel.inspecionar <cópia.xlsx>` — propõe a secção `excel:` (onboarding)
 - `python -m adapters.excel.aplicar <workspace> <lote.json>` — aplica um lote ao workbook (0 ok · 2 cross-check · 3 recálculo · 4 lote inválido · 5 resumo não bate)
+- `python scripts/api_pedido.py <workspace> <MÉTODO> <caminho> …` — um pedido HTTP com evidência redigida (0 ok · 1 código diferente · 2 uso · 3 sem resposta)
 - `python scripts/gerar_painel.py <workspace> [--abrir]` — gera (e abre) o `painel.html` do workspace; é o que o `/painel` corre
 - Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice)
 

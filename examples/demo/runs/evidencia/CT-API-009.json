@@ -1,0 +1,22 @@
+{
+ "ts": "2026-09-24T11:15:48",
+ "pedido": {
+  "metodo": "POST",
+  "url": "https://restful-booker.herokuapp.com/booking",
+  "cabecalhos": {
+   "Content-Type": "application/json",
+   "Accept": "application/json"
+  },
+  "corpo": {
+   "lastname": "SoApelido"
+  }
+ },
+ "resposta": {
+  "codigo": 500,
+  "tempo_ms": 555,
+  "cabecalhos": {
+   "Content-Type": "text/plain; charset=utf-8"
+  },
+  "corpo": "Internal Server Error"
+ }
+}

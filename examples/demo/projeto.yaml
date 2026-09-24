@@ -2,6 +2,7 @@
 empresa: "demo"               # workspace de demonstracao dentro do qa-assistant (examples/demo)
 ambientes:
   teste: "https://www.saucedemo.com/"   # site publico de pratica; nao ha producao
+  api-teste: "https://restful-booker.herokuapp.com"   # API publica de pratica (modulo api); nao ha producao
 roles:
   - standard_user
   - locked_out_user
@@ -15,6 +16,13 @@ bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
 modulos: [funcional-web, exploratorio, api, acessibilidade]
 registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
+
+api:                         # modulo api (docs/tecnica-api.md, plano 3.1)
+  base_url: "https://restful-booker.herokuapp.com"
+  contrato: "https://restful-booker.herokuapp.com/apidoc/index.html"   # documentacao publicada: fonte do esperado
+  autenticacao: "cookie"       # token de POST /auth no cookie token=...; a doc tambem aceita Basic
+  credenciais:
+    admin: {user: DEMO_BOOKER_USER, password: DEMO_BOOKER_PASSWORD}
 
 painel:                      # significado de cada estado de caso no painel (plano 5.1)
   estados: {"Por testar": pendente, "Pass": ok, "Fail": falha, "Blocked": bloqueado, "N/A": na}
@@ -32,6 +40,7 @@ excel:
       "CT-LOGIN-": "Login"
       "CT-PROD-": "Produtos"
       "CT-CHK-": "Checkout"
+      "CT-API-": "API"
     linha_cabecalho: 1
     colunas:
       id: "ID"

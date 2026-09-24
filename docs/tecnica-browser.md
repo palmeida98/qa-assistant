@@ -212,7 +212,7 @@ Na conversão:
 | `visual` | Screenshots de referência e comparação com os frames do Figma |
 | `cross-browser` | O mesmo lote em Chromium, Firefox, WebKit e viewports móveis |
 | `formularios` | Geração sistemática de valores-limite e classes de equivalência por campo |
-| `api` | Pedidos diretos à API na mesma sessão, para preparar dados ou verificar persistência |
+| `api` | Pedidos diretos à API na mesma sessão, para preparar dados ou verificar persistência (`tecnica-api.md`, `scripts/api_pedido.py`) |
 
 ---
 

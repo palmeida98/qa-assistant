@@ -7,6 +7,12 @@ Casos aprovados pelo utilizador em 23.09.2026 (metodologia-core seccao 5.3).
 Resultados esperados = comportamento normal publicado do site (standard_user),
 com as mensagens da interface em ingles.
 
+Area API (plano 3.1, tecnica-api.md): API publica de pratica
+https://restful-booker.herokuapp.com, esperados da documentacao publicada
+(/apidoc); onde a documentacao e omissa, o caso cita a norma HTTP (RFC 9110).
+Casos propostos a 24.09.2026 e aprovados por delegacao (o utilizador pediu
+para avancar sem perguntar): rever.
+
     python examples/demo/gerar_workbook.py [destino.xlsx]
 """
 from __future__ import annotations
@@ -23,6 +29,8 @@ CASE_HEADERS = ["ID", "Título", "Role", "Técnica", "Prioridade", "Pré-condiç
                 "Resultado Esperado", "Estado", "Resultado Obtido", "Observações"]
 LOGIN = "Página de login aberta, sem sessão iniciada."
 SESSAO = "Sessão iniciada com a role indicada; página Products aberta; carrinho vazio."
+TOKEN = "Token de admin obtido com POST /auth (CT-API-002), guardado como segredo da sessão."
+CRIADA = "Reserva de teste criada em CT-API-003 (firstname com prefixo QA-AUTO-)."
 
 CASOS = {
     "Login": [
@@ -90,6 +98,43 @@ CASOS = {
          SESSAO + " Um produto no carrinho.",
          "1. Fazer o checkout com dados fictícios até ao resumo.\n2. Clicar em Finish.",
          "Mostra \"Thank you for your order!\" e o carrinho fica vazio."),
+    ],
+    "API": [
+        ("CT-API-001", "Health check", "—", "Partição de equivalência", "Alta", "API acessível.",
+         "1. GET /ping.",
+         "Responde 201 Created (HealthCheck na documentação)."),
+        ("CT-API-002", "Criar token com credenciais válidas", "admin (API)", "Partição de equivalência", "Alta",
+         "Credenciais de admin no .env.",
+         "1. POST /auth com username e password de admin (JSON).",
+         "Responde 200 com um campo \"token\" não vazio (CreateToken)."),
+        ("CT-API-003", "Criar reserva válida", "—", "Partição de equivalência", "Alta", "API acessível.",
+         "1. POST /booking com firstname QA-AUTO-…, lastname, totalprice, depositpaid, bookingdates e additionalneeds.",
+         "Responde 200 com bookingid numérico e booking igual ao enviado (CreateBooking)."),
+        ("CT-API-004", "Ler a reserva criada", "—", "Transição de estados", "Alta", CRIADA,
+         "1. GET /booking/{id}.",
+         "Responde 200 com os mesmos dados enviados na criação (GetBooking)."),
+        ("CT-API-005", "Filtrar reservas por firstname", "—", "Partição de equivalência", "Média", CRIADA,
+         "1. GET /booking?firstname=<firstname da reserva criada>.",
+         "Responde 200 com uma lista que contém o bookingid criado (GetBookingIds)."),
+        ("CT-API-006", "Atualizar sem autenticação", "—", "Matriz de roles", "Alta", CRIADA,
+         "1. PUT /booking/{id} com dados novos, sem Cookie nem Authorization.\n2. GET /booking/{id}.",
+         "O pedido é recusado (4xx: a documentação exige token ou Basic no PUT) e a reserva fica igual."),
+        ("CT-API-007", "Atualizar com token", "admin (API)", "Transição de estados", "Alta", CRIADA + " " + TOKEN,
+         "1. PUT /booking/{id} com dados novos e Cookie: token=<token>.\n2. GET /booking/{id}.",
+         "Responde 200 com os dados novos, e o GET seguinte devolve-os (UpdateBooking)."),
+        ("CT-API-008", "Atualização parcial com token", "admin (API)", "Partição de equivalência", "Média",
+         CRIADA + " " + TOKEN,
+         "1. PATCH /booking/{id} só com firstname novo e Cookie: token=<token>.\n2. GET /booking/{id}.",
+         "Responde 200; só o firstname muda, os outros campos ficam iguais (PartialUpdateBooking)."),
+        ("CT-API-009", "Criar reserva sem campos obrigatórios", "—", "Partição de equivalência", "Média",
+         "API acessível.",
+         "1. POST /booking com JSON só com lastname.",
+         ("Responde 4xx (erro do cliente), nunca 5xx. Fonte: a documentação é omissa sobre erros; "
+          "RFC 9110 §15.5–15.6 (entrada inválida = 4xx).")),
+        ("CT-API-010", "Apagar a reserva com token", "admin (API)", "Transição de estados", "Média",
+         CRIADA + " " + TOKEN,
+         "1. DELETE /booking/{id} com Cookie: token=<token>.",
+         "Responde 201 Created (DeleteBooking na documentação)."),
     ],
 }
 
