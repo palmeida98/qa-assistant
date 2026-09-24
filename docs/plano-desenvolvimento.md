@@ -416,7 +416,7 @@ Recomendações aplicadas por decisão do utilizador (24.09.2026).
 Notas:
 - `comum.py`: `ler_projeto`, `ler_env`, `ler_env_workspace` e o `Redator` (com as constantes de redação que ele usa). Usado pelo `api_pedido`, `auditar_a11y`, `testar_mobile`, `gerar_painel` e `validar_projeto`; o `api_pedido` continua a exportar os mesmos nomes. -90 linhas nos scripts.
 - Comportamento igual: os testes existentes passam sem mudanças (só o `test_testar_mobile` importa o `Redator` do `comum`); `tests/test_comum.py` novo (leitura do `.env` e do `projeto.yaml`, mensagens de erro dos scripts mantidas, uma só implementação). Demo corrido de novo: validação, painel, API, acessibilidade e mobile iguais.
-- Visto de passagem, sem mudar (fora do âmbito): `testar_mobile.py` com um flow que não é um ficheiro (ex.: `CT-MOB-001` em vez do caminho) dá `Blocked` "o flow nao correu" em vez de erro de uso (código 2).
+- Visto de passagem, sem mudar (fora do âmbito): `testar_mobile.py` com um flow que não é um ficheiro (ex.: `CT-MOB-001` em vez do caminho) dá `Blocked` "o flow nao correu" em vez de erro de uso (código 2). Corrigido a seguir, à parte (ver registo de alterações).
 
 ### 7.9 Versão 1.0
 - [ ] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
@@ -443,3 +443,4 @@ Notas:
 | 2026-09-24 | 7.4 (`3563f24`), 7.5 (`0a61bc6`) e 7.6 (`ced85fc`) concluídas: `historico/` protegido no `.claude/settings.json` do workspace, versões fixas (Playwright MCP e dependências Python), demo reproduzível com teste no job `golden`. |
 | 2026-09-24 | 7.7 concluída (`3ffbb62`), decisões do utilizador: sem `qa_core`/CLI `qa`; `executor-web` adiado e reavaliado no piloto; `jira` e `azure-devops` em registo manual (metodologia §4.2). A 7.2 ganhou os passos de reavaliar o `executor-web` e de confirmar a proteção de `historico/`. |
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
+| 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |

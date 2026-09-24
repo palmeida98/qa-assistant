@@ -2,10 +2,14 @@
 Corre os flows Maestro de um workspace e liga cada resultado ao caso de teste
 (tecnica-mobile.md; plano, tarefa 3.3).
 
-    python scripts/testar_mobile.py <workspace> [flow.yaml ...] [--saida runs/mobile_<data>.json]
+    python scripts/testar_mobile.py <workspace> [flow ...] [--saida runs/mobile_<data>.json]
 
 - A configuracao vem da secao mobile: do projeto.yaml (plataforma, pasta dos
   flows, variaveis). Sem flows indicados, corre todos os CT-*.yaml da pasta.
+- Cada flow indicado e um caminho (a partir da pasta atual, do workspace ou da
+  pasta dos flows) ou o ID do caso (CT-MOB-003 -> o unico CT-MOB-003_*.yaml da
+  pasta). Um flow que nao se encontra e erro de uso (codigo 2, nada corrido),
+  nunca um caso Blocked.
 - O caso e o prefixo do nome do ficheiro do flow (CT-MOB-003_carrinho.yaml ->
   CT-MOB-003).
 - Credenciais: cada variavel listada em mobile.variaveis vai do .env para uma
@@ -14,7 +18,7 @@ Corre os flows Maestro de um workspace e liga cada resultado ao caso de teste
 
 Codigos de saida:
   0  flows corridos (os Fail sao resultados, nao erros)
-  2  configuracao invalida ou Maestro por instalar (nada corrido)
+  2  configuracao invalida, flow inexistente ou Maestro por instalar (nada corrido)
   3  sem alvo (nenhum dispositivo/emulador) ou o Maestro nao produziu relatorio:
      os casos ficam Blocked por ambiente
 """
@@ -49,6 +53,30 @@ class Erro(Exception):
 def caso_do_flow(ficheiro: str) -> str | None:
     m = CASO.match(os.path.basename(ficheiro))
     return m.group(1) if m else None
+
+
+def resolver_flows(nomes: list[str], workspace: str, pasta: str) -> list[str]:
+    """Caminhos absolutos dos flows indicados (ver o cabecalho). Erro com
+    sugestoes se algum nao existir: antes, um nome errado chegava ao Maestro
+    e o caso ficava Blocked "o flow nao correu", como se fosse o ambiente."""
+    flows, faltam = [], []
+    for nome in nomes:
+        caminho = next((c for c in (nome, os.path.join(workspace, nome), os.path.join(pasta, nome))
+                        if os.path.isfile(c)), None)
+        if caminho is None and CASO.fullmatch(nome):
+            do_caso = sorted(glob.glob(os.path.join(pasta, glob.escape(nome) + "_*.yaml")))
+            caminho = do_caso[0] if len(do_caso) == 1 else None
+        if caminho:
+            flows.append(os.path.abspath(caminho))
+            continue
+        # sugestoes: os flows do mesmo caso (apanha gralhas no resto do nome e IDs com varios flows)
+        base = os.path.splitext(os.path.basename(nome))[0]
+        caso = caso_do_flow(base) or base
+        parecidos = sorted(os.path.basename(f) for f in glob.glob(os.path.join(pasta, glob.escape(caso) + "*.yaml")))
+        faltam.append(nome + (f" (queria dizer {parecidos}?)" if parecidos else ""))
+    if faltam:
+        raise Erro(f"flow(s) nao encontrado(s) na pasta atual, no workspace nem em {pasta}: {'; '.join(faltam)}")
+    return flows
 
 
 def configuracao(workspace: str) -> dict:
@@ -114,12 +142,13 @@ def ler_junit(xml_txt: str, red: Redator) -> list[dict]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Corre flows Maestro e liga os resultados aos casos (tecnica-mobile.md).")
     ap.add_argument("workspace")
-    ap.add_argument("flows", nargs="*", help="flows a correr (por omissao todos os CT-*.yaml da pasta)")
+    ap.add_argument("flows", nargs="*", help="flows a correr: caminho ou ID do caso (por omissao todos os CT-*.yaml da pasta)")
     ap.add_argument("--saida", help="relatorio JSON (relativo ao workspace, se nao for absoluto)")
     a = ap.parse_args(argv)
     try:
         cfg = configuracao(a.workspace)
-        flows = [os.path.abspath(f) for f in a.flows] or sorted(glob.glob(os.path.join(cfg["pasta"], "CT-*.yaml")))
+        flows = (resolver_flows(a.flows, a.workspace, cfg["pasta"]) if a.flows
+                 else sorted(glob.glob(os.path.join(cfg["pasta"], "CT-*.yaml"))))
         if not flows:
             raise Erro(f"nenhum flow CT-*.yaml em {cfg['pasta']}")
         sem_caso = [os.path.basename(f) for f in flows if not caso_do_flow(f)]

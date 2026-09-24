@@ -96,6 +96,33 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("sem ID de caso", err)
 
+    def test_flow_inexistente_sai_com_2_sem_correr_o_maestro(self):
+        # antes: o Maestro nao o corria e o caso ficava Blocked "o flow nao correu"
+        with mock.patch.object(tm.subprocess, "run") as run:
+            rc, out, err = self.correr("CT-MOB-009", "flows/CT-MOB-001_logn.yaml")
+        self.assertEqual((rc, out), (2, ""))
+        run.assert_not_called()
+        self.assertIn("CT-MOB-009", err)
+        self.assertIn("queria dizer ['CT-MOB-001_login.yaml']", err)
+
+    def test_flow_pelo_id_do_caso_ou_caminho_relativo(self):
+        pasta = os.path.join(self.ws, "flows")
+        esperado = [os.path.abspath(os.path.join(pasta, "CT-MOB-001_login.yaml")),
+                    os.path.abspath(os.path.join(pasta, "CT-MOB-002_bloqueado.yaml"))]
+        for nomes in (["CT-MOB-001", "CT-MOB-002"],                               # ID do caso
+                      ["flows/CT-MOB-001_login.yaml", "CT-MOB-002_bloqueado.yaml"],  # workspace / pasta
+                      esperado):                                                  # absolutos
+            with self.subTest(nomes=nomes):
+                self.assertEqual(tm.resolver_flows(nomes, self.ws, pasta), esperado)
+
+    def test_id_do_caso_com_dois_flows_e_ambiguo(self):
+        with open(os.path.join(self.ws, "flows", "CT-MOB-001_outro.yaml"), "w", encoding="utf-8") as f:
+            f.write("---\n")
+        with self.assertRaises(tm.Erro) as cm:
+            tm.resolver_flows(["CT-MOB-001"], self.ws, os.path.join(self.ws, "flows"))
+        self.assertIn("CT-MOB-001_login.yaml", str(cm.exception))
+        self.assertIn("CT-MOB-001_outro.yaml", str(cm.exception))
+
     def test_sem_dispositivo_android_da_blocked_e_nao_corre_o_maestro(self):
         def which(nome):
             return None if nome == "adb" else "maestro"

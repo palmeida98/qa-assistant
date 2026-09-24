@@ -27,7 +27,7 @@ Referências:
 - `python -m adapters.excel.aplicar <workspace> <lote.json>` — aplica um lote ao workbook (0 ok · 2 cross-check · 3 recálculo · 4 lote inválido · 5 resumo não bate)
 - `python scripts/api_pedido.py <workspace> <MÉTODO> <caminho> …` — um pedido HTTP com evidência redigida (0 ok · 1 código diferente · 2 uso · 3 sem resposta)
 - `python scripts/auditar_a11y.py <workspace> [--saida …]` — axe-core nas páginas do `projeto.yaml` (0 ok · 2 configuração/ferramenta · 3 página não auditada); instalar antes `npm ci --prefix tools/a11y`
-- `python scripts/testar_mobile.py <workspace> [flows…] [--saida …]` — corre os flows Maestro e liga-os aos casos (0 ok · 2 configuração · 3 sem alvo)
+- `python scripts/testar_mobile.py <workspace> [flows…] [--saida …]` — corre os flows Maestro e liga-os aos casos; cada flow é um caminho ou o ID do caso (0 ok · 2 configuração ou flow inexistente · 3 sem alvo)
 - `python scripts/gerar_painel.py <workspace> [--abrir]` — gera (e abre) o `painel.html` do workspace; é o que o `/painel` corre
 - `python scripts/sincronizar_skills.py [--aplicar]` — compara (e copia) `.claude/skills/` com `~/.claude/skills/`, a cópia que os workspaces usam; correr com `--aplicar` depois de mudar uma skill (0 sincronizadas · 1 diferenças)
 - Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice)

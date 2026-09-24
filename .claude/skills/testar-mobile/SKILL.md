@@ -14,6 +14,8 @@ description: Testa a app movel (Android/iOS) ou a web em contexto movel do works
    variavel listada em mobile.variaveis; nunca escritas no flow nem passadas com -e.
 4. Corre, a partir de <qa>, com o caminho ABSOLUTO do workspace:
    python scripts/testar_mobile.py <workspace> [flows...] --saida runs/mobile_<AAAAMMDD>_<nn>.json
+   (cada flow: caminho, relativo ao workspace ou a pasta dos flows, ou so o ID do caso, ex. CT-MOB-003;
+   sem flows, corre todos; um flow que nao existe da saida 2 e nada corre)
    - 3 = sem alvo ou o Maestro nao correu: Blocked (ambiente);
    - Fail por instabilidade da ferramenta (elemento que existe e nao foi encontrado, timeout do driver):
      uma nova tentativa desse flow; se repetir, Blocked (ferramenta) com sugestao de teste manual.
