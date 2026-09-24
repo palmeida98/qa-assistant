@@ -30,7 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Por fazer |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 concluída) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -354,9 +354,12 @@ Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de 
 
 Saída da revisão geral 2 (24.09.2026, `a57ed19`): o que falta para dar o qa-assistant por concluído (v1.0). Ordem recomendada: 7.1 → 7.2 → 7.3; 7.4, 7.5 e 7.6 em paralelo; 7.7 decidido já, porque muda o que as outras têm de cobrir.
 
-### 7.1 CI verde depois da revisão geral 2
+### 7.1 CI verde depois da revisão geral 2 — `1efa40f`
 A correção do timeout do recálculo (grupo de processos, fora do Windows) só se verifica no Linux; na máquina de desenvolvimento não havia Docker ativo nem WSL com distribuição.
-- [ ] CI de `a57ed19` verde nos 5 jobs (o `tests/test_recalc.py` corre no job `testes`, em Ubuntu).
+- [x] CI de `a57ed19` verde nos 5 jobs (o `tests/test_recalc.py` corre no job `testes`, em Ubuntu).
+
+Notas:
+- Run 36053764682 (push de `a57ed19` + `1efa40f`, 24.09.2026): demo-e2e, lint, secrets, testes e golden verdes. No job `testes` (Ubuntu) correram os 117 testes; passaram `test_timeout_mata_a_arvore_de_processos` (timeout efetivo com um neto pendurado, pelo grupo de processos), `test_acentos_chegam_intactos_por_um_pipe` e `test_gitignore_num_workspace_com_git`.
 
 ### 7.2 Piloto num projeto real (é a 2.4)
 - [ ] `.env` do workspace do piloto preenchido pelo utilizador.
@@ -411,3 +414,4 @@ A reconstrução põe datas do dia (defeitos novos, resumo da vista, `_qa_lotes`
 | 2026-09-24 | CI: runners fixados em `ubuntu-24.04` (`3f72fcd`) antes da migração do `ubuntu-latest` para o Ubuntu 26 (19.10.2026); os 5 jobs passaram (run 36047318268). Nota na 4.1. |
 | 2026-09-24 | Revisão geral 2 (teste de tudo → análise → correções → reteste): **inspetor** deixava a sheet de defeitos sem proposta quando todos os defeitos estavam abertos (vista com os mesmos IDs; acontecia no demo), agora desempata pela linha do cabeçalho e pelo n.º de colunas, com `tests/test_inspecionar.py` (não havia testes); **consola**: no Windows, a saída lida por pipe vinha em cp1252 e os acentos chegavam trocados ao Claude Code, agora todos os pontos de entrada escrevem em UTF-8 (`tests/test_consola.py`); **validar_projeto**: ambiente sem URL passava (era o caso do template), URLs de `api`/`acessibilidade` fora dos ambientes declarados ou de produção passam a problema, e avisa se `.env`/`.api-sessao.env`/`painel.html` não estão no `.gitignore` de um workspace com git; **recálculo**: no Linux o timeout só matava o `soffice` e a espera ficava presa ao filho, agora mata o grupo de processos (`tests/test_recalc.py`); `api_pedido --saida` relativo ao workspace, como nos outros scripts; `scripts/sincronizar_skills.py` para a cópia global das skills (antes manual, sem verificação); hook `testes` do pre-commit também para skills, `CLAUDE.md`, demo e template; docs alinhadas com o que existe (`qa_core`, CLI `qa` e `executor-web` marcados como planeados; códigos 4 e 5 do `aplicar` na técnica Excel); `docs/heuristicas.md` criado com as heurísticas dos 3 bugs do demo. 95 → 117 testes. |
 | 2026-09-24 | Revisão geral 2 em `a57ed19`. Fase 7 (fecho da framework) acrescentada com o que falta para a v1.0: CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível, decisões de âmbito. |
+| 2026-09-24 | 7.1 concluída: CI verde no Linux depois da revisão geral 2 (run 36053764682), com o timeout do recálculo verificado em Ubuntu. |
