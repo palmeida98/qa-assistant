@@ -30,7 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e depois a 7.9) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; 7.3 com o mecanismo pronto; falta o piloto 7.2, que dá o golden real da 7.3, e depois a 7.9) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -370,7 +370,7 @@ Notas:
 - [ ] Confirmar a proteção de `historico/` (7.4): a edição de um ficheiro em `historico/` é recusada no `claude` aberto no workspace.
 - [ ] Para a 7.3: **antes** de aplicar o lote no `/checkpoint`, copiar o workbook para `<workspace>/golden/<lote>/antes.xlsx`; depois do checkpoint revisto, copiar o workbook para `depois.xlsx`, o lote (com o nome original) e escrever `golden.yaml` com `agora` = o `aplicado_em` da sheet `_qa_lotes` para esse lote.
 
-### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15)
+### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15) — mecanismo em `e74c281`
 - [x] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
 
 Notas (1.º critério, adiantado sem o piloto por decisão do utilizador, 24.09.2026):
@@ -452,3 +452,4 @@ Notas:
 | 2026-09-24 | 7.7 concluída (`3ffbb62`), decisões do utilizador: sem `qa_core`/CLI `qa`; `executor-web` adiado e reavaliado no piloto; `jira` e `azure-devops` em registo manual (metodologia §4.2). A 7.2 ganhou os passos de reavaliar o `executor-web` e de confirmar a proteção de `historico/`. |
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
+| 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
