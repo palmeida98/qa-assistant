@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -21,7 +21,7 @@ jobs:
       - run: ruff check --output-format github .
 
   testes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -32,7 +32,7 @@ jobs:
       - run: python -m unittest discover -s tests -v
 
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -43,7 +43,7 @@ jobs:
       - run: pre-commit run detect-secrets --all-files --show-diff-on-failure
 
   golden:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -61,7 +61,7 @@ jobs:
 
   demo-e2e:
     # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DEMO_SAUCE_STANDARD_USER: ${{ secrets.DEMO_SAUCE_STANDARD_USER }}
       DEMO_SAUCE_LOCKED_OUT_USER: ${{ secrets.DEMO_SAUCE_LOCKED_OUT_USER }}
