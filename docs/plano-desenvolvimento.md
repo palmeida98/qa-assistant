@@ -24,7 +24,7 @@
 | Fase | Objetivo | Estado |
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
-| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída, com 1 critério de verificação manual por fechar (1.1: `/` mostra as skills) |
+| 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
 | 4 | CI da própria framework | Por fazer |
@@ -51,7 +51,7 @@ Lições do piloto já incorporadas na framework: recálculo nunca em pasta sinc
 
 ## Fase 1 — Completar o núcleo
 
-### 1.1 Skills em falta — `4e2da2a` (falta confirmar o critério do `/`)
+### 1.1 Skills em falta — `4e2da2a`
 O `CLAUDE.md` lista 8 comandos, mas só existem 4 skills. Criar as que faltam em `.claude/skills/<nome>/SKILL.md`:
 
 - `analisar-funcionalidade` — analisa uma funcionalidade por role/perfil e produz a lista de comportamentos a testar (metodologia-core §5).
@@ -62,7 +62,7 @@ O `CLAUDE.md` lista 8 comandos, mas só existem 4 skills. Criar as que faltam em
 Critérios de aceitação:
 - [x] `dir .claude\skills` mostra 8 pastas, cada uma com `SKILL.md` e frontmatter `name` + `description`.
 - [x] Cada skill cita a secção da metodologia que implementa e não contém nada específico de um projeto.
-- [ ] Dentro do `claude`, escrever `/` mostra as 8 skills com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] Dentro do `claude`, escrever `/` mostra as 8 skills com a etiqueta `(project)`. *(confirmado pelo utilizador, 24.09.2026)*
 - [x] Cópia atualizada em `~/.claude/skills/`.
 - [x] Commit passa os dois guards.
 
