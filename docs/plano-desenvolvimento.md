@@ -280,6 +280,7 @@ Notas:
 - No Linux o ruff exige o bit de execução em ficheiros com shebang (`git update-index --chmod=+x`); no Windows não se nota.
 - Critério 2 validado num branch temporário apagado no fim: o commit partido foi criado pela API do GitHub (como uma edição no site, sem hooks locais), porque o pre-commit bloqueia-o localmente e o guard não se contorna. Resultado: job `golden` falhado com `apply.novos_defeitos[0]: esperado 'BUG-99', obtido 'BUG-4'`.
 - Repositório privado: o badge (no `CLAUDE.md`, até haver README na 6.1) só aparece a quem tem acesso.
+- Runners fixados em `ubuntu-24.04` (`3f72fcd`), em vez de `ubuntu-latest`, que passa ao Ubuntu 26 a partir de 19.10.2026 (aviso do GitHub nos jobs). A mudança de versão fica uma decisão explícita.
 
 ### 4.2 Regressão do demo — `034d1c4`
 Correr os `.spec.ts` do demo (2.5) no CI contra o site público.
@@ -360,3 +361,4 @@ Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de 
 | 2026-09-24 | Verificação da % executada do resumo (`aba_resumo.coluna_percentagem` + `estado_por_testar`): compara com (total − por testar) / total, fração ou pontos percentuais, tolerância estrita por omissão (0,001 pp); o painel recusa um `estado_por_testar` diferente do seu estado pendente. Demo configurado. |
 | 2026-09-24 | detect-secrets: o do CI (Linux, Python 3.12) marcou `password: <NOME_VAR>` num mapa YAML inline que o local (Windows, Python 3.14) deixa passar, com a mesma versão e baseline; segredos óbvios são apanhados nos dois. Corrigido o conteúdo (chaves `var_utilizador`/`var_palavra_passe`); causa exata por apurar. Nos workspaces sem CI, o guard local é a única barreira. |
 | 2026-09-24 | **Causa da diferença do detect-secrets encontrada**: a versão 1.5.0 abre os ficheiros com `open()` sem encoding; no Windows (cp1252) um ficheiro UTF-8 com certos caracteres (ex.: "Á", bytes C3 81) dá `UnicodeDecodeError` e é **saltado sem aviso**, como se fosse binário (6 ficheiros do repositório, incluindo a metodologia). Não era o Python 3.14 nem o YAML. Corrigido: hook local com a mesma versão em modo UTF-8 (`python -X utf8`), mesmo id para o CI; `tests/test_guards.py` impede o retrocesso. A varredura do histórico da 6.2 foi refeita em UTF-8: 1 achado, o falso positivo já conhecido (nome de variável na versão antiga do `projeto.yaml` do demo). |
+| 2026-09-24 | CI: runners fixados em `ubuntu-24.04` (`3f72fcd`) antes da migração do `ubuntu-latest` para o Ubuntu 26 (19.10.2026); os 5 jobs passaram (run 36047318268). Nota na 4.1. |
