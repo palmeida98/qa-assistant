@@ -187,12 +187,16 @@ Aqui só se marca feito e, se surgirem, lições **genéricas** para a metodolog
 - [ ] Piloto concluído e comparado.
 - [ ] Lições genéricas incorporadas (se houver).
 
-### 2.5 Promoção N1 → N2
+### 2.5 Promoção N1 → N2 — `19f7fc7`
 A partir de um caso do demo que passou pelo agente (N1), gerar um teste determinístico Playwright (`.spec.ts`) conforme `tecnica-browser.md` §13.
 
 Critérios de aceitação:
-- [ ] `npx playwright test` corre e passa localmente.
-- [ ] Localizadores seguem a prioridade da `tecnica-browser.md` §4.2.
+- [x] `npx playwright test` corre e passa localmente (3 testes em `examples/demo/e2e/specs/login.spec.ts`, no Chrome instalado). Um esperado alterado de propósito faz o teste falhar.
+- [x] Localizadores seguem a prioridade da `tecnica-browser.md` §4.2: botão por role + nome (nível 1); os campos não têm label, só placeholder (nível 3 — observação de acessibilidade); textos visíveis (nível 4). Sem CSS nem XPath.
+
+Notas:
+- Promovidos CT-LOGIN-001, 002 e 003: dois Pass N1 consecutivos (lote 2.3 e uma reexecução a 24.09.2026), dados determinísticos, esperado estável (§13). O ID do caso vai no título do teste; etiqueta `@smoke`.
+- `@playwright/test` 1.63.0 fixado com lock; credenciais só por variáveis de ambiente (o `playwright.config.ts` lê o `.env` do demo quando existe).
 
 ---
 
