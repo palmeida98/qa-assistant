@@ -22,7 +22,7 @@ api:                         # modulo api (docs/tecnica-api.md, plano 3.1)
   contrato: "https://restful-booker.herokuapp.com/apidoc/index.html"   # documentacao publicada: fonte do esperado
   autenticacao: "cookie"       # token de POST /auth no cookie token=...; a doc tambem aceita Basic
   credenciais:
-    admin: {user: DEMO_BOOKER_USER, password: DEMO_BOOKER_PASSWORD}
+    admin: {var_utilizador: DEMO_BOOKER_USER, var_palavra_passe: DEMO_BOOKER_PASSWORD}
 
 painel:                      # significado de cada estado de caso no painel (plano 5.1)
   estados: {"Por testar": pendente, "Pass": ok, "Fail": falha, "Blocked": bloqueado, "N/A": na}

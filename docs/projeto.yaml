@@ -15,7 +15,7 @@ api:
   base_url: ""                 # URL base do ambiente de TESTES (caminhos relativos do api_pedido.py)
   contrato: ""                 # (opc.) OpenAPI ou documentacao publicada: a fonte do resultado esperado
   autenticacao: ""             # bearer | basic | cookie | api-key | nenhuma
-  credenciais: {}              # role -> {user: NOME_VAR, password: NOME_VAR} (variaveis do .env)
+  credenciais: {}              # role -> {var_utilizador: NOME_VAR, var_palavra_passe: NOME_VAR} (nomes de variaveis do .env)
 
 # painel: significado de cada estado de caso no painel (scripts/gerar_painel.py, plano 5.1).
 # (opc.) Tipos: pendente | ok | falha | bloqueado | na. "Executados" = casos fora de pendente.
