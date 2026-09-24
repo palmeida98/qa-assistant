@@ -30,7 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1, 7.4, 7.5 e 7.6 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e as decisões da 7.7) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1, 7.4 a 7.7 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e a 7.8 opcional) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -404,7 +404,7 @@ Notas:
 - `tests/test_demo_reproduzivel.py`: `Agora` (sem LibreOffice: o mesmo instante dá as mesmas células; as datas escritas são as do instante) e `Demo` (reconstrução = workbook versionado, célula a célula, em todas as sheets; no job `golden`). O `Demo` falhou contra o workbook anterior (datas do dia da reconstrução) e passa com o regenerado; duas reconstruções seguidas dão as mesmas células.
 - O `.xlsx` continua a mudar byte a byte a cada reconstrução (propriedades do ficheiro gravadas pelo openpyxl e pelo LibreOffice); o critério é o das células.
 
-### 7.7 Decisões de âmbito (utilizador)
+### 7.7 Decisões de âmbito (utilizador) — `3ffbb62`
 Recomendações aplicadas por decisão do utilizador (24.09.2026).
 - [x] `qa_core` / CLI `qa`: **não se constrói**; os adaptadores e os scripts são o motor. Metodologia §1.1 e §2 reescritas (o modelo interno é o vocabulário comum, não uma base de dados à parte).
 - [x] Subagente `executor-web`: **não se constrói agora**; usa-se o subagente genérico com as instruções do `/executar-lote` (técnica browser §11). Reavaliado no piloto (7.2).
@@ -436,3 +436,4 @@ Recomendações aplicadas por decisão do utilizador (24.09.2026).
 | 2026-09-24 | Revisão geral 2 em `a57ed19`. Fase 7 (fecho da framework) acrescentada com o que falta para a v1.0: CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível, decisões de âmbito. |
 | 2026-09-24 | 7.1 concluída: CI verde no Linux depois da revisão geral 2 (run 36053764682), com o timeout do recálculo verificado em Ubuntu. |
 | 2026-09-24 | 7.4 (`3563f24`), 7.5 (`0a61bc6`) e 7.6 (`ced85fc`) concluídas: `historico/` protegido no `.claude/settings.json` do workspace, versões fixas (Playwright MCP e dependências Python), demo reproduzível com teste no job `golden`. |
+| 2026-09-24 | 7.7 concluída (`3ffbb62`), decisões do utilizador: sem `qa_core`/CLI `qa`; `executor-web` adiado e reavaliado no piloto; `jira` e `azure-devops` em registo manual (metodologia §4.2). A 7.2 ganhou os passos de reavaliar o `executor-web` e de confirmar a proteção de `historico/`. |
