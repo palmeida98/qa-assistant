@@ -366,6 +366,8 @@ Notas:
 - [ ] `python scripts/validar_projeto.py <workspace>` sem problemas **com as regras novas** (URLs dentro dos ambientes, `.gitignore`); o que aparecer corrige-se no workspace, nunca aqui.
 - [ ] Lote de 16 casos executado e comparado com os resultados anteriores (fecha a 2.4).
 - [ ] Lições genéricas incorporadas, anonimizadas (metodologia §1.4, §17).
+- [ ] Reavaliar o subagente `executor-web` (7.7): se os lotes do piloto encheram o contexto principal, criá-lo; senão, fica o subagente genérico.
+- [ ] Confirmar a proteção de `historico/` (7.4): a edição de um ficheiro em `historico/` é recusada no `claude` aberto no workspace.
 
 ### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15)
 - [ ] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
@@ -403,9 +405,10 @@ Notas:
 - O `.xlsx` continua a mudar byte a byte a cada reconstrução (propriedades do ficheiro gravadas pelo openpyxl e pelo LibreOffice); o critério é o das células.
 
 ### 7.7 Decisões de âmbito (utilizador)
-- [ ] `qa_core` / CLI `qa`: recomendação **não construir** (adaptadores e scripts já são o motor); retirar da metodologia §1.1.
-- [ ] Subagente `executor-web`: só se o piloto mostrar lotes a encher o contexto; senão, retirar da técnica browser §11.
-- [ ] Trackers `jira` e `azure-devops` (aceites pelo `validar_projeto`, sem adaptador nem painel): implementar quando um projeto real precisar, ou documentar como "registo manual".
+Recomendações aplicadas por decisão do utilizador (24.09.2026).
+- [x] `qa_core` / CLI `qa`: **não se constrói**; os adaptadores e os scripts são o motor. Metodologia §1.1 e §2 reescritas (o modelo interno é o vocabulário comum, não uma base de dados à parte).
+- [x] Subagente `executor-web`: **não se constrói agora**; usa-se o subagente genérico com as instruções do `/executar-lote` (técnica browser §11). Reavaliado no piloto (7.2).
+- [x] Trackers `jira` e `azure-devops`: **registo manual** até um projeto real precisar de adaptador. Nova metodologia §4.2 (tabela por tracker), comentário no template, passo 7a no `/checkpoint`, e o `validar_projeto` avisa quando o tracker não tem adaptador (teste novo).
 
 ### 7.8 Arrumação (opcional)
 - [ ] `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` (hoje o `testar_mobile` e o `auditar_a11y` importam do `api_pedido`), sem mudar comportamento.

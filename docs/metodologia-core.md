@@ -23,10 +23,10 @@
 
 | Camada | Conteúdo | Onde vive |
 |---|---|---|
-| **Motor** | Skills (`.claude/skills/`), adaptadores, scripts (`scripts/`, `tools/`), testes e guards. Planeados, ainda por criar: o `qa_core` (modelo de dados, pipeline, CLI `qa`) e subagentes | Repositório pessoal `qa-assistant` |
+| **Motor** | Skills (`.claude/skills/`), adaptadores, scripts (`scripts/`, `tools/`), testes e guards. Não há um núcleo à parte (`qa_core`, CLI `qa`): por decisão de 24.09.2026, os adaptadores e os scripts são o motor | Repositório pessoal `qa-assistant` |
 | **1. Metodologia** | Este documento | `qa-assistant/docs/` |
 | **2. Módulos de teste** | Técnicas por tipo de teste (`tecnica-browser.md`, `tecnica-api.md`, `tecnica-acessibilidade.md`, `tecnica-mobile.md`; lista em §4.1) | `qa-assistant/docs/` |
-| **3. Adaptadores** | Conversão entre o modelo interno e as ferramentas de cada empresa (Excel, Azure DevOps, Jira, Figma) | `qa-assistant/adapters/` |
+| **3. Adaptadores** | Conversão entre o modelo interno e as ferramentas de cada empresa. Hoje só o Excel (`adapters/excel/`); os outros trackers são registo manual (§4.2) | `qa-assistant/adapters/` |
 | **4. Workspace** | Contexto do projeto, ambientes, roles, workbook, execuções, histórico, credenciais | `qa-workspaces/<empresa>/<projeto>/` |
 
 ### 1.2 Fronteira de privacidade
@@ -69,7 +69,7 @@ Distinguir sempre **capacidade da framework** de **detalhe de implementação de
 
 ## 2. Modelo de dados
 
-O modelo interno é independente do formato de qualquer empresa. Os workbooks Excel, o Azure DevOps e o Jira são formatos de entrada e saída, tratados pelos adaptadores.
+O modelo interno é independente do formato de qualquer empresa: é o vocabulário comum das skills, dos registos leves e dos adaptadores, não uma base de dados à parte. Os workbooks Excel, o Azure DevOps e o Jira são formatos de entrada e saída; os que têm adaptador tratam-se por ele, os outros à mão (§4.2).
 
 | Entidade | Campos mínimos |
 |---|---|
@@ -144,6 +144,17 @@ Cada etapa tem uma skill correspondente no Claude Code:
 | `mobile` | `tecnica-mobile.md` | `/testar-mobile` | `mobile:` |
 
 Outras variantes referidas nas técnicas (smoke, matriz de roles, visual, cross-browser, formulários) fazem-se dentro destes módulos, como técnicas de desenho ou tipos de lote, e não são valores de `modulos:`. Um módulo novo entra primeiro nesta tabela, com técnica e skill (processo da §15).
+
+### 4.2 Trackers
+
+`tracker:` no `projeto.yaml` aceita `excel`, `jira` e `azure-devops`, mas só o Excel tem adaptador:
+
+| Tracker | Resultados | Bugs | Painel |
+|---|---|---|---|
+| `excel` | aplicados pelo adaptador no `/checkpoint` (`python -m adapters.excel.aplicar`) | `defeito_novo` / `bug` no registo leve, aplicados com os resultados | `/painel` |
+| `jira`, `azure-devops` | **registo manual**: o registo leve em `runs/` é a fonte; o utilizador (ou o assistente, com a ferramenta do tracker disponível e aprovação) passa-os ao tracker | preparados no formato do projeto e enviados só depois de aprovados (§9.4) | não há |
+
+Um adaptador para outro tracker só se escreve quando um projeto real precisar dele, com o golden e os testes do adaptador Excel como modelo (§15). O `scripts/validar_projeto.py` avisa quando o tracker não tem adaptador.
 
 Informação que já está no workspace **não se volta a perguntar nem a pesquisar**, salvo se houver evidência de que está desatualizada ou inconsistente. Se faltar uma informação necessária para continuar, identificar exatamente o que falta e perguntar.
 

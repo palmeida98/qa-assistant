@@ -42,7 +42,19 @@ class Validar(unittest.TestCase):
         return vp.validar(self.tmp.name)
 
     def test_base_valida(self):
-        self.assertEqual(self.com(), ([], []))
+        self.assertEqual(self.sem_aviso_tracker(), ([], []))
+
+    def sem_aviso_tracker(self, **alteracoes):
+        """validar() sem o aviso do tracker sem adaptador (a base usa jira, sem workbook)."""
+        problemas, avisos = self.com(**alteracoes)
+        return problemas, [w for w in avisos if "sem adaptador" not in w]
+
+    def test_tracker_sem_adaptador_e_aviso(self):
+        for tracker in ("jira", "azure-devops"):
+            with self.subTest(tracker=tracker):
+                problemas, avisos = self.com(tracker=tracker)
+                self.assertEqual(problemas, [])
+                self.assertTrue(any(f"tracker '{tracker}' sem adaptador" in w for w in avisos), avisos)
 
     def test_modulo_fora_da_lista(self):
         problemas, _ = self.com(modulos=["funcional-web", "smoke"])
@@ -102,7 +114,7 @@ class Validar(unittest.TestCase):
         self.assertTrue(any(".api-sessao.env" in w for w in avisos), avisos)
         with open(os.path.join(self.tmp.name, ".gitignore"), "w", encoding="utf-8") as f:
             f.write("*.env\n")
-        _, avisos = self.com(modulos=["api"], api={"base_url": "https://loja.demo/api"})
+        _, avisos = self.sem_aviso_tracker(modulos=["api"], api={"base_url": "https://loja.demo/api"})
         self.assertEqual(avisos, [])
 
 
@@ -122,7 +134,7 @@ class Validar(unittest.TestCase):
     def test_historico_protegido_com_outras_regras(self):
         with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
             f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(historico/**)"]}}')
-        self.assertEqual(self.com(), ([], []))
+        self.assertEqual(self.sem_aviso_tracker(), ([], []))
 
 
 class Demo(unittest.TestCase):

@@ -39,6 +39,7 @@ MODULOS = {
     "mobile": ("mobile", ("plataforma", "flows")),
 }
 TRACKERS = ("excel", "azure-devops", "jira")
+COM_ADAPTADOR = ("excel",)  # os outros sao registo manual (metodologia 4.2)
 
 
 def ambiente_de(url: str, ambientes: dict) -> str | None:
@@ -123,6 +124,9 @@ def validar(workspace: str) -> tuple[list[str], list[str]]:
             problemas.append(f"ambiente '{nome}': {url!r} nao e um URL http(s)://")
     if proj.get("tracker") and proj["tracker"] not in TRACKERS:
         problemas.append(f"tracker {proj['tracker']!r} fora de {list(TRACKERS)}")
+    elif proj.get("tracker") in TRACKERS and proj["tracker"] not in COM_ADAPTADOR:
+        avisos.append(f"tracker {proj['tracker']!r} sem adaptador: resultados e bugs passam ao tracker a mao, "
+                      "a partir do registo leve, e nao ha painel (metodologia 4.2)")
     if proj.get("bugs_resolvidos") not in (None, "remover", "arquivar"):
         problemas.append("bugs_resolvidos tem de ser 'remover' ou 'arquivar'")
     if proj.get("evidencia") not in (None, "texto", "texto+screenshot"):

@@ -28,5 +28,8 @@ description: Grava o registo leve, atualiza o contexto.md do workspace no format
      (aba_resumo): mostra as celulas ao utilizador; corrigem-se as FORMULAS do resumo, nunca os
      numeros a mao. Os totais do painel e do resumo de sessao vem da contagem direta.
    Reaplicar o mesmo lote nao muda nada (o adaptador deteta-o).
+7a. Com tracker jira ou azure-devops (sem adaptador; metodologia-core.md seccao 4.2), o registo leve e a
+   fonte: mostra ao utilizador o que passa ao tracker (resultados e bugs aprovados) e so o envia com a
+   ferramenta do tracker disponivel e aprovacao explicita; senao, fica a lista para ele passar a mao.
 8. Indica ao utilizador o ponto exato onde a execucao ficou. Com tracker excel, pode gerar o painel:
    python scripts/gerar_painel.py <workspace> (a partir da raiz do qa-assistant).

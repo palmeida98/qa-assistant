@@ -3,7 +3,7 @@ empresa: ""
 ambientes:
   teste: ""
 roles: []
-tracker: ""          # azure-devops | jira | excel
+tracker: ""          # excel (com adaptador) | jira | azure-devops (registo manual: metodologia 4.2)
 formato_bug: ""
 bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
