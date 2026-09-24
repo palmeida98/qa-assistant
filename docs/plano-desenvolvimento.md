@@ -194,8 +194,21 @@ Critérios de aceitação:
 
 Cada módulo: um documento em `docs/` (mesma estrutura dos existentes: âmbito, níveis de execução, preparação, verificação, evidência, segurança, ligação à metodologia, checklist) + uma skill + um exemplo no demo.
 
-### 3.1 API — `docs/tecnica-api.md` + `/testar-api`
+### 3.1 API — `docs/tecnica-api.md` + `/testar-api` — `5b11b05` (falta confirmar o critério do `/`)
 Contratos e schemas, códigos de estado, autenticação e autorização por role, casos negativos, idempotência, paginação, limites. Ferramentas: `request` do Playwright, curl, coleções Postman quando o projeto já as tenha. Evidência: pedido/resposta com segredos redigidos.
+
+Critérios de aceitação (3.1):
+- [x] Documento agnóstico de projeto (exemplos só com a Loja Demo), passa os guards.
+- [x] Skill `.claude/skills/testar-api` com frontmatter válido (teste `test_skills`), cópia global sincronizada.
+- [ ] `/` mostra `/testar-api` com a etiqueta `(project)`. *(verificação manual do utilizador; nesta sessão a skill já aparece na lista)*
+- [x] Exemplo executado no demo: área API com 10 casos (restful-booker, esperados da documentação publicada), lote `runs/lote_20260924_api01.json` aplicado ao workbook: 9 Pass, 1 Fail → BUG-1 (500 a um POST sem campos obrigatórios); cross-check limpo, recálculo OK, resumo vs contagem direta bate certo.
+- [x] Referência no `CLAUDE.md` (sem `@`: só se lê com o módulo `api` ativo, para não pesar em todas as sessões).
+
+Notas:
+- `scripts/api_pedido.py`: um pedido com evidência redigida (cabeçalhos de autenticação, chaves JSON com token/password/secret/api_key, e o valor literal de qualquer variável do `.env` ou segredo da sessão). Tokens guardados com `--guardar-segredo` em `.api-sessao.env` e usados como `{{TOKEN}}`: o agente encadeia pedidos sem nunca ver o token. Verificado: nenhum segredo nos 14 ficheiros de evidência do lote.
+- No Git Bash (Windows) um argumento `/booking` chega convertido em `C:/Program Files/Git/booking` (conversão de caminhos do MSYS). O script aceita caminhos sem a barra inicial e explica o erro se receber um caminho convertido; a skill manda escrever sem barra.
+- Decisões por delegação (o utilizador pediu para avançar sem perguntar): alvo restful-booker, os 10 casos de API e o BUG-1 (prioridade Média). Registadas no `contexto.md` do demo para revisão.
+- 9 testes do `api_pedido.py` com um servidor HTTP local (sem rede).
 
 ### 3.2 Acessibilidade — `docs/tecnica-acessibilidade.md` + `/auditar-acessibilidade`
 WCAG 2.1 AA. Parte automática com axe-core via Playwright; parte manual guiada (teclado, ordem de foco, leitor de ecrã, contraste, zoom 200%, reflow). Cada falha mapeada ao critério WCAG correspondente e ao nível.
