@@ -11,8 +11,8 @@
 
 ## 0. Âmbito
 
-- Serve de base a todos os módulos web: `funcional-web`, `smoke`, `roles`, `exploratorio`, `acessibilidade`, `visual`, `cross-browser` e `formularios`. Cada módulo acrescenta apenas o que lhe é próprio.
-- **Não** cobre apps móveis nativas. Essas são uma camada separada (`modulos/mobile.md`).
+- Serve de base aos módulos web (`funcional-web`, `exploratorio`, `acessibilidade`; lista fechada na metodologia §4.1). Smoke, matriz de roles, visual, cross-browser e formulários são variantes feitas dentro desses módulos. Cada módulo acrescenta apenas o que lhe é próprio.
+- **Não** cobre apps móveis nativas: ver `tecnica-mobile.md`.
 - Os valores concretos (URLs, roles, variáveis de credenciais, exceções) vêm do workspace: `CLAUDE.md` e `projeto.yaml`.
 
 ---

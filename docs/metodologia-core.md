@@ -25,7 +25,7 @@
 |---|---|---|
 | **Motor** | `qa_core` (modelo de dados, pipeline, validação, CLI `qa`), skills, subagentes e hooks | Repositório pessoal `qa-assistant` |
 | **1. Metodologia** | Este documento | `qa-assistant/docs/` |
-| **2. Módulos de teste** | Técnicas por tipo de teste (`tecnica-browser.md`, `modulos/acessibilidade.md`, …) | `qa-assistant/docs/` |
+| **2. Módulos de teste** | Técnicas por tipo de teste (`tecnica-browser.md`, `tecnica-api.md`, `tecnica-acessibilidade.md`, `tecnica-mobile.md`; lista em §4.1) | `qa-assistant/docs/` |
 | **3. Adaptadores** | Conversão entre o modelo interno e as ferramentas de cada empresa (Excel, Azure DevOps, Jira, Figma) | `qa-assistant/adapters/` |
 | **4. Workspace** | Contexto do projeto, ambientes, roles, workbook, execuções, histórico, credenciais | `qa-workspaces/<empresa>/<projeto>/` |
 
@@ -130,6 +130,20 @@ Cada etapa tem uma skill correspondente no Claude Code:
 5. Verificar que nenhuma informação do projeto foi escrita nas camadas universais.
 6. Criar o `contexto.md` inicial (ver §12.2).
 7. Importar os casos existentes com o adaptador do projeto e validar o round-trip (importar → exportar → comparar).
+
+### 4.1 Módulos de teste
+
+`modulos:` no `projeto.yaml` só aceita os valores desta lista fechada. Cada módulo ativo precisa da sua secção preenchida no `projeto.yaml` (o `scripts/validar_projeto.py` verifica-o):
+
+| Módulo | Técnica | Skill | Secção no `projeto.yaml` |
+|---|---|---|---|
+| `funcional-web` | `tecnica-browser.md` | `/executar-lote` | `ambientes`, `roles` |
+| `exploratorio` | `tecnica-browser.md` (charters, metodologia §5.2) | `/executar-lote` | — |
+| `api` | `tecnica-api.md` | `/testar-api` | `api:` |
+| `acessibilidade` | `tecnica-acessibilidade.md` | `/auditar-acessibilidade` | `acessibilidade:` |
+| `mobile` | `tecnica-mobile.md` | `/testar-mobile` | `mobile:` |
+
+Outras variantes referidas nas técnicas (smoke, matriz de roles, visual, cross-browser, formulários) fazem-se dentro destes módulos, como técnicas de desenho ou tipos de lote, e não são valores de `modulos:`. Um módulo novo entra primeiro nesta tabela, com técnica e skill (processo da §15).
 
 Informação que já está no workspace **não se volta a perguntar nem a pesquisar**, salvo se houver evidência de que está desatualizada ou inconsistente. Se faltar uma informação necessária para continuar, identificar exatamente o que falta e perguntar.
 

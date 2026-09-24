@@ -7,7 +7,7 @@ tracker: ""          # azure-devops | jira | excel
 formato_bug: ""
 bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
-modulos: [funcional-web]
+modulos: [funcional-web]      # lista fechada (metodologia 4.1): funcional-web | exploratorio | api | acessibilidade | mobile
 registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
 
 # api: so com o modulo api ativo (docs/tecnica-api.md). Nunca valores de credenciais: so nomes de variaveis.

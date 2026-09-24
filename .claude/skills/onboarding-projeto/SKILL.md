@@ -19,7 +19,8 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    - formato obrigatorio de bug
    - regra para bugs resolvidos (remover ou arquivar)
    - politica de evidencia (texto ou texto+screenshot)
-   - modulos de teste ativos
+   - modulos de teste ativos: so os da lista fechada da metodologia-core.md seccao 4.1 (funcional-web,
+     exploratorio, api, acessibilidade, mobile); mostra a lista e o que cada um implica
 3. Preenche o CLAUDE.md e o projeto.yaml com as respostas. Com tracker excel, acrescenta ao CLAUDE.md
    o import de <qa>/docs/tecnica-excel.md, ao lado dos outros imports universais.
 4. Se tracker for "excel", preenche a seccao excel: do projeto.yaml INSPECIONANDO o workbook real
@@ -64,4 +65,9 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
 6. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
 7. Confirma que .env e painel.html estao no .gitignore do workspace.
 8. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
+8a. Para cada modulo ativo com seccao propria (api:, acessibilidade:, mobile: -- metodologia seccao 4.1),
+    preenche a seccao com o utilizador (URLs so do ambiente de testes; credenciais so como nomes de
+    variaveis do .env). No fim valida, a partir da raiz do qa-assistant:
+    python scripts/validar_projeto.py <workspace>
+    e so da o onboarding por concluido com 0 problemas (os avisos mostram-se ao utilizador).
 9. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).
