@@ -1,0 +1,185 @@
+"""
+Corre os flows Maestro de um workspace e liga cada resultado ao caso de teste
+(tecnica-mobile.md; plano, tarefa 3.3).
+
+    python scripts/testar_mobile.py <workspace> [flow.yaml ...] [--saida runs/mobile_<data>.json]
+
+- A configuracao vem da secao mobile: do projeto.yaml (plataforma, pasta dos
+  flows, variaveis). Sem flows indicados, corre todos os CT-*.yaml da pasta.
+- O caso e o prefixo do nome do ficheiro do flow (CT-MOB-003_carrinho.yaml ->
+  CT-MOB-003).
+- Credenciais: cada variavel listada em mobile.variaveis vai do .env para uma
+  variavel de ambiente MAESTRO_<VAR>, que o flow le como ${MAESTRO_<VAR>};
+  nunca pela linha de comandos. As mensagens do relatorio sao redigidas.
+
+Codigos de saida:
+  0  flows corridos (os Fail sao resultados, nao erros)
+  2  configuracao invalida ou Maestro por instalar (nada corrido)
+  3  sem alvo (nenhum dispositivo/emulador) ou o Maestro nao produziu relatorio:
+     os casos ficam Blocked por ambiente
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+import yaml
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+
+from api_pedido import Redator, ler_env
+
+PLATAFORMAS = ("android", "ios", "web")
+CASO = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
+
+
+class Erro(Exception):
+    """Configuracao invalida ou ferramenta em falta (codigo 2)."""
+
+
+def caso_do_flow(ficheiro: str) -> str | None:
+    m = CASO.match(os.path.basename(ficheiro))
+    return m.group(1) if m else None
+
+
+def configuracao(workspace: str) -> dict:
+    path = os.path.join(workspace, "projeto.yaml")
+    if not os.path.isfile(path):
+        raise Erro(f"nao existe {path}")
+    with open(path, encoding="utf-8-sig") as f:
+        m = (yaml.safe_load(f) or {}).get("mobile") or {}
+    plat = m.get("plataforma")
+    if plat not in PLATAFORMAS:
+        raise Erro(f"mobile.plataforma tem de ser um de {PLATAFORMAS} (esta: {plat!r})")
+    pasta = os.path.join(workspace, m.get("flows") or "flows")
+    if not os.path.isdir(pasta):
+        raise Erro(f"pasta de flows em falta: {pasta}")
+    return {"plataforma": plat, "pasta": pasta, "variaveis": list(m.get("variaveis") or []),
+            "timeout": int(m.get("timeout_s") or 900)}
+
+
+def ambiente_maestro(workspace: str, variaveis: list[str]) -> tuple[dict, dict]:
+    """(env para o processo, segredos por valor para redigir)."""
+    env_ws = {**ler_env(os.path.join(workspace, ".env"))}
+    extra, segredos = {}, {}
+    for var in variaveis:
+        valor = env_ws.get(var) or os.environ.get(var)
+        if not valor:
+            raise Erro(f"variavel {var} (mobile.variaveis) sem valor no .env do workspace")
+        extra[f"MAESTRO_{var}"] = valor
+        segredos[var] = valor
+    return extra, segredos
+
+
+def alvo_disponivel(plataforma: str) -> tuple[bool, str]:
+    if plataforma == "web":
+        return True, "Maestro Web (beta) no Chrome"
+    if plataforma == "android":
+        adb = shutil.which("adb")
+        if not adb:
+            return False, "adb nao encontrado (sem Android SDK)"
+        out = subprocess.run([adb, "devices"], capture_output=True, text=True, check=False).stdout
+        dispositivos = [ln.split()[0] for ln in out.splitlines()[1:] if ln.strip().endswith("device")]
+        return (True, f"android: {', '.join(dispositivos)}") if dispositivos else (False, "nenhum dispositivo/emulador Android ligado")
+    xcrun = shutil.which("xcrun")
+    if not xcrun:
+        return False, "xcrun nao encontrado (iOS so em macOS com Xcode)"
+    out = subprocess.run([xcrun, "simctl", "list", "devices", "booted"], capture_output=True, text=True,
+                         check=False).stdout
+    return ("Booted" in out, "simulador iOS ligado" if "Booted" in out else "nenhum simulador iOS ligado")
+
+
+def ler_junit(xml_txt: str, red: Redator) -> list[dict]:
+    res = []
+    for tc in ET.fromstring(xml_txt).iter("testcase"):
+        falha = tc.find("failure")
+        if falha is None:
+            falha = tc.find("error")
+        ok = tc.get("status", "SUCCESS") == "SUCCESS" and falha is None
+        ficheiro = tc.get("file") or tc.get("name") or ""
+        res.append({"caso": caso_do_flow(ficheiro), "flow": ficheiro, "estado_sugerido": "Pass" if ok else "Fail",
+                    "mensagem": red.texto((falha.text or falha.get("message") or "").strip()) if falha is not None else "",
+                    "tempo_s": float(tc.get("time") or 0)})
+    return res
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Corre flows Maestro e liga os resultados aos casos (tecnica-mobile.md).")
+    ap.add_argument("workspace")
+    ap.add_argument("flows", nargs="*", help="flows a correr (por omissao todos os CT-*.yaml da pasta)")
+    ap.add_argument("--saida", help="relatorio JSON (relativo ao workspace, se nao for absoluto)")
+    a = ap.parse_args(argv)
+    try:
+        cfg = configuracao(a.workspace)
+        flows = [os.path.abspath(f) for f in a.flows] or sorted(glob.glob(os.path.join(cfg["pasta"], "CT-*.yaml")))
+        if not flows:
+            raise Erro(f"nenhum flow CT-*.yaml em {cfg['pasta']}")
+        sem_caso = [os.path.basename(f) for f in flows if not caso_do_flow(f)]
+        if sem_caso:
+            raise Erro(f"flows sem ID de caso no nome: {sem_caso}")
+        maestro = shutil.which("maestro")
+        if not maestro:
+            raise Erro("maestro nao encontrado -- instalar o Maestro CLI")
+        extra, segredos = ambiente_maestro(a.workspace, cfg["variaveis"])
+    except Erro as e:
+        print(f"ERRO: {e}", file=sys.stderr)
+        return 2
+    red = Redator(segredos)
+    ok, alvo = alvo_disponivel(cfg["plataforma"])
+    rel = {"plataforma": cfg["plataforma"], "alvo": alvo, "ts": datetime.now().isoformat(timespec="seconds")}
+    if not ok:
+        rel["resultados"] = [{"caso": caso_do_flow(f), "flow": os.path.basename(f), "estado_sugerido": "Blocked",
+                              "mensagem": f"sem alvo: {alvo}", "tempo_s": 0} for f in flows]
+        codigo = 3
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            junit = os.path.join(tmp, "junit.xml")
+            try:
+                r = subprocess.run([maestro, "test", *flows, "--format", "junit", "--output", junit],
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                   env={**os.environ, **extra}, timeout=cfg["timeout"], check=False)
+                saida = r.stdout + r.stderr
+            except subprocess.TimeoutExpired:
+                saida = f"timeout de {cfg['timeout']} s"
+            if os.path.isfile(junit):
+                with open(junit, encoding="utf-8") as f:
+                    rel["resultados"] = ler_junit(f.read(), red)
+                codigo = 0
+            else:
+                rel["resultados"] = []
+                rel["erro"] = red.texto(saida.strip()[-500:])
+                codigo = 3
+        vistos = {os.path.basename(x["flow"]) for x in rel["resultados"]}
+        for f in flows:
+            if os.path.basename(f) not in vistos:
+                rel["resultados"].append({"caso": caso_do_flow(f), "flow": os.path.basename(f),
+                                          "estado_sugerido": "Blocked", "mensagem": "o flow nao correu",
+                                          "tempo_s": 0})
+    print(f"alvo: {rel['alvo']}")
+    for x in rel["resultados"]:
+        print(f"{x['caso']}: {x['estado_sugerido']}" + (f" -- {x['mensagem']}" if x["mensagem"] else "")
+              + f" ({x['tempo_s']:.0f} s)")
+    if rel.get("erro"):
+        print(f"ERRO do Maestro: {rel['erro']}", file=sys.stderr)
+    if a.saida:
+        destino = a.saida if os.path.isabs(a.saida) else os.path.join(a.workspace, a.saida)
+        os.makedirs(os.path.dirname(destino) or ".", exist_ok=True)
+        with open(destino, "w", encoding="utf-8") as f:
+            json.dump(rel, f, ensure_ascii=False, indent=1)
+        print(f"relatorio: {destino}")
+    return codigo
+
+
+if __name__ == "__main__":
+    sys.exit(main())

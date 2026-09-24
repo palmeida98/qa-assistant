@@ -24,6 +24,12 @@ acessibilidade:
   login: {}                    # (opc.) {url, campo_utilizador, campo_palavra_passe, botao, var_utilizador, var_palavra_passe}
   paginas: []                  # [{nome, url, login: true|false}] -- so URLs do ambiente de testes
 
+# mobile: so com o modulo mobile ativo (docs/tecnica-mobile.md).
+mobile:
+  plataforma: ""               # android | ios | web (Maestro Web, beta)
+  flows: "flows"               # pasta dos flows Maestro no workspace; um por caso: CT-MOB-<n>_<nome>.yaml
+  variaveis: []                # variaveis do .env que os flows usam como ${MAESTRO_<VAR>}
+
 # painel: significado de cada estado de caso no painel (scripts/gerar_painel.py, plano 5.1).
 # (opc.) Tipos: pendente | ok | falha | bloqueado | na. "Executados" = casos fora de pendente.
 # Sem esta secao, o 1.o estado de excel.casos.estados conta como pendente e os outros ficam neutros.

@@ -17,6 +17,10 @@ Area Acessibilidade (plano 3.2, tecnica-acessibilidade.md): WCAG 2.1 AA;
 casos automaticos (axe-core, scripts/auditar_a11y.py) e manuais guiados.
 Tambem aprovados por delegacao a 24.09.2026: rever.
 
+Area Mobile (plano 3.3, tecnica-mobile.md): flows Maestro em flows/, corridos
+em Maestro Web (beta) por nao haver dispositivo nesta maquina; esperados =
+comportamento normal do site. Aprovados por delegacao a 24.09.2026: rever.
+
     python examples/demo/gerar_workbook.py [destino.xlsx]
 """
 from __future__ import annotations
@@ -37,6 +41,7 @@ TOKEN = "Token de admin obtido com POST /auth (CT-API-002), guardado como segred
 CRIADA = "Reserva de teste criada em CT-API-003 (firstname com prefixo QA-AUTO-)."
 AXE = "Auditoria automática (python scripts/auditar_a11y.py), página declarada em acessibilidade.paginas."
 AXE_ESP = "Sem violações WCAG 2.1 A/AA detetadas pelo axe-core (boas práticas e incompletos não contam)."
+MAESTRO = "Flow Maestro em flows/ (python scripts/testar_mobile.py); sem sessão; credenciais do .env como MAESTRO_<VAR>."
 
 CASOS = {
     "Login": [
@@ -164,6 +169,17 @@ CASOS = {
          "Página de login aberta, sem sessão iniciada.",
          "1. Com Tab, chegar a Username, Password e Login.\n2. Preencher e submeter com Enter.",
          "O login faz-se só com teclado, com foco visível em cada campo — critérios 2.1.1 A e 2.4.7 AA."),
+    ],
+    "Mobile": [
+        ("CT-MOB-001", "Login com credenciais válidas (flow)", "standard_user", "Partição de equivalência", "Alta",
+         MAESTRO, "1. Correr flows/CT-MOB-001_login.yaml.",
+         "Depois do login aparece a página \"Products\"."),
+        ("CT-MOB-002", "Login de utilizador bloqueado (flow)", "locked_out_user", "Matriz de roles", "Alta",
+         MAESTRO, "1. Correr flows/CT-MOB-002_bloqueado.yaml.",
+         "Mostra \"Epic sadface: Sorry, this user has been locked out.\" e não entra."),
+        ("CT-MOB-003", "Adicionar ao carrinho (flow)", "standard_user", "Transição de estados", "Média",
+         MAESTRO, "1. Correr flows/CT-MOB-003_carrinho.yaml.",
+         "O botão do produto passa a \"Remove\" e o contador do carrinho mostra 1."),
     ],
 }
 

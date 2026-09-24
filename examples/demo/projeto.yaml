@@ -14,7 +14,7 @@ tracker: "excel"             # azure-devops | jira | excel
 formato_bug: "BUG-{n}"       # campos = colunas da sheet Defeitos
 bugs_resolvidos: "remover"   # ou "arquivar"
 evidencia: "texto"           # ou "texto+screenshot"
-modulos: [funcional-web, exploratorio, api, acessibilidade]
+modulos: [funcional-web, exploratorio, api, acessibilidade, mobile]
 registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
 
 api:                         # modulo api (docs/tecnica-api.md, plano 3.1)
@@ -40,6 +40,11 @@ acessibilidade:               # modulo acessibilidade (docs/tecnica-acessibilida
     - {nome: carrinho, url: "https://www.saucedemo.com/cart.html", login: true}
     - {nome: checkout-dados, url: "https://www.saucedemo.com/checkout-step-one.html", login: true}
 
+mobile:                       # modulo mobile (docs/tecnica-mobile.md, plano 3.3)
+  plataforma: "web"           # Maestro Web (beta): nao ha dispositivo/emulador nesta maquina
+  flows: "flows"              # um flow por caso: CT-MOB-<n>_<nome>.yaml
+  variaveis: [DEMO_SAUCE_STANDARD_USER, DEMO_SAUCE_LOCKED_OUT_USER, DEMO_SAUCE_PASSWORD]
+
 painel:                      # significado de cada estado de caso no painel (plano 5.1)
   estados: {"Por testar": pendente, "Pass": ok, "Fail": falha, "Blocked": bloqueado, "N/A": na}
 
@@ -58,6 +63,7 @@ excel:
       "CT-CHK-": "Checkout"
       "CT-API-": "API"
       "CT-A11Y-": "Acessibilidade"
+      "CT-MOB-": "Mobile"
     linha_cabecalho: 1
     colunas:
       id: "ID"
