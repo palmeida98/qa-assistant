@@ -25,7 +25,7 @@
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
-| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1, 2.3 e 2.5 concluídas; 2.2 à espera da confirmação do utilizador; 2.4 no workspace do piloto) |
+| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1, 2.2, 2.3 e 2.5 concluídas; 2.4 no workspace do piloto, à espera das credenciais) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída |
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
@@ -149,14 +149,14 @@ Notas:
 - Credenciais só no `.env` local (ignorado pelo git); a palavra-passe de demonstração não aparece em nenhum ficheiro do repositório.
 - Resultados esperados ainda não confirmados no browser: confirmar em 2.3.
 
-### 2.2 Playwright MCP no onboarding — `0024c37` (critérios 2 e 3 por confirmar pelo utilizador)
+### 2.2 Playwright MCP no onboarding — `0024c37`
 Acrescentar à skill `onboarding-projeto` o registo do Playwright MCP no workspace:
 `claude mcp add playwright --scope project -- npx @playwright/mcp@latest`
 
 Critérios de aceitação:
 - [x] `.mcp.json` criado no workspace (não no repositório da framework, exceto no demo).
-- [ ] `/mcp` dentro do `claude` mostra `playwright` ligado. *(verificação do utilizador numa sessão nova em `examples/demo/`: aprovar o servidor e correr `/mcp`)*
-- [ ] Um login no site de demonstração funciona pelo MCP. *(verificação do utilizador, na mesma sessão, com `standard_user` lido do `.env`)*
+- [x] `/mcp` dentro do `claude` mostra `playwright` ligado. *(confirmado pelo utilizador, 24.09.2026)*
+- [x] Um login no site de demonstração funciona pelo MCP. *(confirmado pelo utilizador, 24.09.2026)*
 
 Notas:
 - No Windows o comando é `claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@latest`; sem o `cmd /c` o Claude Code não lança o `npx`. A skill escolhe o comando conforme o sistema.
@@ -179,7 +179,7 @@ Notas:
 - CT-LOGIN-006: a Dúvida foi respondida pelo utilizador (conta como Pass mostrar o login com o erro certo, mesmo com o URL /inventory.html); esperado reescrito e caso aplicado no lote `lote_20260924_ui02`.
 
 ### 2.4 Piloto num projeto real
-*Estado (23.09.2026): preparado no workspace do projeto (Playwright MCP registado, lote de 16 casos só de consulta proposto, capturas fora do git); execução à espera de 2.2/2.3 e das credenciais. Detalhe no `contexto.md` desse workspace.*
+*Estado (23.09.2026): preparado no workspace do projeto (Playwright MCP registado, lote de 16 casos só de consulta proposto, capturas fora do git); execução à espera de 2.2/2.3 e das credenciais (2.2 e 2.3 concluídas a 24.09.2026: falta só as credenciais). Detalhe no `contexto.md` desse workspace.*
 
 No workspace do projeto real (fora deste repositório): `.env` preenchido localmente, Playwright MCP registado, lote de 10–20 casos já conhecidos, comparação com os resultados anteriores. Todo o registo fica no `contexto.md` desse workspace.
 
