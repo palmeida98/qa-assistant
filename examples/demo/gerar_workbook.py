@@ -119,13 +119,13 @@ def gerar(path: str) -> str:
         ws.cell(i, 2, f"=COUNTA('{sheet}'!A2:A200)")
         for j, e in enumerate(ESTADOS, start=3):
             ws.cell(i, j, f"=COUNTIF('{sheet}'!I2:I200,\"{e}\")")
-        ws.cell(i, 8, f"=IFERROR((B{i}-C{i}-G{i})/(B{i}-G{i}),0)").number_format = "0%"
+        ws.cell(i, 8, f"=IFERROR((B{i}-C{i})/B{i},0)").number_format = "0%"
     t = 4 + len(CASOS)
     ws.cell(t, 1, "Total").font = Font(bold=True)
     for col in "BCDEFG":
         ws[f"{col}{t}"] = f"=SUM({col}4:{col}{t - 1})"
-    ws.cell(t, 8, f"=IFERROR((B{t}-C{t}-G{t})/(B{t}-G{t}),0)").number_format = "0%"
-    ws.cell(t + 2, 1, "% Executado exclui os casos N/A.")
+    ws.cell(t, 8, f"=IFERROR((B{t}-C{t})/B{t},0)").number_format = "0%"
+    ws.cell(t + 2, 1, "% Executado = casos fora de Por testar (N/A e Blocked contam como executados).")
 
     for sheet, casos in CASOS.items():
         ws = wb.create_sheet(sheet)
