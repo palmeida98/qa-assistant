@@ -140,6 +140,27 @@ class TiposDeEstado(unittest.TestCase):
             gerar_painel.tipos_de_estado(["A"], {"estados": {"A": "verde"}})
 
 
+CFG_POR_TESTAR = {"aba_resumo": {"estado_por_testar": "To Do"}}
+
+
+class PorTestarCoerente(unittest.TestCase):
+    """metodologia 16.3: o painel e o resumo usam o mesmo estado 'por testar'."""
+
+    def test_coerente(self):
+        gerar_painel.verificar_por_testar(ESTADOS, CFG_POR_TESTAR)
+
+    def test_painel_trata_o_por_testar_como_executado(self):
+        with self.assertRaises(ValueError):
+            gerar_painel.verificar_por_testar({**ESTADOS, "To Do": "ok"}, CFG_POR_TESTAR)
+
+    def test_painel_tem_outro_pendente(self):
+        with self.assertRaises(ValueError):
+            gerar_painel.verificar_por_testar({**ESTADOS, "N/A": "pendente"}, CFG_POR_TESTAR)
+
+    def test_sem_percentagem_no_resumo_nao_verifica(self):
+        gerar_painel.verificar_por_testar({**ESTADOS, "To Do": "ok"}, {"aba_resumo": None})
+
+
 class MarkdownMinimo(unittest.TestCase):
     def test_listas_encadeadas_bem_formadas(self):
         for md in ["- a\n  - b\n    - c\n- d\n", "  - comeca indentado\n- volta\n", "texto\n\n- x\ncontinua\n"]:

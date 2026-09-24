@@ -62,6 +62,9 @@ excel:
     coluna_total: ""           # (opc.) cabecalho da coluna com o total de casos da area
     linha_total: ""            # (opc.) texto da coluna_area na linha de totais, ex. "Total"
     colunas_estado: {}         # (opc.) estado -> cabecalho, so quando o cabecalho nao e o nome do estado
+    coluna_percentagem: ""     # (opc.) cabecalho da % executada: (total - por testar) / total (metodologia 16.3)
+    estado_por_testar: ""      # (obrig. com coluna_percentagem) estado que conta como nao executado
+    tolerancia_percentagem: 0.001   # (opc.) em pontos percentuais; so aumentar se o resumo arredondar
 
   vista_ativos:                # (opc.) sheet com a lista de defeitos ativos, regenerada; apagar o bloco se nao existir
     sheet: ""

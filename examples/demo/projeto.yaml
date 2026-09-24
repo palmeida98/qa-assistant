@@ -69,6 +69,8 @@ excel:
     coluna_area: "Área"
     coluna_total: "Total"
     linha_total: "Total"
+    coluna_percentagem: "% Executado"
+    estado_por_testar: "Por testar"
 
   vista_ativos:
     sheet: "Defeitos Ativos"

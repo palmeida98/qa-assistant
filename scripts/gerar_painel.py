@@ -62,6 +62,20 @@ def tipos_de_estado(estados: list[str], painel: dict | None) -> dict[str, str]:
     return {e: ("pendente" if i == 0 else "outro") for i, e in enumerate(estados)}
 
 
+def verificar_por_testar(tipos: dict[str, str], cfg_excel: dict) -> None:
+    """A % executada do resumo (aba_resumo.estado_por_testar) e a do painel
+    (estado pendente) tem de usar o mesmo "por testar" (metodologia 16.3)."""
+    pend = (cfg_excel.get("aba_resumo") or {}).get("estado_por_testar")
+    if pend and tipos.get(pend) != "pendente":
+        raise ValueError(
+            f"excel.aba_resumo.estado_por_testar e {pend!r}, mas no painel esse estado e "
+            f"{tipos.get(pend)!r}: acertar a secao painel.estados para as duas % executadas coincidirem"
+        )
+    outros = [e for e, t in tipos.items() if t == "pendente" and e != pend]
+    if pend and outros:
+        raise ValueError(f"o painel trata {outros} como pendente, mas o resumo so conta {pend!r} como por testar")
+
+
 def recolher_workbook(ad: ExcelAdapter, tipos: dict[str, str]) -> dict:
     """Numeros do painel a partir de um adaptador ja carregado."""
     cfg = ad.cfg
@@ -141,6 +155,7 @@ def recolher(workspace: str) -> dict:
     ad = ExcelAdapter.from_projeto(workspace)
     ad.load()  # so leitura: o painel nunca grava o workbook
     tipos = tipos_de_estado(list(ad.cfg["casos"]["estados"]), proj.get("painel"))
+    verificar_por_testar(tipos, ad.cfg)
     dados = recolher_workbook(ad, tipos)
     dados["projeto"] = proj.get("projeto") or os.path.basename(os.path.abspath(workspace))
     dados["workbook"] = ad.cfg["ficheiro"]

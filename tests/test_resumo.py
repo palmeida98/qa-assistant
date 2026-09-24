@@ -63,7 +63,8 @@ class Base(unittest.TestCase):
             area = row[0].value
             if area in TOTAIS:
                 for i, col in enumerate(cab[1:], start=1):
-                    row[i].value = (alterar or {}).get((area, col), TOTAIS[area][col])
+                    if col in TOTAIS[area]:  # so as colunas de contagem (nao a % executada)
+                        row[i].value = (alterar or {}).get((area, col), TOTAIS[area][col])
         self.ad.save()
 
 
@@ -112,6 +113,63 @@ class SemLibreOffice(Base):
             ExcelAdapter.from_dict(cfg, base_dir=self.tmp.name)
 
 
+def cfg_com_percentagem(**extra):
+    cfg = copy.deepcopy(CFG)
+    cfg["aba_resumo"].update({"coluna_percentagem": "% Exec", "estado_por_testar": "To Do", **extra})
+    return cfg
+
+
+def pct(area):
+    """% executada esperada pela regra da metodologia 16.3, a partir dos totais escritos a mao."""
+    s = TOTAIS[area]
+    return (s["Total"] - s["To Do"]) / s["Total"]
+
+
+class Percentagem(Base):
+    """Coluna de % executada: (total - por testar) / total, N/A e Blocked contam."""
+
+    def com_coluna(self, valores, cfg=None):
+        self.resumo_com_numeros()
+        self.ad.load()
+        ws = self.ad.wb["Summary"]
+        ws.cell(1, 8).value = "% Exec"
+        for row in ws.iter_rows(min_row=2):
+            if row[0].value in valores:
+                ws.cell(row[0].row, 8).value = valores[row[0].value]
+        self.ad.save()
+        ad = ExcelAdapter.from_dict(cfg or cfg_com_percentagem(), base_dir=self.tmp.name)
+        ad.load()
+        return ad.verificar_resumo()["problemas"]
+
+    def test_fracao_certa(self):
+        self.assertEqual(self.com_coluna({a: pct(a) for a in TOTAIS}), [])
+
+    def test_pontos_percentuais_certos(self):
+        self.assertEqual(self.com_coluna({a: round(100 * pct(a), 6) for a in TOTAIS}), [])
+
+    def test_formula_que_exclui_os_na_e_detetada(self):
+        # Admin: 4 casos, 1 To Do, 1 N/A -> certo 3/4; excluindo os N/A daria (4-1-1)/(4-1)
+        valores = {a: pct(a) for a in TOTAIS}
+        valores["Admin"] = 2 / 3
+        problemas = self.com_coluna(valores)
+        self.assertEqual(len(problemas), 1)
+        self.assertIn("area 'Admin', % executada", problemas[0])
+
+    def test_arredondamento_so_passa_com_tolerancia(self):
+        valores = {a: round(pct(a), 2) for a in TOTAIS}  # Total: 9/12 = 0.75 exato; os outros tambem
+        valores["Loja"] = 0.76  # 3/4 = 0.75 arredondado para cima de proposito
+        self.assertEqual(len(self.com_coluna(valores)), 1)
+        self.assertEqual(self.com_coluna(valores, cfg_com_percentagem(tolerancia_percentagem=1.5)), [])
+
+    def test_estado_por_testar_obrigatorio_e_valido(self):
+        cfg = cfg_com_percentagem()
+        del cfg["aba_resumo"]["estado_por_testar"]
+        with self.assertRaises(ConfigError):
+            ExcelAdapter.from_dict(cfg)
+        with self.assertRaises(ConfigError):
+            ExcelAdapter.from_dict(cfg_com_percentagem(estado_por_testar="Inventado"))
+
+
 @unittest.skipUnless(tem_libreoffice(), "precisa do LibreOffice (corre no job golden do CI)")
 class ComLibreOffice(Base):
     def test_formulas_reais_batem_depois_do_recalculo(self):
@@ -134,6 +192,19 @@ class ComLibreOffice(Base):
         self.assertTrue(self.ad.recalc()["ok"])
         problemas = self.ad.verificar_resumo()["problemas"]
         self.assertTrue(any("area 'Loja', total" in p for p in problemas), problemas)
+
+    def test_formula_de_percentagem_que_exclui_os_na(self):
+        ws = self.ad.wb["Summary"]
+        ws.cell(1, 8).value = "% Exec"
+        for r in range(2, 6):
+            ws.cell(r, 8).value = f"=IFERROR((B{r}-C{r}-G{r})/(B{r}-G{r}),0)"
+        self.ad.save()
+        self.assertTrue(self.ad.recalc()["ok"])
+        ad = ExcelAdapter.from_dict(cfg_com_percentagem(), base_dir=self.tmp.name)
+        ad.load()
+        problemas = ad.verificar_resumo()["problemas"]
+        self.assertTrue(any("area 'Admin', % executada" in p for p in problemas), problemas)
+        self.assertFalse(any("area 'Loja'" in p for p in problemas), problemas)  # Loja nao tem N/A
 
     def test_aplicar_sai_com_5(self):
         ws_dir = self.tmp.name

@@ -203,6 +203,12 @@ class ExcelAdapter:
             fora = [e for e in r["colunas_estado"] if e not in casos["estados"]]
             if fora:
                 raise ConfigError(f"configuracao: aba_resumo.colunas_estado com estados fora de casos.estados: {fora}")
+            if r.get("coluna_percentagem"):
+                pend = _req(r, "estado_por_testar", "aba_resumo.")
+                if pend not in casos["estados"]:
+                    raise ConfigError(f"configuracao: aba_resumo.estado_por_testar {pend!r} fora de casos.estados")
+                tol = r.get("tolerancia_percentagem")
+                r["tolerancia_percentagem"] = 0.001 if tol in (None, "") else float(tol)
         else:
             cfg["aba_resumo"] = None
 
@@ -275,7 +281,7 @@ class ExcelAdapter:
                 problems.append(f"sheet do resumo em falta: '{r['sheet']}'")
             else:
                 h = self._headers(wb[r["sheet"]], r["linha_cabecalho"])
-                for role in ("coluna_area", "coluna_total"):
+                for role in ("coluna_area", "coluna_total", "coluna_percentagem"):
                     if r.get(role) and r[role] not in h:
                         problems.append(f"'{r['sheet']}': coluna '{r[role]}' ({role}) em falta")
                 if not any(r["colunas_estado"].get(e, e) in h for e in casos["estados"]):
@@ -715,6 +721,9 @@ class ExcelAdapter:
         col_est = {e: h[r["colunas_estado"].get(e, e)] for e in self.cfg["casos"]["estados"]
                    if r["colunas_estado"].get(e, e) in h}
         col_tot = h.get(r["coluna_total"]) if r.get("coluna_total") else None
+        # % executada (metodologia 16.3): (total - por testar) / total; N/A e Blocked contam
+        col_pct = h.get(r["coluna_percentagem"]) if r.get("coluna_percentagem") else None
+        pend, tol_pct = r.get("estado_por_testar"), r.get("tolerancia_percentagem")
 
         problemas, vistas, celulas, vazias = [], set(), 0, 0
         linha_total_vista = False
@@ -731,6 +740,9 @@ class ExcelAdapter:
             comparar = [(e, c, alvo.get(e, 0)) for e, c in col_est.items()]
             if col_tot:
                 comparar.append(("total", col_tot, sum(alvo.values())))
+            if col_pct:
+                n = sum(alvo.values())
+                comparar.append(("% executada", col_pct, (n - alvo.get(pend, 0)) / n if n else 0.0))
             for rotulo, col, esperado in comparar:
                 cel = ws.cell(row, col)
                 celulas += 1
@@ -738,12 +750,18 @@ class ExcelAdapter:
                     vazias += 1
                     continue
                 try:
-                    igual = float(cel.value) == esperado
+                    v = float(cel.value)
+                    if col == col_pct:  # fracao (0.2857) ou pontos percentuais (28.57)
+                        igual = min(abs(v - esperado * 100), abs(v - esperado) * 100) <= tol_pct
+                    else:
+                        igual = v == esperado
                 except (TypeError, ValueError):
                     igual = False
                 if not igual:
+                    regra = (f"(total - {pend}) / total da {esperado:.4%}" if col == col_pct
+                             else f"a contagem direta da {esperado}")
                     problemas.append(f"{r['sheet']}!{cel.coordinate} ({nome}, {rotulo}): o resumo diz "
-                                     f"{cel.value!r}, a contagem direta da {esperado}")
+                                     f"{cel.value!r}, {regra}")
         if celulas and vazias == celulas:
             return {"verificado": False, "problemas": [],
                     "motivo": "o resumo nao tem valores calculados -- recalcular primeiro"}

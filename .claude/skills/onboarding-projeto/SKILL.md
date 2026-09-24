@@ -41,7 +41,9 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    f. Se o workbook tiver uma aba de totais com formulas (resumo por area e estado), preenche
       excel.aba_resumo (sheet, linha_cabecalho, coluna_area, coluna_total, linha_total e, se os
       cabecalhos nao forem os nomes dos estados, colunas_estado) a partir dos cabecalhos reais, e
-      confirma com o utilizador. Serve para verificar as formulas contra a contagem direta
+      confirma com o utilizador. Se houver uma coluna de % executada, preenche coluna_percentagem e
+      estado_por_testar (o mesmo estado que sera "pendente" na seccao painel:); tolerancia_percentagem
+      so se o resumo arredondar de proposito. Serve para verificar as formulas contra a contagem direta
       (tecnica-excel.md seccao 5); os totais nunca se leem do resumo.
    g. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
       excel.casos.estados, PERGUNTA o tipo -- pendente, ok, falha, bloqueado ou na. Propoe os
