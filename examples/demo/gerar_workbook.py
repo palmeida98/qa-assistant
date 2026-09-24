@@ -13,6 +13,10 @@ https://restful-booker.herokuapp.com, esperados da documentacao publicada
 Casos propostos a 24.09.2026 e aprovados por delegacao (o utilizador pediu
 para avancar sem perguntar): rever.
 
+Area Acessibilidade (plano 3.2, tecnica-acessibilidade.md): WCAG 2.1 AA;
+casos automaticos (axe-core, scripts/auditar_a11y.py) e manuais guiados.
+Tambem aprovados por delegacao a 24.09.2026: rever.
+
     python examples/demo/gerar_workbook.py [destino.xlsx]
 """
 from __future__ import annotations
@@ -31,6 +35,8 @@ LOGIN = "Página de login aberta, sem sessão iniciada."
 SESSAO = "Sessão iniciada com a role indicada; página Products aberta; carrinho vazio."
 TOKEN = "Token de admin obtido com POST /auth (CT-API-002), guardado como segredo da sessão."
 CRIADA = "Reserva de teste criada em CT-API-003 (firstname com prefixo QA-AUTO-)."
+AXE = "Auditoria automática (python scripts/auditar_a11y.py), página declarada em acessibilidade.paginas."
+AXE_ESP = "Sem violações WCAG 2.1 A/AA detetadas pelo axe-core (boas práticas e incompletos não contam)."
 
 CASOS = {
     "Login": [
@@ -135,6 +141,29 @@ CASOS = {
          CRIADA + " " + TOKEN,
          "1. DELETE /booking/{id} com Cookie: token=<token>.",
          "Responde 201 Created (DeleteBooking na documentação)."),
+    ],
+    "Acessibilidade": [
+        ("CT-A11Y-001", "Login: WCAG 2.1 AA automático", "—", "Error guessing (axe-core)", "Alta", AXE,
+         "1. Auditar a página login.", AXE_ESP),
+        ("CT-A11Y-002", "Products: WCAG 2.1 AA automático", "standard_user", "Error guessing (axe-core)", "Alta",
+         AXE + " Com login.", "1. Auditar a página produtos.", AXE_ESP),
+        ("CT-A11Y-003", "Carrinho: WCAG 2.1 AA automático", "standard_user", "Error guessing (axe-core)", "Média",
+         AXE + " Com login.", "1. Auditar a página carrinho.", AXE_ESP),
+        ("CT-A11Y-004", "Checkout (dados): WCAG 2.1 AA automático", "standard_user", "Error guessing (axe-core)",
+         "Média", AXE + " Com login.", "1. Auditar a página checkout-dados.", AXE_ESP),
+        ("CT-A11Y-005", "Contraste dos elementos que o axe não decidiu", "standard_user", "Checklist manual (WCAG)",
+         "Média", "Incompletos de color-contrast da auditoria de Products.",
+         "1. Medir o contraste de cada elemento listado pelo axe como incompleto (texto e fundo reais).",
+         "Contraste de pelo menos 4.5:1 (texto normal) ou 3:1 (texto grande) — critério 1.4.3 AA."),
+        ("CT-A11Y-006", "Título de cada página identifica o conteúdo", "standard_user", "Checklist manual (WCAG)",
+         "Média", "Páginas login, produtos, carrinho e checkout-dados.",
+         "1. Ler o título (title) de cada página.",
+         ("Cada página tem um título que identifica o seu conteúdo ou propósito, diferente entre páginas "
+          "diferentes — critério 2.4.2 A (Understanding 2.4.2, técnica G88).")),
+        ("CT-A11Y-007", "Login operável só com teclado", "standard_user", "Checklist manual (WCAG)", "Alta",
+         "Página de login aberta, sem sessão iniciada.",
+         "1. Com Tab, chegar a Username, Password e Login.\n2. Preencher e submeter com Enter.",
+         "O login faz-se só com teclado, com foco visível em cada campo — critérios 2.1.1 A e 2.4.7 AA."),
     ],
 }
 

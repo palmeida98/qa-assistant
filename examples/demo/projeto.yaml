@@ -24,6 +24,22 @@ api:                         # modulo api (docs/tecnica-api.md, plano 3.1)
   credenciais:
     admin: {var_utilizador: DEMO_BOOKER_USER, var_palavra_passe: DEMO_BOOKER_PASSWORD}
 
+acessibilidade:               # modulo acessibilidade (docs/tecnica-acessibilidade.md, plano 3.2)
+  norma: "WCAG 2.1 AA"
+  browser: "chrome"           # o Chrome instalado (sem descarregar browsers do Playwright)
+  login:                      # formulario de login antes das paginas com login: true
+    url: "https://www.saucedemo.com/"
+    campo_utilizador: "#user-name"
+    campo_palavra_passe: "#password"
+    botao: "#login-button"
+    var_utilizador: DEMO_SAUCE_STANDARD_USER
+    var_palavra_passe: DEMO_SAUCE_PASSWORD
+  paginas:
+    - {nome: login, url: "https://www.saucedemo.com/", login: false}
+    - {nome: produtos, url: "https://www.saucedemo.com/inventory.html", login: true}
+    - {nome: carrinho, url: "https://www.saucedemo.com/cart.html", login: true}
+    - {nome: checkout-dados, url: "https://www.saucedemo.com/checkout-step-one.html", login: true}
+
 painel:                      # significado de cada estado de caso no painel (plano 5.1)
   estados: {"Por testar": pendente, "Pass": ok, "Fail": falha, "Blocked": bloqueado, "N/A": na}
 
@@ -41,6 +57,7 @@ excel:
       "CT-PROD-": "Produtos"
       "CT-CHK-": "Checkout"
       "CT-API-": "API"
+      "CT-A11Y-": "Acessibilidade"
     linha_cabecalho: 1
     colunas:
       id: "ID"

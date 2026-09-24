@@ -208,7 +208,7 @@ Na conversão:
 
 | Módulo | O que acrescenta a esta técnica |
 |---|---|
-| `acessibilidade` | Injeção do axe-core + verificações de teclado, foco e nomes acessíveis |
+| `acessibilidade` | Injeção do axe-core + verificações de teclado, foco e nomes acessíveis (`tecnica-acessibilidade.md`, `scripts/auditar_a11y.py`) |
 | `visual` | Screenshots de referência e comparação com os frames do Figma |
 | `cross-browser` | O mesmo lote em Chromium, Firefox, WebKit e viewports móveis |
 | `formularios` | Geração sistemática de valores-limite e classes de equivalência por campo |

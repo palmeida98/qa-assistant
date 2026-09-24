@@ -1,16 +1,18 @@
 # Contexto de sessão — demo-saucedemo
-Atualizado: 2026-09-24 11:40 (lote API 01)
+Atualizado: 2026-09-24 12:40 (lote Acessibilidade 01)
 
 ## Estado atual
-Workbook com 28 casos (7 Login, 5 Produtos, 6 Checkout, 10 API). Executados: 10/28 (área API: 9 Pass, 1 Fail). 1 defeito aberto (BUG-1). Resumo do workbook verificado contra a contagem direta: bate certo.
+Workbook com 35 casos (7 Login, 5 Produtos, 6 Checkout, 10 API, 7 Acessibilidade). Executados: 15/35 (API: 9 Pass, 1 Fail; Acessibilidade: 4 Pass, 1 Fail, 2 por testar). 2 defeitos abertos (BUG-1, BUG-2). Resumo do workbook verificado contra a contagem direta: bate certo.
 
 ## Ponto de execução (último lote, último caso)
-Lote `runs/lote_20260924_api01.json` (área API) concluído e aplicado ao workbook (`aplicar` = 0). Último caso: CT-API-010. As áreas Login, Produtos e Checkout ainda não foram executadas (2.3).
+Lotes `runs/lote_20260924_api01.json` (API) e `runs/lote_20260924_a11y01.json` (Acessibilidade, automática + CT-A11Y-006) concluídos e aplicados. Último caso: CT-A11Y-006. Por testar na Acessibilidade: CT-A11Y-005 (contraste dos incompletos) e CT-A11Y-007 (teclado), que precisam do browser (Playwright MCP). As áreas Login, Produtos e Checkout ainda não foram executadas (2.3).
 
 ## Trabalho concluído
 - Casos de UI aprovados pelo utilizador (23.09.2026): 7 de Login, 5 de Produtos, 6 de Checkout.
 - Onboarding (2.1) e Playwright MCP registado (2.2, confirmação do utilizador pendente).
 - Plano 3.1 (24.09.2026): área API acrescentada ao workbook (10 casos, `gerar_workbook.py`); lote API 01 executado com `/testar-api` e `scripts/api_pedido.py` (evidência redigida; nenhum segredo nos ficheiros).
+- Plano 3.2 (24.09.2026): área Acessibilidade (7 casos); auditoria automática com `scripts/auditar_a11y.py` (axe-core 4.13 no Chrome instalado) em login, produtos, carrinho e checkout-dados: 0 violações WCAG 2.1 A/AA; boas práticas em falta (sem `<h1>`, conteúdo fora de landmarks) como observação; 1 incompleto de contraste em Products (→ CT-A11Y-005). CT-A11Y-006 Fail → BUG-2 ([2.4.2 A] todas as páginas com o título "Swag Labs"). Relatório: `runs/a11y_20260924_01.json`.
+- Workbook reconstruído com `reconstruir_workbook.py` (gerador + lotes por ordem de execução) para acrescentar a área sem perder os resultados da API.
 - Recursos criados e limpos: reserva de teste 2501 (firstname `QA-AUTO-20260924-api01`) criada em CT-API-003 e apagada em CT-API-010 (GET seguinte = 404). Nada ficou por limpar.
 
 ## Decisões tomadas (e quem as tomou)
@@ -22,7 +24,9 @@ Lote `runs/lote_20260924_api01.json` (área API) concluído e aplicado ao workbo
 - **Por delegação** (o utilizador pediu para avançar sem perguntar, 24.09.2026) — a rever:
   - alvo de API: restful-booker (API pública de prática, documentação publicada);
   - os 10 casos CT-API-001…010 considerados aprovados;
-  - BUG-1 registado sem aprovação individual, com severidade e prioridade Média (o adaptador exige uma prioridade da lista).
+  - BUG-1 registado sem aprovação individual, com severidade e prioridade Média (o adaptador exige uma prioridade da lista);
+  - `.env`: contas de demonstração do saucedemo preenchidas localmente (confirmadas no código do site: bloco "Password for all users");
+  - os 7 casos CT-A11Y-001…007 considerados aprovados; BUG-2 registado com severidade e prioridade Baixa.
 
 ## Dúvidas em aberto
 - Os resultados esperados das áreas de UI ainda não foram confirmados no browser (2.3).
@@ -30,7 +34,6 @@ Lote `runs/lote_20260924_api01.json` (área API) concluído e aplicado ao workbo
 - Rever as decisões por delegação acima (casos de API e BUG-1).
 
 ## Problemas conhecidos / bloqueios
-- `.env`: as contas do saucedemo continuam por preencher (as da API já estão, só localmente).
 - Playwright MCP registado em `.mcp.json` (2.2), à espera de aprovação: abrir o `claude` nesta pasta, aprovar o servidor e confirmar com `/mcp`.
 - BUG-1 (API): POST /booking sem campos obrigatórios devolve 500 em vez de 4xx. É um defeito da API de prática (não controlamos a correção); fica aberto como exemplo do fluxo de bugs.
 
@@ -42,7 +45,7 @@ Lote `runs/lote_20260924_api01.json` (área API) concluído e aplicado ao workbo
   - standard_user: CT-LOGIN-001, CT-PROD-001, CT-PROD-002, CT-CHK-001
   - problem_user: CT-PROD-005 (esperado Fail → `/registar-bug`, com aprovação do utilizador antes de escrever)
   - Registo leve em `runs/lote_20260923_01.json`, no formato da metodologia §7.1; aplicar com `python -m adapters.excel.aplicar examples/demo runs/lote_20260923_01.json` a partir da raiz do qa-assistant; depois `/checkpoint`.
-  - Nota: o próximo defeito será BUG-2 (o BUG-1 já existe).
+  - Nota: o próximo defeito será BUG-3 (BUG-1 e BUG-2 já existem).
 
 ## Estado da validação
-Área API: 10/10 executados, aplicados, cross-check limpo, recálculo OK, resumo vs contagem direta bate certo. Áreas de UI: por executar.
+API: 10/10 e Acessibilidade: 5/7 executados, aplicados; cross-check limpo, recálculo OK, resumo vs contagem direta bate certo. Áreas de UI (Login, Produtos, Checkout): por executar.

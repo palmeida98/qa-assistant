@@ -1,0 +1,143 @@
+{
+ "norma": "WCAG 2.1 AA",
+ "browser": "chrome 153.0.8010.53",
+ "paginas": [
+  {
+   "nome": "login",
+   "url": "https://www.saucedemo.com/",
+   "url_final": "https://www.saucedemo.com/",
+   "titulo": "Swag Labs",
+   "erro": null,
+   "violacoes_wcag": [],
+   "boas_praticas": [
+    {
+     "regra": "page-has-heading-one",
+     "criterios": [],
+     "nivel": null,
+     "impacto": "moderate",
+     "ajuda": "Page should contain a level-one heading",
+     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elementos": 1,
+     "exemplos": [
+      {
+       "alvo": "html",
+       "html": "<html lang=\"en\">",
+       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+      }
+     ]
+    },
+    {
+     "regra": "region",
+     "criterios": [],
+     "nivel": null,
+     "impacto": "moderate",
+     "ajuda": "All page content should be contained by landmarks",
+     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/region?application=playwright",
+     "elementos": 1,
+     "exemplos": [
+      {
+       "alvo": ".login_logo",
+       "html": "<div class=\"login_logo\">Swag Labs</div>",
+       "resumo": "Fix any of the following:\n  Some page content is not contained by landmarks"
+      }
+     ]
+    }
+   ],
+   "incompletos": [],
+   "passaram": 28
+  },
+  {
+   "nome": "produtos",
+   "url": "https://www.saucedemo.com/inventory.html",
+   "url_final": "https://www.saucedemo.com/inventory.html",
+   "titulo": "Swag Labs",
+   "erro": null,
+   "violacoes_wcag": [],
+   "boas_praticas": [
+    {
+     "regra": "page-has-heading-one",
+     "criterios": [],
+     "nivel": null,
+     "impacto": "moderate",
+     "ajuda": "Page should contain a level-one heading",
+     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elementos": 1,
+     "exemplos": [
+      {
+       "alvo": "html",
+       "html": "<html lang=\"en\">",
+       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+      }
+     ]
+    }
+   ],
+   "incompletos": [
+    {
+     "regra": "color-contrast",
+     "criterios": [
+      "1.4.3"
+     ],
+     "elementos": 4
+    }
+   ],
+   "passaram": 39
+  },
+  {
+   "nome": "carrinho",
+   "url": "https://www.saucedemo.com/cart.html",
+   "url_final": "https://www.saucedemo.com/cart.html",
+   "titulo": "Swag Labs",
+   "erro": null,
+   "violacoes_wcag": [],
+   "boas_praticas": [
+    {
+     "regra": "page-has-heading-one",
+     "criterios": [],
+     "nivel": null,
+     "impacto": "moderate",
+     "ajuda": "Page should contain a level-one heading",
+     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elementos": 1,
+     "exemplos": [
+      {
+       "alvo": "html",
+       "html": "<html lang=\"en\">",
+       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+      }
+     ]
+    }
+   ],
+   "incompletos": [],
+   "passaram": 37
+  },
+  {
+   "nome": "checkout-dados",
+   "url": "https://www.saucedemo.com/checkout-step-one.html",
+   "url_final": "https://www.saucedemo.com/checkout-step-one.html",
+   "titulo": "Swag Labs",
+   "erro": null,
+   "violacoes_wcag": [],
+   "boas_praticas": [
+    {
+     "regra": "page-has-heading-one",
+     "criterios": [],
+     "nivel": null,
+     "impacto": "moderate",
+     "ajuda": "Page should contain a level-one heading",
+     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elementos": 1,
+     "exemplos": [
+      {
+       "alvo": "html",
+       "html": "<html lang=\"en\">",
+       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+      }
+     ]
+    }
+   ],
+   "incompletos": [],
+   "passaram": 41
+  }
+ ],
+ "ts": "2026-09-24T11:31:03"
+}

@@ -38,11 +38,13 @@ Variáveis de credenciais (valores só no `.env` local, nunca aqui):
   - **Resumo** — totais por área e estado (fórmulas; não editar à mão)
   - **Login**, **Produtos**, **Checkout** — casos `CT-LOGIN-…`, `CT-PROD-…`, `CT-CHK-…`
   - **API** — casos `CT-API-…` (restful-booker; `/testar-api`)
+  - **Acessibilidade** — casos `CT-A11Y-…` (WCAG 2.1 AA; `/auditar-acessibilidade`)
   - **Defeitos** — registo completo (`BUG-{n}`), incluindo resolvidos
   - **Defeitos Ativos** — vista regenerada pelo adaptador (só abertos)
 - Estados de caso: `Por testar`, `Pass`, `Fail`, `Blocked`, `N/A` (os da metodologia §2)
 - Estados de defeito: `Aberto`, `Em análise`, `Em correção`, `Corrigido`, `Reaberto`, `Fechado`, `Não é defeito` (fechados: `Corrigido`, `Fechado`, `Não é defeito`)
 - Registo leve de sessão: `runs/` (`registo_leve` no `projeto.yaml`)
+- O workbook é reconstruível: `python examples/demo/reconstruir_workbook.py` (a partir da raiz do qa-assistant) gera-o de novo e reaplica os lotes de `runs/` pela ordem de execução. Usar sempre que se acrescentam áreas ou casos ao `gerar_workbook.py`, nunca editar o workbook à mão.
 
 ## Formato de bug
 - ID: `BUG-{n}` (o adaptador calcula o próximo número)
@@ -54,5 +56,5 @@ Variáveis de credenciais (valores só no `.env` local, nunca aqui):
 - Política de evidência: **texto** (screenshot só quando o problema é visual).
 - Módulos ativos: `funcional-web`, `exploratorio`, `api`, `acessibilidade`.
   - `api`: o saucedemo não tem API; o módulo usa a API de prática restful-booker (secção `api:` do `projeto.yaml`).
-  - `acessibilidade`: o módulo ainda não existe (plano, tarefa 3.2).
+  - `acessibilidade`: auditoria automática com `scripts/auditar_a11y.py` (páginas na secção `acessibilidade:` do `projeto.yaml`) e manual guiada.
 - Nada do demo pode passar a denylist nem o detect-secrets: nem a palavra-passe de demonstração vai para o repositório.

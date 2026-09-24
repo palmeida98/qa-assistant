@@ -103,7 +103,7 @@ Cada etapa tem uma skill correspondente no Claude Code:
 | Análise | `/analisar-funcionalidade` |
 | Desenho de casos | `/gerar-casos` |
 | Planeamento de lotes | `/planear-lote` |
-| Execução e classificação | `/executar-lote` (browser), `/testar-api` (API) |
+| Execução e classificação | `/executar-lote` (browser), `/testar-api` (API), `/auditar-acessibilidade` |
 | Gestão de bugs | `/registar-bug` |
 | Checkpoint | `/checkpoint` |
 | Validação e relatório | `/fim-sessao` |
