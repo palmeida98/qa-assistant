@@ -30,7 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 concluída) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1, 7.4, 7.5 e 7.6 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e as decisões da 7.7) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -371,7 +371,7 @@ Notas:
 - [ ] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
 - [ ] Golden real do piloto a passar; a nota de "ainda não implementado" sai da metodologia §15.
 
-### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13)
+### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13) — `3563f24`
 Hoje a metodologia promete a proteção por permissões do Claude Code, mas nada a cria.
 - [x] O `/onboarding-projeto` cria o `.claude/settings.json` do workspace com `deny` de escrita e edição em `historico/**`.
 - [x] O `validar_projeto` avisa quando o workspace não o tem; teste.
@@ -382,7 +382,7 @@ Notas:
 - `validar_projeto`: aviso sem a regra (aceita `/historico/**`, `./historico/**` ou `historico/**`, em `settings.json` ou `settings.local.json`); 2 testes novos, e o demo continua com 0 problemas e 0 avisos.
 - Por confirmar no piloto (7.2): abrir o `claude` no workspace e ver a edição de um ficheiro em `historico/` recusada.
 
-### 7.5 Versões fixas
+### 7.5 Versões fixas — `0a61bc6`
 - [x] `@playwright/mcp` com versão fixa no `.mcp.json` do demo e no comando do `/onboarding-projeto` (hoje `@latest`).
 - [x] `requirements.txt` com versões exatas de `openpyxl` e `pyyaml` (uma atualização silenciosa pode mudar o golden); atualizar é uma decisão com golden a passar.
 
@@ -391,7 +391,7 @@ Notas:
 - `openpyxl==3.1.5`, `et-xmlfile==2.0.0` (dependência do openpyxl) e `pyyaml==6.0.3`: as mesmas que o CI já instalava, por isso o golden não muda.
 - `tests/test_guards.py`: dependências Python só com `==`, e uma só versão numérica do `@playwright/mcp` no demo e na skill (um `@latest` esquecido faz o teste falhar).
 
-### 7.6 Demo reproduzível
+### 7.6 Demo reproduzível — `ced85fc`
 A reconstrução põe datas do dia (defeitos novos, resumo da vista, `_qa_lotes`, propriedades do ficheiro) e o `.xlsx` aparece sempre alterado no git.
 - [x] Data de cada lote fixada pelo 1.º `ts` do lote na reconstrução (opção no `aplicar`, sem mudar o comportamento por omissão).
 - [x] Teste no CI: as células do workbook versionado são iguais às do gerador + lotes.
@@ -432,3 +432,4 @@ Notas:
 | 2026-09-24 | Revisão geral 2 (teste de tudo → análise → correções → reteste): **inspetor** deixava a sheet de defeitos sem proposta quando todos os defeitos estavam abertos (vista com os mesmos IDs; acontecia no demo), agora desempata pela linha do cabeçalho e pelo n.º de colunas, com `tests/test_inspecionar.py` (não havia testes); **consola**: no Windows, a saída lida por pipe vinha em cp1252 e os acentos chegavam trocados ao Claude Code, agora todos os pontos de entrada escrevem em UTF-8 (`tests/test_consola.py`); **validar_projeto**: ambiente sem URL passava (era o caso do template), URLs de `api`/`acessibilidade` fora dos ambientes declarados ou de produção passam a problema, e avisa se `.env`/`.api-sessao.env`/`painel.html` não estão no `.gitignore` de um workspace com git; **recálculo**: no Linux o timeout só matava o `soffice` e a espera ficava presa ao filho, agora mata o grupo de processos (`tests/test_recalc.py`); `api_pedido --saida` relativo ao workspace, como nos outros scripts; `scripts/sincronizar_skills.py` para a cópia global das skills (antes manual, sem verificação); hook `testes` do pre-commit também para skills, `CLAUDE.md`, demo e template; docs alinhadas com o que existe (`qa_core`, CLI `qa` e `executor-web` marcados como planeados; códigos 4 e 5 do `aplicar` na técnica Excel); `docs/heuristicas.md` criado com as heurísticas dos 3 bugs do demo. 95 → 117 testes. |
 | 2026-09-24 | Revisão geral 2 em `a57ed19`. Fase 7 (fecho da framework) acrescentada com o que falta para a v1.0: CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível, decisões de âmbito. |
 | 2026-09-24 | 7.1 concluída: CI verde no Linux depois da revisão geral 2 (run 36053764682), com o timeout do recálculo verificado em Ubuntu. |
+| 2026-09-24 | 7.4 (`3563f24`), 7.5 (`0a61bc6`) e 7.6 (`ced85fc`) concluídas: `historico/` protegido no `.claude/settings.json` do workspace, versões fixas (Playwright MCP e dependências Python), demo reproduzível com teste no job `golden`. |
