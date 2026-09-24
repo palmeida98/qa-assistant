@@ -27,7 +27,7 @@
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
-| 4 | CI da própria framework | Por fazer |
+| 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
 | 5 | Interface: painel de progresso por workspace | Por fazer |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Por fazer |
 
@@ -216,17 +216,24 @@ Critérios de aceitação (para cada módulo):
 
 ## Fase 4 — CI da framework
 
-### 4.1 GitHub Actions no `qa-assistant`
+### 4.1 GitHub Actions no `qa-assistant` — `1392eda`, `fa749eb`
 Em cada push: `golden_check.py`, `detect-secrets`, lint Python (ruff).
 
 A denylist pessoal não corre no CI (vive só no teu computador, de propósito); continua a ser a barreira no pre-commit local.
 
+Notas:
+- `.github/workflows/ci.yml`: jobs `lint` (ruff 0.16.8, fixado), `secrets` (só o hook `detect-secrets` do pre-commit, mesma versão e baseline) e `golden` (instala `libreoffice-calc-nogui`, ~35 s). Python 3.12 no CI; `ruff.toml` com `DTZ` desligado (datas locais intencionais).
+- Lint limpo antes de ligar o CI: 32 avisos corrigidos, entre eles o B023 em `apply_lote` (a linha do defeito passou a parâmetro do `put`; não era bug, mas ficava frágil). Golden inalterado.
+- No Linux o ruff exige o bit de execução em ficheiros com shebang (`git update-index --chmod=+x`); no Windows não se nota.
+- Critério 2 validado num branch temporário apagado no fim: o commit partido foi criado pela API do GitHub (como uma edição no site, sem hooks locais), porque o pre-commit bloqueia-o localmente e o guard não se contorna. Resultado: job `golden` falhado com `apply.novos_defeitos[0]: esperado 'BUG-99', obtido 'BUG-4'`.
+- Repositório privado: o badge (no `CLAUDE.md`, até haver README na 6.1) só aparece a quem tem acesso.
+
 ### 4.2 Regressão do demo
 Correr os `.spec.ts` do demo (2.5) no CI contra o site público.
 
-Critérios de aceitação:
-- [ ] Badge verde no GitHub.
-- [ ] Um commit que parte o golden aparece como falhado no CI.
+Critérios de aceitação (da 4.1):
+- [x] Badge verde no GitHub.
+- [x] Um commit que parte o golden aparece como falhado no CI.
 
 Nota: a regressão de projetos reais corre no workspace ou no CI da empresa desse projeto, nunca neste repositório.
 
