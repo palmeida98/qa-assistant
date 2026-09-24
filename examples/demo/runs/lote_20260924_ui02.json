@@ -1,0 +1,10 @@
+{
+ "resultados": [
+  {
+   "tc": "CT-LOGIN-006",
+   "estado": "Pass",
+   "ts": "2026-09-24T13:29:13",
+   "resultado_obtido": "Sem sessão, /inventory.html mostra o formulário de login com \"Epic sadface: You can only access '/inventory.html' when you are logged in.\"; o URL fica /inventory.html (aceite pelo esperado revisto). Observação da execução de 24.09.2026 (lote UI 01), reclassificada depois da resposta à Dúvida."
+  }
+ ]
+}

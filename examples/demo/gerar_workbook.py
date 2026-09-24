@@ -63,7 +63,8 @@ CASOS = {
         ("CT-LOGIN-006", "Acesso direto ao inventário sem sessão", "—", "Error guessing", "Alta",
          "Sem sessão iniciada.",
          "1. Abrir diretamente /inventory.html.",
-         "Volta à página de login com o erro \"Epic sadface: You can only access '/inventory.html' when you are logged in.\"."),
+         ("Mostra o formulário de login com o erro \"Epic sadface: You can only access '/inventory.html' when you "
+          "are logged in.\" (o URL pode continuar /inventory.html — decisão do utilizador, 24.09.2026).")),
         ("CT-LOGIN-007", "Logout", "standard_user", "Transição de estados", "Média", SESSAO,
          "1. Abrir o menu lateral.\n2. Clicar em Logout.\n3. Usar o Back do browser.",
          "Volta à página de login; o Back não reabre o inventário sem nova sessão."),

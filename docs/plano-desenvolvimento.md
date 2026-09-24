@@ -29,7 +29,7 @@
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
 | 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
-| 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Em curso (6.1 concluída; 6.2: verificações feitas e limpas, decisão do utilizador) |
+| 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -175,7 +175,8 @@ Notas:
 - Os 8 casos aprovados, agrupados por role (sem sessão → locked_out_user → standard_user → problem_user): 6 Pass, 1 Fail (CT-PROD-005 → BUG-3), 1 Dúvida (CT-LOGIN-006: aparece o login com o erro certo, mas o URL continua `/inventory.html`; o esperado diz "volta à página de login"). A Dúvida fica fora do lote (o adaptador recusa-a) e está no `contexto.md` como pergunta.
 - **Diferença de ambiente**: executado com a biblioteca Playwright no Chrome, conduzida pelo agente com scripts temporários (apagados), porque o Playwright MCP não estava disponível na sessão (2.2 por confirmar). Previsto na `tecnica-browser.md` §1.
 - Lição confirmada: a 1.ª observação do problem_user veio vazia (o script não esperou pela lista de produtos); não se classificou sobre ela, repetiu-se com espera explícita (`tecnica-browser.md` §4.3).
-- Decisão por delegação: BUG-3 escrito sem aprovação individual (o utilizador pediu para avançar sem perguntar); severidade e prioridade Média.
+- Decisão por delegação: BUG-3 escrito sem aprovação individual (o utilizador pediu para avançar sem perguntar); severidade e prioridade Média. Aprovado depois pelo utilizador, com as outras decisões por delegação (24.09.2026).
+- CT-LOGIN-006: a Dúvida foi respondida pelo utilizador (conta como Pass mostrar o login com o erro certo, mesmo com o URL /inventory.html); esperado reescrito e caso aplicado no lote `lote_20260924_ui02`.
 
 ### 2.4 Piloto num projeto real
 *Estado (23.09.2026): preparado no workspace do projeto (Playwright MCP registado, lote de 16 casos só de consulta proposto, capturas fora do git); execução à espera de 2.2/2.3 e das credenciais. Detalhe no `contexto.md` desse workspace.*
@@ -333,7 +334,7 @@ Notas: `README.md` com as quatro camadas, a fronteira de privacidade e os guards
 Decidir se o repositório passa a público. Antes disso, obrigatório:
 - [x] Varrer **todo o histórico** com detect-secrets e com a denylist (não só o estado atual), porque os primeiros commits foram feitos antes de os guards existirem.
 - [x] Rever `examples/demo/` à procura de qualquer dado não fictício.
-- [ ] Decisão do utilizador sobre a visibilidade.
+- [x] Decisão do utilizador sobre a visibilidade: **fica privado por agora** (utilizador, 24.09.2026). A rever quando o portefólio for para uso público.
 
 Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de todos os ramos):
 - detect-secrets em todas as versões: 0 achados (fora os hashes de integridade dos `package-lock.json`, falsos positivos). Confirmado que a varredura lê os ficheiros, com um segredo plantado (apanhado). Limitação conhecida: o detect-secrets local deixa passar alguns padrões YAML que o do CI apanha (registo de 24.09); o único caso conhecido era um nome de variável, não um segredo.
