@@ -30,6 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Por fazer |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -349,6 +350,52 @@ Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de 
 
 ---
 
+## Fase 7 — Fecho da framework
+
+Saída da revisão geral 2 (24.09.2026, `a57ed19`): o que falta para dar o qa-assistant por concluído (v1.0). Ordem recomendada: 7.1 → 7.2 → 7.3; 7.4, 7.5 e 7.6 em paralelo; 7.7 decidido já, porque muda o que as outras têm de cobrir.
+
+### 7.1 CI verde depois da revisão geral 2
+A correção do timeout do recálculo (grupo de processos, fora do Windows) só se verifica no Linux; na máquina de desenvolvimento não havia Docker ativo nem WSL com distribuição.
+- [ ] CI de `a57ed19` verde nos 5 jobs (o `tests/test_recalc.py` corre no job `testes`, em Ubuntu).
+
+### 7.2 Piloto num projeto real (é a 2.4)
+- [ ] `.env` do workspace do piloto preenchido pelo utilizador.
+- [ ] `python scripts/validar_projeto.py <workspace>` sem problemas **com as regras novas** (URLs dentro dos ambientes, `.gitignore`); o que aparecer corrige-se no workspace, nunca aqui.
+- [ ] Lote de 16 casos executado e comparado com os resultados anteriores (fecha a 2.4).
+- [ ] Lições genéricas incorporadas, anonimizadas (metodologia §1.4, §17).
+
+### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15)
+- [ ] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
+- [ ] Golden real do piloto a passar; a nota de "ainda não implementado" sai da metodologia §15.
+
+### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13)
+Hoje a metodologia promete a proteção por permissões do Claude Code, mas nada a cria.
+- [ ] O `/onboarding-projeto` cria o `.claude/settings.json` do workspace com `deny` de escrita e edição em `historico/**`.
+- [ ] O `validar_projeto` avisa quando o workspace não o tem; teste.
+
+### 7.5 Versões fixas
+- [ ] `@playwright/mcp` com versão fixa no `.mcp.json` do demo e no comando do `/onboarding-projeto` (hoje `@latest`).
+- [ ] `requirements.txt` com versões exatas de `openpyxl` e `pyyaml` (uma atualização silenciosa pode mudar o golden); atualizar é uma decisão com golden a passar.
+
+### 7.6 Demo reproduzível
+A reconstrução põe datas do dia (defeitos novos, resumo da vista, `_qa_lotes`, propriedades do ficheiro) e o `.xlsx` aparece sempre alterado no git.
+- [ ] Data de cada lote fixada pelo 1.º `ts` do lote na reconstrução (opção no `aplicar`, sem mudar o comportamento por omissão).
+- [ ] Teste no CI: as células do workbook versionado são iguais às do gerador + lotes.
+
+### 7.7 Decisões de âmbito (utilizador)
+- [ ] `qa_core` / CLI `qa`: recomendação **não construir** (adaptadores e scripts já são o motor); retirar da metodologia §1.1.
+- [ ] Subagente `executor-web`: só se o piloto mostrar lotes a encher o contexto; senão, retirar da técnica browser §11.
+- [ ] Trackers `jira` e `azure-devops` (aceites pelo `validar_projeto`, sem adaptador nem painel): implementar quando um projeto real precisar, ou documentar como "registo manual".
+
+### 7.8 Arrumação (opcional)
+- [ ] `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` (hoje o `testar_mobile` e o `auditar_a11y` importam do `api_pedido`), sem mudar comportamento.
+
+### 7.9 Versão 1.0
+- [ ] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
+- [ ] README com o estado final; tag `v1.0`; tabela "Estado resumido" com todas as fases concluídas.
+
+---
+
 ## Registo de alterações a este plano
 
 | Data | Alteração |
@@ -363,3 +410,4 @@ Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de 
 | 2026-09-24 | **Causa da diferença do detect-secrets encontrada**: a versão 1.5.0 abre os ficheiros com `open()` sem encoding; no Windows (cp1252) um ficheiro UTF-8 com certos caracteres (ex.: "Á", bytes C3 81) dá `UnicodeDecodeError` e é **saltado sem aviso**, como se fosse binário (6 ficheiros do repositório, incluindo a metodologia). Não era o Python 3.14 nem o YAML. Corrigido: hook local com a mesma versão em modo UTF-8 (`python -X utf8`), mesmo id para o CI; `tests/test_guards.py` impede o retrocesso. A varredura do histórico da 6.2 foi refeita em UTF-8: 1 achado, o falso positivo já conhecido (nome de variável na versão antiga do `projeto.yaml` do demo). |
 | 2026-09-24 | CI: runners fixados em `ubuntu-24.04` (`3f72fcd`) antes da migração do `ubuntu-latest` para o Ubuntu 26 (19.10.2026); os 5 jobs passaram (run 36047318268). Nota na 4.1. |
 | 2026-09-24 | Revisão geral 2 (teste de tudo → análise → correções → reteste): **inspetor** deixava a sheet de defeitos sem proposta quando todos os defeitos estavam abertos (vista com os mesmos IDs; acontecia no demo), agora desempata pela linha do cabeçalho e pelo n.º de colunas, com `tests/test_inspecionar.py` (não havia testes); **consola**: no Windows, a saída lida por pipe vinha em cp1252 e os acentos chegavam trocados ao Claude Code, agora todos os pontos de entrada escrevem em UTF-8 (`tests/test_consola.py`); **validar_projeto**: ambiente sem URL passava (era o caso do template), URLs de `api`/`acessibilidade` fora dos ambientes declarados ou de produção passam a problema, e avisa se `.env`/`.api-sessao.env`/`painel.html` não estão no `.gitignore` de um workspace com git; **recálculo**: no Linux o timeout só matava o `soffice` e a espera ficava presa ao filho, agora mata o grupo de processos (`tests/test_recalc.py`); `api_pedido --saida` relativo ao workspace, como nos outros scripts; `scripts/sincronizar_skills.py` para a cópia global das skills (antes manual, sem verificação); hook `testes` do pre-commit também para skills, `CLAUDE.md`, demo e template; docs alinhadas com o que existe (`qa_core`, CLI `qa` e `executor-web` marcados como planeados; códigos 4 e 5 do `aplicar` na técnica Excel); `docs/heuristicas.md` criado com as heurísticas dos 3 bugs do demo. 95 → 117 testes. |
+| 2026-09-24 | Revisão geral 2 em `a57ed19`. Fase 7 (fecho da framework) acrescentada com o que falta para a v1.0: CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível, decisões de âmbito. |
