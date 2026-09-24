@@ -64,7 +64,7 @@ Os casos gerados são propostas até o utilizador os aprovar; um bug só é cria
 ## Testes e CI
 
 - `python -m unittest discover -s tests` — testes unitários (adaptador, inspeção, recálculo, painel, resumo, API, acessibilidade, mobile, validação, denylist, skills, consola).
-- `python scripts/golden_check.py` — teste golden do adaptador Excel (precisa de LibreOffice).
+- `python scripts/golden_check.py` — teste golden do adaptador Excel (precisa de LibreOffice). Com `--dir <workspace>/golden/<lote>` corre também o golden **real** de um projeto: um lote histórico aplicado a uma cópia do workbook de antes tem de dar, célula a célula, o workbook guardado depois (os dados ficam no workspace).
 - O CI (GitHub Actions) corre lint (ruff), testes, detect-secrets e o golden em cada push; o `pre-commit` corre o mesmo localmente, mais a denylist.
 
 As skills correm a partir da cópia global em `~/.claude/skills/` (os workspaces vivem fora deste repositório): depois de mudar uma skill, `python scripts/sincronizar_skills.py --aplicar`.

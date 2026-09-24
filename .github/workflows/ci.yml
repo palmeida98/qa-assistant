@@ -56,9 +56,10 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends libreoffice-calc-nogui
       - run: pip install -r requirements.txt
       - run: python scripts/golden_check.py
-      # testes que recalculam formulas reais (resumo vs contagem direta) e a reconstrucao do demo
-      # (workbook versionado = gerador + lotes; plano 7.6); no job testes ficam skipped
-      - run: python -m unittest tests.test_resumo tests.test_demo_reproduzivel -v
+      # testes que recalculam formulas reais (resumo vs contagem direta), a reconstrucao do demo
+      # (workbook versionado = gerador + lotes; plano 7.6) e o mecanismo do golden real com dados
+      # ficticios (plano 7.3); no job testes ficam skipped
+      - run: python -m unittest tests.test_resumo tests.test_demo_reproduzivel tests.test_golden_real -v
 
   demo-e2e:
     # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)

@@ -30,7 +30,7 @@ Referências:
 - `python scripts/testar_mobile.py <workspace> [flows…] [--saida …]` — corre os flows Maestro e liga-os aos casos; cada flow é um caminho ou o ID do caso (0 ok · 2 configuração ou flow inexistente · 3 sem alvo)
 - `python scripts/gerar_painel.py <workspace> [--abrir]` — gera (e abre) o `painel.html` do workspace; é o que o `/painel` corre
 - `python scripts/sincronizar_skills.py [--aplicar]` — compara (e copia) `.claude/skills/` com `~/.claude/skills/`, a cópia que os workspaces usam; correr com `--aplicar` depois de mudar uma skill (0 sincronizadas · 1 diferenças)
-- Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice)
+- Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice); golden real de um workspace: `python scripts/golden_check.py --dir <workspace>/golden/<lote>` (metodologia §15)
 
 ## Ambiente
 Repositório pessoal. Os workspaces de cada empresa vivem em ../qa-workspaces/<empresa>/<projeto>/.

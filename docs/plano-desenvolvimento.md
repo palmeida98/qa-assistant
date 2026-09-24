@@ -368,9 +368,17 @@ Notas:
 - [ ] Lições genéricas incorporadas, anonimizadas (metodologia §1.4, §17).
 - [ ] Reavaliar o subagente `executor-web` (7.7): se os lotes do piloto encheram o contexto principal, criá-lo; senão, fica o subagente genérico.
 - [ ] Confirmar a proteção de `historico/` (7.4): a edição de um ficheiro em `historico/` é recusada no `claude` aberto no workspace.
+- [ ] Para a 7.3: **antes** de aplicar o lote no `/checkpoint`, copiar o workbook para `<workspace>/golden/<lote>/antes.xlsx`; depois do checkpoint revisto, copiar o workbook para `depois.xlsx`, o lote (com o nome original) e escrever `golden.yaml` com `agora` = o `aplicado_em` da sheet `_qa_lotes` para esse lote.
 
 ### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15)
-- [ ] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
+- [x] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
+
+Notas (1.º critério, adiantado sem o piloto por decisão do utilizador, 24.09.2026):
+- Pasta `<workspace>/golden/<lote>/` com `antes.xlsx`, o `lote_*.json` com o nome original, `depois.xlsx` (saída guardada e revista) e `golden.yaml` (`agora` obrigatório; `etiqueta` e `reportado_por` opcionais). Uma pasta com várias destas corre-as todas. O `projeto.yaml` é o do workspace (a pasta acima mais próxima), com a configuração **atual**.
+- Aplica pelo mesmo `aplicar` do `/checkpoint` (com `--agora`, 7.6) a uma cópia de `antes.xlsx` numa pasta temporária, compara todas as células de todas as sheets (fórmula e valor calculado) com `depois.xlsx` e confirma que reaplicar não muda nada. O esperado nunca é gerado pelo script. Códigos: 0 igual · 1 diferenças (listadas por célula) · 2 pasta incompleta, sem `projeto.yaml` acima ou sem LibreOffice.
+- O fictício corre sempre primeiro: com `QA_GOLDEN_DIR` no ambiente, o hook do `pre-commit` não o perde.
+- `tests/test_golden_real.py` (dados fictícios, workspace temporário): passa com o `depois` certo, falha a apontar a célula alterada, deteta outro instante nas datas escritas, corre várias pastas e a variável de ambiente, recusa pastas incompletas. No CI, no job `golden`.
+- Especificado na metodologia §15.
 - [ ] Golden real do piloto a passar; a nota de "ainda não implementado" sai da metodologia §15.
 
 ### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13) — `3563f24`
