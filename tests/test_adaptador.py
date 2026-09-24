@@ -88,6 +88,57 @@ class ValidarLote(unittest.TestCase):
         self.assertEqual(self.ad.validar_lote([item(ts="2026-09-24T10:00:00", nota="x")]), [])
 
 
+class LoteEditadoDepoisDeAplicado(unittest.TestCase):
+    """tecnica-excel.md secao 5: o hash so reconhece conteudo igual; o lote_id
+    impede que um lote editado depois de aplicado duplique notas e defeitos."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        gerar(os.path.join(self.tmp.name, CFG["ficheiro"]))
+        self.ad = ExcelAdapter.from_dict(copy.deepcopy(CFG), base_dir=self.tmp.name)
+        self.ad.load()
+        self.lote = [item("CT-CONTA-001", "Fail", defeito_novo={"titulo": "Falha", "prioridade": "P1"})]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def defeitos(self):
+        return [v for _, v in self.ad._defect_rows()[2]]
+
+    def test_lote_editado_com_o_mesmo_id_e_recusado(self):
+        self.assertEqual(self.ad.apply_lote(self.lote, lote_id="lote_01")["novos_defeitos"], ["BUG-4"])
+        antes = self.defeitos()
+        editado = copy.deepcopy(self.lote)
+        editado[0]["resultado_obtido"] = "gralha corrigida"
+        with self.assertRaises(LoteInvalido) as cm:
+            self.ad.apply_lote(editado, lote_id="lote_01")
+        self.assertIn("OUTRO conteudo", str(cm.exception))
+        self.assertEqual(self.defeitos(), antes)
+        self.assertEqual(len(self.ad.lotes_aplicados()), 1)
+
+    def test_mesmo_conteudo_com_outro_id_nao_muda_nada(self):
+        self.ad.apply_lote(self.lote, lote_id="lote_01")
+        r = self.ad.apply_lote(copy.deepcopy(self.lote), lote_id="copia")
+        self.assertFalse(r["aplicado"])
+        self.assertEqual(self.defeitos(), ["BUG-1", "BUG-2", "BUG-3", "BUG-4"])
+
+    def test_lote_de_correcao_com_outro_id_e_aceite(self):
+        self.ad.apply_lote(self.lote, lote_id="lote_01")
+        correcao = [item("CT-CONTA-001", "Fail", resultado_obtido="gralha corrigida", bug="BUG-4")]
+        r = self.ad.apply_lote(correcao, lote_id="lote_01_correcao")
+        self.assertTrue(r["aplicado"])
+        self.assertEqual(r["novos_defeitos"], [])
+
+    def test_sheet_de_controlo_antiga_ganha_lote_id(self):
+        ws = self.ad.wb.create_sheet(CFG.get("controlo_lotes", {}).get("sheet", "_qa_lotes"))
+        ws.append(["hash", "aplicado_em", "etiqueta", "itens", "defeitos_novos"])
+        ws.append(["abc", "2026-09-01T10:00:00", "[antigo]", 1, ""])
+        self.ad.apply_lote(self.lote, lote_id="lote_01")
+        self.assertEqual(ws.cell(1, 6).value, "lote_id")
+        ids = [x.get("lote_id") for x in self.ad.lotes_aplicados()]
+        self.assertEqual(ids, [None, "lote_01"])
+
+
 class LerLote(unittest.TestCase):
     def escrever(self, conteudo, encoding="utf-8"):
         fd, path = tempfile.mkstemp(suffix=".json")

@@ -48,7 +48,7 @@ import openpyxl
 from .recalc import recalc_safe
 
 CONTROL_SHEET_DEFAULT = "_qa_lotes"
-_CONTROL_HEADERS = ["hash", "aplicado_em", "etiqueta", "itens", "defeitos_novos"]
+_CONTROL_HEADERS = ["hash", "aplicado_em", "etiqueta", "itens", "defeitos_novos", "lote_id"]
 
 
 class ConfigError(ValueError):
@@ -359,7 +359,14 @@ class ExcelAdapter:
     def _control_ws(self, create: bool):
         wb, name = self._need_wb(), self.cfg["controlo_lotes"]["sheet"]
         if name in wb.sheetnames:
-            return wb[name]
+            ws = wb[name]
+            if create:  # sheets de versoes anteriores ganham as colunas novas (ex.: lote_id)
+                existentes = [c.value for c in ws[1]]
+                for col in _CONTROL_HEADERS:
+                    if col not in existentes:
+                        ws.cell(1, len(existentes) + 1).value = col
+                        existentes.append(col)
+            return ws
         if not create:
             return None
         ws = wb.create_sheet(name)
@@ -371,7 +378,8 @@ class ExcelAdapter:
         ws = self._control_ws(create=False)
         if ws is None:
             return []
-        return [dict(zip(_CONTROL_HEADERS, row)) for row in ws.iter_rows(min_row=2, values_only=True) if row[0]]
+        cab = [c.value for c in ws[1]]  # pela linha de cabecalho: sheets antigas nao tem lote_id
+        return [dict(zip(cab, row)) for row in ws.iter_rows(min_row=2, values_only=True) if row[0]]
 
     def lote_ja_aplicado(self, lote: list) -> dict | None:
         h = lote_hash(lote)
@@ -425,11 +433,13 @@ class ExcelAdapter:
         return problemas
 
     def apply_lote(self, lote: list, etiqueta: str | None = None,
-                   reportado_por: str = "QA automatizado") -> dict:
+                   reportado_por: str = "QA automatizado", lote_id: str | None = None) -> dict:
         """Aplica o lote: estado, resultado obtido e observacoes por caso, e
         cria os defeitos novos. Um lote ja aplicado a este workbook (mesmo
         conteudo) nao e reaplicado: devolve {"aplicado": False, ...} sem
-        alterar nada (tecnica-excel.md secao 5).
+        alterar nada (tecnica-excel.md secao 5). Com `lote_id` (o aplicar usa
+        o nome do ficheiro), um lote com esse id ja aplicado mas com conteudo
+        diferente -- um lote editado depois de aplicado -- e recusado.
 
         O lote inteiro e validado antes de qualquer escrita (validar_lote);
         se tiver problemas, levanta LoteInvalido e nada muda."""
@@ -439,6 +449,15 @@ class ExcelAdapter:
         if anterior:
             return {"aplicado": False, "hash": h_lote, "novos_defeitos": [],
                     "motivo": f"lote ja aplicado em {anterior['aplicado_em']}"}
+        if lote_id:
+            mesmo_id = next((x for x in self.lotes_aplicados() if x.get("lote_id") == lote_id), None)
+            if mesmo_id:
+                raise LoteInvalido([(
+                    f"o lote '{lote_id}' ja foi aplicado em {mesmo_id['aplicado_em']} com OUTRO conteudo "
+                    "(foi editado depois de aplicado). Reaplica-lo repetiria notas e defeitos. Poe a "
+                    "correcao num lote novo, com outro nome, so com os casos a corrigir "
+                    "(tecnica-excel.md secao 5)."
+                )])
 
         etiqueta = etiqueta or f"[{date.today().isoformat()}]"
         casos, d, notas = self.cfg["casos"], self.cfg["defeitos"], self.cfg["notas"]
@@ -508,8 +527,10 @@ class ExcelAdapter:
                 put(dcol.get("data_report"), date.today().isoformat())
 
         ctl = self._control_ws(create=True)
-        ctl.append([h_lote, datetime.now().isoformat(timespec="seconds"), etiqueta,
-                    len(lote), ", ".join(novos)])
+        registo = {"hash": h_lote, "aplicado_em": datetime.now().isoformat(timespec="seconds"),
+                   "etiqueta": etiqueta, "itens": len(lote), "defeitos_novos": ", ".join(novos),
+                   "lote_id": lote_id}
+        ctl.append([registo.get(c.value) for c in ctl[1]])
         return {"aplicado": True, "hash": h_lote, "novos_defeitos": novos}
 
     def update_defect_note(self, defect_id: str, nota: str, coluna: str,

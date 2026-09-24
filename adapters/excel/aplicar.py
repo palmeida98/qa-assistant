@@ -13,7 +13,8 @@ Codigos de saida:
   0  aplicado e gravado (ou lote ja aplicado antes: nada muda)
   2  cross-check com problemas: original intacto, resultado em <nome>.REVISTO.xlsx
   3  gravado, mas o recalculo falhou (rever antes de dar por terminado)
-  4  lote ou configuracao invalidos: nada foi escrito (ver a lista de problemas)
+  4  lote ou configuracao invalidos, ou lote ja aplicado com outro conteudo:
+     nada foi escrito (ver a lista de problemas)
 """
 from __future__ import annotations
 
@@ -45,7 +46,8 @@ def aplicar(workspace: str, lote_path: str, etiqueta: str | None = None,
 
     print(f"Workbook: {ad.path}")
     print(f"Lote: {lote_path} ({len(lote)} itens)")
-    r = ad.apply_lote(lote, etiqueta=etiqueta, reportado_por=reportado_por)
+    lote_id = os.path.splitext(os.path.basename(lote_path))[0]
+    r = ad.apply_lote(lote, etiqueta=etiqueta, reportado_por=reportado_por, lote_id=lote_id)
     if not r["aplicado"]:
         print(f"Nada aplicado: {r['motivo']}. O workbook nao foi alterado.")
         return 0

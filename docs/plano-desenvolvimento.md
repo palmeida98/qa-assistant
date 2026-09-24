@@ -278,3 +278,4 @@ Decidir se o repositório passa a público. Antes disso, obrigatório:
 |---|---|
 | 2026-09-23 | Versão inicial |
 | 2026-09-24 | Revisão geral (`994fa8b`): denylist passa a ler ficheiros Office e nomes de ficheiros (antes um `.xlsx` de cliente passava o guard; histórico verificado, limpo); adaptador valida o lote inteiro antes de escrever (`validar_lote`, código 4 no `aplicar`) e aceita `bug` existente; um só formato de registo leve (metodologia §7.1 = técnica-excel §4); 27 testes `unittest` no CI e no pre-commit (inclui a verificação do painel da 5.1); ruff no pre-commit; skills alinhadas com o fluxo. |
+| 2026-09-24 | Lote editado depois de aplicado: antes era reaplicado (hash diferente) e duplicava notas e defeitos; agora a sheet de controlo guarda o `lote_id` (nome do ficheiro) e o adaptador recusa-o (código 4). Verificado: o `main` não pode ser protegido (repositório privado, plano Free: API 403); o CI é aviso depois do push, não barreira — a decidir na 6.2. |

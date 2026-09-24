@@ -19,7 +19,9 @@ description: Grava o registo leve, atualiza o contexto.md do workspace no format
    do qa-assistant: python -m adapters.excel.aplicar <workspace> <registo_leve>/<lote>.json
    e so segue se sair com 0. Os outros codigos:
    - 4 = lote invalido (ex.: Duvida por resolver, estado fora do vocabulario, caso repetido): nada foi
-     escrito; corrige o registo leve com o utilizador e volta a aplicar;
+     escrito; corrige o registo leve com o utilizador e volta a aplicar. Excecao: se o lote JA tinha
+     sido aplicado e foi editado depois, nao o reapliques -- a correcao vai num lote novo, com outro
+     nome, so com os casos a corrigir (e "bug" em vez de "defeito_novo" para defeitos ja criados);
    - 2 = cross-check com problemas: original intacto, resultado em .REVISTO.xlsx; mostra os problemas;
    - 3 = gravado, mas o recalculo falhou: rever antes de dar por terminado.
    Reaplicar o mesmo lote nao muda nada (o adaptador deteta-o).
