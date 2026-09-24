@@ -30,7 +30,7 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1, 7.4 a 7.7 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e a 7.8 opcional) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; falta o piloto 7.2, que desbloqueia a 7.3, e depois a 7.9) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -410,7 +410,7 @@ Recomendações aplicadas por decisão do utilizador (24.09.2026).
 - [x] Subagente `executor-web`: **não se constrói agora**; usa-se o subagente genérico com as instruções do `/executar-lote` (técnica browser §11). Reavaliado no piloto (7.2).
 - [x] Trackers `jira` e `azure-devops`: **registo manual** até um projeto real precisar de adaptador. Nova metodologia §4.2 (tabela por tracker), comentário no template, passo 7a no `/checkpoint`, e o `validar_projeto` avisa quando o tracker não tem adaptador (teste novo).
 
-### 7.8 Arrumação (opcional)
+### 7.8 Arrumação (opcional) — `799e068`
 - [x] `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` (hoje o `testar_mobile` e o `auditar_a11y` importam do `api_pedido`), sem mudar comportamento.
 
 Notas:
@@ -442,3 +442,4 @@ Notas:
 | 2026-09-24 | 7.1 concluída: CI verde no Linux depois da revisão geral 2 (run 36053764682), com o timeout do recálculo verificado em Ubuntu. |
 | 2026-09-24 | 7.4 (`3563f24`), 7.5 (`0a61bc6`) e 7.6 (`ced85fc`) concluídas: `historico/` protegido no `.claude/settings.json` do workspace, versões fixas (Playwright MCP e dependências Python), demo reproduzível com teste no job `golden`. |
 | 2026-09-24 | 7.7 concluída (`3ffbb62`), decisões do utilizador: sem `qa_core`/CLI `qa`; `executor-web` adiado e reavaliado no piloto; `jira` e `azure-devops` em registo manual (metodologia §4.2). A 7.2 ganhou os passos de reavaliar o `executor-web` e de confirmar a proteção de `historico/`. |
+| 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
