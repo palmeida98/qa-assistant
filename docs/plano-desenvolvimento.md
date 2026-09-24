@@ -25,9 +25,9 @@
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
-| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 e 2.3 concluídas; 2.2 à espera da confirmação do utilizador; 2.4 no workspace do piloto; 2.5 por fazer) |
+| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1, 2.3 e 2.5 concluídas; 2.2 à espera da confirmação do utilizador; 2.4 no workspace do piloto) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
-| 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
+| 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 
@@ -281,8 +281,12 @@ Notas:
 - Critério 2 validado num branch temporário apagado no fim: o commit partido foi criado pela API do GitHub (como uma edição no site, sem hooks locais), porque o pre-commit bloqueia-o localmente e o guard não se contorna. Resultado: job `golden` falhado com `apply.novos_defeitos[0]: esperado 'BUG-99', obtido 'BUG-4'`.
 - Repositório privado: o badge (no `CLAUDE.md`, até haver README na 6.1) só aparece a quem tem acesso.
 
-### 4.2 Regressão do demo
+### 4.2 Regressão do demo — `034d1c4`
 Correr os `.spec.ts` do demo (2.5) no CI contra o site público.
+
+Notas:
+- Job `demo-e2e`: Chromium do Playwright, `npm ci` e `npx playwright test` em `examples/demo/e2e`. As contas de demonstração vêm dos secrets do repositório `DEMO_SAUCE_*`; sem eles o job emite um aviso e não corre os testes (não falha).
+- A 1.ª execução (24.09.2026) foi antes de os secrets existirem e só deu o aviso. Reexecutado o job depois de os criar: `3 passed` contra o site público.
 
 Critérios de aceitação (da 4.1):
 - [x] Badge verde no GitHub.
