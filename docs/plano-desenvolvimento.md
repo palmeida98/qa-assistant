@@ -227,8 +227,20 @@ Notas:
 - `.env` do demo: contas do saucedemo preenchidas localmente por delegação, confirmadas no código do site.
 - 10 testes do `auditar_a11y.py` sem browser (resultado bruto do axe fictício). A parte Node não corre no CI.
 
-### 3.3 Mobile — `docs/tecnica-mobile.md` + `/testar-mobile`
+### 3.3 Mobile — `docs/tecnica-mobile.md` + `/testar-mobile` — `908e922` (falta confirmar o critério do `/`)
 Flows Maestro em YAML, emulador vs. dispositivo real, gestos, permissões, deep links, estados offline/background, diferenças iOS/Android.
+
+Critérios de aceitação (3.3):
+- [x] Documento agnóstico de projeto, passa os guards.
+- [x] Skill `.claude/skills/testar-mobile` com frontmatter válido, cópia global sincronizada.
+- [ ] `/` mostra `/testar-mobile` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] Exemplo executado no demo: área Mobile, 3 flows Maestro (login, utilizador bloqueado, carrinho) corridos com `scripts/testar_mobile.py`: 3 Pass. **Em Maestro Web (beta)**, não numa app nativa: esta máquina não tem adb, emulador nem dispositivo. Verificado que um flow com a asserção errada dá Fail.
+- [x] Referência no `CLAUDE.md` (sem `@`).
+
+Notas:
+- `scripts/testar_mobile.py`: um flow por caso (o ID é o prefixo do nome do ficheiro); credenciais do `.env` em variáveis `MAESTRO_<VAR>` (o Maestro dá-as aos flows como `${MAESTRO_<VAR>}`), nunca `-e` na linha de comandos; lê o JUnit do Maestro e redige as mensagens. Sem alvo (Android sem dispositivo, iOS sem simulador) os casos ficam Blocked e o Maestro nem corre.
+- Por fazer, quando houver emulador: um exemplo numa app nativa (ex.: a app de demonstração da Sauce Labs).
+- 8 testes do `testar_mobile.py` com o Maestro e o adb simulados (o formato JUnit é o real do Maestro 2.10).
 
 ### 3.4 Módulos no `projeto.yaml`
 Lista fechada de valores válidos em `modulos:` (`funcional-web`, `api`, `acessibilidade`, `mobile`, `exploratorio`) e `onboarding-projeto` a perguntar quais ativar.
