@@ -473,15 +473,11 @@ class ExcelAdapter:
     # Vista de defeitos ativos
     # ------------------------------------------------------------------
 
-    def regenerate_active_defects(self) -> dict:
-        """Reconstroi as linhas de dados da vista de defeitos ativos a partir
-        da sheet de defeitos (sem os estados fechados), ordenadas por
-        prioridade, pelo criterio secundario configurado e pelo numero do
-        defeito. Preserva o que esta acima da primeira linha de dados e
-        reaplica o estilo da primeira linha de dados original."""
-        v = self.cfg.get("vista_ativos")
-        if not v:
-            return {"total_aberto": None, "motivo": "vista_ativos nao configurada"}
+    def defeitos_abertos(self, ordenar_por: str | None = None) -> dict:
+        """So leitura. {"abertos": [linha como dict], "fechados": n}: os
+        defeitos cujo estado nao esta em estados_fechados, ordenados por
+        prioridade, por `ordenar_por` (coluna dos defeitos, opcional) e pelo
+        numero do defeito."""
         d = self.cfg["defeitos"]
         ws_def, h_def, def_rows = self._defect_rows()
         est_col = h_def[d["colunas"]["estado"]]
@@ -495,15 +491,28 @@ class ExcelAdapter:
             rows.append({name: ws_def.cell(r, c).value for name, c in h_def.items()})
 
         prio_col, prios = d["colunas"].get("prioridade"), d["prioridades"]
-        sec = v.get("ordenar_por")
 
         def key(row):
             p = row.get(prio_col) if prio_col else None
             pk = prios.index(p) if p in prios else len(prios)
             n = self._defect_number(row.get(d["colunas"]["id"]))
-            return (pk, row.get(sec) or "" if sec else "", n if n is not None else float("inf"))
+            return (pk, row.get(ordenar_por) or "" if ordenar_por else "", n if n is not None else float("inf"))
 
         rows.sort(key=key)
+        return {"abertos": rows, "fechados": closed}
+
+    def regenerate_active_defects(self) -> dict:
+        """Reconstroi as linhas de dados da vista de defeitos ativos a partir
+        da sheet de defeitos (sem os estados fechados), ordenadas por
+        prioridade, pelo criterio secundario configurado e pelo numero do
+        defeito. Preserva o que esta acima da primeira linha de dados e
+        reaplica o estilo da primeira linha de dados original."""
+        v = self.cfg.get("vista_ativos")
+        if not v:
+            return {"total_aberto": None, "motivo": "vista_ativos nao configurada"}
+        d = self.cfg["defeitos"]
+        ab = self.defeitos_abertos(v.get("ordenar_por"))
+        rows, closed = ab["abertos"], ab["fechados"]
 
         ws = self._need_wb()[v["sheet"]]
         hv = self._headers(ws, v["linha_cabecalho"])

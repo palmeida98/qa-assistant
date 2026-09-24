@@ -50,7 +50,10 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    c. Diz ao utilizador que, ao abrir o claude no workspace pela primeira vez, tem de aprovar o
       servidor (servidores de projeto pedem confirmacao) e confirmar com /mcp que "playwright"
       aparece ligado. Esta sessao nao ve as ferramentas do MCP registado agora.
+   f. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
+      excel.casos.estados, PERGUNTA o tipo -- pendente, ok, falha, bloqueado ou na. Propoe os
+      tipos pelos nomes, mas o utilizador confirma (o vocabulario e do projeto).
 6. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
-7. Confirma que .env esta no .gitignore do workspace.
+7. Confirma que .env e painel.html estao no .gitignore do workspace.
 8. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.
 9. Nunca escreve informacao deste projeto nas camadas universais (docs/ do qa-assistant).

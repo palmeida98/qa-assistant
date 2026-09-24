@@ -10,6 +10,12 @@ evidencia: "texto"           # ou "texto+screenshot"
 modulos: [funcional-web]
 registo_leve: "runs/"        # pasta do registo leve da sessao (nunca historico/, que e imutavel)
 
+# painel: significado de cada estado de caso no painel (scripts/gerar_painel.py, plano 5.1).
+# (opc.) Tipos: pendente | ok | falha | bloqueado | na. "Executados" = casos fora de pendente.
+# Sem esta secao, o 1.o estado de excel.casos.estados conta como pendente e os outros ficam neutros.
+painel:
+  estados: {}                # ex. {"Por testar": pendente, "Pass": ok, "Fail": falha, "Blocked": bloqueado, "N/A": na}
+
 # ---------------------------------------------------------------------------
 # excel: layout do workbook, lido pelo adaptador (adapters/excel/base.py).
 # Preencher SO quando tracker: "excel". Nunca adivinhar: o /onboarding-projeto
