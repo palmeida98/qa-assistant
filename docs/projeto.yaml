@@ -55,6 +55,14 @@ excel:
     estado_inicial: ""         # (obrig.) estado de um defeito novo; tem de estar em estados
     prioridades: []            # (opc.) ordem das prioridades, da mais alta para a mais baixa
 
+  aba_resumo:                  # (opc.) aba de totais com formulas, verificada contra a contagem direta
+    sheet: ""                  #   (tecnica-excel.md secao 5); apagar o bloco se o workbook nao tiver resumo
+    linha_cabecalho: 1
+    coluna_area: ""            # cabecalho da coluna com o nome de cada sheet de casos (uma linha por sheet)
+    coluna_total: ""           # (opc.) cabecalho da coluna com o total de casos da area
+    linha_total: ""            # (opc.) texto da coluna_area na linha de totais, ex. "Total"
+    colunas_estado: {}         # (opc.) estado -> cabecalho, so quando o cabecalho nao e o nome do estado
+
   vista_ativos:                # (opc.) sheet com a lista de defeitos ativos, regenerada; apagar o bloco se nao existir
     sheet: ""
     linha_cabecalho: 1         # as linhas acima desta ficam intactas; os dados comecam na seguinte

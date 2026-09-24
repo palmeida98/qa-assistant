@@ -53,6 +53,8 @@
     "Total": {"Total": 12, "To Do": 3, "Pass": 4, "Fail": 2, "Blocked": 2, "N/A": 1}
   },
 
+  "resumo_vs_contagem": {"verificado": true, "problemas": []},
+
   "controlo_lotes": [{"etiqueta": "[golden]", "itens": 3, "defeitos_novos": "BUG-4"}],
 
   "reaplicar": {"aplicado": false, "ficheiro_igual": true}

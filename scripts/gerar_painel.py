@@ -146,6 +146,8 @@ def recolher(workspace: str) -> dict:
     dados["workbook"] = ad.cfg["ficheiro"]
     dados["gerado"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     dados["contexto"] = ler_contexto(os.path.join(workspace, "contexto.md"))
+    # os totais do painel vem sempre da contagem direta; o resumo do workbook so se verifica
+    dados["resumo"] = ad.verificar_resumo() if ad.cfg.get("aba_resumo") else None
     return dados
 
 
@@ -183,6 +185,9 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td.barra{width:40%;min-width:120px}
 .scroll{overflow-x:auto}
 .vazio{color:var(--muted)}
+.alerta{border-color:var(--falha);border-width:2px}
+.alerta h2{color:var(--falha)}
+.alerta ul{margin:6px 0;padding-left:20px}
 code{background:var(--code);padding:1px 4px;border-radius:4px;font-size:.88em}
 .ctx ul{margin:4px 0;padding-left:20px}
 .ctx p{margin:4px 0}
@@ -316,9 +321,26 @@ def render(dados: dict) -> str:
     else:
         bloco_ctx = '<p class="vazio">Sem contexto.md no workspace.</p>'
 
+    rs = dados.get("resumo")
+    if rs is None:
+        linha_resumo, bloco_resumo = "", ""
+    elif not rs["verificado"]:
+        linha_resumo, bloco_resumo = f"<p>Resumo do workbook não verificado: {_e(rs['motivo'])}.</p>", ""
+    elif not rs["problemas"]:
+        linha_resumo, bloco_resumo = "<p>Resumo do workbook: bate certo com a contagem direta.</p>", ""
+    else:
+        linha_resumo = ""
+        itens = "".join(f"<li>{_e(x)}</li>" for x in rs["problemas"])
+        bloco_resumo = (
+            '<section class="alerta"><h2>O resumo do workbook não bate com a contagem direta</h2>'
+            f"<ul>{itens}</ul><p>Os números deste painel vêm da contagem direta, caso a caso, e não do resumo. "
+            "Corrige as fórmulas do resumo, não os números à mão.</p></section>"
+        )
+
     # numeros tambem em JSON, para verificar os totais sem ler o HTML
     numeros = {"casos": {k: v for k, v in c.items()},
-               "defeitos": {k: v for k, v in d.items() if k != "lista"}}
+               "defeitos": {k: v for k, v in d.items() if k != "lista"},
+               "resumo": rs}
     json_txt = json.dumps(numeros, ensure_ascii=False, indent=1).replace("</", "<\\/")
 
     return f"""<!doctype html>
@@ -334,7 +356,9 @@ def render(dados: dict) -> str:
 <header>
 <h1>{_e(dados["projeto"])}</h1>
 <p>Último checkpoint: {_e(ctx["atualizado"] or "—")} · painel gerado a {_e(dados["gerado"])} a partir de <code>{_e(dados["workbook"])}</code></p>
+{linha_resumo}
 </header>
+{bloco_resumo}
 <section><h2>Progresso</h2>
 <div class="kpis">{kpis}</div>
 <div style="margin-top:14px">{_barra(c["por_estado"], c["total"], cores)}</div>

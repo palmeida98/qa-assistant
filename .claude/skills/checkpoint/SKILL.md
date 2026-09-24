@@ -23,7 +23,10 @@ description: Grava o registo leve, atualiza o contexto.md do workspace no format
      sido aplicado e foi editado depois, nao o reapliques -- a correcao vai num lote novo, com outro
      nome, so com os casos a corrigir (e "bug" em vez de "defeito_novo" para defeitos ja criados);
    - 2 = cross-check com problemas: original intacto, resultado em .REVISTO.xlsx; mostra os problemas;
-   - 3 = gravado, mas o recalculo falhou: rever antes de dar por terminado.
+   - 3 = gravado, mas o recalculo falhou: rever antes de dar por terminado;
+   - 5 = gravado e recalculado, mas o resumo do workbook nao bate com a contagem direta
+     (aba_resumo): mostra as celulas ao utilizador; corrigem-se as FORMULAS do resumo, nunca os
+     numeros a mao. Os totais do painel e do resumo de sessao vem da contagem direta.
    Reaplicar o mesmo lote nao muda nada (o adaptador deteta-o).
 8. Indica ao utilizador o ponto exato onde a execucao ficou. Com tracker excel, pode gerar o painel:
    python scripts/gerar_painel.py <workspace> (a partir da raiz do qa-assistant).

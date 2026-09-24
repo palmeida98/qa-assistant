@@ -195,6 +195,17 @@ class ExcelAdapter:
         else:
             cfg["vista_ativos"] = None
 
+        r = cfg.get("aba_resumo")
+        if r and r.get("sheet"):
+            _req(r, "coluna_area", "aba_resumo.")
+            r.setdefault("linha_cabecalho", 1)
+            r["colunas_estado"] = r.get("colunas_estado") or {}
+            fora = [e for e in r["colunas_estado"] if e not in casos["estados"]]
+            if fora:
+                raise ConfigError(f"configuracao: aba_resumo.colunas_estado com estados fora de casos.estados: {fora}")
+        else:
+            cfg["aba_resumo"] = None
+
         defaults = {
             "notas": {"resultado": "Resultado: {resultado}", "defeito_novo": "Defeito novo: {id}.",
                       "defeito_existente": "Defeito associado: {id}."},
@@ -258,6 +269,17 @@ class ExcelAdapter:
         v = self.cfg.get("vista_ativos")
         if v and v["sheet"] not in wb.sheetnames:
             problems.append(f"sheet da vista de ativos em falta: '{v['sheet']}'")
+        r = self.cfg.get("aba_resumo")
+        if r:
+            if r["sheet"] not in wb.sheetnames:
+                problems.append(f"sheet do resumo em falta: '{r['sheet']}'")
+            else:
+                h = self._headers(wb[r["sheet"]], r["linha_cabecalho"])
+                for role in ("coluna_area", "coluna_total"):
+                    if r.get(role) and r[role] not in h:
+                        problems.append(f"'{r['sheet']}': coluna '{r[role]}' ({role}) em falta")
+                if not any(r["colunas_estado"].get(e, e) in h for e in casos["estados"]):
+                    problems.append(f"'{r['sheet']}': nenhuma coluna com o nome de um estado (usar colunas_estado)")
         if problems:
             raise ConfigError("configuracao nao corresponde ao workbook:\n - " + "\n - ".join(problems))
 
@@ -670,6 +692,67 @@ class ExcelAdapter:
         if dup:
             problems.append(f"ID de defeito duplicado: {dup}")
         return problems
+
+    def verificar_resumo(self, path: str | None = None) -> dict:
+        """So leitura. Compara os valores CALCULADOS da aba de resumo
+        (excel.aba_resumo) com a contagem direta dos estados, ambos lidos do
+        ficheiro gravado em `path` (por omissao o workbook): por area, por
+        estado, no total da area e na linha de total (tecnica-excel.md
+        secao 5). Devolve {"verificado", "problemas", "motivo"}; verificado
+        e False sem aba_resumo ou sem valores calculados (falta recalcular)."""
+        r = self.cfg.get("aba_resumo")
+        if not r:
+            return {"verificado": False, "problemas": [], "motivo": "aba_resumo nao configurada"}
+        wb = openpyxl.load_workbook(path or self.path, data_only=True)
+        leitor = copy.copy(self)
+        leitor.wb = wb
+        direta = {area: Counter(c) for area, c in leitor.progress_summary().items()}
+        total = sum(direta.values(), Counter())
+
+        ws = wb[r["sheet"]]
+        h = self._headers(ws, r["linha_cabecalho"])
+        col_area = h[r["coluna_area"]]
+        col_est = {e: h[r["colunas_estado"].get(e, e)] for e in self.cfg["casos"]["estados"]
+                   if r["colunas_estado"].get(e, e) in h}
+        col_tot = h.get(r["coluna_total"]) if r.get("coluna_total") else None
+
+        problemas, vistas, celulas, vazias = [], set(), 0, 0
+        linha_total_vista = False
+        for row in range(r["linha_cabecalho"] + 1, ws.max_row + 1):
+            area = ws.cell(row, col_area).value
+            area = "" if area is None else str(area).strip()
+            if r.get("linha_total") and area == r["linha_total"]:
+                alvo, nome, linha_total_vista = total, "linha de total", True
+            elif area in direta:
+                alvo, nome = direta[area], f"area '{area}'"
+                vistas.add(area)
+            else:
+                continue  # titulos, notas e linhas vazias nao sao areas
+            comparar = [(e, c, alvo.get(e, 0)) for e, c in col_est.items()]
+            if col_tot:
+                comparar.append(("total", col_tot, sum(alvo.values())))
+            for rotulo, col, esperado in comparar:
+                cel = ws.cell(row, col)
+                celulas += 1
+                if cel.value is None:
+                    vazias += 1
+                    continue
+                try:
+                    igual = float(cel.value) == esperado
+                except (TypeError, ValueError):
+                    igual = False
+                if not igual:
+                    problemas.append(f"{r['sheet']}!{cel.coordinate} ({nome}, {rotulo}): o resumo diz "
+                                     f"{cel.value!r}, a contagem direta da {esperado}")
+        if celulas and vazias == celulas:
+            return {"verificado": False, "problemas": [],
+                    "motivo": "o resumo nao tem valores calculados -- recalcular primeiro"}
+        if vazias:
+            problemas.append(f"{r['sheet']}: {vazias} celula(s) sem valor calculado")
+        problemas += [f"{r['sheet']}: a area '{a}' nao aparece no resumo" for a in direta if a not in vistas]
+        if r.get("linha_total") and not linha_total_vista:
+            problemas.append(f"{r['sheet']}: linha de total '{r['linha_total']}' nao encontrada")
+        return {"verificado": True, "problemas": problemas, "motivo": None}
 
     def _case_refs(self, value) -> list[str]:
         """IDs de caso referidos numa celula (pode ter varios, separados por

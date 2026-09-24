@@ -38,7 +38,12 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    e. Valida: ExcelAdapter.from_projeto(<workspace>).load() tem de passar (falha se faltar uma sheet
       ou coluna) e cross_check() so para mostrar problemas que ja existam no workbook. Nao aplica
       lotes nem grava o workbook durante o onboarding.
-   f. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
+   f. Se o workbook tiver uma aba de totais com formulas (resumo por area e estado), preenche
+      excel.aba_resumo (sheet, linha_cabecalho, coluna_area, coluna_total, linha_total e, se os
+      cabecalhos nao forem os nomes dos estados, colunas_estado) a partir dos cabecalhos reais, e
+      confirma com o utilizador. Serve para verificar as formulas contra a contagem direta
+      (tecnica-excel.md seccao 5); os totais nunca se leem do resumo.
+   g. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
       excel.casos.estados, PERGUNTA o tipo -- pendente, ok, falha, bloqueado ou na. Propoe os
       tipos pelos nomes, mas o utilizador confirma (o vocabulario e do projeto).
 5. Se um modulo de browser estiver ativo (ex.: funcional-web), regista o Playwright MCP NO WORKSPACE

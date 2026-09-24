@@ -40,6 +40,13 @@ defeitos:
   estado_inicial: "New"
   prioridades: ["P1", "P2", "P3", "P4"]
 
+aba_resumo:                    # aba de totais, verificada contra a contagem direta
+  sheet: "Summary"
+  linha_cabecalho: 1
+  coluna_area: "Sheet"
+  coluna_total: "Total"
+  linha_total: "Total"
+
 vista_ativos:
   sheet: "Open Defects"
   linha_cabecalho: 3

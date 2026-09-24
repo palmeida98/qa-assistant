@@ -56,3 +56,5 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends libreoffice-calc-nogui
       - run: pip install -r requirements.txt
       - run: python scripts/golden_check.py
+      # testes que recalculam formulas reais (resumo vs contagem direta); no job testes ficam skipped
+      - run: python -m unittest tests.test_resumo -v

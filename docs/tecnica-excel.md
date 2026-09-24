@@ -78,6 +78,8 @@ A impressão digital só reconhece conteúdo **igual**. Um lote editado depois d
 
 O cross-check do adaptador verifica também que cada defeito aponta para um caso que existe (só conta como referência o texto que começa por um prefixo de caso configurado).
 
+**Resumo vs contagem direta.** As fórmulas de uma aba de resumo podem estar erradas sem ninguém dar por isso: a contar a coluna errada, com um intervalo fixo que já não chega à última linha, ou sem uma área nova. Por isso o adaptador **nunca usa o resumo como fonte dos totais**: o painel e o `aplicar` contam os estados linha a linha. Quando o bloco opcional `excel.aba_resumo` existe, `verificar_resumo()` compara os valores **calculados** do resumo (lidos do ficheiro gravado, com `data_only=True`) com essa contagem direta, por área, por estado, no total da área e na linha de total, e reporta cada diferença. Os valores calculados só existem depois de um recálculo (o `openpyxl` grava fórmulas sem valores em cache); sem eles, a verificação diz que não pode comparar, sem inventar números. No `aplicar`, corre depois do recálculo: se o resumo não bater, sai com o código 5 (gravado e recalculado, mas o resumo do workbook está errado: corrigir as fórmulas, nunca os números à mão). O painel mostra o mesmo aviso.
+
 ## 6. Exportação para outras equipas
 
 Quando o workbook oficial não é o formato que outra equipa (ex.: desenvolvimento) precisa de consultar, gera-se uma exportação derivada e descartável a partir do workbook oficial — nunca o contrário. O workbook oficial se mantém como única fonte de verdade (metodologia §1.3); a exportação é sempre regenerável.

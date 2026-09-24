@@ -63,6 +63,13 @@ excel:
     estado_inicial: "Aberto"
     prioridades: ["Crítica", "Alta", "Média", "Baixa"]
 
+  aba_resumo:                  # verificado contra a contagem direta (tecnica-excel.md secao 5)
+    sheet: "Resumo"
+    linha_cabecalho: 3
+    coluna_area: "Área"
+    coluna_total: "Total"
+    linha_total: "Total"
+
   vista_ativos:
     sheet: "Defeitos Ativos"
     linha_cabecalho: 3

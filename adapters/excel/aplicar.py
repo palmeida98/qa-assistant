@@ -15,6 +15,8 @@ Codigos de saida:
   3  gravado, mas o recalculo falhou (rever antes de dar por terminado)
   4  lote ou configuracao invalidos, ou lote ja aplicado com outro conteudo:
      nada foi escrito (ver a lista de problemas)
+  5  gravado e recalculado, mas o resumo do workbook nao bate com a contagem
+     direta (aba_resumo; tecnica-excel.md secao 5): corrigir as formulas
 """
 from __future__ import annotations
 
@@ -72,6 +74,17 @@ def aplicar(workspace: str, lote_path: str, etiqueta: str | None = None,
         rc = ad.recalc()
         print(f"Recalculo ({rc['mecanismo']}):", "OK" if rc["ok"] else f"FALHOU -- {rc['erro']}")
         rc_code = 0 if rc["ok"] else 3
+        if rc["ok"]:
+            vr = ad.verificar_resumo()
+            if vr["verificado"] and vr["problemas"]:
+                print(f"\nResumo vs contagem direta: {len(vr['problemas'])} diferenca(s) -- corrigir as FORMULAS do resumo:")
+                for p in vr["problemas"]:
+                    print(" -", p)
+                rc_code = 5
+            elif vr["verificado"]:
+                print("Resumo vs contagem direta: bate certo.")
+            elif ad.cfg.get("aba_resumo"):
+                print(f"Resumo nao verificado: {vr['motivo']}.")
 
     depois = ad.progress_summary()
     print("\nAntes -> depois (contagem direta por sheet):")

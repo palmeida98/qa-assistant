@@ -110,6 +110,10 @@ def run(workdir: str) -> dict:
     h = [c.value for c in ws[1]]
     ob["totais_summary"] = {row[0]: dict(zip(h[1:], row[1:])) for row in ws.iter_rows(min_row=2, values_only=True)}
 
+    # resumo (formulas recalculadas) vs contagem direta: tecnica-excel.md secao 5
+    vr = ad.verificar_resumo()
+    ob["resumo_vs_contagem"] = {"verificado": vr["verificado"], "problemas": vr["problemas"]}
+
     ad_ctl = ExcelAdapter.from_dict(cfg, base_dir=workdir)
     ad_ctl.load()
     ob["controlo_lotes"] = [{k: x[k] for k in ("etiqueta", "itens", "defeitos_novos")} for x in ad_ctl.lotes_aplicados()]
