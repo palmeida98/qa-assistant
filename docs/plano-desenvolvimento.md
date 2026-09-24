@@ -29,7 +29,7 @@
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
 | 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
-| 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Por fazer |
+| 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Em curso (6.1 concluída; 6.2: verificações feitas e limpas, decisão do utilizador) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -324,13 +324,22 @@ Critérios de aceitação (da 5.1):
 
 ## Fase 6 — Portefólio
 
-### 6.1 README
+### 6.1 README — `00278ee`
 Arquitetura em camadas, fronteira de privacidade, como começar (onboarding de um workspace novo), demo, módulos disponíveis.
+
+Notas: `README.md` com as quatro camadas, a fronteira de privacidade e os guards, o fluxo de trabalho (diagrama mermaid), o onboarding de um projeto novo, a tabela de módulos, o demo, testes/CI e requisitos. O badge do CI passou do `CLAUDE.md` para o README (como previsto na 4.1).
 
 ### 6.2 Visibilidade do repositório
 Decidir se o repositório passa a público. Antes disso, obrigatório:
-- [ ] Varrer **todo o histórico** com detect-secrets e com a denylist (não só o estado atual), porque os primeiros commits foram feitos antes de os guards existirem.
-- [ ] Rever `examples/demo/` à procura de qualquer dado não fictício.
+- [x] Varrer **todo o histórico** com detect-secrets e com a denylist (não só o estado atual), porque os primeiros commits foram feitos antes de os guards existirem.
+- [x] Rever `examples/demo/` à procura de qualquer dado não fictício.
+- [ ] Decisão do utilizador sobre a visibilidade.
+
+Verificações (24.09.2026, 52 commits, 219 versões de ficheiros extraídas de todos os ramos):
+- detect-secrets em todas as versões: 0 achados (fora os hashes de integridade dos `package-lock.json`, falsos positivos). Confirmado que a varredura lê os ficheiros, com um segredo plantado (apanhado). Limitação conhecida: o detect-secrets local deixa passar alguns padrões YAML que o do CI apanha (registo de 24.09); o único caso conhecido era um nome de variável, não um segredo.
+- Denylist (texto, nomes e conteúdo de ficheiros Office) em todas as versões: 0 achados. Confirmado com um termo real da lista plantado (bloqueado).
+- Nenhum `.env` nem `.api-sessao.env` alguma vez no histórico; as palavras-passe de demonstração não aparecem em nenhuma versão; sem caminhos locais nem o nome de utilizador da máquina (só o nome do repositório no GitHub, no badge).
+- `examples/demo/`: só sites públicos de prática (saucedemo.com, restful-booker), contas de demonstração publicadas pelos próprios sites referidas pelo nome da variável, dados de teste com prefixo `QA-AUTO-`, bugs dos sites de prática.
 
 ---
 
