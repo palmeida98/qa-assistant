@@ -1,0 +1,54 @@
+{
+ "resultados": [
+  {
+   "tc": "CT-LOGIN-003",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Mostra \"Epic sadface: Username is required\"; fica em /."
+  },
+  {
+   "tc": "CT-LOGIN-002",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Mostra \"Epic sadface: Sorry, this user has been locked out.\"; fica em /."
+  },
+  {
+   "tc": "CT-LOGIN-001",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Abre /inventory.html com o título \"Products\"."
+  },
+  {
+   "tc": "CT-PROD-001",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "6 produtos, todos com nome, descrição, preço, imagem e botão \"Add to cart\"."
+  },
+  {
+   "tc": "CT-PROD-002",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Preços por ordem crescente: 7.99, 9.99, 15.99, 15.99, 29.99, 49.99."
+  },
+  {
+   "tc": "CT-CHK-001",
+   "estado": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Contador do carrinho = 1; botão passa a \"Remove\" (produto removido a seguir, para limpar)."
+  },
+  {
+   "tc": "CT-PROD-005",
+   "estado": "Fail",
+   "ts": "2026-09-24T12:24:30",
+   "resultado_obtido": "Os 6 produtos mostram a mesma imagem (/assets/sl-404-….jpg); no standard_user cada produto tem a sua.",
+   "defeito_novo": {
+    "titulo": "problem_user: todos os produtos mostram a mesma imagem",
+    "descricao": "Ambiente: saucedemo.com (teste), Chrome 153 via biblioteca Playwright (não o Playwright MCP, que não estava disponível nesta sessão). Role: problem_user.\nPassos: login com problem_user; observar a imagem de cada produto em Products; repetir com standard_user.\nEsperado: cada produto com a sua própria imagem, igual à apresentada ao standard_user.\nObservado: os 6 produtos mostram a mesma imagem (/assets/sl-404-….jpg); com standard_user as 6 imagens são diferentes e correspondem a cada produto.",
+    "area": "Produtos",
+    "role": "problem_user",
+    "severidade": "Média",
+    "prioridade": "Média"
+   }
+  }
+ ]
+}
