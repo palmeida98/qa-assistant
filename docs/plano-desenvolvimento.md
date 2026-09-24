@@ -210,8 +210,22 @@ Notas:
 - Decisões por delegação (o utilizador pediu para avançar sem perguntar): alvo restful-booker, os 10 casos de API e o BUG-1 (prioridade Média). Registadas no `contexto.md` do demo para revisão.
 - 9 testes do `api_pedido.py` com um servidor HTTP local (sem rede).
 
-### 3.2 Acessibilidade — `docs/tecnica-acessibilidade.md` + `/auditar-acessibilidade`
+### 3.2 Acessibilidade — `docs/tecnica-acessibilidade.md` + `/auditar-acessibilidade` — `afbdbe7` (falta confirmar o critério do `/`)
 WCAG 2.1 AA. Parte automática com axe-core via Playwright; parte manual guiada (teclado, ordem de foco, leitor de ecrã, contraste, zoom 200%, reflow). Cada falha mapeada ao critério WCAG correspondente e ao nível.
+
+Critérios de aceitação (3.2):
+- [x] Documento agnóstico de projeto, passa os guards.
+- [x] Skill `.claude/skills/auditar-acessibilidade` com frontmatter válido, cópia global sincronizada.
+- [ ] `/` mostra `/auditar-acessibilidade` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] Exemplo executado no demo: área Acessibilidade (7 casos). Auditoria automática em 4 páginas (login, produtos, carrinho, checkout-dados; 3 com login): 0 violações WCAG 2.1 A/AA, boas práticas e 1 incompleto de contraste registados; CT-A11Y-006 (2.4.2 A, títulos iguais) Fail → BUG-2. Os manuais CT-A11Y-005 (contraste) e CT-A11Y-007 (teclado) ficam Por testar: precisam do browser pelo agente (Playwright MCP).
+- [x] Referência no `CLAUDE.md` (sem `@`, como a API).
+
+Notas:
+- `tools/a11y/` (Node, versões fixadas: Playwright 1.63.0, @axe-core/playwright 4.13.0; `npm ci --prefix tools/a11y`) só abre as páginas e corre o axe; usa o Chrome instalado (`channel: chrome`), sem descarregar browsers. `scripts/auditar_a11y.py` lê o `projeto.yaml`, passa as credenciais do login por variáveis de ambiente (nunca argumentos) e mapeia as tags do axe a critérios e níveis; boas práticas → observações, incompletos → revisão manual.
+- Uma página redirecionada (ex.: login falhado) é tratada como não auditada: o axe na página de login daria um falso Pass.
+- O workbook do demo passou a ser reconstruível (`examples/demo/reconstruir_workbook.py`: gerador + lotes de `runs/` pela ordem de execução, pelo 1.º `ts` de cada lote; pelo nome, os BUG-n trocavam).
+- `.env` do demo: contas do saucedemo preenchidas localmente por delegação, confirmadas no código do site.
+- 10 testes do `auditar_a11y.py` sem browser (resultado bruto do axe fictício). A parte Node não corre no CI.
 
 ### 3.3 Mobile — `docs/tecnica-mobile.md` + `/testar-mobile`
 Flows Maestro em YAML, emulador vs. dispositivo real, gestos, permissões, deep links, estados offline/background, diferenças iOS/Android.
@@ -305,3 +319,4 @@ Decidir se o repositório passa a público. Antes disso, obrigatório:
 | 2026-09-24 | Resumo vs contagem direta: bloco opcional `excel.aba_resumo`; `verificar_resumo()` compara os valores recalculados do resumo com a contagem caso a caso (por área, estado, total e linha de total); código 5 no `aplicar`, alerta no painel, parte do golden. Os totais nunca se leem do resumo. Detetados nos testes: fórmula a contar a coluna errada e caso fora do intervalo fixo (o demo usa `A2:A200`). |
 | 2026-09-24 | Definição de "executado" (decisão do utilizador): todo o caso fora de `Por testar`; N/A e Blocked contam como executados; % executada = executados / total. Escrita na metodologia §16.3; fórmula do resumo do demo alinhada (antes excluía os N/A) e workbook regenerado (só essas fórmulas e a nota mudaram). |
 | 2026-09-24 | Verificação da % executada do resumo (`aba_resumo.coluna_percentagem` + `estado_por_testar`): compara com (total − por testar) / total, fração ou pontos percentuais, tolerância estrita por omissão (0,001 pp); o painel recusa um `estado_por_testar` diferente do seu estado pendente. Demo configurado. |
+| 2026-09-24 | detect-secrets: o do CI (Linux, Python 3.12) marcou `password: <NOME_VAR>` num mapa YAML inline que o local (Windows, Python 3.14) deixa passar, com a mesma versão e baseline; segredos óbvios são apanhados nos dois. Corrigido o conteúdo (chaves `var_utilizador`/`var_palavra_passe`); causa exata por apurar. Nos workspaces sem CI, o guard local é a única barreira. |
