@@ -107,6 +107,7 @@ Cada etapa tem uma skill correspondente no Claude Code:
 | Gestão de bugs | `/registar-bug` |
 | Checkpoint | `/checkpoint` |
 | Validação e relatório | `/fim-sessao` |
+| Acompanhamento (a qualquer momento) | `/painel` |
 
 ---
 

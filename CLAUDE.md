@@ -16,12 +16,12 @@ Referências:
 
 ## Comandos disponíveis
 /onboarding-projeto · /analisar-funcionalidade · /gerar-casos · /planear-lote
-/executar-lote · /registar-bug · /checkpoint · /fim-sessao
+/executar-lote · /registar-bug · /checkpoint · /fim-sessao · /painel
 
 ## Scripts (a partir da raiz do qa-assistant)
 - `python -m adapters.excel.inspecionar <cópia.xlsx>` — propõe a secção `excel:` (onboarding)
 - `python -m adapters.excel.aplicar <workspace> <lote.json>` — aplica um lote ao workbook (0 ok · 2 cross-check · 3 recálculo · 4 lote inválido · 5 resumo não bate)
-- `python scripts/gerar_painel.py <workspace>` — gera o `painel.html` do workspace
+- `python scripts/gerar_painel.py <workspace> [--abrir]` — gera (e abre) o `painel.html` do workspace; é o que o `/painel` corre
 - Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice)
 
 ## Ambiente

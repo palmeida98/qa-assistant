@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from html.parser import HTMLParser
+from unittest import mock
 
 import yaml
 
@@ -159,6 +160,52 @@ class PorTestarCoerente(unittest.TestCase):
 
     def test_sem_percentagem_no_resumo_nao_verifica(self):
         gerar_painel.verificar_por_testar({**ESTADOS, "To Do": "ok"}, {"aba_resumo": None})
+
+
+class LinhaDeComandos(unittest.TestCase):
+    """O que a skill /painel usa (plano 5.2): --abrir, codigos de saida, estado do resumo."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        with open(os.path.join(ROOT, "adapters", "excel", "exemplo.yaml"), encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        gerar(os.path.join(self.tmp.name, cfg["ficheiro"]))
+        self.proj = {"projeto": "t", "tracker": "excel", "excel": cfg, "painel": {"estados": ESTADOS}}
+        self.escrever_projeto()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def escrever_projeto(self):
+        with open(os.path.join(self.tmp.name, "projeto.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump(self.proj, f, allow_unicode=True)
+
+    def correr(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err),                 mock.patch.object(gerar_painel.webbrowser, "open") as abrir:
+            rc = gerar_painel.main([self.tmp.name, *args])
+        return rc, out.getvalue(), err.getvalue(), abrir
+
+    def test_abrir_abre_o_ficheiro_local(self):
+        rc, _, _, abrir = self.correr("--abrir")
+        self.assertEqual(rc, 0)
+        uri = abrir.call_args.args[0]
+        self.assertTrue(uri.startswith("file:") and uri.endswith("/painel.html"), uri)
+
+    def test_sem_abrir_nao_abre(self):
+        self.assertFalse(self.correr()[3].called)
+
+    def test_diz_o_estado_do_resumo(self):
+        self.assertIn("resumo do workbook: nao verificado", self.correr()[1])
+
+    def test_outro_tracker_sai_com_2_sem_gerar(self):
+        self.proj["tracker"] = "jira"
+        self.escrever_projeto()
+        rc, _, err, abrir = self.correr("--abrir")
+        self.assertEqual(rc, 2)
+        self.assertIn("tracker", err)
+        self.assertFalse(abrir.called)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "painel.html")))
 
 
 class MarkdownMinimo(unittest.TestCase):

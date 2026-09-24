@@ -10,8 +10,11 @@ O significado de cada estado de caso vem da secao `painel:` do projeto.yaml
 (pendente | ok | falha | bloqueado | na); sem ela, o primeiro estado de
 excel.casos.estados conta como pendente e os restantes ficam neutros.
 
-Uso (a partir da raiz do qa-assistant):
-    python scripts/gerar_painel.py <workspace> [--saida painel.html]
+Uso (a partir da raiz do qa-assistant; skill /painel, plano 5.2):
+    python scripts/gerar_painel.py <workspace> [--saida painel.html] [--abrir]
+
+Sai com 0 (gerado) ou 2 (configuracao invalida: nada gerado). --abrir abre o
+ficheiro local no browser; o painel nunca se publica (tem dados do projeto).
 """
 
 from __future__ import annotations
@@ -22,7 +25,9 @@ import json
 import os
 import re
 import sys
+import webbrowser
 from datetime import datetime
+from pathlib import Path
 
 import yaml
 
@@ -397,6 +402,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Gera o painel.html de um workspace (plano 5.1).")
     ap.add_argument("workspace")
     ap.add_argument("--saida", default="painel.html", help="relativo ao workspace (por omissao painel.html)")
+    ap.add_argument("--abrir", action="store_true", help="abre o painel gerado no browser (ficheiro local)")
     a = ap.parse_args(argv)
     try:
         dados = recolher(a.workspace)
@@ -409,6 +415,17 @@ def main(argv=None) -> int:
     c, d = dados["casos"], dados["defeitos"]
     print(f"painel gerado: {destino} ({c['executados']}/{c['total']} casos executados, "
           f"{d['abertos']} defeitos abertos)")
+    rs = dados.get("resumo")
+    if rs is None:
+        print("resumo do workbook: sem aba_resumo configurada")
+    elif not rs["verificado"]:
+        print(f"resumo do workbook: nao verificado -- {rs['motivo']}")
+    elif rs["problemas"]:
+        print(f"resumo do workbook: {len(rs['problemas'])} diferenca(s) com a contagem direta (ver o painel)")
+    else:
+        print("resumo do workbook: bate certo com a contagem direta")
+    if a.abrir:
+        webbrowser.open(Path(destino).resolve().as_uri())
     return 0
 
 
