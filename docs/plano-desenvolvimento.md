@@ -28,7 +28,7 @@
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
-| 5 | Interface: painel de progresso por workspace | Por fazer |
+| 5 | Interface: painel de progresso por workspace | Em curso (5.1 concluída) |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Por fazer |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
@@ -241,15 +241,22 @@ Nota: a regressão de projetos reais corre no workspace ou no CI da empresa dess
 
 ## Fase 5 — Interface
 
-### 5.1 Painel por workspace
+### 5.1 Painel por workspace — `e6cc04f`
 `scripts/gerar_painel.py <caminho-do-workspace>` lê o workbook (pelo adaptador) e o `contexto.md` e gera `painel.html` dentro do workspace: progresso por área e estado, defeitos abertos por severidade, último checkpoint e próximos passos. O HTML gerado fica no workspace (no `.gitignore`), nunca no repositório.
+
+Notas:
+- Só lê o workbook (`load()`, nunca grava). Método novo no adaptador, `defeitos_abertos()`, reutilizado pela `regenerate_active_defects()`; golden inalterado.
+- O significado dos estados vem da secção opcional `painel:` do `projeto.yaml` (`pendente | ok | falha | bloqueado | na`), validada contra `excel.casos.estados`; sem ela, o 1.º estado conta como pendente. A `onboarding-projeto` pergunta-a e põe o `painel.html` no `.gitignore` do workspace.
+- Do `contexto.md` mostra a linha `Atualizado:` e as secções ponto de execução, trabalho pendente, dúvidas e bloqueios (Markdown mínimo convertido no próprio script). Os números vão também num bloco JSON (`#numeros`) no HTML.
+- Só `tracker: excel` por agora; outro tracker sai com código 2 e mensagem clara.
+- Validação (24.09.2026): no demo, 0/18 executados, igual ao `progress_summary()` (ainda sem execuções). Na fixture do golden com o lote aplicado e recalculado, os números do painel batem com a Summary recalculada pelo LibreOffice (por área e total), com o `esperado.json` e com a ordem da vista de ativos; sem `src`/`href` externos nem `<link>`/`@import`. A verificação foi manual (script no scratchpad); se o painel mudar muito, vale passá-la a teste no CI.
 
 ### 5.2 Skill `/painel`
 Gera e abre o painel do workspace atual.
 
-Critérios de aceitação:
-- [ ] Painel do demo gerado e coerente com o workbook (totais batem).
-- [ ] Funciona offline, um único ficheiro HTML.
+Critérios de aceitação (da 5.1):
+- [x] Painel do demo gerado e coerente com o workbook (totais batem).
+- [x] Funciona offline, um único ficheiro HTML.
 
 ---
 
