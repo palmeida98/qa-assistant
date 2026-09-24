@@ -28,7 +28,7 @@
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Por fazer |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
-| 5 | Interface: painel de progresso por workspace | Em curso (5.1 concluída) |
+| 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Por fazer |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
@@ -251,8 +251,18 @@ Notas:
 - Só `tracker: excel` por agora; outro tracker sai com código 2 e mensagem clara.
 - Validação (24.09.2026): no demo, 0/18 executados, igual ao `progress_summary()` (ainda sem execuções). Na fixture do golden com o lote aplicado e recalculado, os números do painel batem com a Summary recalculada pelo LibreOffice (por área e total), com o `esperado.json` e com a ordem da vista de ativos; sem `src`/`href` externos nem `<link>`/`@import`. A verificação foi manual (script no scratchpad); se o painel mudar muito, vale passá-la a teste no CI.
 
-### 5.2 Skill `/painel`
+### 5.2 Skill `/painel` — `a016109` (falta confirmar o critério do `/`)
 Gera e abre o painel do workspace atual.
+
+Critérios de aceitação (da 5.2):
+- [x] `.claude/skills/painel/SKILL.md` com frontmatter válido, cópia global em `~/.claude/skills/`, referida no `CLAUDE.md` e na metodologia §3.
+- [x] Seguindo os passos da skill no demo, o painel é gerado e abre no browser (`gerar_painel.py --abrir`); com um tracker que não é Excel sai com 2 sem gerar nada.
+- [ ] Dentro do `claude`, escrever `/` mostra `/painel` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+
+Notas:
+- `--abrir` usa o módulo `webbrowser` com o URI do ficheiro local: igual em Windows, macOS e Linux, sem aspas de shell. O script passa a imprimir o estado do resumo do workbook, que a skill resume.
+- A skill proíbe publicar ou enviar o painel: num projeto real tem dados do cliente (metodologia §1.2).
+- Encontrado ao testar: o frontmatter da `fim-sessao` tinha YAML inválido desde a fase 0 (`: ` na descrição sem aspas) e o Claude Code mostrava a 1.ª linha do corpo como descrição. Corrigido; `tests/test_skills.py` valida o frontmatter de todas as skills e que cada uma está no `CLAUDE.md`.
 
 Critérios de aceitação (da 5.1):
 - [x] Painel do demo gerado e coerente com o workbook (totais batem).
