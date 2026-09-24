@@ -26,9 +26,9 @@
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
 | 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1, 2.3 e 2.5 concluídas; 2.2 à espera da confirmação do utilizador; 2.4 no workspace do piloto) |
-| 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
+| 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída |
 | 4 | CI da própria framework | Concluída |
-| 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
+| 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
@@ -205,13 +205,13 @@ Notas:
 
 Cada módulo: um documento em `docs/` (mesma estrutura dos existentes: âmbito, níveis de execução, preparação, verificação, evidência, segurança, ligação à metodologia, checklist) + uma skill + um exemplo no demo.
 
-### 3.1 API — `docs/tecnica-api.md` + `/testar-api` — `5b11b05` (falta confirmar o critério do `/`)
+### 3.1 API — `docs/tecnica-api.md` + `/testar-api` — `5b11b05`
 Contratos e schemas, códigos de estado, autenticação e autorização por role, casos negativos, idempotência, paginação, limites. Ferramentas: `request` do Playwright, curl, coleções Postman quando o projeto já as tenha. Evidência: pedido/resposta com segredos redigidos.
 
 Critérios de aceitação (3.1):
 - [x] Documento agnóstico de projeto (exemplos só com a Loja Demo), passa os guards.
 - [x] Skill `.claude/skills/testar-api` com frontmatter válido (teste `test_skills`), cópia global sincronizada.
-- [ ] `/` mostra `/testar-api` com a etiqueta `(project)`. *(verificação manual do utilizador; nesta sessão a skill já aparece na lista)*
+- [x] `/` mostra `/testar-api` com a etiqueta `(project)`. *(confirmado pelo utilizador, 24.09.2026)*
 - [x] Exemplo executado no demo: área API com 10 casos (restful-booker, esperados da documentação publicada), lote `runs/lote_20260924_api01.json` aplicado ao workbook: 9 Pass, 1 Fail → BUG-1 (500 a um POST sem campos obrigatórios); cross-check limpo, recálculo OK, resumo vs contagem direta bate certo.
 - [x] Referência no `CLAUDE.md` (sem `@`: só se lê com o módulo `api` ativo, para não pesar em todas as sessões).
 
@@ -221,13 +221,13 @@ Notas:
 - Decisões por delegação (o utilizador pediu para avançar sem perguntar): alvo restful-booker, os 10 casos de API e o BUG-1 (prioridade Média). Registadas no `contexto.md` do demo para revisão.
 - 9 testes do `api_pedido.py` com um servidor HTTP local (sem rede).
 
-### 3.2 Acessibilidade — `docs/tecnica-acessibilidade.md` + `/auditar-acessibilidade` — `afbdbe7` (falta confirmar o critério do `/`)
+### 3.2 Acessibilidade — `docs/tecnica-acessibilidade.md` + `/auditar-acessibilidade` — `afbdbe7`
 WCAG 2.1 AA. Parte automática com axe-core via Playwright; parte manual guiada (teclado, ordem de foco, leitor de ecrã, contraste, zoom 200%, reflow). Cada falha mapeada ao critério WCAG correspondente e ao nível.
 
 Critérios de aceitação (3.2):
 - [x] Documento agnóstico de projeto, passa os guards.
 - [x] Skill `.claude/skills/auditar-acessibilidade` com frontmatter válido, cópia global sincronizada.
-- [ ] `/` mostra `/auditar-acessibilidade` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] `/` mostra `/auditar-acessibilidade` com a etiqueta `(project)`. *(confirmado pelo utilizador, 24.09.2026)*
 - [x] Exemplo executado no demo: área Acessibilidade (7 casos). Auditoria automática em 4 páginas (login, produtos, carrinho, checkout-dados; 3 com login): 0 violações WCAG 2.1 A/AA, boas práticas e 1 incompleto de contraste registados; CT-A11Y-006 (2.4.2 A, títulos iguais) Fail → BUG-2. Os manuais CT-A11Y-005 (contraste) e CT-A11Y-007 (teclado) ficam Por testar: precisam do browser pelo agente (Playwright MCP).
 - [x] Referência no `CLAUDE.md` (sem `@`, como a API).
 
@@ -238,13 +238,13 @@ Notas:
 - `.env` do demo: contas do saucedemo preenchidas localmente por delegação, confirmadas no código do site.
 - 10 testes do `auditar_a11y.py` sem browser (resultado bruto do axe fictício). A parte Node não corre no CI.
 
-### 3.3 Mobile — `docs/tecnica-mobile.md` + `/testar-mobile` — `908e922` (falta confirmar o critério do `/`)
+### 3.3 Mobile — `docs/tecnica-mobile.md` + `/testar-mobile` — `908e922`
 Flows Maestro em YAML, emulador vs. dispositivo real, gestos, permissões, deep links, estados offline/background, diferenças iOS/Android.
 
 Critérios de aceitação (3.3):
 - [x] Documento agnóstico de projeto, passa os guards.
 - [x] Skill `.claude/skills/testar-mobile` com frontmatter válido, cópia global sincronizada.
-- [ ] `/` mostra `/testar-mobile` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] `/` mostra `/testar-mobile` com a etiqueta `(project)`. *(confirmado pelo utilizador, 24.09.2026)*
 - [x] Exemplo executado no demo: área Mobile, 3 flows Maestro (login, utilizador bloqueado, carrinho) corridos com `scripts/testar_mobile.py`: 3 Pass. **Em Maestro Web (beta)**, não numa app nativa: esta máquina não tem adb, emulador nem dispositivo. Verificado que um flow com a asserção errada dá Fail.
 - [x] Referência no `CLAUDE.md` (sem `@`).
 
@@ -263,7 +263,7 @@ Critérios de aceitação (3.4):
 
 Notas:
 - A `tecnica-browser.md` listava como módulos `smoke`, `roles`, `visual`, `cross-browser` e `formularios`, que não existem: passam a variantes dentro dos módulos, não valores de `modulos:`. Referências antigas a `modulos/*.md` corrigidas.
-- Os critérios comuns da Fase 3 (documento, skill, exemplo no demo, `CLAUDE.md`) ficaram verificados em cada tarefa (3.1–3.3); falta só a verificação manual do `/`.
+- Os critérios comuns da Fase 3 (documento, skill, exemplo no demo, `CLAUDE.md`) ficaram verificados em cada tarefa (3.1–3.3); a verificação manual do `/` foi confirmada pelo utilizador (24.09.2026).
 
 ---
 
@@ -308,13 +308,13 @@ Notas:
 - Só `tracker: excel` por agora; outro tracker sai com código 2 e mensagem clara.
 - Validação (24.09.2026): no demo, 0/18 executados, igual ao `progress_summary()` (ainda sem execuções). Na fixture do golden com o lote aplicado e recalculado, os números do painel batem com a Summary recalculada pelo LibreOffice (por área e total), com o `esperado.json` e com a ordem da vista de ativos; sem `src`/`href` externos nem `<link>`/`@import`. A verificação foi manual (script no scratchpad); se o painel mudar muito, vale passá-la a teste no CI.
 
-### 5.2 Skill `/painel` — `a016109` (falta confirmar o critério do `/`)
+### 5.2 Skill `/painel` — `a016109`
 Gera e abre o painel do workspace atual.
 
 Critérios de aceitação (da 5.2):
 - [x] `.claude/skills/painel/SKILL.md` com frontmatter válido, cópia global em `~/.claude/skills/`, referida no `CLAUDE.md` e na metodologia §3.
 - [x] Seguindo os passos da skill no demo, o painel é gerado e abre no browser (`gerar_painel.py --abrir`); com um tracker que não é Excel sai com 2 sem gerar nada.
-- [ ] Dentro do `claude`, escrever `/` mostra `/painel` com a etiqueta `(project)`. *(verificação manual do utilizador)*
+- [x] Dentro do `claude`, escrever `/` mostra `/painel` com a etiqueta `(project)`. *(confirmado pelo utilizador, 24.09.2026)*
 
 Notas:
 - `--abrir` usa o módulo `webbrowser` com o URI do ficheiro local: igual em Windows, macOS e Linux, sem aspas de shell. O script passa a imprimir o estado do resumo do workbook, que a skill resume.
