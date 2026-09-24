@@ -28,7 +28,7 @@ Este é o mesmo padrão de "validar antes de adotar" da metodologia (§15), apli
 
 No adaptador: `load()` → `apply_lote()` → `regenerate_active_defects()` → `save_if_clean()` (inclui o `cross_check()`) → `recalc()`. O `load()` falha logo se a configuração não corresponder ao workbook (sheet ou coluna obrigatória em falta), e o `apply_lote()` verifica todos os IDs de caso antes de escrever o que quer que seja. As colunas opcionais de caso (resultado obtido, observações) só se usam nas sheets onde existem.
 
-Para correr o fluxo completo num workspace: `python -m adapters.excel.aplicar <workspace> <lote.json>` (a partir da raiz do qa-assistant). Sai com 0 (gravado, ou lote já aplicado), 2 (cross-check com problemas: original intacto, `.REVISTO.xlsx` à parte) ou 3 (gravado, mas o recálculo falhou).
+Para correr o fluxo completo num workspace: `python -m adapters.excel.aplicar <workspace> <lote.json>` (a partir da raiz do qa-assistant). Sai com 0 (gravado, ou lote já aplicado), 2 (cross-check com problemas: original intacto, `.REVISTO.xlsx` à parte), 3 (gravado, mas o recálculo falhou), 4 (lote ou configuração inválidos, ou lote já aplicado com outro conteúdo: nada escrito; §4 e §5) ou 5 (gravado e recalculado, mas o resumo do workbook não bate com a contagem direta; §5).
 
 ## 2. Recalcular fórmulas em segurança
 
@@ -46,7 +46,7 @@ O mecanismo concreto de recálculo depende do ambiente, e **não é portátil po
 
 Ao migrar um `qa_lib.py` de projeto de uma sessão Cowork para Claude Code local, **o mecanismo de recálculo tem de ser reescrito** para o ambiente novo — o resto da lógica (carregar, aplicar lote, cross-check) mantém-se.
 
-No adaptador: `adapters/excel/recalc.py`, `recalc_safe(path, mecanismo="libreoffice" | "excel-com", timeout)`, escolhido pela configuração (`recalc:`). Devolve `{"ok": True}` ou `{"ok": False, "erro": …}` e, em caso de erro, o original fica intacto.
+No adaptador: `adapters/excel/recalc.py`, `recalc_safe(path, mecanismo="libreoffice" | "excel-com", timeout)`, escolhido pela configuração (`recalc:`). Devolve `{"ok": True}` ou `{"ok": False, "erro": …}` e, em caso de erro, o original fica intacto. O timeout mata a árvore de processos inteira (no Windows com `taskkill /T`; no Linux e macOS, o grupo de processos): o `soffice` lança um `soffice.bin` que, pendurado, segurava a espera para sempre.
 
 Ao regravar o ficheiro, o LibreOffice introduz diferenças sem efeito visual ou funcional (ex.: o byte de transparência das cores passa de `00` para `FF`; referências de autofiltro perdem os `$`; literais de erro em fórmulas já partidas passam a minúsculas). Não se confunda isto com perda de dados — mas também não se afirme "formatação preservada" sem comparar o que foi efetivamente comparado.
 

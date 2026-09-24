@@ -115,6 +115,20 @@ def profile_sheet(ws, wb) -> dict:
     return info
 
 
+def _e_vista_de(p: dict, q: dict) -> bool:
+    """p e uma vista de q: os IDs de p estao todos em q. Com os MESMOS IDs (ex.:
+    todos os defeitos abertos, a vista igual ao registo), a vista e a que tem
+    linhas acima do cabecalho (titulo, resumo); em empate, a que tem menos
+    colunas. Sem desempate, nenhuma e vista (fica para CONFIRMAR)."""
+    if not p["_ids"] <= q["_ids"]:
+        return False
+    if p["_ids"] < q["_ids"]:
+        return True
+    if p["linha_cabecalho"] != q["linha_cabecalho"]:
+        return p["linha_cabecalho"] > q["linha_cabecalho"]
+    return len(p["colunas"]) < len(q["colunas"])
+
+
 def classify(profiles: list[dict]) -> dict:
     """Separa sheets de casos, de defeitos e vistas, so pelas relacoes entre
     elas (sem nomes pre-definidos):
@@ -136,7 +150,7 @@ def classify(profiles: list[dict]) -> dict:
         else:
             res["outras"].append(p)
     for p in com_id:
-        p["_vista_de"] = next((q for q in com_id if q is not p and p["_ids"] <= q["_ids"]), None)
+        p["_vista_de"] = next((q for q in com_id if q is not p and _e_vista_de(p, q)), None)
     for p in com_id:
         if p["_vista_de"]:
             continue
@@ -177,8 +191,11 @@ def _estado_proposta(p, excluir):
     if len(com_lista) == 1:
         c = com_lista[0]
         return c["nome"], c["lista_validacao"], "detetado pela validacao de dados (lista)"
-    return (_cfm("coluna de estado", [c["nome"] for c in enums]),
-            None, "varias colunas candidatas" if enums else "sem candidatas")
+    # um so valor (ex.: todos os defeitos ainda "Aberto") tambem pode ser a coluna de estado
+    unicos = [c for c in p["colunas"] if c["nome"] not in excluir and c["distintos"] == 1
+              and not c["texto_longo"] and not c["datas"] and c not in enums]
+    opcoes = [c["nome"] for c in enums + unicos]
+    return (_cfm("coluna de estado", opcoes), None, "varias colunas candidatas" if opcoes else "sem candidatas")
 
 
 def _match_col(c, base) -> str:
@@ -237,8 +254,8 @@ def propose(path: str) -> tuple[dict, list[str]]:
         idc = p["_id"]
         refs = [c["nome"] for c in p["_refs"]]
         caso_col = refs[0] if len(refs) == 1 else _cfm("coluna do caso relacionado", refs)
-        nome, estados, como = _estado_proposta(p, {idc["nome"]})
-        enums = [c["nome"] for c in _enum_cols(p, {idc["nome"], nome})]
+        nome, estados, como = _estado_proposta(p, {idc["nome"], *refs})
+        enums = [c["nome"] for c in _enum_cols(p, {idc["nome"], nome, *refs})]
         datas = [c["nome"] for c in p["colunas"] if c["datas"]]
         defeitos = {
             "sheet": p["sheet"],
@@ -342,4 +359,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    for _s in (sys.stdout, sys.stderr):
+        _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

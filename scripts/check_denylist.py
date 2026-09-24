@@ -60,4 +60,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    for _s in (sys.stdout, sys.stderr):
+        _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

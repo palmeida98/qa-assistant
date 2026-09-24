@@ -36,10 +36,12 @@
         pass_filenames: false
         files: ^(adapters/|tests/golden/|docs/tecnica-excel\.md$|scripts/golden_check\.py$)
 
-      # testes unitarios (adaptador, painel, denylist): rapidos, sem LibreOffice
+      # testes unitarios: rapidos, sem LibreOffice. Correm tambem quando mudam os ficheiros
+      # que os testes leem: skills e CLAUDE.md (test_skills), demo (test_validar_projeto,
+      # test_painel), template do projeto.yaml e esta configuracao (test_guards)
       - id: testes
         name: testes unitarios
         entry: python -m unittest discover -s tests
         language: system
         pass_filenames: false
-        files: ^(adapters/|scripts/|tests/)
+        files: ^(adapters/|scripts/|tests/|tools/|examples/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|\.pre-commit-config\.yaml$)

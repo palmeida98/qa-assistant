@@ -140,6 +140,15 @@ class ApiPedido(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("sem a barra inicial", err)
 
+    def test_saida_relativa_fica_no_workspace(self):
+        rc, _, _ = self.auth("--saida", "runs/evidencia/CT-API-001.json")
+        self.assertEqual(rc, 0)
+        destino = os.path.join(self.ws, "runs", "evidencia", "CT-API-001.json")
+        with open(destino, encoding="utf-8") as f:
+            texto = f.read()
+        self.assertNotIn(SENHA, texto)
+        self.assertEqual(json.loads(texto)["resposta"]["codigo"], 200)
+
     def test_json_invalido_sai_com_2(self):
         self.assertEqual(self.correr("POST", "/itens", "--json", "{nao e json")[0], 2)
 

@@ -7,8 +7,8 @@ description: Gera propostas de casos de teste a partir da analise de uma funcion
 2. Le o formato de caso e o tracker em projeto.yaml (workspace atual) e a estrutura do workbook/tracker
    no CLAUDE.md. Nao inventes colunas nem estados.
 3. Escolhe a tecnica de desenho por comportamento (seccao 5.2): particao de equivalencia, valores-limite,
-   tabela de decisao, transicao de estados, pairwise, matriz de roles, error guessing (heuristicas,
-   seccao 17) ou charter exploratorio. Inclui casos negativos.
+   tabela de decisao, transicao de estados, pairwise, matriz de roles, error guessing (heuristicas de
+   <qa>/docs/heuristicas.md, seccao 17) ou charter exploratorio. Inclui casos negativos.
 4. Cada caso tem os campos do modelo de dados (seccao 2): funcionalidade, titulo, pre-condicoes, passos,
    UM resultado esperado verificavel, role, plataforma, modulo, tecnica, prioridade e origem.
    Se um caso tiver varios resultados esperados, divide-o (seccao 5.3).

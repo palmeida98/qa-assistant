@@ -23,7 +23,7 @@
 
 | Camada | Conteúdo | Onde vive |
 |---|---|---|
-| **Motor** | `qa_core` (modelo de dados, pipeline, validação, CLI `qa`), skills, subagentes e hooks | Repositório pessoal `qa-assistant` |
+| **Motor** | Skills (`.claude/skills/`), adaptadores, scripts (`scripts/`, `tools/`), testes e guards. Planeados, ainda por criar: o `qa_core` (modelo de dados, pipeline, CLI `qa`) e subagentes | Repositório pessoal `qa-assistant` |
 | **1. Metodologia** | Este documento | `qa-assistant/docs/` |
 | **2. Módulos de teste** | Técnicas por tipo de teste (`tecnica-browser.md`, `tecnica-api.md`, `tecnica-acessibilidade.md`, `tecnica-mobile.md`; lista em §4.1) | `qa-assistant/docs/` |
 | **3. Adaptadores** | Conversão entre o modelo interno e as ferramentas de cada empresa (Excel, Azure DevOps, Jira, Figma) | `qa-assistant/adapters/` |
@@ -129,7 +129,7 @@ Cada etapa tem uma skill correspondente no Claude Code:
 4. Confirmar que o `.env` está no `.gitignore` e que `historico/` está protegido.
 5. Verificar que nenhuma informação do projeto foi escrita nas camadas universais.
 6. Criar o `contexto.md` inicial (ver §12.2).
-7. Importar os casos existentes com o adaptador do projeto e validar o round-trip (importar → exportar → comparar).
+7. Importar os casos existentes com o adaptador do projeto e validar o round-trip (importar → exportar → comparar). Com o adaptador Excel, que lê e escreve o próprio workbook (não há importação para um modelo à parte), isto é o `ExcelAdapter.from_projeto(...).load()` sem erros e o `cross_check()` a mostrar só problemas que já existiam no workbook; o `python scripts/validar_projeto.py <workspace>` faz as duas coisas.
 
 ### 4.1 Módulos de teste
 
@@ -403,7 +403,7 @@ Só se alteram com instrução explícita do utilizador para esse artefacto espe
 
 Antes de criar um script ou uma ferramenta nova:
 
-1. procurar no `qa_core`, nas skills e nos adaptadores existentes;
+1. procurar nas skills, nos adaptadores e nos scripts existentes (`CLAUDE.md` do `qa-assistant`, secção Scripts);
 2. ler a documentação respetiva;
 3. perceber o fluxo atual;
 4. reutilizar ou estender;
@@ -415,7 +415,7 @@ Uma ferramenta que funciona não se substitui sem motivo.
 
 No início de cada sessão, confirmar e, se houver diferenças, registar:
 
-- que ferramentas estão disponíveis (Claude Code, MCPs ligados, browser, CLI `qa`);
+- que ferramentas estão disponíveis (Claude Code, MCPs ligados, browser, Node.js, LibreOffice, Maestro);
 - onde estão os ficheiros (repositório, workspace);
 - que scripts e skills podem ser usados;
 - as limitações do ambiente.
@@ -426,14 +426,15 @@ Não assumir que uma ferramenta disponível num ambiente existe noutro.
 
 ## 15. Alterações à framework
 
-Qualquer alteração ao `qa_core`, aos adaptadores, às skills ou às camadas universais segue a **validação antes de adoção**:
+Qualquer alteração aos adaptadores, aos scripts, às skills ou às camadas universais segue a **validação antes de adoção**:
 
 1. Identificar o comportamento atual.
 2. Alterar primeiro a especificação (Markdown), depois o código.
 3. Correr os testes da framework, em especial:
    - **teste golden**: um lote histórico real (lido do workspace via `QA_GOLDEN_DIR`) tem de produzir uma saída idêntica à guardada;
      - hoje existe o golden **fictício** do adaptador Excel (`python scripts/golden_check.py`: fixture, lote e resultado esperado em `tests/golden/`, escritos à mão). O golden com lote histórico real via `QA_GOLDEN_DIR` ainda não está implementado; até lá, uma alteração que afete um projeto real valida-se também por comparação direta numa cópia do workbook desse projeto (nunca no original);
-   - **teste de round-trip**: importar → exportar sem perda.
+   - **teste de round-trip**: importar → exportar sem perda (com o adaptador Excel, que edita o próprio workbook, é o golden que o cobre: os casos fora do lote ficam iguais e reaplicar o mesmo lote não muda nada);
+   - **testes unitários** (`python -m unittest discover -s tests`), que o `pre-commit` e o CI também correm.
 4. Investigar todas as diferenças relevantes.
 5. Confirmar que cada diferença é intencional.
 6. Só então adotar (commit).
@@ -485,7 +486,7 @@ Próximos passos: …
 
 Cada bug relevante pode gerar uma heurística reutilizável noutros projetos.
 
-- Guardar em `qa-assistant/docs/heuristicas.md` **só depois de anonimizar**: sem nomes, URLs, dados ou textos do cliente.
+- Guardar em `qa-assistant/docs/heuristicas.md` **só depois de anonimizar**: sem nomes, URLs, dados ou textos do cliente. A denylist do `pre-commit` é a última barreira, não a primeira.
 - Formato: *componente/tipo de ecrã → padrão de falha → como testar*.
 - Exemplo: *Campo de IBAN → aceita espaços na introdução mas falha a validação no envio → testar com e sem espaços, com minúsculas e com o prefixo do país*.
 

@@ -248,6 +248,8 @@ def gerar(path: str) -> str:
 
 
 if __name__ == "__main__":
+    for _s in (sys.stdout, sys.stderr):  # saida em UTF-8 tambem num pipe no Windows
+        _s.reconfigure(encoding="utf-8", errors="replace")
     here = os.path.dirname(os.path.abspath(__file__))
     dest = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "workbook", "plano-demo.xlsx")
     os.makedirs(os.path.dirname(dest), exist_ok=True)

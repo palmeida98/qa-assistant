@@ -98,6 +98,7 @@ excel:
   notas:                       # (opc.) texto acrescentado as observacoes do caso, depois da etiqueta da sessao
     resultado: "Resultado: {resultado}"   # usado nas sheets sem coluna resultado_obtido
     defeito_novo: "Defeito novo: {id}."
+    defeito_existente: "Defeito associado: {id}."   # item do lote com "bug" (defeito ja existente)
 
   controlo_lotes:
     sheet: "_qa_lotes"         # (opc.) sheet escondida onde o adaptador regista os lotes aplicados

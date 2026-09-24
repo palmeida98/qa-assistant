@@ -10,7 +10,7 @@ do .env ou segredo da sessao. Nenhum segredo chega a saida.
     python scripts/api_pedido.py <workspace> <METODO> <url|caminho>
         [-H "Nome: valor"]... [--json '{...}' | --json-file f.json]
         [--esperado 201] [--guardar campo=NOME]... [--guardar-segredo campo=NOME]...
-        [--saida evidencia.json] [--timeout 30]
+        [--saida runs/evidencia/<caso>.json] [--timeout 30]
 
 - Um caminho relativo usa api.base_url do projeto.yaml. No Git Bash (Windows)
   escrever sem a barra inicial (booking/1): o shell converte /booking num
@@ -251,7 +251,7 @@ def main(argv=None) -> int:
     ap.add_argument("--esperado", type=int)
     ap.add_argument("--guardar", action="append", default=[], metavar="campo=NOME")
     ap.add_argument("--guardar-segredo", action="append", default=[], metavar="campo=NOME")
-    ap.add_argument("--saida", help="grava tambem a evidencia neste ficheiro (JSON)")
+    ap.add_argument("--saida", help="grava tambem a evidencia neste ficheiro JSON (relativo ao workspace, se nao for absoluto)")
     ap.add_argument("--timeout", type=float, default=30)
     ap.add_argument("--max-corpo", type=int, default=4000)
     a = ap.parse_args(argv)
@@ -263,10 +263,15 @@ def main(argv=None) -> int:
     saida = json.dumps(evid, ensure_ascii=False, indent=1)
     print(saida)
     if a.saida:
-        with open(a.saida, "w", encoding="utf-8") as f:
+        destino = a.saida if os.path.isabs(a.saida) else os.path.join(a.workspace, a.saida)
+        os.makedirs(os.path.dirname(destino) or ".", exist_ok=True)
+        with open(destino, "w", encoding="utf-8") as f:
             f.write(saida + "\n")
     return rc
 
 
 if __name__ == "__main__":
+    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    for _s in (sys.stdout, sys.stderr):
+        _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

@@ -1,7 +1,9 @@
 """
 Valida o projeto.yaml de um workspace (metodologia-core.md seccao 4 e 4.1;
-plano, tarefa 3.4): campos base, modulos da lista fechada, seccao de cada
-modulo ativo, Excel (quando tracker: excel) e seccao painel:.
+plano, tarefa 3.4): campos base, URL de cada ambiente, modulos da lista
+fechada, seccao de cada modulo ativo, URLs dos modulos dentro dos ambientes
+declarados (nunca producao), Excel (quando tracker: excel), seccao painel: e,
+num workspace com git, o .gitignore dos ficheiros com segredos (aviso).
 
     python scripts/validar_projeto.py <workspace>
 
@@ -15,7 +17,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
+import subprocess
 import sys
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -33,6 +38,47 @@ MODULOS = {
 TRACKERS = ("excel", "azure-devops", "jira")
 
 
+def ambiente_de(url: str, ambientes: dict) -> str | None:
+    """Nome do ambiente declarado que contem o URL (mesmo esquema e anfitriao, caminho por baixo)."""
+    u = urlsplit(str(url))
+    for nome, base in ambientes.items():
+        b = urlsplit(str(base or ""))
+        if b.netloc and (u.scheme, u.netloc.lower()) == (b.scheme, b.netloc.lower()):
+            caminho = b.path.rstrip("/")
+            if not caminho or u.path == caminho or u.path.startswith(caminho + "/"):
+                return nome
+    return None
+
+
+def urls_dos_modulos(proj: dict, modulos: list) -> list[tuple[str, str]]:
+    out = []
+    if "api" in modulos and (proj.get("api") or {}).get("base_url"):
+        out.append(("api.base_url", proj["api"]["base_url"]))
+    if "acessibilidade" in modulos:
+        a = proj.get("acessibilidade") or {}
+        if (a.get("login") or {}).get("url"):
+            out.append(("acessibilidade.login.url", a["login"]["url"]))
+        out += [(f"acessibilidade.paginas[{p.get('nome')}]", p["url"])
+                for p in a.get("paginas") or [] if isinstance(p, dict) and p.get("url")]
+    return out
+
+
+def avisos_gitignore(workspace: str, proj: dict, modulos: list) -> list[str]:
+    """Ficheiros com segredos ou dados do projeto que o git do workspace tem de ignorar
+    (metodologia seccao 4, passo 4). So num workspace dentro de um repositorio git."""
+    git = shutil.which("git")
+    if not git:
+        return []
+    dentro = subprocess.run([git, "-C", workspace, "rev-parse", "--is-inside-work-tree"],
+                            capture_output=True, text=True, check=False)
+    if dentro.returncode != 0:
+        return []
+    ficheiros = [".env"] + ([".api-sessao.env"] if "api" in modulos else [])         + (["painel.html"] if proj.get("tracker") == "excel" else [])
+    falta = [f for f in ficheiros if subprocess.run([git, "-C", workspace, "check-ignore", "-q", f],
+                                                    capture_output=True, check=False).returncode != 0]
+    return [f"{f} nao esta no .gitignore do workspace (tem segredos ou dados do projeto)" for f in falta]
+
+
 def validar(workspace: str) -> tuple[list[str], list[str]]:
     with open(os.path.join(workspace, "projeto.yaml"), encoding="utf-8-sig") as f:
         proj = yaml.safe_load(f) or {}
@@ -41,8 +87,18 @@ def validar(workspace: str) -> tuple[list[str], list[str]]:
     for campo in ("projeto", "tracker", "formato_bug"):
         if not proj.get(campo):
             problemas.append(f"campo '{campo}' vazio")
-    if not (proj.get("ambientes") or {}):
+    ambientes = proj.get("ambientes") or {}
+    if not ambientes:
         problemas.append("'ambientes' vazio: e preciso pelo menos o ambiente de testes")
+    elif not isinstance(ambientes, dict):
+        problemas.append("'ambientes' tem de ser um mapa nome -> URL")
+        ambientes = {}
+    for nome, url in ambientes.items():
+        partes = urlsplit(str(url or "").strip())
+        if not str(url or "").strip():
+            problemas.append(f"ambiente '{nome}' sem URL")
+        elif partes.scheme not in ("http", "https") or not partes.netloc:
+            problemas.append(f"ambiente '{nome}': {url!r} nao e um URL http(s)://")
     if proj.get("tracker") and proj["tracker"] not in TRACKERS:
         problemas.append(f"tracker {proj['tracker']!r} fora de {list(TRACKERS)}")
     if proj.get("bugs_resolvidos") not in (None, "remover", "arquivar"):
@@ -64,8 +120,19 @@ def validar(workspace: str) -> tuple[list[str], list[str]]:
             if faltam:
                 problemas.append(f"modulo '{m}' ativo mas a seccao {secao}: nao tem {faltam}")
     for m, (secao, obrig) in MODULOS.items():
-        if secao and m not in modulos and any((proj.get(secao) or {}).get(c) for c in obrig):
+        # all: um campo com valor por omissao no template (ex.: mobile.flows) nao conta como preenchida
+        if secao and m not in modulos and all((proj.get(secao) or {}).get(c) for c in obrig):
             avisos.append(f"seccao {secao}: preenchida, mas o modulo '{m}' nao esta em 'modulos'")
+
+    # URLs dos modulos ativos: so de ambientes declarados, nunca de producao (tecnica-browser.md seccao 2)
+    for campo_url, url in urls_dos_modulos(proj, modulos):
+        amb = ambiente_de(url, ambientes)
+        if amb is None:
+            problemas.append(f"{campo_url} ({url}) fora dos ambientes declarados em 'ambientes'")
+        elif "prod" in str(amb).lower():
+            problemas.append(f"{campo_url} ({url}) aponta para o ambiente '{amb}' (producao?)")
+
+    avisos += avisos_gitignore(workspace, proj, modulos)
 
     if proj.get("tracker") == "excel":
         from adapters.excel import ConfigError, ExcelAdapter
@@ -106,4 +173,7 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    for _s in (sys.stdout, sys.stderr):
+        _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

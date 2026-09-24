@@ -6,8 +6,10 @@ pelo adaptador.
 Serve para acrescentar areas ou casos ao demo sem perder os resultados ja
 registados: o workbook e sempre o gerador + os lotes aplicados. A etiqueta de
 cada lote e derivada do nome do ficheiro (lote_AAAAMMDD_<id> ->
-"[AAAA-MM-DD, lote_AAAAMMDD_<id>]"), por isso a reconstrucao e deterministica;
-so a data dos defeitos novos e a do dia da reconstrucao.
+"[AAAA-MM-DD, lote_AAAAMMDD_<id>]"), por isso estados, notas e defeitos saem
+sempre iguais. Nao e byte a byte: a data dos defeitos novos, a do resumo da
+vista de ativos, o aplicado_em da sheet _qa_lotes e as datas do ficheiro sao
+as do dia da reconstrucao (o git mostra sempre o .xlsx alterado).
 
     python examples/demo/reconstruir_workbook.py      (a partir da raiz do qa-assistant)
 
@@ -56,4 +58,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    for _s in (sys.stdout, sys.stderr):
+        _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

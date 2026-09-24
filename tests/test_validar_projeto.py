@@ -8,6 +8,7 @@ import contextlib
 import io
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -59,6 +60,47 @@ class Validar(unittest.TestCase):
         texto = " | ".join(problemas)
         for trecho in ("'projeto' vazio", "tracker 'trello'", "evidencia", "'ambientes' vazio"):
             self.assertIn(trecho, texto)
+
+
+    def test_ambiente_sem_url_ou_mal_escrito(self):
+        problemas, _ = self.com(ambientes={"teste": "", "uat": "loja.demo"})
+        texto = " | ".join(problemas)
+        self.assertIn("ambiente 'teste' sem URL", texto)
+        self.assertIn("ambiente 'uat'", texto)
+
+    def test_urls_dos_modulos_dentro_dos_ambientes(self):
+        a11y = {"paginas": [{"nome": "home", "url": "https://loja.demo/"},
+                            {"nome": "conta", "url": "https://loja.demo.outro.pt/conta"}]}
+        problemas, _ = self.com(modulos=["api", "acessibilidade"], acessibilidade=a11y,
+                                api={"base_url": "https://api.loja.demo/v1"})
+        texto = " | ".join(problemas)
+        self.assertIn("api.base_url (https://api.loja.demo/v1) fora dos ambientes", texto)
+        self.assertIn("acessibilidade.paginas[conta]", texto)  # anfitriao parecido nao conta
+        self.assertNotIn("paginas[home]", texto)
+
+    def test_url_de_producao_e_problema(self):
+        problemas, _ = self.com(modulos=["api"], api={"base_url": "https://loja.pt/api"},
+                                ambientes={"teste": "https://teste.loja.pt", "producao": "https://loja.pt"})
+        self.assertTrue(any("'producao'" in p for p in problemas), problemas)
+
+    def test_url_com_caminho_do_ambiente(self):
+        problemas, _ = self.com(modulos=["api"], ambientes={"teste": "https://loja.demo/app/"},
+                                api={"base_url": "https://loja.demo/app/api"})
+        self.assertEqual(problemas, [])
+        problemas, _ = self.com(modulos=["api"], ambientes={"teste": "https://loja.demo/app/"},
+                                api={"base_url": "https://loja.demo/application"})
+        self.assertTrue(problemas)
+
+    @unittest.skipUnless(shutil.which("git"), "sem git")
+    def test_gitignore_num_workspace_com_git(self):
+        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
+        _, avisos = self.com(modulos=["api"], api={"base_url": "https://loja.demo/api"})
+        self.assertTrue(any(".env nao esta no .gitignore" in w for w in avisos), avisos)
+        self.assertTrue(any(".api-sessao.env" in w for w in avisos), avisos)
+        with open(os.path.join(self.tmp.name, ".gitignore"), "w", encoding="utf-8") as f:
+            f.write("*.env\n")
+        _, avisos = self.com(modulos=["api"], api={"base_url": "https://loja.demo/api"})
+        self.assertEqual(avisos, [])
 
 
 class Demo(unittest.TestCase):

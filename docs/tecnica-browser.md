@@ -170,7 +170,7 @@ Segue a política do `projeto.yaml` (metodologia §7.3). No browser, um **Fail**
 
 - Reutilizar a sessão e a navegação dentro do lote. Ir diretamente por URL quando o caso não testa a navegação em si.
 - Não tirar snapshots completos repetidos da mesma página sem ter havido mudança.
-- Em lotes grandes, a execução corre num **subagente** (`executor-web`), que devolve ao contexto principal apenas o registo leve: ID, resultado, nota curta e bug.
+- Em lotes grandes, a execução pode correr num **subagente**, que devolve ao contexto principal apenas o registo leve: ID, resultado, nota curta e bug. Ainda não há um subagente próprio da framework (`executor-web` está planeado): até lá, usar o subagente genérico do Claude Code com as instruções do `/executar-lote`.
 - Agrupar verificações da mesma página, quando vários casos a partilham, sem misturar os resultados de cada caso.
 
 ---

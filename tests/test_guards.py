@@ -7,6 +7,7 @@ tem de correr em modo UTF-8 e manter o id que o CI usa.
 """
 
 import os
+import re
 import unittest
 
 import yaml
@@ -29,6 +30,15 @@ class Guards(unittest.TestCase):
 
     def test_os_guards_existem(self):
         self.assertTrue({"detect-secrets", "denylist", "ruff-check", "golden", "testes"} <= set(hooks()))
+
+    def test_testes_correm_quando_mudam_os_ficheiros_que_leem(self):
+        padrao = re.compile(hooks()["testes"]["files"])
+        for caminho in ("adapters/excel/base.py", "scripts/gerar_painel.py", "tests/test_skills.py",
+                        ".claude/skills/checkpoint/SKILL.md", "CLAUDE.md", "examples/demo/projeto.yaml",
+                        "docs/projeto.yaml", ".pre-commit-config.yaml", "tools/a11y/axe_scan.mjs"):
+            with self.subTest(caminho=caminho):
+                self.assertTrue(padrao.search(caminho))
+        self.assertFalse(padrao.search("docs/metodologia-core.md"))
 
     def test_o_bug_de_codificacao_existe_mesmo(self):
         # a razao do -X utf8: bytes de "Á" em UTF-8 nao se leem em cp1252

@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -76,7 +77,10 @@ def find_soffice() -> str:
 
 
 def _run_with_timeout(cmd: list[str], timeout: int) -> tuple[int, str, str]:
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # fora do Windows, num grupo de processos proprio: soffice lanca o soffice.bin, que herda os
+    # pipes; matar so o pai deixava o communicate() a espera do filho pendurado, sem timeout
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            start_new_session=os.name != "nt")
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -84,9 +88,12 @@ def _run_with_timeout(cmd: list[str], timeout: int) -> tuple[int, str, str]:
         if os.name == "nt":
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)
         else:
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         proc.communicate()
-        raise TimeoutError(f"recalculo nao terminou em {timeout}s")
+        raise TimeoutError(f"recalculo nao terminou em {timeout}s") from None
     return proc.returncode, stdout, stderr
 
 
