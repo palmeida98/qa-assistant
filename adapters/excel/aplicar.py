@@ -8,6 +8,7 @@ A configuracao vem da secao `excel:` do projeto.yaml do workspace.
 
     python -m adapters.excel.aplicar <workspace> <lote.json>
         [--etiqueta "[2026-09-23, lote 01]"] [--reportado-por "..."] [--sem-recalc]
+        [--agora 2026-09-23T14:03:00]   (datas escritas fixas; tecnica-excel.md secao 1)
 
 Codigos de saida:
   0  aplicado e gravado (ou lote ja aplicado antes: nada muda)
@@ -23,7 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import date
+from datetime import datetime
 
 from .base import ConfigError, ExcelAdapter, LoteInvalido, load_lote
 
@@ -38,13 +39,15 @@ def _resolve(workspace: str, path: str) -> str:
 
 
 def aplicar(workspace: str, lote_path: str, etiqueta: str | None = None,
-            reportado_por: str = "QA automatizado", recalc: bool = True) -> int:
+            reportado_por: str = "QA automatizado", recalc: bool = True,
+            agora: datetime | None = None) -> int:
     lote_path = _resolve(workspace, lote_path)
     ad = ExcelAdapter.from_projeto(workspace)
+    ad.agora = agora
     ad.load()
     antes = ad.progress_summary()
     lote = load_lote(lote_path)
-    etiqueta = etiqueta or f"[{date.today().isoformat()}, {os.path.splitext(os.path.basename(lote_path))[0]}]"
+    etiqueta = etiqueta or f"[{ad._agora().date().isoformat()}, {os.path.splitext(os.path.basename(lote_path))[0]}]"
 
     print(f"Workbook: {ad.path}")
     print(f"Lote: {lote_path} ({len(lote)} itens)")
@@ -100,9 +103,11 @@ def main(argv=None) -> int:
     ap.add_argument("--etiqueta", help="texto que antecede as notas desta sessao (por omissao: [data, nome do lote])")
     ap.add_argument("--reportado-por", default="QA automatizado")
     ap.add_argument("--sem-recalc", action="store_true")
+    ap.add_argument("--agora", type=datetime.fromisoformat, metavar="AAAA-MM-DDTHH:MM:SS",
+                    help="instante usado em todas as datas escritas, em vez do relogio (reconstrucoes)")
     a = ap.parse_args(argv)
     try:
-        return aplicar(a.workspace, a.lote, a.etiqueta, a.reportado_por, not a.sem_recalc)
+        return aplicar(a.workspace, a.lote, a.etiqueta, a.reportado_por, not a.sem_recalc, a.agora)
     except (LoteInvalido, ConfigError, FileNotFoundError) as e:
         print(f"\nNADA APLICADO -- {e}", file=sys.stderr)
         return 4

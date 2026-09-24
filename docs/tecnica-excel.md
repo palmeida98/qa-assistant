@@ -30,6 +30,8 @@ No adaptador: `load()` → `apply_lote()` → `regenerate_active_defects()` → 
 
 Para correr o fluxo completo num workspace: `python -m adapters.excel.aplicar <workspace> <lote.json>` (a partir da raiz do qa-assistant). Sai com 0 (gravado, ou lote já aplicado), 2 (cross-check com problemas: original intacto, `.REVISTO.xlsx` à parte), 3 (gravado, mas o recálculo falhou), 4 (lote ou configuração inválidos, ou lote já aplicado com outro conteúdo: nada escrito; §4 e §5) ou 5 (gravado e recalculado, mas o resumo do workbook não bate com a contagem direta; §5).
 
+**Data da aplicação.** Por omissão, o adaptador usa o relógio: a data da etiqueta das notas, a data de report dos defeitos novos, a data do texto de resumo da vista de ativos e o `aplicado_em` da sheet de controlo. Com `--agora AAAA-MM-DDTHH:MM:SS` no `aplicar` (atributo `agora` do `ExcelAdapter`), usa esse instante em todos esses sítios, e a mesma sequência de lotes produz sempre as mesmas células. Serve para reconstruir um workbook a partir dos lotes com a data em que cada lote foi executado (ex.: `examples/demo/reconstruir_workbook.py`, que usa o primeiro `ts` de cada lote); numa sessão normal não se usa.
+
 ## 2. Recalcular fórmulas em segurança
 
 **Regra de ouro, descoberta a doer:** nunca recalcular um workbook a correr diretamente num caminho dentro de uma pasta sincronizada ou montada (pasta conectada do Cowork, OneDrive, uma unidade de rede, qualquer montagem FUSE). O LibreOffice fica pendurado indefinidamente nesse filesystem, de forma 100% reprodutível — não é o ficheiro, é o tipo de montagem.

@@ -393,8 +393,14 @@ Notas:
 
 ### 7.6 Demo reproduzível
 A reconstrução põe datas do dia (defeitos novos, resumo da vista, `_qa_lotes`, propriedades do ficheiro) e o `.xlsx` aparece sempre alterado no git.
-- [ ] Data de cada lote fixada pelo 1.º `ts` do lote na reconstrução (opção no `aplicar`, sem mudar o comportamento por omissão).
-- [ ] Teste no CI: as células do workbook versionado são iguais às do gerador + lotes.
+- [x] Data de cada lote fixada pelo 1.º `ts` do lote na reconstrução (opção no `aplicar`, sem mudar o comportamento por omissão).
+- [x] Teste no CI: as células do workbook versionado são iguais às do gerador + lotes.
+
+Notas:
+- `aplicar --agora AAAA-MM-DDTHH:MM:SS` (atributo `agora` do `ExcelAdapter`): etiqueta por omissão, data de report dos defeitos novos, data do resumo da vista de ativos e `aplicado_em` usam esse instante; sem a opção, o relógio (golden inalterado). Especificado na técnica Excel §1.
+- `reconstruir_workbook.py [workspace]` passa o 1.º `ts` de cada lote e aceita outra pasta (o teste reconstrói numa pasta temporária, nunca no demo).
+- `tests/test_demo_reproduzivel.py`: `Agora` (sem LibreOffice: o mesmo instante dá as mesmas células; as datas escritas são as do instante) e `Demo` (reconstrução = workbook versionado, célula a célula, em todas as sheets; no job `golden`). O `Demo` falhou contra o workbook anterior (datas do dia da reconstrução) e passa com o regenerado; duas reconstruções seguidas dão as mesmas células.
+- O `.xlsx` continua a mudar byte a byte a cada reconstrução (propriedades do ficheiro gravadas pelo openpyxl e pelo LibreOffice); o critério é o das células.
 
 ### 7.7 Decisões de âmbito (utilizador)
 - [ ] `qa_core` / CLI `qa`: recomendação **não construir** (adaptadores e scripts já são o motor); retirar da metodologia §1.1.

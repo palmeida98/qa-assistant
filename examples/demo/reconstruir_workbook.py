@@ -6,12 +6,15 @@ pelo adaptador.
 Serve para acrescentar areas ou casos ao demo sem perder os resultados ja
 registados: o workbook e sempre o gerador + os lotes aplicados. A etiqueta de
 cada lote e derivada do nome do ficheiro (lote_AAAAMMDD_<id> ->
-"[AAAA-MM-DD, lote_AAAAMMDD_<id>]"), por isso estados, notas e defeitos saem
-sempre iguais. Nao e byte a byte: a data dos defeitos novos, a do resumo da
-vista de ativos, o aplicado_em da sheet _qa_lotes e as datas do ficheiro sao
-as do dia da reconstrucao (o git mostra sempre o .xlsx alterado).
+"[AAAA-MM-DD, lote_AAAAMMDD_<id>]") e todas as datas escritas sao o 1.o ts do
+lote (aplicar --agora), por isso as celulas saem sempre iguais (plano 7.6;
+tests/test_demo_reproduzivel.py). O ficheiro nao e igual byte a byte: as
+propriedades do .xlsx (criado/modificado) sao as da reconstrucao.
 
-    python examples/demo/reconstruir_workbook.py      (a partir da raiz do qa-assistant)
+    python examples/demo/reconstruir_workbook.py [workspace]   (a partir da raiz do qa-assistant)
+
+Sem argumento reconstroi o workbook do proprio demo; com uma pasta que tenha uma
+copia do projeto.yaml do demo, reconstroi la (usado pelo teste).
 
 Sai com o primeiro codigo diferente de 0 do aplicar (tecnica-excel.md secao 1).
 """
@@ -27,6 +30,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [AQUI, os.path.dirname(os.path.dirname(AQUI))]
 
 import gerar_workbook
+import yaml
 
 from adapters.excel.aplicar import main as aplicar
 
@@ -44,17 +48,27 @@ def ordem(path: str) -> tuple[str, str]:
     return (min((t for t in tss if t), default="9999"), os.path.basename(path))
 
 
-def main() -> int:
-    destino = os.path.join(AQUI, "workbook", "plano-demo.xlsx")
+def reconstruir(workspace: str = AQUI) -> int:
+    with open(os.path.join(workspace, "projeto.yaml"), encoding="utf-8-sig") as f:
+        destino = os.path.join(workspace, yaml.safe_load(f)["excel"]["ficheiro"])
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
     gerar_workbook.gerar(destino)
     print(f"workbook gerado de novo: {destino}")
     for lote in sorted(glob.glob(os.path.join(AQUI, "runs", "lote_*.json")), key=ordem):
         nome = os.path.splitext(os.path.basename(lote))[0]
         print(f"\n== {nome}")
-        rc = aplicar([AQUI, lote, "--etiqueta", etiqueta(nome)])
+        args = [workspace, lote, "--etiqueta", etiqueta(nome)]
+        primeiro_ts = ordem(lote)[0]
+        if primeiro_ts != "9999":  # lote sem ts: fica o relogio
+            args += ["--agora", primeiro_ts]
+        rc = aplicar(args)
         if rc != 0:
             return rc
     return 0
+
+
+def main() -> int:
+    return reconstruir(sys.argv[1] if len(sys.argv) > 1 else AQUI)
 
 
 if __name__ == "__main__":

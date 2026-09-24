@@ -41,7 +41,7 @@ import json
 import os
 import re
 from collections import Counter
-from datetime import date, datetime
+from datetime import datetime
 
 import openpyxl
 
@@ -92,6 +92,13 @@ class ExcelAdapter:
         self.cfg = self._validate(config)
         self.base_dir = base_dir or os.getcwd()
         self.wb: openpyxl.Workbook | None = None
+        # instante usado nas datas escritas (etiqueta, data de report, resumo da vista,
+        # aplicado_em); None = o relogio. Fixo, a mesma sequencia de lotes da sempre as
+        # mesmas celulas (tecnica-excel.md secao 1, "Data da aplicacao")
+        self.agora: datetime | None = None
+
+    def _agora(self) -> datetime:
+        return self.agora or datetime.now()
 
     @classmethod
     def from_dict(cls, config: dict, base_dir: str | None = None) -> ExcelAdapter:
@@ -487,7 +494,7 @@ class ExcelAdapter:
                     "(tecnica-excel.md secao 5)."
                 )])
 
-        etiqueta = etiqueta or f"[{date.today().isoformat()}]"
+        etiqueta = etiqueta or f"[{self._agora().date().isoformat()}]"
         casos, d, notas = self.cfg["casos"], self.cfg["defeitos"], self.cfg["notas"]
         ccol = casos["colunas"]
 
@@ -552,10 +559,10 @@ class ExcelAdapter:
                 put(dcol.get("prioridade"), vals.get("prioridade", vals.get("severidade")))
                 put(dcol["estado"], d["estado_inicial"])
                 put(dcol.get("reportado_por"), reportado_por)
-                put(dcol.get("data_report"), date.today().isoformat())
+                put(dcol.get("data_report"), self._agora().date().isoformat())
 
         ctl = self._control_ws(create=True)
-        registo = {"hash": h_lote, "aplicado_em": datetime.now().isoformat(timespec="seconds"),
+        registo = {"hash": h_lote, "aplicado_em": self._agora().isoformat(timespec="seconds"),
                    "etiqueta": etiqueta, "itens": len(lote), "defeitos_novos": ", ".join(novos),
                    "lote_id": lote_id}
         ctl.append([registo.get(c.value) for c in ctl[1]])
@@ -653,7 +660,7 @@ class ExcelAdapter:
         resumo = v.get("resumo")
         if resumo:
             ws[resumo["celula"]].value = resumo["modelo"].format_map(
-                {"abertos": len(rows), "fechados": closed, "severidade": sev, "data": date.today()}
+                {"abertos": len(rows), "fechados": closed, "severidade": sev, "data": self._agora().date()}
             )
         return {"total_aberto": len(rows), "por_severidade": dict(sev), "fechados": closed}
 
