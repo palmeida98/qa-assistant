@@ -25,7 +25,7 @@
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
-| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 concluída) |
+| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1 e 2.3 concluídas; 2.2 à espera da confirmação do utilizador; 2.4 no workspace do piloto; 2.5 por fazer) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída, com critérios de verificação manual por fechar (`/` mostra `/testar-api`, `/auditar-acessibilidade`, `/testar-mobile`) |
 | 4 | CI da própria framework | Em curso (4.1 concluída; 4.2 depende da 2.5) |
 | 5 | Interface: painel de progresso por workspace | Concluída, com 1 critério de verificação manual por fechar (5.2: `/` mostra `/painel`) |
@@ -163,13 +163,19 @@ Notas:
 - `@latest` mantido por agora; fixar a versão na passagem para N2 (2.5). Versão verificada nesta máquina: 0.0.82.
 - `claude mcp list` mostra o servidor como `Pending approval` até ser aprovado no primeiro arranque do `claude` no workspace.
 
-### 2.3 Primeiro lote no demo
+### 2.3 Primeiro lote no demo — `b9cfc1b`
 Executar 5–10 casos do demo com `/planear-lote` e `/executar-lote`, aplicar pelo adaptador, `/checkpoint`.
 
 Critérios de aceitação:
-- [ ] Cross-check limpo.
-- [ ] Um defeito fictício registado com `/registar-bug` no formato do `projeto.yaml`.
-- [ ] `contexto.md` do demo atualizado.
+- [x] Cross-check limpo (e resumo vs contagem direta a bater certo).
+- [x] Um defeito fictício registado com `/registar-bug` no formato do `projeto.yaml`: BUG-3 (problem_user, imagens), como `defeito_novo` no lote.
+- [x] `contexto.md` do demo atualizado.
+
+Notas:
+- Os 8 casos aprovados, agrupados por role (sem sessão → locked_out_user → standard_user → problem_user): 6 Pass, 1 Fail (CT-PROD-005 → BUG-3), 1 Dúvida (CT-LOGIN-006: aparece o login com o erro certo, mas o URL continua `/inventory.html`; o esperado diz "volta à página de login"). A Dúvida fica fora do lote (o adaptador recusa-a) e está no `contexto.md` como pergunta.
+- **Diferença de ambiente**: executado com a biblioteca Playwright no Chrome, conduzida pelo agente com scripts temporários (apagados), porque o Playwright MCP não estava disponível na sessão (2.2 por confirmar). Previsto na `tecnica-browser.md` §1.
+- Lição confirmada: a 1.ª observação do problem_user veio vazia (o script não esperou pela lista de produtos); não se classificou sobre ela, repetiu-se com espera explícita (`tecnica-browser.md` §4.3).
+- Decisão por delegação: BUG-3 escrito sem aprovação individual (o utilizador pediu para avançar sem perguntar); severidade e prioridade Média.
 
 ### 2.4 Piloto num projeto real
 *Estado (23.09.2026): preparado no workspace do projeto (Playwright MCP registado, lote de 16 casos só de consulta proposto, capturas fora do git); execução à espera de 2.2/2.3 e das credenciais. Detalhe no `contexto.md` desse workspace.*
