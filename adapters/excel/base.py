@@ -29,6 +29,9 @@ Formato do lote: {"resultados": [item, ...]}, cada item
 As chaves de "defeito_novo" sao mapeadas para colunas pela configuracao
 (defeitos.campos_lote); "tc_relacionado" (por omissao o proprio caso),
 "severidade" e "prioridade" (por omissao a severidade) tem papel proprio.
+"bug" (opcional) associa um defeito ja existente ao caso (so uma nota).
+Outras chaves (ts, nota, ...) sao ignoradas. Um lote invalido e recusado
+inteiro antes de qualquer escrita (validar_lote, tecnica-excel.md secao 4).
 """
 from __future__ import annotations
 
@@ -52,9 +55,20 @@ class ConfigError(ValueError):
     pass
 
 
+class LoteInvalido(ValueError):
+    """Lote recusado antes de qualquer escrita; .problemas tem a lista."""
+
+    def __init__(self, problemas: list[str]):
+        self.problemas = problemas
+        super().__init__("lote invalido:\n - " + "\n - ".join(problemas))
+
+
 def load_lote(path: str) -> list:
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)["resultados"]
+    with open(path, encoding="utf-8-sig") as f:  # -sig: aceita ficheiros gravados com BOM
+        data = json.load(f)
+    if not isinstance(data, dict) or not isinstance(data.get("resultados"), list):
+        raise LoteInvalido([f"{path}: esperado {{\"resultados\": [...]}} (tecnica-excel.md secao 4)"])
+    return data["resultados"]
 
 
 def lote_hash(lote: list) -> str:
@@ -109,6 +123,7 @@ class ExcelAdapter:
         notas (opc.):
           resultado: modelo com {resultado} (usado se nao houver coluna resultado_obtido)
           defeito_novo: modelo com {id}
+          defeito_existente: modelo com {id} (item com "bug")
         controlo_lotes (opc.): {sheet} -- sheet escondida com os lotes aplicados
         recalc (opc.): {mecanismo: libreoffice | excel-com, timeout: int}
         """
@@ -181,7 +196,8 @@ class ExcelAdapter:
             cfg["vista_ativos"] = None
 
         defaults = {
-            "notas": {"resultado": "Resultado: {resultado}", "defeito_novo": "Defeito novo: {id}."},
+            "notas": {"resultado": "Resultado: {resultado}", "defeito_novo": "Defeito novo: {id}.",
+                      "defeito_existente": "Defeito associado: {id}."},
             "controlo_lotes": {"sheet": CONTROL_SHEET_DEFAULT},
             "recalc": {"mecanismo": "libreoffice", "timeout": 60},
         }
@@ -365,6 +381,49 @@ class ExcelAdapter:
     # Aplicacao de um lote
     # ------------------------------------------------------------------
 
+    def validar_lote(self, lote: list) -> list[str]:
+        """So leitura. Problemas que impedem aplicar o lote (vazio = pode
+        aplicar-se): tecnica-excel.md secao 4."""
+        casos, d = self.cfg["casos"], self.cfg["defeitos"]
+        if not isinstance(lote, list) or not lote:
+            return ["lote vazio"]
+        existentes = {str(v).strip() for _, ws, h in self._case_sheets() for _, v in self._case_rows(ws, h)}
+        defeitos = {str(v).strip() for _, v in self._defect_rows()[2]}
+        estados, prios = casos["estados"], d["prioridades"]
+        problemas, vistos = [], Counter()
+        for i, item in enumerate(lote, 1):
+            if not isinstance(item, dict):
+                problemas.append(f"item {i}: nao e um objeto")
+                continue
+            tc = str(item.get("tc") or "").strip()
+            onde = f"item {i} ({tc or 'sem tc'})"
+            if not tc:
+                problemas.append(f"{onde}: falta 'tc'")
+            elif tc not in existentes:
+                problemas.append(f"{onde}: caso nao existe no workbook")
+            vistos[tc] += 1
+            if item.get("estado") in (None, ""):
+                problemas.append(f"{onde}: falta 'estado'")
+            elif item["estado"] not in estados:
+                problemas.append(f"{onde}: estado {item['estado']!r} fora de {estados}"
+                                 + (" -- resolver a Duvida antes de aplicar (metodologia 8.5)"
+                                    if str(item["estado"]).lower().startswith(("dúvida", "duvida")) else ""))
+            bug = item.get("bug")
+            if bug not in (None, "") and str(bug).strip() not in defeitos:
+                problemas.append(f"{onde}: bug {bug!r} nao existe em '{d['sheet']}'")
+            novo = item.get("defeito_novo")
+            if novo not in (None, {}):
+                if not isinstance(novo, dict):
+                    problemas.append(f"{onde}: 'defeito_novo' tem de ser um objeto ou null")
+                elif prios:
+                    pr = novo.get("prioridade", novo.get("severidade"))
+                    if pr not in prios:
+                        problemas.append(f"{onde}: prioridade do defeito novo {pr!r} fora de {prios}")
+        dup = sorted(tc for tc, n in vistos.items() if tc and n > 1)
+        if dup:
+            problemas.append(f"caso repetido no lote: {dup}")
+        return problemas
+
     def apply_lote(self, lote: list, etiqueta: str | None = None,
                    reportado_por: str = "QA automatizado") -> dict:
         """Aplica o lote: estado, resultado obtido e observacoes por caso, e
@@ -372,7 +431,8 @@ class ExcelAdapter:
         conteudo) nao e reaplicado: devolve {"aplicado": False, ...} sem
         alterar nada (tecnica-excel.md secao 5).
 
-        Todos os IDs de caso sao verificados antes de qualquer escrita."""
+        O lote inteiro e validado antes de qualquer escrita (validar_lote);
+        se tiver problemas, levanta LoteInvalido e nada muda."""
         self._need_wb()
         h_lote = lote_hash(lote)
         anterior = self.lote_ja_aplicado(lote)
@@ -384,14 +444,15 @@ class ExcelAdapter:
         casos, d, notas = self.cfg["casos"], self.cfg["defeitos"], self.cfg["notas"]
         ccol = casos["colunas"]
 
-        # mapa caso -> (ws, headers, linha), validado antes de escrever
+        problemas = self.validar_lote(lote)
+        if problemas:
+            raise LoteInvalido(problemas)
+
+        # mapa caso -> (ws, headers, linha)
         rowmap = {}
-        for sheet, ws, h in self._case_sheets():
+        for _sheet, ws, h in self._case_sheets():
             for r, v in self._case_rows(ws, h):
                 rowmap.setdefault(str(v).strip(), (ws, h, r))
-        missing = [it["tc"] for it in lote if str(it["tc"]).strip() not in rowmap]
-        if missing:
-            raise KeyError(f"IDs de caso nao encontrados no workbook: {missing}")
 
         ws_def, h_def, def_rows = self._defect_rows()
         last_def_row = max([r for r, _ in def_rows] + [d["linha_cabecalho"]])
@@ -420,6 +481,8 @@ class ExcelAdapter:
                     partes.append(notas["resultado"].format(resultado=item.get("resultado_obtido")))
                 if def_id:
                     partes.append(notas["defeito_novo"].format(id=def_id))
+                if item.get("bug") not in (None, ""):
+                    partes.append(notas["defeito_existente"].format(id=str(item["bug"]).strip()))
                 if partes:
                     nota = f"{etiqueta} " + " ".join(partes)
                     c = ws.cell(r, h[ccol["observacoes"]])
@@ -496,7 +559,8 @@ class ExcelAdapter:
             p = row.get(prio_col) if prio_col else None
             pk = prios.index(p) if p in prios else len(prios)
             n = self._defect_number(row.get(d["colunas"]["id"]))
-            return (pk, row.get(ordenar_por) or "" if ordenar_por else "", n if n is not None else float("inf"))
+            sec = str(row.get(ordenar_por) or "") if ordenar_por else ""
+            return (pk, sec, n if n is not None else float("inf"))
 
         rows.sort(key=key)
         return {"abertos": rows, "fechados": closed}

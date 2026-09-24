@@ -20,7 +20,8 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    - regra para bugs resolvidos (remover ou arquivar)
    - politica de evidencia (texto ou texto+screenshot)
    - modulos de teste ativos
-3. Preenche o CLAUDE.md e o projeto.yaml com as respostas.
+3. Preenche o CLAUDE.md e o projeto.yaml com as respostas. Com tracker excel, acrescenta ao CLAUDE.md
+   o import de <qa>/docs/tecnica-excel.md, ao lado dos outros imports universais.
 4. Se tracker for "excel", preenche a seccao excel: do projeto.yaml INSPECIONANDO o workbook real
    (tecnica-excel.md seccao 1; nunca adivinhar nomes de sheets, colunas ou estados):
    a. Corre, a partir da raiz do qa-assistant, sobre uma COPIA local do workbook (nunca o oficial
@@ -37,6 +38,9 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    e. Valida: ExcelAdapter.from_projeto(<workspace>).load() tem de passar (falha se faltar uma sheet
       ou coluna) e cross_check() so para mostrar problemas que ja existam no workbook. Nao aplica
       lotes nem grava o workbook durante o onboarding.
+   f. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
+      excel.casos.estados, PERGUNTA o tipo -- pendente, ok, falha, bloqueado ou na. Propoe os
+      tipos pelos nomes, mas o utilizador confirma (o vocabulario e do projeto).
 5. Se um modulo de browser estiver ativo (ex.: funcional-web), regista o Playwright MCP NO WORKSPACE
    (tecnica-browser.md seccao 1, nivel N1). O comando corre a partir da pasta do workspace, porque
    --scope project escreve o .mcp.json na pasta atual:
@@ -50,9 +54,6 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
    c. Diz ao utilizador que, ao abrir o claude no workspace pela primeira vez, tem de aprovar o
       servidor (servidores de projeto pedem confirmacao) e confirmar com /mcp que "playwright"
       aparece ligado. Esta sessao nao ve as ferramentas do MCP registado agora.
-   f. Preenche a seccao painel: do projeto.yaml (scripts/gerar_painel.py): para cada estado de
-      excel.casos.estados, PERGUNTA o tipo -- pendente, ok, falha, bloqueado ou na. Propoe os
-      tipos pelos nomes, mas o utilizador confirma (o vocabulario e do projeto).
 6. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
 7. Confirma que .env e painel.html estao no .gitignore do workspace.
 8. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.

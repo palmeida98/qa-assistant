@@ -13,6 +13,7 @@ Codigos de saida:
   0  aplicado e gravado (ou lote ja aplicado antes: nada muda)
   2  cross-check com problemas: original intacto, resultado em <nome>.REVISTO.xlsx
   3  gravado, mas o recalculo falhou (rever antes de dar por terminado)
+  4  lote ou configuracao invalidos: nada foi escrito (ver a lista de problemas)
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ import os
 import sys
 from datetime import date
 
-from .base import ExcelAdapter, load_lote
+from .base import ConfigError, ExcelAdapter, LoteInvalido, load_lote
 
 
 def _resolve(workspace: str, path: str) -> str:
@@ -85,7 +86,11 @@ def main(argv=None) -> int:
     ap.add_argument("--reportado-por", default="QA automatizado")
     ap.add_argument("--sem-recalc", action="store_true")
     a = ap.parse_args(argv)
-    return aplicar(a.workspace, a.lote, a.etiqueta, a.reportado_por, not a.sem_recalc)
+    try:
+        return aplicar(a.workspace, a.lote, a.etiqueta, a.reportado_por, not a.sem_recalc)
+    except (LoteInvalido, ConfigError, FileNotFoundError) as e:
+        print(f"\nNADA APLICADO -- {e}", file=sys.stderr)
+        return 4
 
 
 if __name__ == "__main__":

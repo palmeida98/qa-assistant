@@ -5,6 +5,12 @@
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
 
+  # lint igual ao do CI (.github/workflows/ci.yml): mesma versao, mesmo ruff.toml
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff-check
+
   - repo: local
     hooks:
       - id: denylist
@@ -22,3 +28,11 @@
         language: system
         pass_filenames: false
         files: ^(adapters/|tests/golden/|docs/tecnica-excel\.md$|scripts/golden_check\.py$)
+
+      # testes unitarios (adaptador, painel, denylist): rapidos, sem LibreOffice
+      - id: testes
+        name: testes unitarios
+        entry: python -m unittest discover -s tests
+        language: system
+        pass_filenames: false
+        files: ^(adapters/|scripts/|tests/)

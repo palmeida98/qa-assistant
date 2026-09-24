@@ -17,5 +17,11 @@ description: Grava o registo leve, atualiza o contexto.md do workspace no format
 7. Nao passa resultados para o workbook/tracker principal sem confirmacao do utilizador. Com tracker
    excel e confirmacao dada, aplica o lote pelo adaptador (tecnica-excel.md seccao 1), a partir da raiz
    do qa-assistant: python -m adapters.excel.aplicar <workspace> <registo_leve>/<lote>.json
-   e so segue se sair com 0 (2 = cross-check com problemas, original intacto; 3 = recalculo falhou).
-8. Indica ao utilizador o ponto exato onde a execucao ficou.
+   e so segue se sair com 0. Os outros codigos:
+   - 4 = lote invalido (ex.: Duvida por resolver, estado fora do vocabulario, caso repetido): nada foi
+     escrito; corrige o registo leve com o utilizador e volta a aplicar;
+   - 2 = cross-check com problemas: original intacto, resultado em .REVISTO.xlsx; mostra os problemas;
+   - 3 = gravado, mas o recalculo falhou: rever antes de dar por terminado.
+   Reaplicar o mesmo lote nao muda nada (o adaptador deteta-o).
+8. Indica ao utilizador o ponto exato onde a execucao ficou. Com tracker excel, pode gerar o painel:
+   python scripts/gerar_painel.py <workspace> (a partir da raiz do qa-assistant).

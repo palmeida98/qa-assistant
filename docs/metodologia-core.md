@@ -36,7 +36,7 @@ A linha entre a camada 3 e a camada 4 é uma fronteira rígida.
 - **Nunca** entram no repositório `qa-assistant`: nomes de clientes ou empresas, URLs de ambientes, nomes de contas, credenciais, workbooks, resultados, bugs, capturas de ecrã ou qualquer exemplo que permita identificar um projeto real.
 - As credenciais vivem **apenas** no `.env` do workspace e são referidas pelo nome da variável (ex.: `LOJA_BO_ADMIN_USER`), nunca pelo valor.
 - Ao extrair uma heurística ou um exemplo de um projeto real para a framework, **anonimizar primeiro** (ver §17).
-- O guarda de privacidade (gitleaks + denylist) bloqueia commits que violem esta regra. Um bloqueio do guarda nunca se contorna: corrige-se o conteúdo.
+- O guarda de privacidade (detect-secrets + denylist, que também lê o conteúdo de ficheiros Office e os nomes dos ficheiros) bloqueia commits que violem esta regra. Um bloqueio do guarda nunca se contorna: corrige-se o conteúdo.
 
 ### 1.3 Hierarquia de fontes de verdade
 
@@ -190,11 +190,15 @@ A otimização **nunca** pode reduzir a cobertura nem alterar a lógica de um ca
 
 ### 7.1 Registo leve
 
-Durante a sessão, os resultados são escritos num registo leve em `runs/`, e não diretamente no workbook ou no tracker. Cada linha contém, no mínimo:
+Durante a sessão, os resultados são escritos num registo leve em `runs/` (um ficheiro por lote, ex. `runs/lote_20260922_01.json`), e não diretamente no workbook ou no tracker. O ficheiro é `{"resultados": [ … ]}` e cada resultado contém, no mínimo:
 
 ```json
-{"caso": "CHK-013", "resultado": "Fail", "nota": "cupão expirado aceite", "bug": "BUG-41", "ts": "2026-09-22T14:03:00"}
+{"tc": "CHK-013", "estado": "Fail", "resultado_obtido": "cupão expirado aceite", "bug": "BUG-41", "ts": "2026-09-22T14:03:00"}
 ```
+
+- `estado` usa o vocabulário do projeto; `resultado_obtido` é o que se observou (não o esperado copiado); `bug` é um bug **já existente** associado ao caso.
+- Um bug **novo** vai como `defeito_novo` (campos na técnica do tracker, ex. `tecnica-excel.md` §4), só depois de aprovado pelo utilizador (§9).
+- Casos em `Dúvida` podem ficar no registo durante a sessão, mas são reclassificados antes de o lote passar para o workbook ou tracker (§8.5): o adaptador recusa um lote com estados fora do vocabulário do projeto.
 
 ### 7.2 Checkpoints
 

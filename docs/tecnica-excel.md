@@ -58,7 +58,13 @@ Ao regravar o ficheiro, o LibreOffice introduz diferenças sem efeito visual ou 
 
 O registo leve (metodologia §7.1) que um lote de execução produz tem de conter, no mínimo, por caso: o ID do caso, o estado, o resultado obtido (o que se observou de facto, não uma repetição do esperado) e, quando houver um defeito novo, os dados desse defeito (título, descrição, severidade, caso relacionado, referência ao requisito).
 
-No adaptador, o lote é `{"resultados": [item, …]}`, cada item `{"tc", "estado", "resultado_obtido", "defeito_novo"}`, em que `defeito_novo` é `null` ou um dicionário cujas chaves são mapeadas para colunas pela configuração (`defeitos.campos_lote`); `tc_relacionado` (por omissão o próprio caso), `severidade` e `prioridade` (por omissão a severidade) têm papel próprio.
+No adaptador, o lote é `{"resultados": [item, …]}`, cada item `{"tc", "estado", "resultado_obtido", "defeito_novo", "bug"}`:
+
+- `defeito_novo` é `null` ou um dicionário cujas chaves são mapeadas para colunas pela configuração (`defeitos.campos_lote`); `tc_relacionado` (por omissão o próprio caso), `severidade` e `prioridade` (por omissão a severidade) têm papel próprio.
+- `bug` (opcional) é o ID de um defeito **já existente** associado ao caso (reteste, duplicado): acrescenta às observações do caso a nota `notas.defeito_existente` (por omissão `Defeito associado: {id}.`) e não cria defeito.
+- Outras chaves (ex. `ts`, `nota`) são ignoradas pelo adaptador.
+
+Antes de escrever o que quer que seja, o adaptador **recusa o lote inteiro** (erro com a lista de problemas) se: o lote estiver vazio; um item não tiver `tc` ou `estado`; o mesmo caso aparecer duas vezes; um estado não estiver em `casos.estados` (inclui `Dúvida`, que se resolve antes de aplicar — metodologia §8.5); um `bug` não existir na sheet de defeitos; ou, havendo lista de `prioridades`, a prioridade de um defeito novo estiver fora dela.
 
 O estado de um caso usa sempre a lista de estados válidos **desse projeto** (definida no `projeto.yaml` ou no adaptador), nunca uma palavra inventada na hora. Diferentes projetos podem usar vocabulários diferentes para os mesmos conceitos (por exemplo, um projeto real observado usa os estados em português "Não Executado / Passou / Falhou / Bloqueado / N/A" para casos, e uma lista mais rica para defeitos: "Aberto / Em Análise / Em Correção / Corrigido / Reaberto / Fechado / Não é um Defeito") — este documento não impõe um vocabulário; impõe que o vocabulário seja explícito e verificado no cross-check (§1, passo 4).
 

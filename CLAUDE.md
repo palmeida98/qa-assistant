@@ -18,5 +18,11 @@ Referências:
 /onboarding-projeto · /analisar-funcionalidade · /gerar-casos · /planear-lote
 /executar-lote · /registar-bug · /checkpoint · /fim-sessao
 
+## Scripts (a partir da raiz do qa-assistant)
+- `python -m adapters.excel.inspecionar <cópia.xlsx>` — propõe a secção `excel:` (onboarding)
+- `python -m adapters.excel.aplicar <workspace> <lote.json>` — aplica um lote ao workbook (0 ok · 2 cross-check · 3 recálculo · 4 lote inválido)
+- `python scripts/gerar_painel.py <workspace>` — gera o `painel.html` do workspace
+- Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice)
+
 ## Ambiente
 Repositório pessoal. Os workspaces de cada empresa vivem em ../qa-workspaces/<empresa>/<projeto>/.
