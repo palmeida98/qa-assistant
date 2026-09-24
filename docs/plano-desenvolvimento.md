@@ -373,8 +373,14 @@ Notas:
 
 ### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13)
 Hoje a metodologia promete a proteção por permissões do Claude Code, mas nada a cria.
-- [ ] O `/onboarding-projeto` cria o `.claude/settings.json` do workspace com `deny` de escrita e edição em `historico/**`.
-- [ ] O `validar_projeto` avisa quando o workspace não o tem; teste.
+- [x] O `/onboarding-projeto` cria o `.claude/settings.json` do workspace com `deny` de escrita e edição em `historico/**`.
+- [x] O `validar_projeto` avisa quando o workspace não o tem; teste.
+
+Notas:
+- Template `docs/workspace/settings.json` com `"deny": ["Edit(/historico/**)"]`. Sintaxe confirmada na documentação de permissões do Claude Code: o `/` inicial ancora na pasta do workspace (settings de projeto); uma regra `Edit` cobre todas as ferramentas que editam ficheiros e os comandos Bash reconhecidos (`sed`, `tee`, `>`); uma regra `Write(...)` com caminho é ignorada. Não cobre scripts que abram ficheiros por conta própria (metodologia §13).
+- O `/onboarding-projeto` copia o template, ou acrescenta a regra a um `settings.json` que já exista; o demo tem o mesmo ficheiro em `examples/demo/.claude/`.
+- `validar_projeto`: aviso sem a regra (aceita `/historico/**`, `./historico/**` ou `historico/**`, em `settings.json` ou `settings.local.json`); 2 testes novos, e o demo continua com 0 problemas e 0 avisos.
+- Por confirmar no piloto (7.2): abrir o `claude` no workspace e ver a edição de um ficheiro em `historico/` recusada.
 
 ### 7.5 Versões fixas
 - [ ] `@playwright/mcp` com versão fixa no `.mcp.json` do demo e no comando do `/onboarding-projeto` (hoje `@latest`).

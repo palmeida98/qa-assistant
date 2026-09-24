@@ -28,6 +28,9 @@ BASE = {"projeto": "loja-demo", "empresa": "demo", "ambientes": {"teste": "https
 class Validar(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        # historico/ protegido, como o onboarding deixa (docs/workspace/settings.json)
+        os.makedirs(os.path.join(self.tmp.name, ".claude"))
+        shutil.copy(os.path.join(ROOT, "docs", "workspace", "settings.json"), os.path.join(self.tmp.name, ".claude"))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -103,6 +106,25 @@ class Validar(unittest.TestCase):
         self.assertEqual(avisos, [])
 
 
+    def test_historico_sem_protecao_e_aviso(self):
+        settings = os.path.join(self.tmp.name, ".claude", "settings.json")
+        for conteudo in (None, "{}", '{"permissions": {"deny": ["Write(/historico/**)"]}}', "nao e json"):
+            with self.subTest(conteudo=conteudo):
+                if conteudo is None:
+                    os.remove(settings)
+                else:
+                    with open(settings, "w", encoding="utf-8") as f:
+                        f.write(conteudo)
+                problemas, avisos = self.com()
+                self.assertEqual(problemas, [])
+                self.assertTrue(any("historico/ sem protecao" in w for w in avisos), avisos)
+
+    def test_historico_protegido_com_outras_regras(self):
+        with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
+            f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(historico/**)"]}}')
+        self.assertEqual(self.com(), ([], []))
+
+
 class Demo(unittest.TestCase):
     def test_o_demo_passa(self):
         # copia do projeto.yaml e do workbook do demo (so leitura do original)
@@ -110,11 +132,13 @@ class Demo(unittest.TestCase):
         try:
             demo = os.path.join(ROOT, "examples", "demo")
             shutil.copy(os.path.join(demo, "projeto.yaml"), tmp)
+            shutil.copytree(os.path.join(demo, ".claude"), os.path.join(tmp, ".claude"))
             os.makedirs(os.path.join(tmp, "workbook"))
             shutil.copy(os.path.join(demo, "workbook", "plano-demo.xlsx"), os.path.join(tmp, "workbook"))
             with contextlib.redirect_stdout(io.StringIO()) as out:
                 rc = vp.main([tmp])
             self.assertEqual(rc, 0, out.getvalue())
+            self.assertIn("0 problema(s), 0 aviso(s)", out.getvalue())
         finally:
             shutil.rmtree(tmp)
 

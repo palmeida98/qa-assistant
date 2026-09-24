@@ -35,7 +35,7 @@ class Guards(unittest.TestCase):
         padrao = re.compile(hooks()["testes"]["files"])
         for caminho in ("adapters/excel/base.py", "scripts/gerar_painel.py", "tests/test_skills.py",
                         ".claude/skills/checkpoint/SKILL.md", "CLAUDE.md", "examples/demo/projeto.yaml",
-                        "docs/projeto.yaml", ".pre-commit-config.yaml", "tools/a11y/axe_scan.mjs"):
+                        "docs/projeto.yaml", "docs/workspace/settings.json", ".pre-commit-config.yaml", "tools/a11y/axe_scan.mjs"):
             with self.subTest(caminho=caminho):
                 self.assertTrue(padrao.search(caminho))
         self.assertFalse(padrao.search("docs/metodologia-core.md"))

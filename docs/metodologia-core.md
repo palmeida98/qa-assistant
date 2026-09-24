@@ -126,7 +126,7 @@ Cada etapa tem uma skill correspondente no Claude Code:
    - política de evidência (`texto` ou `texto+screenshot`);
    - módulos de teste ativos;
    - exceções e regras próprias do projeto.
-4. Confirmar que o `.env` está no `.gitignore` e que `historico/` está protegido.
+4. Confirmar que o `.env` está no `.gitignore` e que `historico/` está protegido: o `.claude/settings.json` do workspace (copiado de `qa-assistant/docs/workspace/settings.json`) proíbe editar `historico/**` (§13).
 5. Verificar que nenhuma informação do projeto foi escrita nas camadas universais.
 6. Criar o `contexto.md` inicial (ver §12.2).
 7. Importar os casos existentes com o adaptador do projeto e validar o round-trip (importar → exportar → comparar). Com o adaptador Excel, que lê e escreve o próprio workbook (não há importação para um modelo à parte), isto é o `ExcelAdapter.from_projeto(...).load()` sem erros e o `cross_check()` a mostrar só problemas que já existiam no workbook; o `python scripts/validar_projeto.py <workspace>` faz as duas coisas.
@@ -389,7 +389,7 @@ O `contexto.md` é o estado **temporário** da sessão. Não substitui o `CLAUDE
 
 Lotes concluídos, relatórios de execuções passadas e exportações arquivadas são **imutáveis**, em todos os projetos:
 
-- vivem em `historico/`, protegido por permissões do Claude Code;
+- vivem em `historico/`, protegido por permissões do Claude Code: a regra `Edit(/historico/**)` em `deny` no `.claude/settings.json` do workspace (o `/` inicial ancora-a na pasta do workspace). Uma regra `Edit` cobre todas as ferramentas que editam ficheiros e os comandos Bash que o Claude Code reconhece (ex.: `sed`, `tee`, redirecionamentos `>`); **não** cobre um script que abra os ficheiros por conta própria, por isso nenhum script da framework escreve em `historico/`;
 - nunca se alteram, regeneram ou sobrescrevem;
 - servem apenas como referência e como base de validação (§15).
 

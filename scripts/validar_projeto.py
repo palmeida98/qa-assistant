@@ -3,7 +3,8 @@ Valida o projeto.yaml de um workspace (metodologia-core.md seccao 4 e 4.1;
 plano, tarefa 3.4): campos base, URL de cada ambiente, modulos da lista
 fechada, seccao de cada modulo ativo, URLs dos modulos dentro dos ambientes
 declarados (nunca producao), Excel (quando tracker: excel), seccao painel: e,
-num workspace com git, o .gitignore dos ficheiros com segredos (aviso).
+num workspace com git, o .gitignore dos ficheiros com segredos (aviso) e a
+protecao de historico/ no .claude/settings.json (aviso).
 
     python scripts/validar_projeto.py <workspace>
 
@@ -16,7 +17,9 @@ Codigos de saida: 0 sem problemas (pode haver avisos) · 1 problemas · 2 nao ha
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -79,6 +82,25 @@ def avisos_gitignore(workspace: str, proj: dict, modulos: list) -> list[str]:
     return [f"{f} nao esta no .gitignore do workspace (tem segredos ou dados do projeto)" for f in falta]
 
 
+REGRA_HISTORICO = re.compile(r"^Edit\((/|\./)?historico/\*\*\)$")
+
+
+def historico_protegido(workspace: str) -> bool:
+    """O .claude/settings.json (ou settings.local.json) do workspace proibe editar historico/**."""
+    for nome in ("settings.json", "settings.local.json"):
+        path = os.path.join(workspace, ".claude", nome)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                deny = ((json.load(f) or {}).get("permissions") or {}).get("deny") or []
+        except (ValueError, AttributeError):
+            continue
+        if any(REGRA_HISTORICO.match(str(r).strip()) for r in deny):
+            return True
+    return False
+
+
 def validar(workspace: str) -> tuple[list[str], list[str]]:
     with open(os.path.join(workspace, "projeto.yaml"), encoding="utf-8-sig") as f:
         proj = yaml.safe_load(f) or {}
@@ -133,6 +155,9 @@ def validar(workspace: str) -> tuple[list[str], list[str]]:
             problemas.append(f"{campo_url} ({url}) aponta para o ambiente '{amb}' (producao?)")
 
     avisos += avisos_gitignore(workspace, proj, modulos)
+    if not historico_protegido(workspace):
+        avisos.append("historico/ sem protecao: falta Edit(/historico/**) em permissions.deny no .claude/settings.json "
+                      "do workspace (copiar <qa>/docs/workspace/settings.json; metodologia seccao 13)")
 
     if proj.get("tracker") == "excel":
         from adapters.excel import ConfigError, ExcelAdapter
