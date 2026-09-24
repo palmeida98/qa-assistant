@@ -1,0 +1,11 @@
+{
+  "name": "demo-saucedemo-e2e",
+  "private": true,
+  "description": "Regressao N2 do demo (tecnica-browser.md seccao 13; plano 2.5)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

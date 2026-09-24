@@ -47,6 +47,9 @@ Variáveis de credenciais (valores só no `.env` local, nunca aqui):
 - Registo leve de sessão: `runs/` (`registo_leve` no `projeto.yaml`)
 - O workbook é reconstruível: `python examples/demo/reconstruir_workbook.py` (a partir da raiz do qa-assistant) gera-o de novo e reaplica os lotes de `runs/` pela ordem de execução. Usar sempre que se acrescentam áreas ou casos ao `gerar_workbook.py`, nunca editar o workbook à mão.
 
+## Regressão (N2)
+- `e2e/`: specs Playwright dos casos promovidos (tecnica-browser.md §13), hoje CT-LOGIN-001…003 em `e2e/specs/login.spec.ts`. Correr: `npm ci` e `npx playwright test` dentro de `e2e/` (usa o Chrome instalado; credenciais do `.env`).
+
 ## Formato de bug
 - ID: `BUG-{n}` (o adaptador calcula o próximo número)
 - Campos: colunas da sheet Defeitos — Título, Descrição (passos, esperado → observado), Área, Caso, Role, Severidade, Prioridade, Estado, Reportado por, Data
