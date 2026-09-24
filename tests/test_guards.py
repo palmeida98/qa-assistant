@@ -40,6 +40,24 @@ class Guards(unittest.TestCase):
                 self.assertTrue(padrao.search(caminho))
         self.assertFalse(padrao.search("docs/metodologia-core.md"))
 
+    def test_dependencias_python_com_versao_exata(self):
+        # plano 7.5: o golden depende do openpyxl; uma atualizacao silenciosa mudava-o
+        with open(os.path.join(ROOT, "requirements.txt"), encoding="utf-8") as f:
+            linhas = [x.strip() for x in f if x.strip() and not x.startswith("#")]
+        self.assertTrue(linhas)
+        for linha in linhas:
+            with self.subTest(dependencia=linha):
+                self.assertRegex(linha, r"^[A-Za-z0-9_.-]+==[0-9][0-9A-Za-z.]*$")
+
+    def test_playwright_mcp_com_a_mesma_versao_fixa(self):
+        with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:
+            mcp = f.read()
+        with open(os.path.join(ROOT, ".claude", "skills", "onboarding-projeto", "SKILL.md"), encoding="utf-8-sig") as f:
+            skill = f.read()
+        versoes = set(re.findall(r"@playwright/mcp@([^\s\"]+)", mcp + skill))
+        self.assertEqual(len(versoes), 1, versoes)
+        self.assertRegex(versoes.pop(), r"^\d+\.\d+\.\d+$")  # nunca @latest
+
     def test_o_bug_de_codificacao_existe_mesmo(self):
         # a razao do -X utf8: bytes de "Á" em UTF-8 nao se leem em cp1252
         with self.assertRaises(UnicodeDecodeError):

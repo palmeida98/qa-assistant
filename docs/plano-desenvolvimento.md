@@ -383,8 +383,13 @@ Notas:
 - Por confirmar no piloto (7.2): abrir o `claude` no workspace e ver a edição de um ficheiro em `historico/` recusada.
 
 ### 7.5 Versões fixas
-- [ ] `@playwright/mcp` com versão fixa no `.mcp.json` do demo e no comando do `/onboarding-projeto` (hoje `@latest`).
-- [ ] `requirements.txt` com versões exatas de `openpyxl` e `pyyaml` (uma atualização silenciosa pode mudar o golden); atualizar é uma decisão com golden a passar.
+- [x] `@playwright/mcp` com versão fixa no `.mcp.json` do demo e no comando do `/onboarding-projeto` (hoje `@latest`).
+- [x] `requirements.txt` com versões exatas de `openpyxl` e `pyyaml` (uma atualização silenciosa pode mudar o golden); atualizar é uma decisão com golden a passar.
+
+Notas:
+- `@playwright/mcp@0.0.82` (a mais recente a 24.09.2026; `npx @playwright/mcp@0.0.82 --version` confirmado). Regra na técnica browser §1.
+- `openpyxl==3.1.5`, `et-xmlfile==2.0.0` (dependência do openpyxl) e `pyyaml==6.0.3`: as mesmas que o CI já instalava, por isso o golden não muda.
+- `tests/test_guards.py`: dependências Python só com `==`, e uma só versão numérica do `@playwright/mcp` no demo e na skill (um `@latest` esquecido faz o teste falhar).
 
 ### 7.6 Demo reproduzível
 A reconstrução põe datas do dia (defeitos novos, resumo da vista, `_qa_lotes`, propriedades do ficheiro) e o `.xlsx` aparece sempre alterado no git.

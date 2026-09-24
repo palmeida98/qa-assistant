@@ -32,6 +32,7 @@ Regras:
 - Subir de N0 para N1 assim que o resultado esperado envolva comportamento dinâmico ou interativo.
 - Um caso passa de N1 para N2 segundo os critérios da §13.
 - Se o Playwright MCP não estiver disponível no ambiente, usar o browser disponível (por exemplo, Claude in Chrome) e **registar a diferença de ambiente** (metodologia §14.2).
+- O Playwright MCP regista-se com uma **versão fixa** (`@playwright/mcp@<versão>`, a mesma no `.mcp.json` do demo e no `/onboarding-projeto`), nunca `@latest`: uma versão nova pode mudar as ferramentas ou o snapshot a meio de um projeto. Atualizar é uma alteração própria, verificada no demo.
 
 ---
 

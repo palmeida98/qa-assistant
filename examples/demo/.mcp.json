@@ -6,7 +6,7 @@
       "args": [
         "/c",
         "npx",
-        "@playwright/mcp@latest"
+        "@playwright/mcp@0.0.82"
       ],
       "env": {}
     }
