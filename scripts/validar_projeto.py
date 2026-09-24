@@ -25,8 +25,6 @@ import subprocess
 import sys
 from urllib.parse import urlsplit
 
-import yaml
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
@@ -103,8 +101,8 @@ def historico_protegido(workspace: str) -> bool:
 
 
 def validar(workspace: str) -> tuple[list[str], list[str]]:
-    with open(os.path.join(workspace, "projeto.yaml"), encoding="utf-8-sig") as f:
-        proj = yaml.safe_load(f) or {}
+    from comum import ler_projeto
+    proj = ler_projeto(workspace)
     problemas, avisos = [], []
 
     for campo in ("projeto", "tracker", "formato_bug"):

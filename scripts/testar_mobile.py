@@ -33,12 +33,10 @@ import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-import yaml
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from api_pedido import Redator, ler_env
+from comum import Redator, ler_env_workspace, ler_projeto
 
 PLATAFORMAS = ("android", "ios", "web")
 CASO = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
@@ -54,11 +52,10 @@ def caso_do_flow(ficheiro: str) -> str | None:
 
 
 def configuracao(workspace: str) -> dict:
-    path = os.path.join(workspace, "projeto.yaml")
-    if not os.path.isfile(path):
-        raise Erro(f"nao existe {path}")
-    with open(path, encoding="utf-8-sig") as f:
-        m = (yaml.safe_load(f) or {}).get("mobile") or {}
+    try:
+        m = ler_projeto(workspace).get("mobile") or {}
+    except FileNotFoundError:
+        raise Erro(f"nao existe {os.path.join(workspace, 'projeto.yaml')}") from None
     plat = m.get("plataforma")
     if plat not in PLATAFORMAS:
         raise Erro(f"mobile.plataforma tem de ser um de {PLATAFORMAS} (esta: {plat!r})")
@@ -71,7 +68,7 @@ def configuracao(workspace: str) -> dict:
 
 def ambiente_maestro(workspace: str, variaveis: list[str]) -> tuple[dict, dict]:
     """(env para o processo, segredos por valor para redigir)."""
-    env_ws = {**ler_env(os.path.join(workspace, ".env"))}
+    env_ws = ler_env_workspace(workspace)
     extra, segredos = {}, {}
     for var in variaveis:
         valor = env_ws.get(var) or os.environ.get(var)

@@ -411,7 +411,12 @@ Recomendações aplicadas por decisão do utilizador (24.09.2026).
 - [x] Trackers `jira` e `azure-devops`: **registo manual** até um projeto real precisar de adaptador. Nova metodologia §4.2 (tabela por tracker), comentário no template, passo 7a no `/checkpoint`, e o `validar_projeto` avisa quando o tracker não tem adaptador (teste novo).
 
 ### 7.8 Arrumação (opcional)
-- [ ] `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` (hoje o `testar_mobile` e o `auditar_a11y` importam do `api_pedido`), sem mudar comportamento.
+- [x] `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` (hoje o `testar_mobile` e o `auditar_a11y` importam do `api_pedido`), sem mudar comportamento.
+
+Notas:
+- `comum.py`: `ler_projeto`, `ler_env`, `ler_env_workspace` e o `Redator` (com as constantes de redação que ele usa). Usado pelo `api_pedido`, `auditar_a11y`, `testar_mobile`, `gerar_painel` e `validar_projeto`; o `api_pedido` continua a exportar os mesmos nomes. -90 linhas nos scripts.
+- Comportamento igual: os testes existentes passam sem mudanças (só o `test_testar_mobile` importa o `Redator` do `comum`); `tests/test_comum.py` novo (leitura do `.env` e do `projeto.yaml`, mensagens de erro dos scripts mantidas, uma só implementação). Demo corrido de novo: validação, painel, API, acessibilidade e mobile iguais.
+- Visto de passagem, sem mudar (fora do âmbito): `testar_mobile.py` com um flow que não é um ficheiro (ex.: `CT-MOB-001` em vez do caminho) dá `Blocked` "o flow nao correu" em vez de erro de uso (código 2).
 
 ### 7.9 Versão 1.0
 - [ ] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.

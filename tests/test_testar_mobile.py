@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "scripts")]
 
 import testar_mobile as tm
-from api_pedido import Redator
+from comum import Redator
 
 # formato real do `maestro test --format junit` (2.10), com um segredo ficticio na mensagem
 JUNIT = """<?xml version='1.0' encoding='UTF-8'?>

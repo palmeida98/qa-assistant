@@ -26,12 +26,10 @@ import subprocess
 import sys
 from datetime import datetime
 
-import yaml
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from api_pedido import ler_env
+from comum import ler_env_workspace, ler_projeto
 
 FERRAMENTA = os.path.join(ROOT, "tools", "a11y")
 NORMAS = {
@@ -99,11 +97,10 @@ def resumo_texto(rel: dict) -> list[str]:
 
 
 def configuracao(workspace: str) -> tuple[dict, dict]:
-    path = os.path.join(workspace, "projeto.yaml")
-    if not os.path.isfile(path):
-        raise Erro(f"nao existe {path}")
-    with open(path, encoding="utf-8-sig") as f:
-        a = (yaml.safe_load(f) or {}).get("acessibilidade") or {}
+    try:
+        a = ler_projeto(workspace).get("acessibilidade") or {}
+    except FileNotFoundError:
+        raise Erro(f"nao existe {os.path.join(workspace, 'projeto.yaml')}") from None
     paginas = a.get("paginas") or []
     if not paginas:
         raise Erro("acessibilidade.paginas vazio no projeto.yaml")
@@ -119,7 +116,7 @@ def configuracao(workspace: str) -> tuple[dict, dict]:
                               "var_utilizador", "var_palavra_passe") if not login.get(k)]
         if faltam:
             raise Erro(f"acessibilidade.login incompleto: falta {faltam}")
-        vars_ = {**os.environ, **ler_env(os.path.join(workspace, ".env"))}
+        vars_ = {**os.environ, **ler_env_workspace(workspace)}
         for k in ("var_utilizador", "var_palavra_passe"):
             if not vars_.get(login[k]):
                 raise Erro(f"variavel {login[k]} ({k}) sem valor no .env do workspace")

@@ -39,36 +39,21 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
-import yaml
+from comum import (
+    CABECALHOS_SECRETOS,
+    REDIGIDO,
+    Redator,
+    ler_env,
+    ler_env_workspace,
+    ler_projeto,
+)
 
 SESSAO = ".api-sessao.env"
-REDIGIDO = "«redigido»"
-CABECALHOS_SECRETOS = {"authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key",
-                       "x-auth-token"}
-CHAVE_SECRETA = re.compile(r"token|password|passwd|secret|api[_-]?key", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
 class Erro(Exception):
     """Uso ou configuracao invalidos (codigo 2)."""
-
-
-def ler_env(path: str) -> dict[str, str]:
-    """KEY=VALUE por linha; ignora comentarios, linhas vazias e 'export '."""
-    out = {}
-    if not os.path.isfile(path):
-        return out
-    with open(path, encoding="utf-8-sig") as f:
-        for linha in f:
-            linha = linha.strip()
-            if not linha or linha.startswith("#") or "=" not in linha:
-                continue
-            k, _, v = linha.removeprefix("export ").partition("=")
-            v = v.strip()
-            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-                v = v[1:-1]
-            out[k.strip()] = v
-    return out
 
 
 def ler_sessao(workspace: str) -> tuple[dict[str, str], set[str]]:
@@ -100,41 +85,6 @@ def substituir(texto: str, vars_: dict[str, str]) -> str:
     return PLACEHOLDER.sub(troca, texto)
 
 
-class Redator:
-    """Redige segredos: por nome de cabecalho, por nome de chave JSON e por valor."""
-
-    def __init__(self, segredos_por_valor: dict[str, str]):
-        # valores mais compridos primeiro, para um segredo que contem outro ser trocado inteiro
-        self.valores = sorted(((v, k) for k, v in segredos_por_valor.items() if v), key=lambda x: -len(x[0]))
-
-    def texto(self, s: str) -> str:
-        for valor, nome in self.valores:
-            s = s.replace(valor, f"«{nome}»")
-        return s
-
-    def cabecalhos(self, h: dict) -> dict:
-        return {k: (REDIGIDO if k.lower() in CABECALHOS_SECRETOS else self.texto(str(v))) for k, v in h.items()}
-
-    def json(self, obj):
-        if isinstance(obj, dict):
-            return {k: (REDIGIDO if CHAVE_SECRETA.search(str(k)) and v not in (None, "") else self.json(v))
-                    for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [self.json(x) for x in obj]
-        if isinstance(obj, str):
-            return self.texto(obj)
-        return obj
-
-    def corpo(self, texto: str | None, max_chars: int):
-        if texto in (None, ""):
-            return texto
-        try:
-            return self.json(json.loads(texto))
-        except ValueError:
-            t = self.texto(texto)
-            return t if len(t) <= max_chars else t[:max_chars] + f"… (+{len(t) - max_chars} caracteres)"
-
-
 def campo(obj, caminho: str):
     """'token', 'booking.firstname', '0.bookingid'."""
     for parte in caminho.split("."):
@@ -148,16 +98,15 @@ def campo(obj, caminho: str):
 
 
 def base_url(workspace: str) -> str | None:
-    path = os.path.join(workspace, "projeto.yaml")
-    if not os.path.isfile(path):
+    try:
+        proj = ler_projeto(workspace)
+    except FileNotFoundError:
         return None
-    with open(path, encoding="utf-8-sig") as f:
-        proj = yaml.safe_load(f) or {}
     return ((proj.get("api") or {}).get("base_url") or "").rstrip("/") or None
 
 
 def pedido(a) -> tuple[int, dict]:
-    env = {**ler_env(os.path.join(a.workspace, ".env"))}
+    env = ler_env_workspace(a.workspace)
     sessao, segredos_sessao = ler_sessao(a.workspace)
     vars_ = {**os.environ, **env, **sessao}
     # redigir por valor: tudo o que vem do .env (>= 4 caracteres) e os segredos da sessao

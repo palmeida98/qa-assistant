@@ -29,10 +29,10 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
+
+from comum import ler_projeto
 
 from adapters.excel import ExcelAdapter
 
@@ -152,8 +152,7 @@ def ler_contexto(path: str) -> dict:
 
 
 def recolher(workspace: str) -> dict:
-    with open(os.path.join(workspace, "projeto.yaml"), encoding="utf-8-sig") as f:
-        proj = yaml.safe_load(f) or {}
+    proj = ler_projeto(workspace)
     tracker = proj.get("tracker")
     if tracker != "excel":
         raise ValueError(f"o painel so suporta tracker: excel por agora (este projeto: {tracker!r})")
