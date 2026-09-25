@@ -52,6 +52,12 @@ class AxeBundle(unittest.TestCase):
         with open(os.path.join(ROOT, ".gitattributes"), encoding="utf-8") as f:
             self.assertIn("src/qa_audit/modules/accessibility/vendor/* -text", f.read())
 
+    def test_vendor_files_have_no_crlf(self):
+        # vendor/ is -text in .gitattributes: a CRLF written by an editor or a script would be committed as is
+        for name in os.listdir(axe.VENDOR):
+            with self.subTest(file=name), open(os.path.join(axe.VENDOR, name), "rb") as f:
+                self.assertNotIn(b"\r\n", f.read())
+
     def test_same_version_as_the_workspace_tool(self):
         # tools/a11y (the workspace script) and the engine must report the same axe until the script is retired
         with open(os.path.join(ROOT, "tools", "a11y", "package-lock.json"), encoding="utf-8") as f:
