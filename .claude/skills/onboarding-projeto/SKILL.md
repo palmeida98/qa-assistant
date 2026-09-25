@@ -52,12 +52,13 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
 5. Se um modulo de browser estiver ativo (ex.: funcional-web), regista o Playwright MCP NO WORKSPACE
    (tecnica-browser.md seccao 1, nivel N1). O comando corre a partir da pasta do workspace, porque
    --scope project escreve o .mcp.json na pasta atual:
-   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.82 --secrets .env
+   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.82 --secrets .env --isolated
      (sem o "cmd /c" o Claude Code nao consegue lancar o npx no Windows)
-   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.82 --secrets .env
+   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.82 --secrets .env --isolated
    (versao fixa, a mesma do examples/demo/.mcp.json; nunca @latest: tecnica-browser.md seccao 1.
    --secrets .env: no login escreve-se o NOME da variavel e o MCP poe o valor; o assistente nunca
-   le o valor: tecnica-browser.md seccao 3)
+   le o valor: tecnica-browser.md seccao 3. --isolated: perfil do browser limpo em cada sessao;
+   com o perfil persistente os cliques deixavam de chegar a pagina: tecnica-browser.md seccao 1)
    Depois:
    a. Confirma que o .mcp.json ficou na pasta do workspace e NUNCA na raiz do qa-assistant
       (unica excecao: o demo, em examples/demo/).

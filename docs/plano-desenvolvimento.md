@@ -25,12 +25,12 @@
 |---|---|---|
 | 0 | Base: repositório, documentos universais, guards, templates | Concluída |
 | 1 | Completar o núcleo: skills em falta, adaptador Excel universal, teste golden | Concluída |
-| 2 | Browser automation com Playwright MCP, demo público, piloto real | Em curso (2.1, 2.2, 2.3 e 2.5 concluídas; 2.4 no workspace do piloto, à espera das credenciais) |
+| 2 | Browser automation com Playwright MCP, demo público, piloto | Concluída (piloto 2.4 num site público de prática, 25.09.2026) |
 | 3 | Novos módulos de técnica: API, acessibilidade, mobile | Concluída |
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; 7.3 com o mecanismo pronto; falta o piloto 7.2, que dá o golden real da 7.3, e depois a 7.9) |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 a 7.8 concluídas; falta a 7.9, v1.0) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (login) on branch `feat/login`, merged after the pilot; 8.11 (translation) not now, at most after the pilot |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
@@ -187,8 +187,10 @@ No workspace do projeto real (fora deste repositório): `.env` preenchido localm
 
 Aqui só se marca feito e, se surgirem, lições **genéricas** para a metodologia ou técnica (sem nomes).
 
-- [ ] Piloto concluído e comparado.
-- [ ] Lições genéricas incorporadas (se houver).
+- [x] Piloto concluído e comparado.
+- [x] Lições genéricas incorporadas (se houver).
+
+Notas: Piloto feito a 25.09.2026 **num site público de prática** (SauceDemo), num workspace fora do repositório (`qa-workspaces/pratica/saucedemo/`, criado a partir do demo, git local): o utilizador deixou de ter acesso a projetos de empresa e decidiu que o piloto corre num cenário criado para o efeito. Lote de 16 casos (10 por testar + 6 retestes com resultado anterior) executado por um `claude` aberto no workspace com o Playwright MCP, aplicado no `/checkpoint`: 15 Pass, 1 Fail (CT-PROD-005 -> BUG-3, igual ao anterior); os 6 retestes deram o mesmo estado. A 1.ª execução não foi aplicada: com o perfil persistente do MCP os cliques deixavam de chegar à página (diagnóstico com três variantes; resolvido com `--isolated`, 37 cliques reais e 0 sintéticos na 2.ª). Lições: ver 7.2.
 
 ### 2.5 Promoção N1 → N2 — `19f7fc7`
 A partir de um caso do demo que passou pelo agente (N1), gerar um teste determinístico Playwright (`.spec.ts`) conforme `tecnica-browser.md` §13.
@@ -363,13 +365,18 @@ Notas:
 - Run 36053764682 (push de `a57ed19` + `1efa40f`, 24.09.2026): demo-e2e, lint, secrets, testes e golden verdes. No job `testes` (Ubuntu) correram os 117 testes; passaram `test_timeout_mata_a_arvore_de_processos` (timeout efetivo com um neto pendurado, pelo grupo de processos), `test_acentos_chegam_intactos_por_um_pipe` e `test_gitignore_num_workspace_com_git`.
 
 ### 7.2 Piloto num projeto real (é a 2.4)
-- [ ] `.env` do workspace do piloto preenchido pelo utilizador.
-- [ ] `python scripts/validar_projeto.py <workspace>` sem problemas **com as regras novas** (URLs dentro dos ambientes, `.gitignore`); o que aparecer corrige-se no workspace, nunca aqui.
-- [ ] Lote de 16 casos executado e comparado com os resultados anteriores (fecha a 2.4).
-- [ ] Lições genéricas incorporadas, anonimizadas (metodologia §1.4, §17).
-- [ ] Reavaliar o subagente `executor-web` (7.7): se os lotes do piloto encheram o contexto principal, criá-lo; senão, fica o subagente genérico.
-- [ ] Confirmar a proteção de `historico/` (7.4): a edição de um ficheiro em `historico/` é recusada no `claude` aberto no workspace.
-- [ ] Para a 7.3: **antes** de aplicar o lote no `/checkpoint`, copiar o workbook para `<workspace>/golden/<lote>/antes.xlsx`; depois do checkpoint revisto, copiar o workbook para `depois.xlsx`, o lote (com o nome original) e escrever `golden.yaml` com `agora` = o `aplicado_em` da sheet `_qa_lotes` para esse lote.
+- [x] `.env` do workspace do piloto preenchido (contas de demonstração publicadas pelo site).
+- [x] `python scripts/validar_projeto.py <workspace>` sem problemas **com as regras novas** (URLs dentro dos ambientes, `.gitignore`); o que aparecer corrige-se no workspace, nunca aqui.
+- [x] Lote de 16 casos executado e comparado com os resultados anteriores (fecha a 2.4).
+- [x] Lições genéricas incorporadas, anonimizadas (metodologia §1.4, §17).
+- [x] Reavaliar o subagente `executor-web` (7.7): se os lotes do piloto encheram o contexto principal, criá-lo; senão, fica o subagente genérico.
+- [x] Confirmar a proteção de `historico/` (7.4): a edição de um ficheiro em `historico/` é recusada no `claude` aberto no workspace.
+- [x] Para a 7.3: **antes** de aplicar o lote no `/checkpoint`, copiar o workbook para `<workspace>/golden/<lote>/antes.xlsx`; depois do checkpoint revisto, copiar o workbook para `depois.xlsx`, o lote (com o nome original) e escrever `golden.yaml` com `agora` = o `aplicado_em` da sheet `_qa_lotes` para esse lote.
+
+Notas (7.2, 25.09.2026): Piloto feito a 25.09.2026 **num site público de prática** (SauceDemo), num workspace fora do repositório (`qa-workspaces/pratica/saucedemo/`, criado a partir do demo, git local): o utilizador deixou de ter acesso a projetos de empresa e decidiu que o piloto corre num cenário criado para o efeito. Lote de 16 casos (10 por testar + 6 retestes com resultado anterior) executado por um `claude` aberto no workspace com o Playwright MCP, aplicado no `/checkpoint`: 15 Pass, 1 Fail (CT-PROD-005 -> BUG-3, igual ao anterior); os 6 retestes deram o mesmo estado. A 1.ª execução não foi aplicada: com o perfil persistente do MCP os cliques deixavam de chegar à página (diagnóstico com três variantes; resolvido com `--isolated`, 37 cliques reais e 0 sintéticos na 2.ª).
+- Lições incorporadas: (1) Playwright MCP com `--secrets .env` (o assistente escreve o nome da variável e nunca vê o valor; a palavra-passe não aparece no transcript) e `--isolated` (perfil limpo; o persistente perdia os cliques), na técnica browser §1 e §3, no `/onboarding-projeto`, no demo e em teste de guarda; (2) `validar_projeto` avisa quando o `.mcp.json` do workspace não tem versão fixa, `--secrets .env` ou `--isolated` (o `@latest` de um workspace real passou sem aviso); (3) metodologia §15: a `etiqueta` do `golden.yaml` é a etiqueta das notas, não uma descrição (o golden real apanhou o engano); (4) guard `commit-msg` com a denylist (um nome de cliente passou numa mensagem de commit; corrigido).
+- `executor-web`: não se cria. O lote de 16 casos correu numa sessão própria (~100 turnos, 3 a 6 min) sem tocar no contexto da sessão principal; o subagente genérico / uma sessão no workspace chegam.
+- `historico/`: numa sessão `claude` no workspace, com o Edit permitido e as edições aceites automaticamente, a edição de um ficheiro em `historico/` foi recusada (hash igual).
 
 ### 7.3 Golden com lote histórico real (`QA_GOLDEN_DIR`, metodologia §15) — mecanismo em `e74c281`
 - [x] `golden_check.py` aceita uma pasta de workspace (`QA_GOLDEN_DIR` ou `--dir`) com workbook de partida, lote e esperado, que ficam **só no workspace**.
@@ -380,7 +387,7 @@ Notas (1.º critério, adiantado sem o piloto por decisão do utilizador, 24.09.
 - O fictício corre sempre primeiro: com `QA_GOLDEN_DIR` no ambiente, o hook do `pre-commit` não o perde.
 - `tests/test_golden_real.py` (dados fictícios, workspace temporário): passa com o `depois` certo, falha a apontar a célula alterada, deteta outro instante nas datas escritas, corre várias pastas e a variável de ambiente, recusa pastas incompletas. No CI, no job `golden`.
 - Especificado na metodologia §15.
-- [ ] Golden real do piloto a passar (a nota de "ainda não implementado" já saiu da metodologia §15 com o mecanismo, em `e74c281`).
+- [x] Golden real do piloto a passar (a nota de "ainda não implementado" já saiu da metodologia §15 com o mecanismo, em `e74c281`). 25.09.2026: `golden/lote_20260925_02` do workspace do piloto: `GOLDEN REAL OK` (células iguais ao `depois.xlsx`, reaplicar sem efeito).
 
 ### 7.4 `historico/` protegido de facto (metodologia §4 passo 4, §13) — `3563f24`
 Hoje a metodologia promete a proteção por permissões do Claude Code, mas nada a cria.
@@ -525,6 +532,7 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | Piloto (2.4 / 7.2) num site público de prática, por decisão do utilizador (sem acesso a projetos de empresa): lote aplicado, golden real OK, lições incorporadas (`--isolated`, `--secrets`, aviso do `.mcp.json` no `validar_projeto`, `etiqueta` do golden, guard `commit-msg`). |
 | 2026-09-25 | Decisões do utilizador: a v1.0 é só a camada de workspace (o `qa-audit` segue versão própria); tradução (8.11) não agora; exceção do detect-secrets mantida e explicada no próprio `axe.yaml`. |
 | 2026-09-25 | 8.10 (login `form` e `manual`, `crawl.pages`) por decisão do utilizador; `storage-state` fica para depois; a tradução passa a 8.11. |
 | 2026-09-25 | Decisão do utilizador: mantém-se a exceção do detect-secrets (pragma de allowlist só nas duas linhas de hash de `src/qa_audit/modules/accessibility/vendor/axe.yaml`; um teste impede-a noutro sítio). Chaves públicas de integridade, não segredos; nenhum ficheiro excluído da varredura. |

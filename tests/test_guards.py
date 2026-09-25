@@ -74,9 +74,10 @@ class Guards(unittest.TestCase):
         with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:
             args = json.load(f)["mcpServers"]["playwright"]["args"]
         self.assertEqual(args[args.index("--secrets") + 1], ".env")
+        self.assertIn("--isolated", args)          # perfil persistente perdia os cliques (tecnica-browser.md seccao 1)
         with open(os.path.join(ROOT, ".claude", "skills", "onboarding-projeto", "SKILL.md"), encoding="utf-8-sig") as f:
             skill = f.read()
-        self.assertEqual(len(re.findall(r"@playwright/mcp@[^\s]+ --secrets \.env", skill)), 2)   # Windows e Linux/macOS
+        self.assertEqual(len(re.findall(r"@playwright/mcp@[^\s]+ --secrets \.env --isolated", skill)), 2)   # Windows e Linux/macOS
 
     def test_o_bug_de_codificacao_existe_mesmo(self):
         # a razao do -X utf8: bytes de "Á" em UTF-8 nao se leem em cp1252

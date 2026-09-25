@@ -84,6 +84,34 @@ def avisos_gitignore(workspace: str, proj: dict, modulos: list) -> list[str]:
 REGRA_HISTORICO = re.compile(r"^Edit\((/|\./)?historico/\*\*\)$")
 
 
+def avisos_mcp(workspace: str) -> list[str]:
+    """O Playwright MCP do workspace (.mcp.json), quando existe: versao fixa, --secrets .env e --isolated
+    (tecnica-browser.md seccoes 1 e 3; licoes do piloto de 25.09.2026)."""
+    path = os.path.join(workspace, ".mcp.json")
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            servers = (json.load(f) or {}).get("mcpServers") or {}
+    except (OSError, ValueError) as e:
+        return [f".mcp.json ilegivel: {e}"]
+    avisos = []
+    for nome, srv in servers.items():
+        args = [str(a) for a in (srv or {}).get("args") or []]
+        pacote = next((a for a in args if a.startswith("@playwright/mcp")), None)
+        if pacote is None:
+            continue
+        if not re.fullmatch(r"@playwright/mcp@\d+\.\d+\.\d+", pacote):
+            avisos.append(f".mcp.json ({nome}): {pacote} sem versao fixa (tecnica-browser.md seccao 1: nunca @latest)")
+        if "--secrets" not in args or args[args.index("--secrets") + 1:args.index("--secrets") + 2] != [".env"]:
+            avisos.append(f".mcp.json ({nome}): falta --secrets .env (o assistente nao pode ler as credenciais; "
+                          "tecnica-browser.md seccao 3)")
+        if "--isolated" not in args:
+            avisos.append(f".mcp.json ({nome}): falta --isolated (com o perfil persistente os cliques perdem-se; "
+                          "tecnica-browser.md seccao 1)")
+    return avisos
+
+
 def historico_protegido(workspace: str) -> bool:
     """O .claude/settings.json (ou settings.local.json) do workspace proibe editar historico/**."""
     for nome in ("settings.json", "settings.local.json"):
@@ -157,6 +185,7 @@ def validar(workspace: str) -> tuple[list[str], list[str]]:
             problemas.append(f"{campo_url} ({url}) aponta para o ambiente '{amb}' (producao?)")
 
     avisos += avisos_gitignore(workspace, proj, modulos)
+    avisos += avisos_mcp(workspace)
     if not historico_protegido(workspace):
         avisos.append("historico/ sem protecao: falta Edit(/historico/**) em permissions.deny no .claude/settings.json "
                       "do workspace (copiar <qa>/docs/workspace/settings.json; metodologia seccao 13)")

@@ -33,6 +33,7 @@ Regras:
 - Um caso passa de N1 para N2 segundo os critérios da §13.
 - Se o Playwright MCP não estiver disponível no ambiente, usar o browser disponível (por exemplo, Claude in Chrome) e **registar a diferença de ambiente** (metodologia §14.2).
 - O Playwright MCP regista-se com uma **versão fixa** (`@playwright/mcp@<versão>`, a mesma no `.mcp.json` do demo e no `/onboarding-projeto`), nunca `@latest`: uma versão nova pode mudar as ferramentas ou o snapshot a meio de um projeto. Atualizar é uma alteração própria, verificada no demo.
+- O Playwright MCP corre com `--isolated` (perfil de browser limpo em cada sessão, em memória). Com o perfil persistente por omissão, no piloto de 25.09.2026 os cliques (`browser_click`, `browser_press_key`) deixaram de chegar à página depois da 1.ª navegação, enquanto o preenchimento de campos continuava a funcionar; o diagnóstico com três variantes (a mesma tarefa: login + adicionar ao carrinho) falhou só com o perfil persistente. O perfil limpo também não deixa cookies nem sessões do site testado de uma sessão para a outra. Nunca contornar cliques que não chegam com `element.click()` em `browser_evaluate`: o caso fica `Blocked` (limitação da ferramenta, §9).
 
 ---
 

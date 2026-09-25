@@ -131,6 +131,26 @@ class Validar(unittest.TestCase):
                 self.assertEqual(problemas, [])
                 self.assertTrue(any("historico/ sem protecao" in w for w in avisos), avisos)
 
+    def test_mcp_do_workspace(self):
+        # licoes do piloto (25.09.2026): versao fixa, --secrets .env e --isolated
+        mcp = os.path.join(self.tmp.name, ".mcp.json")
+        casos = {
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env", "--isolated"]': [],
+            '["/c", "npx", "@playwright/mcp@latest", "--secrets", ".env", "--isolated"]': ["sem versao fixa"],
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--isolated"]': ["falta --secrets"],
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env"]': ["falta --isolated"],
+        }
+        for args, esperados in casos.items():
+            with self.subTest(args=args):
+                with open(mcp, "w", encoding="utf-8") as f:
+                    f.write('{"mcpServers": {"playwright": {"command": "cmd", "args": ' + args + '}}}')
+                avisos = vp.avisos_mcp(self.tmp.name)
+                self.assertEqual(len(avisos), len(esperados), avisos)
+                for texto in esperados:
+                    self.assertTrue(any(texto in a for a in avisos), avisos)
+        os.remove(mcp)
+        self.assertEqual(vp.avisos_mcp(self.tmp.name), [])          # sem .mcp.json: nada a verificar
+
     def test_historico_protegido_com_outras_regras(self):
         with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
             f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(historico/**)"]}}')
