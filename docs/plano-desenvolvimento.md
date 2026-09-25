@@ -471,7 +471,12 @@ Notes (8.4): the npm integrity of the bundled axe-core is the same as in `tools/
 
 Notes (8.5): checks are pure functions (`modules/security/checks.py`, 15 unit tests); the module reads headers, cookie names/flags (values dropped), page HTML and TLS details, plus one `http://` request to check the redirect. The HTTPS fixture uses a self-signed certificate valid for two days (planted `tls-cert-expiring`), generated with `openssl` (Git for Windows ships one). Found on the way: this machine's Firefox cannot load **any** HTTPS page (`NS_ERROR_FAILURE`, same broken cryptography as 8.4) while `doctor` reported it ready: `doctor` now tests each browser's cryptography, and an HTTPS start page failing that way explains it. Locally Firefox HTTPS and WebKit are skipped with the reason; CI runs them.
 
-### 8.6–8.8 Performance, functional, visual
+### 8.6 Performance module
+- [x] Thresholds from a cited source (web.dev: TTFB 0.8/1.8 s, FCP 1.8/3.0 s, LCP 2.5/4.0 s, CLS 0.1/0.25, confirmed on the pages on 25.09.2026), configurable; the other metrics measured only; metrics table in every report.
+
+Notes (8.6): planted defects `slow.html` (the fixture server waits 2 s: TTFB poor) and `shift.html` (banner inserted after load: CLS). What each engine measures was checked before writing the spec: Chromium everything; Firefox LCP but not CLS (reported `n/a in firefox`, never estimated). Found while designing: the accessibility module presses Tab and resizes the viewport, which would count as layout shifts; modules now run on each page by `order` (performance 0, security 10, accessibility 90), and a test checks the reflow page shows CLS 0. Bad thresholds are a usage error before the audit (`validate_config`).
+
+### 8.7–8.8 Functional, visual
 One commit each, each with planted defects in the local site and no problems on clean pages. Performance thresholds from a cited source, configurable (risk 8). Functional: `--allow-submit` only for forms listed in the configuration.
 
 ### 8.9 Documentation, install and example
@@ -503,5 +508,6 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | 8.6 concluída: módulo de performance com os limiares do web.dev e tabela de métricas; ordem dos módulos por página. |
 | 2026-09-25 | 8.5 concluída: módulo de segurança passivo; `doctor` testa a criptografia de cada browser. |
 | 2026-09-25 | Fase 8 (`qa-audit`) acrescentada por decisão do utilizador: motor de auditoria automática ao lado da camada de workspace, em inglês, repositório privado e proprietário; revê a decisão 7.7 sobre o `qa_core`/CLI. Especificação em `docs/qa-audit.md`. |

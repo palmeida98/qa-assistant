@@ -1,0 +1,19 @@
+# performance module defaults (README.md; docs/qa-audit.md §17); override under modules.performance.thresholds
+# {good, poor}: web.dev thresholds (field data, 75th percentile) · a number: a budget · null: measured only
+thresholds:
+  ttfb_ms: {good: 800, poor: 1800}     # web.dev, Time to First Byte
+  fcp_ms: {good: 1800, poor: 3000}     # web.dev, First Contentful Paint
+  lcp_ms: {good: 2500, poor: 4000}     # web.dev, Largest Contentful Paint
+  cls: {good: 0.1, poor: 0.25}         # web.dev, Cumulative Layout Shift
+  dns_ms: null
+  connect_ms: null
+  tls_ms: null
+  dom_content_loaded_ms: null
+  load_ms: null
+  requests: null
+  transfer_kb: null
+  js_kb: null
+  image_kb: null
+  css_kb: null
+  console_errors: null
+max_pages_listed: 10

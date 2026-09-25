@@ -15,6 +15,9 @@ class AuditModule:
     description = ""
     id_prefix = ""             # finding ids, e.g. "ACC" -> ACC-001
     requires_browser = True
+    # modules run on each page in this order: ones that only read the page first (performance measures an untouched
+    # page), ones that interact with it (Tab key, viewport changes) last
+    order = 50
     manual_checks: ClassVar[list[dict]] = []   # [{"id", "title", "how", "references"}], listed in the report, never "done"
     disclaimer = ""            # shown with the module's results
 
@@ -28,6 +31,10 @@ class AuditModule:
             return {}
         with open(path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
+
+    def validate_config(self, cfg: dict) -> list[str]:
+        """Problems in this module's configuration (modules.<name>); any makes the run a usage error (exit 2)."""
+        return []
 
     def applicable(self, ctx) -> tuple[bool, str]:
         """(applies, reason) — used by --type full to skip modules that make no sense for the target."""

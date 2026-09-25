@@ -91,6 +91,17 @@ def write(result, path: str) -> None:
                 for e in f.evidence:
                     add(f"- {esc(e.kind)}: {esc(e.path or e.value)}")
             add("")
+    metrics = getattr(result, "metrics", None) or []
+    if metrics:
+        from . import metric_value
+        add("## Metrics (observed · threshold · result)")
+        add("")
+        add("| Page | Metric | Observed | Threshold | Result |")
+        add("|---|---|---:|---|---|")
+        for m in metrics:
+            add(f"| {esc(m['url'])} | {esc(m['metric'])} | {esc(metric_value(m))} | {esc(m['threshold'])} | "
+                f"{esc(m['result'])} |")
+        add("")
     if result.manual_checks:
         add("## Manual checks (not automated — require a person)")
         add("")

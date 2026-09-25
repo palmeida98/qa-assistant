@@ -109,6 +109,9 @@ def configure(a: argparse.Namespace):
         cfg["crawl"]["exclude"] = list(cfg["crawl"]["exclude"]) + a.exclude
         config_mod.validate(cfg)
     modules = registry.select(a.type or "full", available)
+    problems = [p for m in modules for p in m.validate_config(cfg["modules"].get(m.name) or {})]
+    if problems:
+        raise ConfigError("; ".join(problems))
     return target, cfg, modules
 
 

@@ -14,7 +14,7 @@ from .module import AuditModule
 ENTRY_POINT_GROUP = "qa_audit.modules"
 NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 # shown when someone asks for them before they exist (plan phase 8)
-PLANNED = {"performance": "8.6", "functional": "8.7", "visual": "8.8"}
+PLANNED = {"functional": "8.7", "visual": "8.8"}
 
 
 class RegistryError(RuntimeError):
@@ -60,7 +60,7 @@ def select(types: str, available: dict[str, AuditModule]) -> list[AuditModule]:
     """Modules for --type ('full' or a comma list). ConfigError for unknown or not-yet-available names."""
     names = [t.strip().lower() for t in (types or "full").split(",") if t.strip()]
     if not names or names == ["full"]:
-        return list(available.values())
+        return sorted(available.values(), key=lambda m: m.order)
     if "full" in names:
         raise ConfigError("--type full cannot be combined with other types")
     chosen, problems = [], []
@@ -74,4 +74,4 @@ def select(types: str, available: dict[str, AuditModule]) -> list[AuditModule]:
             problems.append(f"unknown type '{n}'")
     if problems:
         raise ConfigError("; ".join(problems) + f". Available: {', '.join(available) or 'none'}, full")
-    return chosen
+    return sorted(chosen, key=lambda m: m.order)

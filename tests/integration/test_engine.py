@@ -73,7 +73,7 @@ class EngineTests:
         cls.site = FixtureSite().__enter__()
         mods = registry.discover(use_entry_points=False)
         cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name),
-                                [mods["accessibility"], mods["security"]])
+                                [mods["accessibility"], mods["security"], mods["performance"]])
         from qa_audit.reports import write_all
         cls.paths = write_all(cls.result, ["html", "json", "csv", "md"])
         cls.requests = list(cls.site.requests)
@@ -100,7 +100,7 @@ class EngineTests:
     def test_pages_visited_within_limits(self):
         visited = {p.url.split("/", 3)[3] for p in self.result.pages}
         self.assertEqual(visited, {"", "index.html", "about.html", "a11y.html", "form.html", "xss.html",
-                                   "csp.html", "sec.html", "secure.html", "mixed.html",
+                                   "csp.html", "sec.html", "secure.html", "mixed.html", "slow.html", "shift.html",
                                    "deep/level1.html", "deep/level2.html"})
         reasons = {s["url"].split("/", 3)[3]: s["reason"] for s in self.result.crawl["skipped"]}
         self.assertEqual(reasons["private/secret.html"], "disallowed by robots.txt")
@@ -165,6 +165,43 @@ class EngineTests:
     def test_security_findings_are_one_per_check(self):
         checks = [f.check for f in self.result.findings if f.module == "security"]
         self.assertEqual(len(checks), len(set(checks)))
+
+    # --- performance (docs/qa-audit.md §17) ---------------------------------------------------------------
+    def perf(self) -> dict:
+        return {f.check: f for f in self.result.findings if f.module == "performance"}
+
+    def test_slow_server_response_is_found(self):
+        f = self.perf()["ttfb_ms"]
+        self.assertEqual((f.status, f.severity, f.confidence), ("warning", "medium", "medium"))   # > 1800 ms: poor
+        self.assertTrue(f.url.endswith("/slow.html"))
+        self.assertIn("web.dev", " ".join(f.references))
+
+    def test_layout_shift_only_where_the_engine_measures_it(self):
+        cls_rows = [m for m in self.result.metrics if m["metric"] == "CLS"]
+        shift = next(m for m in cls_rows if m["url"].endswith("/shift.html"))
+        if self.engine == "chromium":
+            self.assertGreater(shift["value"], 0.1)
+            self.assertTrue(self.perf()["cls"].url.endswith("/shift.html"))
+            # measured before the accessibility module resizes the viewport of a11y.html (module order)
+            a11y = next(m for m in cls_rows if m["url"].endswith("/a11y.html"))
+            self.assertEqual(a11y["value"], 0)
+            self.assertNotIn("a11y.html", self.perf()["cls"].description)
+        else:
+            self.assertIsNone(shift["value"])                       # never estimated
+            self.assertEqual(shift["result"], f"n/a in {self.engine}")
+            self.assertNotIn("cls", self.perf())
+
+    def test_fast_pages_are_not_blamed(self):
+        for f in self.perf().values():
+            self.assertNotIn("about.html", f.description)
+        # metrics without a cited threshold are measured, never turned into findings
+        self.assertLessEqual(set(self.perf()), {"ttfb_ms", "fcp_ms", "lcp_ms", "cls"})
+
+    def test_every_audited_page_has_its_metrics(self):
+        audited = {p.final_url for p in self.result.pages if p.audited}
+        measured = {m["url"] for m in self.result.metrics if m["metric"] == "TTFB"}
+        self.assertEqual(measured, audited)
+        self.assertTrue(any("cold cache" in n for n in self.result.notes))
 
     def test_cookie_values_never_reach_the_results(self):
         with open(self.paths["json"], encoding="utf-8") as f:
@@ -295,7 +332,7 @@ class CliTests:
             common = ["--browser", self.engine, "--delay-ms", "0", "--output", tmp, "--max-pages", "3"]
             code, out, _ = self.cli(site.url, *common)
             self.assertEqual(code, 1, out)                          # high-severity problems on a11y.html
-            self.assertIn("[1/4] Discovery", out)                   # discovery, accessibility, security, report
+            self.assertIn("[1/5] Discovery", out)       # discovery, performance, security, accessibility, report
             self.assertIn("Security", out)
             self.assertIn("Only audit sites you own or are authorized to test.", out)
             self.assertIn("report.html", out)

@@ -50,5 +50,10 @@ def fake_result(run_folder: str, findings: list[Finding] | None = None) -> RunRe
         crawl={"pages": 1, "skipped": [{"url": "https://shop.example/logout", "reason": "excluded"}],
                "not_visited": 0, "robots": "respected"},
         pages=[page], findings=findings,
+        metrics=[{"module": "performance", "url": "https://shop.example/", "metric": "ttfb", "value": 912.4,
+                  "unit": "ms", "threshold": "good <= 800, poor > 1800", "result": "needs-improvement",
+                  "source": "web.dev"},
+                 {"module": "performance", "url": "https://shop.example/", "metric": "cls", "value": None,
+                  "unit": "", "threshold": "", "result": "n/a", "source": "=cmd"}],
         manual_checks={"accessibility": [{"id": "sr", "title": "Screen reader <b>walk</b>", "how": "NVDA"}]},
         errors=[], notes=[], config=copy.deepcopy(config.DEFAULTS), run_folder=run_folder, run=None)

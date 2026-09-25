@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Performance module (plan 8.6): TTFB, FCP, LCP and CLS with the web.dev thresholds; DNS, connection, TLS,
+  DOMContentLoaded, load, requests and transfer sizes measured only unless a budget is configured. Metrics table
+  (observed · threshold · result) in every report and `metrics.csv`; `n/a` where an engine cannot measure.
+- Module `order` (readers before page-changing modules) and `validate_config` (bad module configuration is exit 2).
 - Security module (passive, plan 8.5): HTTPS, HTTP→HTTPS redirect, TLS protocol and certificate expiry, HSTS, CSP,
   clickjacking, nosniff, version disclosure, cookie flags (names and flags only), mixed content, forms posting to
   HTTP. Reported once per check with the affected pages.

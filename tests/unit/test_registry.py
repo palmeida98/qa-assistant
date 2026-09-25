@@ -25,6 +25,11 @@ class Registry(unittest.TestCase):
         sec = mods["security"]
         self.assertEqual((sec.title, sec.id_prefix), ("Security", "SEC"))
         self.assertIn("not a penetration test", sec.disclaimer)
+        self.assertEqual(mods["performance"].id_prefix, "PERF")
+        # readers first, the module that presses keys and resizes the viewport last
+        self.assertEqual([m.name for m in registry.select("full", mods)][-1], "accessibility")
+        self.assertEqual([m.name for m in registry.select("accessibility,performance", mods)],
+                         ["performance", "accessibility"])
 
     def test_plugin_through_entry_point_needs_no_core_change(self):
         ep = types.SimpleNamespace(name="extra", load=lambda: Extra)
@@ -48,8 +53,8 @@ class Registry(unittest.TestCase):
         self.assertEqual(len(registry.select("full", mods)), 2)
         self.assertEqual(len(registry.select(None, mods)), 2)
         self.assertEqual(len(registry.select("accessibility, accessibility", mods)), 1)
-        with self.assertRaisesRegex(ConfigError, "planned in task 8.6"):
-            registry.select("performance", mods)
+        with self.assertRaisesRegex(ConfigError, "planned in task 8.7"):
+            registry.select("functional", mods)
         with self.assertRaisesRegex(ConfigError, "unknown type 'nope'.*Available"):
             registry.select("nope", mods)
         with self.assertRaises(ConfigError):

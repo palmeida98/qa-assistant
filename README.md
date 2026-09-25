@@ -26,8 +26,8 @@ screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `re
 is sent anywhere but to the target. Only audit sites you own or are authorized to test.
 
 Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow, manual checklist) and
-**security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content). Planned: performance, functional,
-visual. Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
+**security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content) and **performance** (TTFB, FCP,
+LCP, CLS against the web.dev thresholds; sizes and timings measured). Planned: functional, visual. Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
 contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ---

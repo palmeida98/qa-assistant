@@ -133,6 +133,18 @@ def render(result) -> str:
         out.append('<p class="card">No findings.</p>')
     for f in result.findings:
         out.append(_finding(f))
+    metrics = getattr(result, "metrics", None) or []
+    if metrics:
+        from . import metric_value
+        flagged = sum(1 for m in metrics if m["result"] in ("needs-improvement", "poor", "over-budget"))
+        out.append(f"<h2>Metrics</h2><details><summary>{len(metrics)} measurements · {flagged} above a threshold"
+                   "</summary><div><table><tr><th>Page</th><th>Metric</th><th class=num>Observed</th>"
+                   "<th>Threshold</th><th>Result</th></tr>")
+        for m in metrics:
+            out.append(f"<tr><td class=wrap>{esc(m['url'])}</td><td>{esc(m['metric'])}</td>"
+                       f"<td class=num>{esc(metric_value(m))}</td><td>{esc(m['threshold'])}</td>"
+                       f"<td>{esc(m['result'])}</td></tr>")
+        out.append("</table></div></details>")
     if result.manual_checks:
         out.append("<h2>Manual checks</h2><p class=\"muted\">Not automated. A person has to check these.</p>")
         for module, checks in result.manual_checks.items():

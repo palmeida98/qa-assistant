@@ -82,6 +82,7 @@ class Security(AuditModule):
     title = "Security"
     description = "Passive checks: HTTPS, TLS, security headers, cookies, mixed content, version disclosure."
     id_prefix = "SEC"
+    order = 10         # reads only
     disclaimer = ("Passive checks only (headers, cookies, TLS, page HTML); this is not a penetration test and "
                   "cannot show that a site is secure.")
 

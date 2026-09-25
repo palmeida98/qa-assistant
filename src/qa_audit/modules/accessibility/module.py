@@ -56,6 +56,7 @@ class Accessibility(AuditModule):
     title = "Accessibility"
     description = "WCAG 2.1 A/AA automated checks (axe-core), keyboard walk and reflow, plus a manual checklist."
     id_prefix = "ACC"
+    order = 90         # presses Tab and resizes the viewport: runs last
     manual_checks = MANUAL
     disclaimer = ("An automated audit finds only part of the WCAG issues and is not a conformance certification; "
                   "see the manual checks.")

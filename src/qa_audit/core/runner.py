@@ -23,6 +23,7 @@ class RunContext:
         self.tally = CheckTally()
         self.errors: list[dict] = []
         self.notes: list[str] = []
+        self.metrics: list[dict] = []
         self.session = None      # browser session (set by the runner)
         self.pages = []          # PageInfo of the pages visited so far
         self._state: dict[str, dict] = {}
@@ -36,6 +37,12 @@ class RunContext:
 
     def add_finding(self, finding: Finding) -> None:
         self.findings.append(finding)
+
+    def add_metric(self, module: str, url: str, name: str, value, unit: str = "", threshold: str = "",
+                   result: str = "measured", source: str = "") -> None:
+        """One observed value for the metrics table (docs/qa-audit.md §17). value None means not available."""
+        self.metrics.append({"module": module, "url": url, "metric": name, "value": value, "unit": unit,
+                             "threshold": threshold, "result": result, "source": source})
 
     def passed(self, module: str, n: int = 1) -> None:
         self.tally.add(module, n)
@@ -73,6 +80,7 @@ class RunResult:
             "crawl": self.crawl,
             "pages": [p.to_dict() for p in self.pages],
             "findings": [f.to_dict() for f in self.findings],
+            "metrics": self.metrics,
             "manual_checks": self.manual_checks,
             "errors": self.errors,
             "notes": self.notes,
@@ -99,6 +107,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
     from ..browser.session import Session
 
     progress = progress or (lambda event, **data: None)
+    modules = sorted(modules, key=lambda m: m.order)          # readers first, page-changing modules last
     target = validate_url(target)
     started = dt.datetime.now()
     run_folder = RunFolder(cfg["output"]["directory"], now=started)
@@ -180,6 +189,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
                "robots": crawl.robots},
         pages=crawl.pages,
         findings=findings,
+        metrics=ctx.metrics,
         manual_checks={m.name: list(m.manual_checks) for m in modules if m.manual_checks},
         errors=ctx.errors,
         notes=notes,

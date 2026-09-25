@@ -15,6 +15,7 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -32,6 +33,8 @@ EXTRA_HEADERS = {
                      ("X-Frame-Options", "DENY"), ("X-Content-Type-Options", "nosniff"),
                      ("Strict-Transport-Security", "max-age=31536000; includeSubDomains")],
 }
+# planted performance defect (docs/qa-audit.md §17): the server waits before answering (TTFB "poor" > 1800 ms)
+SLOW_PATHS = {"/slow.html": 2.0}
 GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
 
 
@@ -64,6 +67,9 @@ class _SiteHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         self._record()
+        delay = SLOW_PATHS.get(urlsplit(self.path).path)
+        if delay:
+            time.sleep(delay)
         super().do_GET()
 
     def do_HEAD(self):

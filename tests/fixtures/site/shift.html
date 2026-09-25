@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Layout shift — Fictional Shop</title></head>
+<body><main><h1>Layout shift</h1>
+<p id="text">This text is pushed down by a banner inserted after the page has loaded.</p>
+<p><a href="index.html">Home</a></p>
+</main>
+<script>
+  window.addEventListener('load', () => setTimeout(() => {
+    const banner = document.createElement('div');
+    banner.style.height = '400px';
+    banner.textContent = 'Late banner';
+    document.querySelector('main').prepend(banner);
+  }, 150));
+</script>
+</body>
+</html>

@@ -39,7 +39,11 @@ class Cli(unittest.TestCase):
             secret = os.path.join(tmp, "c.yaml")
             with open(secret, "w", encoding="utf-8") as f:
                 f.write("login: {password: x}\n")
-            for argv in (["not-a-url"], ["https://shop.example", "--type", "performance"],
+            bad = os.path.join(tmp, "t.yaml")
+            with open(bad, "w", encoding="utf-8") as f:
+                f.write("modules: {performance: {thresholds: {ttfb_ms: {good: 900, poor: 100}, speed: 1}}}\n")
+            for argv in (["https://shop.example", "--config", bad], ["not-a-url"],
+                         ["https://shop.example", "--type", "functional"],
                          ["https://shop.example", "--type", "nope"], ["https://shop.example", "--viewport", "big"],
                          ["https://shop.example", "--report", "pdf"], ["https://shop.example", "--config", secret],
                          ["https://shop.example", "--browser", "ie"], ["https://shop.example", "--exclude", "("]):

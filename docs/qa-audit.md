@@ -290,7 +290,10 @@ class AuditModule:
     manual_checks: list[dict] = []                       # human checklist shown in the report
 ```
 
-Modules report through `ctx.add_finding(...)` and `ctx.passed(check, url)`. Every visited page is loaded once
+Modules run on each page in ascending `order`: modules that only read the page first (performance measures an
+untouched page), modules that interact with it (Tab key, viewport changes) last. Modules report through
+`ctx.add_finding(...)`, `ctx.passed(...)` and `ctx.add_metric(...)`, and may reject their configuration with
+`validate_config` (exit 2 before the audit starts). Every visited page is loaded once
 and shared by all modules (one visit per page, polite to the target).
 
 External modules register through the `qa_audit.modules` entry point group; the core needs no change.
@@ -299,7 +302,8 @@ External modules register through the `qa_audit.modules` entry point group; the 
 |---|---|
 | `accessibility` | Available (§11) |
 | `security` | Available, passive only (§16) |
-| `functional`, `performance`, `visual` | Planned (plan 8.6–8.8) |
+| `performance` | Available (§17) |
+| `functional`, `visual` | Planned (plan 8.7–8.8) |
 
 ---
 
@@ -340,9 +344,7 @@ conformance certification.**
 - Login: credentials from environment variables or a hidden prompt, session state kept only in the run folder.
   Needed before `/auditar-acessibilidade` and `scripts/auditar_a11y.py` move to this engine.
 - Several engines in one run (compatibility), sitemap discovery.
-- Modules `functional`, `performance`, `visual` (plan 8.6–8.8); active security checks, always opt-in. Performance thresholds come from
-  a cited source (web.dev Core Web Vitals and TTFB guidance) and are configurable; a measured value is always
-  shown, and becomes a finding only above its threshold (risk 8).
+- Modules `functional`, `visual` (plan 8.7–8.8); active security checks, always opt-in.
 
 ---
 
@@ -433,4 +435,37 @@ as passed once per page.
 
 With `--ignore-https-errors` the certificate's trust is not judged (the browser accepted it only because it was
 told to), and the report says so; its protocol and expiry date are still checked.
+
+---
+
+## 17. Performance module
+
+`--type performance`. Risk 8 (measurements are noisy): every measured value is shown in a **metrics table**
+(observed metric · threshold · result); a value becomes a finding only above a threshold, and the finding is a
+`warning` with confidence `medium`, because it is **one lab measurement** from the auditing machine, while the
+reference thresholds are meant for field data at the 75th percentile of real users.
+
+Measured on every audited page, in the browser, with the Navigation Timing, Paint Timing, Largest Contentful Paint,
+Layout Instability and Resource Timing APIs (no extra requests):
+
+| Metric | Default threshold (good / poor) | Source |
+|---|---|---|
+| TTFB (`responseStart`) | 800 ms / 1800 ms | web.dev, *Time to First Byte* |
+| FCP | 1800 ms / 3000 ms | web.dev, *First Contentful Paint* |
+| LCP | 2500 ms / 4000 ms | web.dev, *Largest Contentful Paint* |
+| CLS (session windows, until the measurement) | 0.1 / 0.25 | web.dev, *Cumulative Layout Shift* |
+| DNS, connection, TLS, DOMContentLoaded, load | none: measured only | — |
+| requests, transferred KB, JavaScript KB, image KB, CSS KB | none: measured only | — |
+| console errors | none: measured only (findings belong to `functional`) | — |
+
+Result: `good` (≤ good), `needs-improvement` (≤ poor) → warning · low, `poor` (> poor) → warning · medium. A
+threshold can be replaced in `modules.performance.thresholds`, either with `{good, poor}` or with a single number (a
+budget: above it → warning · low, result `over-budget`); `null` means measured only. One finding per metric, listing
+the pages above the threshold.
+
+Limits, stated in the report: the first page is measured with a cold cache and later pages may reuse cached
+resources; LCP and CLS are only available where the engine implements them (CLS: Chromium; LCP: Chromium and
+Firefox) and are reported as `n/a` elsewhere, never estimated; CLS covers only the shifts before the measurement
+(after `load` and network idle); sizes of cross-origin resources without `Timing-Allow-Origin` read as 0 and the
+total is marked partial.
 
