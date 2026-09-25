@@ -52,10 +52,12 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
 5. Se um modulo de browser estiver ativo (ex.: funcional-web), regista o Playwright MCP NO WORKSPACE
    (tecnica-browser.md seccao 1, nivel N1). O comando corre a partir da pasta do workspace, porque
    --scope project escreve o .mcp.json na pasta atual:
-   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.82
+   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.82 --secrets .env
      (sem o "cmd /c" o Claude Code nao consegue lancar o npx no Windows)
-   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.82
-   (versao fixa, a mesma do examples/demo/.mcp.json; nunca @latest: tecnica-browser.md seccao 1)
+   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.82 --secrets .env
+   (versao fixa, a mesma do examples/demo/.mcp.json; nunca @latest: tecnica-browser.md seccao 1.
+   --secrets .env: no login escreve-se o NOME da variavel e o MCP poe o valor; o assistente nunca
+   le o valor: tecnica-browser.md seccao 3)
    Depois:
    a. Confirma que o .mcp.json ficou na pasta do workspace e NUNCA na raiz do qa-assistant
       (unica excecao: o demo, em examples/demo/).
@@ -64,7 +66,7 @@ description: Configura um novo workspace de projeto - ambientes, roles, tracker,
       servidor (servidores de projeto pedem confirmacao) e confirmar com /mcp que "playwright"
       aparece ligado. Esta sessao nao ve as ferramentas do MCP registado agora.
 6. Cria o .env com as variaveis de credenciais identificadas, SEM valores.
-7. Confirma que .env e painel.html estao no .gitignore do workspace. Protege o historico/ (metodologia-core.md
+7. Confirma que .env, painel.html e .playwright-mcp/ estao no .gitignore do workspace. Protege o historico/ (metodologia-core.md
    seccao 13): copia <qa>/docs/workspace/settings.json para <workspace>/.claude/settings.json; se ja existir,
    acrescenta "Edit(/historico/**)" a permissions.deny sem apagar o resto, e mostra a alteracao.
 8. Cria o contexto.md inicial, no formato da metodologia-core.md seccao 12.2.

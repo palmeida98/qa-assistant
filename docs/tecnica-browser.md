@@ -51,6 +51,8 @@ Antes do primeiro caso de um lote:
 ## 3. Autenticação e roles
 
 - As credenciais vêm **exclusivamente** de variáveis de ambiente. Nunca se escrevem em registos, notas, bugs, relatórios ou mensagens, nem mascaradas parcialmente.
+- **O assistente nunca lê o valor de uma credencial.** Com o Playwright MCP, o `.env` do workspace é passado como ficheiro de segredos (`--secrets .env`, no `.mcp.json`): nos campos de texto (`browser_type`, `browser_fill_form`) escreve-se o **nome** da variável (ex.: `LOJA_BO_ADMIN_PASS`) e o MCP substitui-o pelo valor; nas respostas, qualquer valor do `.env` aparece como `<secret>NOME</secret>`. Sem esse mecanismo (outro browser, MCP sem `--secrets`), o utilizador faz o login na janela do browser e o assistente continua a partir daí.
+- A pasta `.playwright-mcp/`, onde o MCP guarda snapshots e capturas, tem dados da aplicação testada: fica fora do git (`.gitignore` do workspace).
 - **Um login por role e por lote.** A ordem dos lotes (metodologia §6) deve permitir executar todos os casos de uma role antes de mudar para outra.
 - Quando a ferramenta o permitir, guardar e reutilizar o estado de sessão (cookies/storage) por role, para evitar repetir o login.
 - Ao mudar de role: fazer logout explícito ou usar um contexto de browser novo. Nunca assumir que a sessão anterior terminou.

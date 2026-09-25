@@ -6,6 +6,7 @@ ficheiro UTF-8 com certos caracteres (ex.: "Á") era saltado sem aviso. O hook
 tem de correr em modo UTF-8 e manter o id que o CI usa.
 """
 
+import json
 import os
 import re
 import unittest
@@ -58,6 +59,15 @@ class Guards(unittest.TestCase):
         versoes = set(re.findall(r"@playwright/mcp@([^\s\"]+)", mcp + skill))
         self.assertEqual(len(versoes), 1, versoes)
         self.assertRegex(versoes.pop(), r"^\d+\.\d+\.\d+$")  # nunca @latest
+
+    def test_playwright_mcp_recebe_o_env_como_segredos(self):
+        # tecnica-browser.md seccao 3: o assistente escreve o NOME da variavel e o MCP poe o valor
+        with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:
+            args = json.load(f)["mcpServers"]["playwright"]["args"]
+        self.assertEqual(args[args.index("--secrets") + 1], ".env")
+        with open(os.path.join(ROOT, ".claude", "skills", "onboarding-projeto", "SKILL.md"), encoding="utf-8-sig") as f:
+            skill = f.read()
+        self.assertEqual(len(re.findall(r"@playwright/mcp@[^\s]+ --secrets \.env", skill)), 2)   # Windows e Linux/macOS
 
     def test_o_bug_de_codificacao_existe_mesmo(self):
         # a razao do -X utf8: bytes de "Á" em UTF-8 nao se leem em cp1252

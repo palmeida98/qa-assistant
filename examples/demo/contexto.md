@@ -39,6 +39,7 @@ Lotes aplicados, por ordem: `runs/lote_20260924_api01.json` (API), `lote_2026092
 - BUG-1 (API): POST /booking sem campos obrigatórios devolve 500 em vez de 4xx. É um defeito da API de prática (não controlamos a correção); fica aberto como exemplo do fluxo de bugs.
 
 ## Trabalho pendente
+- **25.09.2026: `--secrets .env` acrescentado ao `.mcp.json` (tecnica-browser.md §3).** Validado no mesmo dia num workspace real (não no demo): os campos do login ficaram `<secret>NOME_DA_VARIAVEL</secret>`, nunca o valor. Falta repetir aqui, no demo: abrir o `claude` nesta pasta, aprovar o `playwright` de novo (args mudaram), `/mcp` ligado; login com `standard_user` escrevendo só os NOMES das variáveis (`DEMO_SAUCE_STANDARD_USER`, `DEMO_SAUCE_PASSWORD`) e confirmar que a resposta mostra `<secret>…</secret>` e não o valor. Depois `/planear-lote` + `/executar-lote` com os 10 casos de UI por testar. 
 - 2.2: confirmar `/mcp` com playwright ligado e um login com `standard_user` pelo MCP.
 - Próximo lote de UI (10 casos por testar), de preferência com o Playwright MCP depois de fechar a 2.2.
 - Acessibilidade manual: CT-A11Y-005 e CT-A11Y-007.
