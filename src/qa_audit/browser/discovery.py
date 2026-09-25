@@ -135,6 +135,7 @@ class Crawler:
         self.patterns = [re.compile(BUILTIN_EXCLUDE, re.IGNORECASE)] + \
                         [re.compile(p, re.IGNORECASE) for p in c.get("exclude") or []]
         self.robots: RobotFileParser | None = None
+        self.audited_urls: dict[str, str] = {}      # final URL -> the requested URL that audited it
 
     # --- robots.txt ------------------------------------------------------------------------------------------
     def _load_robots(self, result: CrawlResult) -> None:
@@ -249,6 +250,10 @@ class Crawler:
                 # reported as a broken link (functional); an error page is not audited as content
                 info.error = f"HTTP {resp.status}"
                 return info
+            if info.final_url in self.audited_urls:
+                # e.g. a redirect to a page already audited: every module would repeat its work on it
+                info.error = f"same page as {self.audited_urls[info.final_url]}"
+                return info
             if "html" not in info.content_type.lower():
                 if is_start:
                     raise TargetUnreachable(f"{url}: not an HTML page ({info.content_type or 'no content type'})")
@@ -275,6 +280,7 @@ class Crawler:
             info.timing = page.evaluate(
                 "() => { const n = performance.getEntriesByType('navigation')[0]; return n ? n.toJSON() : {}; }")
             info.audited = True
+            self.audited_urls[info.final_url] = url
             self.on_page(page, info)
             return info
         finally:

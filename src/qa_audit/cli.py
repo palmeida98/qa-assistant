@@ -21,6 +21,7 @@ EPILOG = """examples:
   qa-audit https://example.com --max-pages 5 --report html,json --cleanup
   qa-audit doctor
   qa-audit version
+  qa-audit baselines --delete example.com
 
 Only audit sites you own or are authorized to test. Specification: docs/qa-audit.md"""
 
@@ -28,7 +29,8 @@ Only audit sites you own or are authorized to test. Specification: docs/qa-audit
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="qa-audit", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EPILOG,
-        description="Automated QA audit of a website. Other commands: 'qa-audit doctor', 'qa-audit version'.")
+        description="Automated QA audit of a website. Other commands: 'qa-audit doctor', 'qa-audit version', "
+                    "'qa-audit baselines'.")
     p.add_argument("url", help="target URL (http or https)")
     p.add_argument("--type", default=None, metavar="LIST",
                    help="comma-separated modules, or 'full' (default: full)")
@@ -52,6 +54,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=None, metavar="FILE", help="YAML configuration file")
     p.add_argument("--fail-on", default=None, choices=config_mod.FAIL_ON,
                    help="exit 1 on problems at or above this severity (default: high)")
+    p.add_argument("--baseline-dir", default=None, metavar="DIR",
+                   help="visual baselines folder (default: ~/.qa-audit/baselines; never inside the output)")
+    p.add_argument("--update-baseline", action="store_true",
+                   help="replace the visual baselines with this run's screenshots (after reviewing a change)")
     p.add_argument("--allow-submit", action="store_true",
                    help="submit the forms listed under modules.functional.forms (never forms found by discovery)")
     p.add_argument("--ignore-https-errors", action="store_true",
@@ -64,7 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def overrides_from_args(a: argparse.Namespace) -> dict:
-    o: dict = {"browser": {}, "crawl": {}, "evidence": {}, "output": {}, "network": {}, "safety": {}}
+    o: dict = {"browser": {}, "crawl": {}, "evidence": {}, "output": {}, "network": {}, "safety": {},
+               "modules": {}}
     if a.browser:
         o["browser"]["engine"] = a.browser
     if a.headed:
@@ -90,6 +97,13 @@ def overrides_from_args(a: argparse.Namespace) -> dict:
         o["output"]["directory"] = a.output
     if a.cleanup:
         o["output"]["cleanup"] = True
+    visual = {}
+    if a.baseline_dir:
+        visual["baseline_dir"] = a.baseline_dir
+    if a.update_baseline:
+        visual["update_baseline"] = True
+    if visual:
+        o["modules"]["visual"] = visual
     if a.allow_submit:
         o["safety"]["allow_submit"] = True
     if a.ignore_https_errors:
@@ -114,6 +128,12 @@ def configure(a: argparse.Namespace):
         config_mod.validate(cfg)
     modules = registry.select(a.type or "full", available)
     problems = [p for m in modules for p in m.validate_config(cfg["modules"].get(m.name) or {})]
+    if a.type not in (None, "full"):
+        # asked for by name: a module that cannot run here is an error, not a silent skip
+        for m in modules:
+            ok, reason = m.applicable(None)
+            if not ok:
+                problems.append(f"{m.name}: {reason}")
     if problems:
         raise ConfigError("; ".join(problems))
     return target, cfg, modules
@@ -190,12 +210,36 @@ def audit(argv: list[str], console: Console | None = None) -> int:
     return exit_code(result, cfg["fail_on"])
 
 
+def baselines(argv: list[str]) -> int:
+    """List or delete the stored visual baselines (docs/qa-audit.md §19)."""
+    from .modules.visual import compare
+
+    p = argparse.ArgumentParser(prog="qa-audit baselines", description="List or delete visual baselines.")
+    p.add_argument("--baseline-dir", default=None, metavar="DIR", help="default: ~/.qa-audit/baselines")
+    p.add_argument("--delete", default=None, metavar="HOST", help="a host as listed, or 'all'")
+    a = p.parse_args(argv)
+    root = compare.root(a.baseline_dir)
+    if a.delete:
+        removed = compare.delete_baselines(root, a.delete)
+        print(f"deleted: {', '.join(removed)}" if removed else f"nothing to delete for {a.delete!r} in {root}")
+        return 0 if removed else 1
+    rows = compare.list_baselines(root)
+    print(f"visual baselines in {root}")
+    for host, files, size in rows:
+        print(f"  {host:<40} {files:>5} screenshot(s) {size / 1024 / 1024:>8.1f} MB")
+    if not rows:
+        print("  (none)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_streams()
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] in (["version"], ["--version"]):
         print(f"qa-audit {__version__}")
         return 0
+    if argv[:1] == ["baselines"]:
+        return baselines(argv[1:])
     if argv[:1] == ["doctor"]:
         from .doctor import run as doctor
         return doctor(argv[1:])

@@ -58,7 +58,9 @@ def engine_available(engine: str) -> str:
 
 def make_cfg(engine: str, out: str, **over) -> dict:
     mods = registry.discover(use_entry_points=False)
-    base = {"browser": {"engine": engine}, "crawl": {"delay_ms": 0}, "output": {"directory": out}}
+    # visual baselines always under the test's temporary folder, never in the user's ~/.qa-audit
+    base = {"browser": {"engine": engine}, "crawl": {"delay_ms": 0}, "output": {"directory": out},
+            "modules": {"visual": {"baseline_dir": os.path.join(out, "baselines")}}}
     return config.build(None, config.deep_merge(base, over),
                         module_defaults={n: m.default_config() for n, m in mods.items()})
 
@@ -107,11 +109,13 @@ class EngineTests:
         visited = {p.url.split("/", 3)[3] for p in self.result.pages}
         self.assertEqual(visited, {"", "index.html", "about.html", "a11y.html", "form.html", "xss.html",
                                    "csp.html", "sec.html", "secure.html", "mixed.html", "slow.html", "shift.html",
-                                   "broken.html", "gone.html", "error500.html", "r1",
+                                   "broken.html", "gone.html", "error500.html", "r1", "visual.html",
                                    "deep/level1.html", "deep/level2.html"})
         errors = {p.url.split("/", 3)[3]: p for p in self.result.pages if not p.audited}
-        self.assertEqual({k: v.error for k, v in errors.items()},
+        self.assertEqual({k: v.error for k, v in errors.items() if k != "r1"},
                          {"gone.html": "HTTP 404", "error500.html": "HTTP 500"})      # not audited as content
+        # /r1 redirects to about.html, already audited: recorded, not audited twice
+        self.assertTrue(errors["r1"].error.startswith("same page as "), errors["r1"].error)
         reasons = {s["url"].split("/", 3)[3]: s["reason"] for s in self.result.crawl["skipped"]}
         self.assertEqual(reasons["private/secret.html"], "disallowed by robots.txt")
         self.assertEqual(reasons["deep/level3.html"], "beyond max depth")
@@ -250,6 +254,27 @@ class EngineTests:
                                                "broken-resource-third-party", "js-exception", "console-error",
                                                "redirect-chain", "form-email-type"})
 
+    # --- visual: first run and responsive checks (docs/qa-audit.md §19) -----------------------------------
+    def vis(self) -> dict:
+        return {f.check: f for f in self.result.findings if f.module == "visual"}
+
+    def test_first_run_creates_baselines_and_reports_no_difference(self):
+        self.assertNotIn("visual-diff", self.vis())
+        rows = [m for m in self.result.metrics if m["module"] == "visual"]
+        self.assertTrue(rows)
+        self.assertEqual({m["result"] for m in rows}, {"baseline created"})
+        self.assertTrue(any("baselines in" in n and self.tmp.name in n for n in self.result.notes))
+
+    def test_responsive_checks(self):
+        overflow = self.vis()["horizontal-overflow"]
+        self.assertIn("a11y.html", overflow.actual)                 # the 1200 px block
+        self.assertIn("mobile 390px", overflow.actual)
+        self.assertNotIn("about.html", overflow.actual)
+        self.assertEqual(overflow.severity, "medium")
+        meta = self.vis()["viewport-meta-missing"]
+        self.assertNotIn("/about.html", meta.description)           # has the meta tag
+        self.assertIn("/sec.html", meta.description)
+
     def test_cookie_values_never_reach_the_results(self):
         with open(self.paths["json"], encoding="utf-8") as f:
             self.assertNotIn("fixture-not-a-secret", f.read())
@@ -333,6 +358,47 @@ class FormSubmitTests:
         self.assertIn("HTTP 405", f.actual)
 
 
+class VisualTests:
+    """Baselines: created, unchanged, a planted change found only where it happened, then updated."""
+
+    engine = ""
+
+    def test_baseline_lifecycle(self):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        mods = registry.discover(use_entry_points=False)
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            def audit(**visual):
+                cfg = make_cfg(self.engine, tmp, crawl={"max_depth": 1},
+                               modules={"visual": {"baseline_dir": os.path.join(tmp, "b"), **visual}})
+                r = runner.run(site.url + "visual.html", cfg, [mods["visual"]])
+                return r, {m["url"].rsplit("/", 1)[-1] + " " + m["metric"]: m["result"] for m in r.metrics}
+
+            _, first = audit()
+            self.assertEqual(set(first.values()), {"baseline created"})
+            self.assertEqual(len(first), 3 * 3)                    # 3 pages x 3 viewports
+            again, second = audit()
+            self.assertEqual(set(second.values()), {"unchanged"}, second)   # rendering is deterministic
+            self.assertNotIn("visual-diff", {f.check for f in again.findings})
+            site.variant = True                                     # the hero turns red: "Winter sale"
+            changed, third = audit()
+            diffs = {k for k, v in third.items() if v == "changed"}
+            self.assertEqual({k.split(" ")[0] for k in diffs}, {"visual.html"})
+            self.assertEqual(len(diffs), 3)                         # every viewport of that page only
+            f = next(f for f in changed.findings if f.check == "visual-diff")
+            self.assertEqual((f.status, f.severity), ("needs-human", "medium"))
+            shots = [e.path for e in f.evidence if e.kind == "screenshot"]
+            self.assertTrue(any("baseline" in p for p in shots) and any("diff" in p for p in shots))
+            for p in shots:
+                self.assertTrue(os.path.isfile(os.path.join(changed.run_folder, p)), p)
+            updated, fourth = audit(update_baseline=True)
+            self.assertEqual(set(fourth.values()), {"baseline updated"})
+            self.assertNotIn("visual-diff", {f.check for f in updated.findings})
+            _, fifth = audit()
+            self.assertEqual(set(fifth.values()), {"unchanged"})
+
+
 def https_available(engine: str) -> str:
     """'' if this engine loads the HTTPS fixture here, else the reason (e.g. Firefox with broken cryptography)."""
     reason = engine_available(engine)
@@ -410,17 +476,18 @@ class CliTests:
         if reason:
             self.skipTest(reason)
         with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
-            common = ["--browser", self.engine, "--delay-ms", "0", "--output", tmp, "--max-pages", "3"]
+            common = ["--browser", self.engine, "--delay-ms", "0", "--output", tmp, "--max-pages", "3",
+                      "--baseline-dir", os.path.join(tmp, "baselines")]
             code, out, _ = self.cli(site.url, *common)
             self.assertEqual(code, 1, out)                          # high-severity problems on a11y.html
-            self.assertIn("[1/6] Discovery", out)   # discovery, performance, security, functional, accessibility, report
+            self.assertIn("[1/7] Discovery", out)   # + performance, security, functional, visual, accessibility, report
             self.assertIn("Security", out)
             self.assertIn("Only audit sites you own or are authorized to test.", out)
             self.assertIn("report.html", out)
             code, out, _ = self.cli(site.url, *common, "--fail-on", "none", "--cleanup", "--report", "json")
             self.assertEqual(code, 0)
             self.assertIn("Run folder deleted", out)
-            runs = [d for d in os.listdir(tmp) if not d.startswith(".")]
+            runs = [d for d in os.listdir(tmp) if not d.startswith(".") and d != "baselines"]
             self.assertEqual(len(runs), 1)                          # only the first run is left
             self.assertEqual(self.cli(site.url + "missing.html", *common)[0], 3)
         with tempfile.TemporaryDirectory() as tmp:
@@ -460,7 +527,7 @@ class ReportInBrowser(unittest.TestCase):
 
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
-                            (HttpsTests, "Https"), (FormSubmitTests, "Forms")):
+                            (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

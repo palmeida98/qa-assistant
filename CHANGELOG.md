@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Visual module (plan 8.8): full-page screenshots per viewport compared with baselines (baseline, current and diff
+  images; needs-human), horizontal overflow per viewport, missing viewport meta tag. Baselines outside any
+  repository (`~/.qa-audit/baselines`, `--baseline-dir`), `--update-baseline`, and `qa-audit baselines` to list or
+  delete them. A module asked for by name that cannot run here is a usage error.
+
+### Fixed
+- A page reached again through a redirect was audited twice by every module; it is now recorded as the same page.
 - Functional module (plan 8.7): broken links (visited pages, plus HEAD checks of unvisited same-origin links; never
   excluded or robots-disallowed ones), broken resources, uncaught exceptions, console errors, redirect chains,
   e-mail fields without validation; `--allow-submit` submits only the forms listed in the configuration.

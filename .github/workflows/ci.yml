@@ -29,6 +29,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      # extra do motor visual (Pillow): sem ele os testes de comparacao de imagens ficariam skipped
+      - run: pip install pillow==12.3.0
       - run: python -m unittest discover -s tests -v
 
   secrets:
@@ -70,7 +72,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e .
+      - run: pip install -e .[visual]
       - run: python -m playwright install --with-deps chromium firefox webkit
       - run: qa-audit doctor --no-color
       - run: python -m unittest discover -s tests/integration -v

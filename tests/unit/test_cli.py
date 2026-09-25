@@ -49,13 +49,31 @@ class Cli(unittest.TestCase):
             with open(bad, "w", encoding="utf-8") as f:
                 f.write("modules: {performance: {thresholds: {ttfb_ms: {good: 900, poor: 100}, speed: 1}}}\n")
             for argv in (["https://shop.example", "--config", bad], ["not-a-url"],
-                         ["https://shop.example", "--type", "visual"],
                          ["https://shop.example", "--type", "nope"], ["https://shop.example", "--viewport", "big"],
                          ["https://shop.example", "--report", "pdf"], ["https://shop.example", "--config", secret],
                          ["https://shop.example", "--browser", "ie"], ["https://shop.example", "--exclude", "("]):
                 with self.subTest(argv=argv):
                     code, _, err = run(argv)
                     self.assertEqual(code, 2, err)
+
+    def test_a_module_asked_for_by_name_that_cannot_run_is_an_error(self):
+        with mock.patch("qa_audit.modules.visual.compare.pillow_available", return_value=False):
+            code, _, err = run(["https://shop.example", "--type", "visual"])
+        self.assertEqual(code, 2)
+        self.assertIn("Pillow is not installed", err)
+
+    def test_baselines_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "shop.example", "chromium", "desktop"))
+            with open(os.path.join(tmp, "shop.example", "chromium", "desktop", "index.png"), "wb") as f:
+                f.write(b"png")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["baselines", "--baseline-dir", tmp]), 0)
+                self.assertIn("shop.example", out.getvalue())
+                self.assertEqual(cli.main(["baselines", "--baseline-dir", tmp, "--delete", "other.example"]), 1)
+                self.assertEqual(cli.main(["baselines", "--baseline-dir", tmp, "--delete", "shop.example"]), 0)
+            self.assertFalse(os.path.exists(os.path.join(tmp, "shop.example")))
 
     def test_overrides_only_what_was_given(self):
         a = cli.build_parser().parse_args(["https://shop.example", "--max-pages", "3", "--screenshots"])

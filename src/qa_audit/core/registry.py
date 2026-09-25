@@ -14,7 +14,7 @@ from .module import AuditModule
 ENTRY_POINT_GROUP = "qa_audit.modules"
 NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 # shown when someone asks for them before they exist (plan phase 8)
-PLANNED = {"visual": "8.8"}
+PLANNED: dict[str, str] = {}
 
 
 class RegistryError(RuntimeError):

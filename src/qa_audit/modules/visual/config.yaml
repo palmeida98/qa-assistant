@@ -1,0 +1,11 @@
+# visual module defaults (README.md; docs/qa-audit.md §19); override under modules.visual
+viewports:
+  - {name: desktop, width: 1440, height: 900}
+  - {name: tablet, width: 768, height: 1024}
+  - {name: mobile, width: 390, height: 844}
+tolerance: 16             # per channel (0-255) before a pixel counts as changed
+max_diff_ratio: 0.001     # share of changed pixels that makes a visual-diff (0.1 %)
+mask: []                  # CSS selectors hidden in screenshots (clocks, carousels, ads)
+max_height: 8000          # px; taller screenshots are cut
+baseline_dir: null        # null: ~/.qa-audit/baselines (or --baseline-dir)
+update_baseline: false    # --update-baseline

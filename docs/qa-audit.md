@@ -50,6 +50,7 @@ The browsers are the only download, and only at install time.
 qa-audit <url> [options]      audit a target
 qa-audit doctor               check the environment (exit 0 ok · 1 something required is missing)
 qa-audit version              print the version
+qa-audit baselines [--delete HOST|all] [--baseline-dir DIR]   list or delete stored visual baselines (§19)
 ```
 
 | Option | Default | Meaning |
@@ -73,6 +74,8 @@ qa-audit version              print the version
 | `--fail-on SEVERITY` | `high` | Exit 1 if a problem at or above this severity exists; `none` never fails. |
 | `--ignore-https-errors` | off | Audit a site whose certificate the browser rejects (e.g. a self-signed staging certificate); the report notes it, and the certificate's trust is then not judged. |
 | `--allow-submit` | off | Let the functional module submit the forms **listed in the configuration** (§6, §18); forms found by discovery are never submitted. |
+| `--baseline-dir DIR` | `~/.qa-audit/baselines` | Where visual baselines are kept (§19); never inside the output folder. |
+| `--update-baseline` | off | Replace the visual baselines with this run's screenshots (after reviewing the differences). |
 | `--block-third-party` | off | Block every request the page makes outside the target origin (§8). |
 | `--no-color` | auto | Plain terminal output (also `NO_COLOR`). |
 
@@ -311,7 +314,7 @@ External modules register through the `qa_audit.modules` entry point group; the 
 | `security` | Available, passive only (§16) |
 | `performance` | Available (§17) |
 | `functional` | Available (§18) |
-| `visual` | Planned (plan 8.8) |
+| `visual` | Available (§19) |
 
 ---
 
@@ -352,7 +355,7 @@ conformance certification.**
 - Login: credentials from environment variables or a hidden prompt, session state kept only in the run folder.
   Needed before `/auditar-acessibilidade` and `scripts/auditar_a11y.py` move to this engine.
 - Several engines in one run (compatibility), sitemap discovery.
-- Module `visual` (plan 8.8); active security checks, always opt-in; scripted user flows (login, checkout) as
+- Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
 
 ---
@@ -363,7 +366,9 @@ Risk 7.
 
 - **WebKit on Windows** can be blocked by Windows application control (Smart App Control / WDAC): its bundled
   `libEGL.dll` is refused and Playwright reports it as a missing library. `qa-audit doctor` shows the engine as
-  unavailable with that hint; use Chromium or Firefox locally. CI runs all three engines on Linux.
+  unavailable with that hint; use another engine locally. CI runs all three engines on Linux. Smart App Control
+  decides by cloud reputation, so the block can disappear later without any change here (seen on 25.09.2026:
+  WebKit and Firefox blocked in the morning, working in the afternoon); run `doctor` again rather than assuming.
 - **Firefox (Playwright build, Windows with application control)**: the browser's cryptography is broken:
   `crypto.getRandomValues` throws `OperationError`, and **no HTTPS page loads** (`NS_ERROR_FAILURE`). `doctor` tests
   the browser's cryptography and flags it; an HTTPS start page that fails this way says so. Use Chromium there.
@@ -523,4 +528,38 @@ modules:
 The form is filled and submitted once, in its own tab, on the first audited page whose URL matches; the result is
 the response to the navigation that follows. Literal secrets are refused in the configuration (§4): use
 `fields_env`.
+
+---
+
+## 19. Visual module
+
+`--type visual` (needs Pillow: `pip install -e .[visual]`; without it the module is skipped in `full` and
+`--type visual` is a usage error).
+
+For every audited page and every configured viewport (default: desktop 1440×900, tablet 768×1024, mobile 390×844)
+the module takes a full-page screenshot with animations disabled and the text caret hidden, after web fonts are
+ready, masking the configured selectors (`mask`, for clocks, carousels, ads), and compares it with the **baseline**
+of the same page, viewport and engine.
+
+| Check | When | Status · severity |
+|---|---|---|
+| `visual-diff` | more than `max_diff_ratio` of the pixels (default 0.1 %) differ from the baseline by more than `tolerance` (default 16 of 255 per channel) | needs-human · medium: a change is not a bug until a person says so |
+| `visual-size-changed` | the page's rendered size changed | needs-human · low |
+| `horizontal-overflow` | at a viewport, the page is wider than the viewport | warning · medium (tablet, mobile) · low (desktop) |
+| `viewport-meta-missing` | no `<meta name="viewport">` (mobile browsers render a zoomed-out desktop page) | warning · low |
+
+Evidence of a difference: the baseline, the current screenshot and a diff image (changed pixels in red over a faded
+baseline), all copied into the run folder so the report stands alone. A metrics row per page and viewport gives the
+share of changed pixels (`baseline created`, `unchanged`, `changed`).
+
+**Baselines** (§7): the first run of a page/viewport/engine creates its baseline and reports nothing for it. They
+live in `~/.qa-audit/baselines/<host_port>/<engine>/<viewport>/` (or `--baseline-dir`), **outside the output folder
+and any repository**; the root gets a `.gitignore` with `*`. They are screenshots of the audited site: `--cleanup`
+does not delete them (they must survive between runs); `qa-audit baselines` lists them and
+`qa-audit baselines --delete <host>` (or `all`) removes them. `--update-baseline` replaces them after a reviewed
+change. The report says where they are.
+
+Screenshots taller than `max_height` (default 8000 px) are cut there. The viewport is restored after the module
+runs; it runs after the modules that only read the page and before accessibility (whose keyboard walk leaves
+focus rings on screen).
 

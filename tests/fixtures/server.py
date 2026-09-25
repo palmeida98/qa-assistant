@@ -38,6 +38,8 @@ SLOW_PATHS = {"/slow.html": 2.0}
 # planted functional defects (docs/qa-audit.md §18): a server error and a chain of three redirects
 ERROR_PATHS = {"/error500.html": 500}
 REDIRECTS = {"/r1": "/r2", "/r2": "/r3", "/r3": "/about.html"}
+# planted visual change (docs/qa-audit.md §19): with FixtureSite.variant on, /visual.html serves visual-v2.html
+VARIANTS = {"/visual.html": "visual-v2.html"}
 GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
 
 
@@ -58,6 +60,10 @@ class _SiteHandler(SimpleHTTPRequestHandler):
 
     def _record(self):
         self.server.requests.append((self.command, self.path))
+
+    def translate_path(self, path):
+        alt = VARIANTS.get(urlsplit(path).path) if getattr(self.server, "variant", False) else None
+        return os.path.join(SITE, alt) if alt else super().translate_path(path)
 
     def version_string(self):
         return next((v for n, v in self._extra() if n == "Server"), self.server_version)
@@ -105,6 +111,7 @@ class FixtureSite:
     def __init__(self, tls: bool = False):
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(_SiteHandler, directory=SITE))
         self.httpd.requests = []
+        self.httpd.variant = False
         self.port = self.httpd.server_address[1]
         self._tmp = None
         if tls:
@@ -122,6 +129,14 @@ class FixtureSite:
     @property
     def requests(self) -> list[tuple[str, str]]:
         return self.httpd.requests
+
+    @property
+    def variant(self) -> bool:
+        return self.httpd.variant
+
+    @variant.setter
+    def variant(self, on: bool) -> None:
+        self.httpd.variant = on
 
     def __enter__(self):
         self._t.start()
