@@ -63,6 +63,9 @@ def main(argv: list[str]) -> int:
     pragma = "  # pragma: " + "allowlist secret"   # split: only the manifest lines carry the marker
     with open(os.path.join(VENDOR, "axe.yaml"), "w", encoding="utf-8", newline="\n") as f:
         f.write("# written by scripts/update_axe.py; checked by tests/unit/test_engine_guards.py\n"
+                "# The two checksum lines below carry detect-secrets' allowlist pragma: they are public integrity "
+                "hashes of\n# axe-core (npm registry, and this file), not secrets. User decision, 25.09.2026; a guard "
+                "test fails if the\n# pragma appears on any other line (tests/unit/test_engine_guards.py).\n"
                 f"package: axe-core\nversion: {version}\nlicense: {meta.get('license', '')}\n"
                 f"source: {tarball}\n"
                 f"npm_integrity: {integrity}{pragma}\n"

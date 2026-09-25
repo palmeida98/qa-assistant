@@ -1,4 +1,7 @@
 # written by scripts/update_axe.py; checked by tests/unit/test_engine_guards.py
+# The two checksum lines below carry detect-secrets' allowlist pragma: they are public integrity hashes of
+# axe-core (npm registry, and this file), not secrets. User decision, 25.09.2026; a guard test fails if the
+# pragma appears on any other line (tests/unit/test_engine_guards.py).
 package: axe-core
 version: 4.13.0
 license: MPL-2.0

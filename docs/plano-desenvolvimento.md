@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; 7.3 com o mecanismo pronto; falta o piloto 7.2, que dá o golden real da 7.3, e depois a 7.9) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (translation of the workspace layer) waits for the user's decision |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (login) on branch `feat/login`, merged after the pilot; 8.11 (translation) not now, at most after the pilot |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -428,6 +428,7 @@ Notas:
 - Visto de passagem, sem mudar (fora do âmbito): `testar_mobile.py` com um flow que não é um ficheiro (ex.: `CT-MOB-001` em vez do caminho) dá `Blocked` "o flow nao correu" em vez de erro de uso (código 2). Corrigido a seguir, à parte (ver registo de alterações).
 
 ### 7.9 Versão 1.0
+Decisão do utilizador (25.09.2026): a v1.0 é a **camada de workspace** (metodologia, skills, adaptadores, fluxo do piloto), validada em projeto real; o motor `qa-audit` segue com versão própria (`pyproject.toml`, hoje 0.1.0) e não entra no critério da v1.0.
 - [ ] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
 - [ ] README com o estado final; tag `v1.0`; tabela "Estado resumido" com todas as fases concluídas.
 
@@ -491,7 +492,14 @@ Notes (8.8): comparing against a baseline means keeping screenshots of the audit
 
 Notes (8.9): `install.ps1` was tested on a fresh local clone: its first version failed only inside the script (a one-element array splatted into a native command); fixed. Writing the guide, a claim about WebKit was checked before being written and turned out wrong: WebKit 26 measures LCP (the spec and the performance README said Chromium and Firefox only); corrected in the three places. The example configuration is loaded by a test with every module's validation, so it cannot fall behind the code.
 
-### 8.10 Language of the workspace layer (to confirm with the user)
+### 8.10 Login (`form` and `manual`) and explicit pages: on branch `feat/login`, merged after the pilot
+Implemented and committed on the branch `feat/login` (`7fcae15`): `auth:` with `form` and `manual`, one attempt, session-expiry detection, credentials redacted everywhere, `crawl.pages`; specification in that branch's `docs/qa-audit.md` §20. User decision (25.09.2026): login waits until **after the pilot**; then it is the next task: merge the branch (with its CI green), then move `/auditar-acessibilidade` onto `qa-audit` and retire `scripts/auditar_a11y.py` and `tools/a11y/`. `storage-state` later.
+
+### 8.11 Language of the workspace layer
+User decision (25.09.2026): **not now**; at most after the pilot, and only with a concrete reason (sharing with
+international teams, for example). The client's team works in Portuguese, and translating the skills the pilot uses
+would make a pilot failure ambiguous (translation or method).
+
 The existing workspace layer (methodology, techniques, skills, scripts) is in European Portuguese. Translating it to English is a separate, large change that touches the skills used by live workspaces; to be confirmed before it starts.
 
 ---
@@ -517,6 +525,8 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | Decisões do utilizador: a v1.0 é só a camada de workspace (o `qa-audit` segue versão própria); tradução (8.11) não agora; exceção do detect-secrets mantida e explicada no próprio `axe.yaml`. |
+| 2026-09-25 | 8.10 (login `form` e `manual`, `crawl.pages`) por decisão do utilizador; `storage-state` fica para depois; a tradução passa a 8.11. |
 | 2026-09-25 | Decisão do utilizador: mantém-se a exceção do detect-secrets (pragma de allowlist só nas duas linhas de hash de `src/qa_audit/modules/accessibility/vendor/axe.yaml`; um teste impede-a noutro sítio). Chaves públicas de integridade, não segredos; nenhum ficheiro excluído da varredura. |
 | 2026-09-25 | 8.9 concluída: scripts de instalação, guia do utilizador, exemplo fictício, job `install` no CI. |
 | 2026-09-25 | 8.8 concluída: módulo visual; baselines fora de qualquer repositório e comando `qa-audit baselines`. |
