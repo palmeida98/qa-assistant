@@ -23,7 +23,7 @@
 
 | Camada | Conteúdo | Onde vive |
 |---|---|---|
-| **Motor** | Skills (`.claude/skills/`), adaptadores, scripts (`scripts/`, `tools/`), testes e guards. Não há um núcleo à parte (`qa_core`, CLI `qa`): por decisão de 24.09.2026, os adaptadores e os scripts são o motor | Repositório pessoal `qa-assistant` |
+| **Motor** | Skills (`.claude/skills/`), adaptadores, scripts (`scripts/`, `tools/`), testes e guards; e o motor de auditoria automática `qa-audit` (`src/qa_audit`, especificado em `docs/qa-audit.md`), que vive ao lado desta camada e não a substitui (decisão de 25.09.2026, que revê a de 24.09.2026 sobre um núcleo à parte) | Repositório pessoal `qa-assistant` |
 | **1. Metodologia** | Este documento | `qa-assistant/docs/` |
 | **2. Módulos de teste** | Técnicas por tipo de teste (`tecnica-browser.md`, `tecnica-api.md`, `tecnica-acessibilidade.md`, `tecnica-mobile.md`; lista em §4.1) | `qa-assistant/docs/` |
 | **3. Adaptadores** | Conversão entre o modelo interno e as ferramentas de cada empresa. Hoje só o Excel (`adapters/excel/`); os outros trackers são registo manual (§4.2) | `qa-assistant/adapters/` |

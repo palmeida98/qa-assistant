@@ -31,6 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; 7.3 com o mecanismo pronto; falta o piloto 7.2, que dá o golden real da 7.3, e depois a 7.9) |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | In progress |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -432,6 +433,42 @@ Notas:
 
 ---
 
+## Fase 8 — `qa-audit` engine
+
+User decisions (25.09.2026): the automated engine **lives alongside** the workspace layer (nothing of it is removed); the engine, its CLI, reports, code and documentation are in **English**; the repository stays **private and proprietary** (only the owner has access); first slice 8.1 → 8.4. This revises the 7.7 decision "no `qa_core` / CLI `qa`": the engine is a separate package (`src/qa_audit`), the workspace scripts keep working as before. Specification: `docs/qa-audit.md` (written first, methodology §15). Technical risks and their mitigations: `docs/qa-audit.md` §5–§9, §13, §14.
+
+### 8.0 Specification and decisions
+- [x] `docs/qa-audit.md`; this phase; methodology §1.1 updated.
+
+### 8.1 Package, CLI and core
+- [ ] `pyproject.toml` (exact versions; proprietary, "Private :: Do Not Upload"), `src/qa_audit`, `qa-audit version` / `doctor` / `--help`, configuration with precedence and the no-credentials rule, `Finding` with the evidence rule, run folder with `.gitignore` and `--cleanup`, module registry (built-in + entry points).
+- [ ] `LICENSE` (proprietary), `CONTRIBUTING.md`, `CHANGELOG.md`; `.gitignore` for output, evidence and secrets; guard test for tracked `qa-output/` paths.
+- [ ] Unit tests in `tests/unit/`, run by the existing `unittest` command, pre-commit and CI.
+
+### 8.2 Browser layer and discovery
+- [ ] Engines chromium/firefox/webkit, viewport, device, video, trace; same-origin GET-only crawl with exclusions, `robots.txt`, delay and identifiable user agent.
+- [ ] Local test site `tests/fixtures/site/` with trap links and a POST form; integration tests: no trap requested, nothing posted, no request outside `127.0.0.1` (recording proxy, browser traffic included).
+- [ ] CI job with the three engines on Linux.
+
+### 8.3 Reports
+- [ ] Terminal summary, JSON, CSV, Markdown and self-contained HTML (inline CSS, CSP `default-src 'none'`, audited content escaped); tests.
+
+### 8.4 Accessibility module
+- [ ] axe-core 4.13.0 shipped with manifest and `scripts/update_axe.py`; violations / incomplete / manual checklist; keyboard and reflow checks; disclaimer.
+- [ ] Integration: planted defects found, clean page without problems, on every available engine.
+- [ ] Replacing `scripts/auditar_a11y.py` + `tools/a11y/` (and moving `/auditar-acessibilidade`) waits for login support (parity with its authenticated pages); until then both exist.
+
+### 8.5–8.8 Security (passive), performance, functional, visual
+One commit each, each with planted defects in the local site and no problems on clean pages. Performance thresholds from a cited source, configurable (risk 8). Functional: `--allow-submit` only for forms listed in the configuration.
+
+### 8.9 Documentation, install and example
+- [ ] Install script or `pipx` instructions, fictional example configuration, README section; clean clone → install → audit of the local site green in CI.
+
+### 8.10 Language of the workspace layer (to confirm with the user)
+The existing workspace layer (methodology, techniques, skills, scripts) is in European Portuguese. Translating it to English is a separate, large change that touches the skills used by live workspaces; to be confirmed before it starts.
+
+---
+
 ## Registo de alterações a este plano
 
 | Data | Alteração |
@@ -453,3 +490,4 @@ Notas:
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | Fase 8 (`qa-audit`) acrescentada por decisão do utilizador: motor de auditoria automática ao lado da camada de workspace, em inglês, repositório privado e proprietário; revê a decisão 7.7 sobre o `qa_core`/CLI. Especificação em `docs/qa-audit.md`. |
