@@ -63,6 +63,18 @@ class Denylist(unittest.TestCase):
     def test_xlsx_limpo_passa(self):
         self.assertEqual(self.correr(self.xlsx("Loja Demo")).returncode, 0)
 
+    def test_mensagem_de_commit(self):
+        # o hook commit-msg passa o ficheiro da mensagem (.git/COMMIT_EDITMSG) ao mesmo script
+        msg = os.path.join(self.tmp.name, "COMMIT_EDITMSG")
+        with open(msg, "w", encoding="utf-8") as f:
+            f.write(f"8.99: exemplo\n\nvalidado no workspace {TERMO.upper()}\n")
+        env = dict(os.environ, QA_DENYLIST=self.lista)
+        r = subprocess.run([sys.executable, SCRIPT, msg], capture_output=True, text=True, env=env, check=False)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        with open(msg, "w", encoding="utf-8") as f:
+            f.write("8.99: exemplo sem nomes\n")
+        r = subprocess.run([sys.executable, SCRIPT, msg], capture_output=True, text=True, env=env, check=False)
+        self.assertEqual(r.returncode, 0, r.stdout)
 
 if __name__ == "__main__":
     unittest.main()

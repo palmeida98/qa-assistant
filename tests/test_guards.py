@@ -60,6 +60,15 @@ class Guards(unittest.TestCase):
         self.assertEqual(len(versoes), 1, versoes)
         self.assertRegex(versoes.pop(), r"^\d+\.\d+\.\d+$")  # nunca @latest
 
+    def test_denylist_tambem_na_mensagem_do_commit(self):
+        with open(os.path.join(ROOT, ".pre-commit-config.yaml"), encoding="utf-8-sig") as f:
+            cfg = yaml.safe_load(f)
+        self.assertIn("commit-msg", cfg["default_install_hook_types"])
+        self.assertEqual(cfg["default_stages"], ["pre-commit"])      # os outros hooks nao correm duas vezes
+        h = hooks()["denylist-mensagem"]
+        self.assertEqual(h["stages"], ["commit-msg"])
+        self.assertEqual(h["entry"], hooks()["denylist"]["entry"])
+
     def test_playwright_mcp_recebe_o_env_como_segredos(self):
         # tecnica-browser.md seccao 3: o assistente escreve o NOME da variavel e o MCP poe o valor
         with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:

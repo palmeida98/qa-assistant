@@ -1,4 +1,9 @@
-﻿repos:
+﻿# pre-commit install instala os dois tipos de hook: os de ficheiros (pre-commit) e o da mensagem
+# (commit-msg). Os hooks sem "stages" correm so no pre-commit (default_stages), nao outra vez na mensagem.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
   # detect-secrets 1.5.0 abre os ficheiros com open() sem encoding: no Windows (cp1252)
   # um ficheiro UTF-8 com certos caracteres (ex.: "Á" = bytes C3 81) da UnicodeDecodeError
   # e e SALTADO sem aviso, como se fosse binario. Corre-se em modo UTF-8 (-X utf8), igual
@@ -25,6 +30,14 @@
         entry: python scripts/check_denylist.py
         language: system
         pass_filenames: true
+
+      # a mensagem do commit tambem fica no historico: um nome de cliente numa mensagem passou uma vez
+      # (25.09.2026), porque o hook de cima so le ficheiros
+      - id: denylist-mensagem
+        name: nomes de clientes na mensagem do commit
+        entry: python scripts/check_denylist.py
+        language: system
+        stages: [commit-msg]
 
       # teste golden do adaptador Excel (plano 1.5; metodologia-core seccao 15):
       # so corre quando o commit toca no adaptador, na fixture ou no proprio teste.
