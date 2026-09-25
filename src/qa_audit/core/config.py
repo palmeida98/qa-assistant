@@ -34,6 +34,8 @@ DEFAULTS: dict = {
         "delay_ms": 500,
         "respect_robots": True,
         "exclude": [],
+        "pages": [],
+        "follow_links": True,
     },
     "network": {"block_third_party": False},
     "evidence": {
@@ -49,6 +51,7 @@ DEFAULTS: dict = {
     },
     "fail_on": "high",
     "safety": {"allow_submit": False},
+    "auth": None,
     "modules": {},
 }
 
@@ -101,7 +104,7 @@ def load_file(path: str) -> dict:
     secrets = find_literal_secrets(data)
     if secrets:
         raise ConfigError(f"{path}: credentials are not allowed in configuration files ({', '.join(secrets)}); "
-                          "name an environment variable instead (e.g. password_env: SHOP_ADMIN_PASSWORD)")
+                          "name an environment variable instead (e.g. pass_env: SHOP_ADMIN_PASS)")
     return data
 
 
@@ -150,6 +153,10 @@ def validate(cfg: dict) -> None:
                 re.compile(pat)
             except re.error as ex:
                 problems.append(f"crawl.exclude: invalid regular expression {pat!r}: {ex}")
+    if not isinstance(c.get("pages"), list) or not all(isinstance(x, str) and x for x in c["pages"]):
+        problems.append("crawl.pages must be a list of URLs or paths")
+    if not isinstance(c.get("follow_links"), bool):
+        problems.append("crawl.follow_links must be true or false")
     if e.get("screenshots") not in SCREENSHOT_MODES:
         problems.append(f"evidence.screenshots must be one of {', '.join(SCREENSHOT_MODES)}")
     if str(e.get("trace")) not in TRACE_MODES:

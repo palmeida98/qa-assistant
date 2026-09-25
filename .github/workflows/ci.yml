@@ -75,7 +75,9 @@ jobs:
       - run: pip install -e .[visual]
       - run: python -m playwright install --with-deps chromium firefox webkit
       - run: qa-audit doctor --no-color
-      - run: python -m unittest discover -s tests/integration -v
+      # xvfb: o metodo de login manual abre o browser visivel (docs/qa-audit.md 20)
+      - run: sudo apt-get install -y -q xvfb
+      - run: xvfb-run -a python -m unittest discover -s tests/integration -v
         env:
           QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
           QA_AUDIT_REQUIRE_ENGINES: "1"

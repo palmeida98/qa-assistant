@@ -19,7 +19,7 @@ qa-audit https://example.com                         # every available module
 qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
 ```
 
-It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
+It can log in first (a form, or you log in by hand for Active Directory / 2FA). It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
 links, respects `robots.txt`), runs the selected modules on each page, and writes `qa-output/<timestamp>/` with
 screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
 is sent anywhere but to the target. Only audit sites you own or are authorized to test.

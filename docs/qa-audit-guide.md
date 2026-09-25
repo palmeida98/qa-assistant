@@ -110,6 +110,34 @@ Module options live under `modules.<name>` in the configuration; each module's `
 Browser choice matters: CLS is only measured in Chromium (elsewhere `n/a`, never estimated); visual baselines are
 per engine.
 
+### Pages behind a login
+
+Configure `auth:` in the project's configuration file (§20 of the spec). Two methods:
+
+```yaml
+auth:                                   # a plain login form
+  method: form
+  login_url: /login
+  username_env: NEW_PROJECT_QA_USER     # names of environment variables, never the values
+  pass_env: NEW_PROJECT_QA_PASS
+  success_url: "/account"               # or success_selector: "#logout"
+```
+
+```yaml
+auth:                                   # Active Directory, a second factor, a CAPTCHA
+  method: manual
+  login_url: https://staging.new-project.example/login
+  success_selector: "#user-menu"
+  manual_timeout_s: 300
+```
+
+With `manual` the browser opens visibly and the terminal asks you to log in; the audit continues when the success
+check passes. Either way there is **one attempt** (a failed login is exit 3, never retried, so a shared account is
+not locked), the session's logout links are never followed, a page that sends you back to the login page stops the
+crawl ("session ended"), and the credential values are replaced by `«VARIABLE_NAME»` in everything the engine
+writes. Traces are refused with `auth`. To audit a fixed set of pages rather than crawl, list them in
+`crawl.pages` and set `crawl.follow_links: false`.
+
 ---
 
 ## 7. Reading the results

@@ -18,7 +18,7 @@ import threading
 import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 
@@ -40,6 +40,11 @@ ERROR_PATHS = {"/error500.html": 500}
 REDIRECTS = {"/r1": "/r2", "/r2": "/r3", "/r3": "/about.html"}
 # planted visual change (docs/qa-audit.md §19): with FixtureSite.variant on, /visual.html serves visual-v2.html
 VARIANTS = {"/visual.html": "visual-v2.html"}
+# login flow (docs/qa-audit.md §20): fictional account; /account/* needs the session cookie,
+# account/expire.html ends the session
+VALID_LOGIN = ("qa-auto-fixture", "open-sesame-fixture")
+SESSION_COOKIE = "fixture_session=valid"
+EXTRA_HEADERS["/account/expire.html"] = [("Set-Cookie", "fixture_session=; Path=/; Max-Age=0")]
 GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
 
 
@@ -74,8 +79,19 @@ class _SiteHandler(SimpleHTTPRequestHandler):
                 self.send_header(name, value)
         super().end_headers()
 
+    def _redirect(self, location: str, cookie: str = "") -> None:
+        self.send_response(302)
+        self.send_header("Location", location)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def _special(self) -> bool:
         path = urlsplit(self.path).path
+        if path.startswith("/account/") and SESSION_COOKIE not in (self.headers.get("Cookie") or ""):
+            self._redirect("/login.html")
+            return True
         if path in ERROR_PATHS:
             self.send_error(ERROR_PATHS[path], "fixture: planted server error")
             return True
@@ -102,6 +118,14 @@ class _SiteHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         self._record()
+        if urlsplit(self.path).path == "/login":
+            length = int(self.headers.get("Content-Length") or 0)
+            form = parse_qs(self.rfile.read(length).decode("utf-8"))
+            if (form.get("user", [""])[0], form.get("pass", [""])[0]) == VALID_LOGIN:
+                self._redirect("/account/index.html", f"{SESSION_COOKIE}; Path=/")
+            else:
+                self._redirect("/login.html?error=1")       # back to the form: the login did not succeed
+            return
         self.send_error(405, "fixture site: nothing may be posted")
 
 

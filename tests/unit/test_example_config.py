@@ -17,6 +17,9 @@ class ExampleConfig(unittest.TestCase):
         for name, module in mods.items():
             with self.subTest(module=name):
                 self.assertEqual(module.validate_config(cfg["modules"].get(name) or {}), [])
+        from qa_audit.core import auth
+        fake_env = {"NEW_PROJECT_QA_USER": "x", "NEW_PROJECT_QA_PASS": "y"}
+        self.assertEqual(auth.validate(cfg, fake_env), [])
         self.assertFalse(cfg["safety"]["allow_submit"])
         self.assertEqual(cfg["evidence"]["trace"], "off")
 

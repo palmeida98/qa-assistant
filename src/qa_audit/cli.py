@@ -127,7 +127,9 @@ def configure(a: argparse.Namespace):
         cfg["crawl"]["exclude"] = list(cfg["crawl"]["exclude"]) + a.exclude
         config_mod.validate(cfg)
     modules = registry.select(a.type or "full", available)
+    from .core import auth
     problems = [p for m in modules for p in m.validate_config(cfg["modules"].get(m.name) or {})]
+    problems += auth.validate(cfg)
     if a.type not in (None, "full"):
         # asked for by name: a module that cannot run here is an error, not a silent skip
         for m in modules:
@@ -171,6 +173,7 @@ def audit(argv: list[str], console: Console | None = None) -> int:
     from .browser.discovery import TargetUnreachable
     from .browser.session import BrowserError
     from .core import runner
+    from .core.auth import AuthError
     from .reports import terminal, write_all
 
     steps = ["Discovery"] + [m.title for m in modules] + ["Report"]
@@ -179,7 +182,14 @@ def audit(argv: list[str], console: Console | None = None) -> int:
     state = {"i": 1}
 
     def progress(event, **d):
-        if event == "page":
+        if event == "auth_start":
+            console.print(f"      logging in ({d['method']}) ...", "dim")
+        elif event == "auth_manual":
+            console.print(f"      Log in in the browser window ({d['url']}); waiting up to {d['timeout_s']} s ...",
+                          "yellow")
+        elif event == "auth_done":
+            console.print(f"      {d['detail']}", "dim")
+        elif event == "page":
             prog.page(d["url"], d["n"])
         elif event == "discovery_done":
             prog.step(1, True, f"{d['pages']} pages, {d['skipped']} links skipped")
@@ -192,6 +202,10 @@ def audit(argv: list[str], console: Console | None = None) -> int:
     except ConfigError as e:
         err.print(f"qa-audit: error: {e}", "red")
         return 2
+    except AuthError as e:
+        prog.step(1, False, "login failed")
+        err.print(f"qa-audit: login failed: {e}", "red")
+        return 3
     except TargetUnreachable as e:
         prog.step(1, False, "target unreachable")
         err.print(f"qa-audit: {e}", "red")

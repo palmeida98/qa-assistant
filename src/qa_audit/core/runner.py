@@ -8,6 +8,7 @@ import os
 import traceback
 
 from .. import __version__
+from . import auth
 from .config import validate_url
 from .evidence import RunFolder
 from .findings import CheckTally, Evidence, Finding, assign_ids, sort_key, summarize
@@ -100,6 +101,26 @@ def _logger(run: RunFolder) -> logging.Logger:
     return log
 
 
+def _redact(ctx: RunContext, crawl, redactor: Redactor) -> None:
+    """Credentials never reach a report: every text the run keeps goes through the redactor (§20)."""
+    t = redactor.text
+    for f in ctx.findings:
+        for key in ("title", "description", "expected", "actual", "recommendation", "url"):
+            setattr(f, key, t(getattr(f, key)))
+        f.steps = [t(x) for x in f.steps]
+        f.element = {k: t(str(v)) for k, v in f.element.items()}
+        for e in f.evidence:
+            e.value, e.label = t(e.value), t(e.label)
+    for p in crawl.pages:
+        p.title = t(p.title)
+        p.console_errors = [t(x) for x in p.console_errors]
+        p.page_errors = [t(x) for x in p.page_errors]
+        p.error = t(p.error)
+    ctx.notes[:] = [t(n) for n in ctx.notes]
+    for e in ctx.errors:
+        e["message"] = t(e["message"])
+
+
 def run(target: str, cfg: dict, modules: list, progress=None, session_factory=None) -> RunResult:
     """Audit target. progress(event, **data) receives: page, module_done, discovery_done.
 
@@ -136,10 +157,22 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
                     f.evidence.append(ev)
 
     session = factory(cfg, run_folder, target)
+    redactor = Redactor(auth.secrets(cfg))
     try:
         with session:
             ctx.session = session
-            crawl = Crawler(session, cfg, target, on_page=on_page, log=log.info, redactor=Redactor()).run()
+            expired = None
+            if auth.configured(cfg):
+                progress("auth_start", method=cfg["auth"]["method"])
+                done = auth.login(session, cfg, target, progress=progress)
+                log.info("auth: %s", done)
+                ctx.notes.append(f"auth: {done}; one attempt")
+                progress("auth_done", detail=done)
+                expired = auth.expired_pattern(cfg, target)
+            crawl = Crawler(session, cfg, target, on_page=on_page, log=log.info, redactor=redactor,
+                            expired=expired).run()
+            if crawl.session_expired:
+                ctx.notes.append(f"auth: the session ended at {crawl.session_expired}; the crawl stopped there")
             ctx.crawl = crawl
             progress("discovery_done", pages=len(crawl.pages), skipped=len(crawl.skipped))
             module_rows = []
@@ -171,6 +204,8 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
             h.close()
             log.removeHandler(h)
 
+    if redactor.values:
+        _redact(ctx, crawl, redactor)
     findings = sorted(ctx.findings, key=sort_key)
     assign_ids(findings, {m.name: m.id_prefix for m in modules})
     finished = dt.datetime.now()
@@ -188,7 +223,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
         modules=module_rows,
         summary=summarize(findings, ctx.tally),
         crawl={"pages": len(crawl.pages), "skipped": crawl.skipped, "not_visited": crawl.not_visited,
-               "robots": crawl.robots},
+               "robots": crawl.robots, "session_expired": crawl.session_expired},
         pages=crawl.pages,
         findings=findings,
         metrics=ctx.metrics,
