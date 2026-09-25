@@ -26,6 +26,7 @@ DEFAULTS: dict = {
         "viewport": {"width": 1440, "height": 900},
         "device": None,
         "timeout_ms": 30000,
+        "ignore_https_errors": False,
     },
     "crawl": {
         "max_pages": 20,

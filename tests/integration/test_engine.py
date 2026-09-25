@@ -23,7 +23,7 @@ for p in (os.path.join(ROOT, "src"), os.path.join(ROOT, "tests", "fixtures")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from server import FixtureSite, RecordingProxy
+from server import FixtureSite, RecordingProxy, find_openssl
 
 from qa_audit import cli
 from qa_audit.browser.session import Session
@@ -72,7 +72,8 @@ class EngineTests:
         cls.tmp = tempfile.TemporaryDirectory()
         cls.site = FixtureSite().__enter__()
         mods = registry.discover(use_entry_points=False)
-        cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name), [mods["accessibility"]])
+        cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name),
+                                [mods["accessibility"], mods["security"]])
         from qa_audit.reports import write_all
         cls.paths = write_all(cls.result, ["html", "json", "csv", "md"])
         cls.requests = list(cls.site.requests)
@@ -83,8 +84,11 @@ class EngineTests:
             cls.site.__exit__(None, None, None)
             cls.tmp.cleanup()
 
-    def by_page(self, page: str):
-        return [f for f in self.result.findings if f.url.endswith("/" + page)]
+    def by_page(self, page: str, module: str = "accessibility"):
+        return [f for f in self.result.findings if f.url.endswith("/" + page) and f.module == module]
+
+    def security(self) -> dict:
+        return {f.check: f for f in self.result.findings if f.module == "security"}
 
     # --- discovery safety (risk 3, 4) ---------------------------------------------------------------------
     def test_only_get_and_no_trap_requested(self):
@@ -96,7 +100,8 @@ class EngineTests:
     def test_pages_visited_within_limits(self):
         visited = {p.url.split("/", 3)[3] for p in self.result.pages}
         self.assertEqual(visited, {"", "index.html", "about.html", "a11y.html", "form.html", "xss.html",
-                                   "csp.html", "deep/level1.html", "deep/level2.html"})
+                                   "csp.html", "sec.html", "secure.html", "mixed.html",
+                                   "deep/level1.html", "deep/level2.html"})
         reasons = {s["url"].split("/", 3)[3]: s["reason"] for s in self.result.crawl["skipped"]}
         self.assertEqual(reasons["private/secret.html"], "disallowed by robots.txt")
         self.assertEqual(reasons["deep/level3.html"], "beyond max depth")
@@ -139,6 +144,32 @@ class EngineTests:
     def test_no_module_errors(self):
         self.assertEqual(self.result.errors, [])
 
+    # --- security, passive (docs/qa-audit.md §16) over plain HTTP --------------------------------------------
+    def test_security_planted_defects_over_http(self):
+        sec = self.security()
+        self.assertEqual((sec["not-https"].status, sec["not-https"].severity), ("problem", "high"))  # password page
+        self.assertIn("sec.html", sec["not-https"].description)
+        self.assertIn("Apache/2.4.1", " ".join(e.value for e in sec["version-disclosure"].evidence))
+        self.assertIn("sec.html", sec["version-disclosure"].url + sec["version-disclosure"].description)
+        self.assertIn("'unsafe-eval'", sec["csp-unsafe"].actual)
+        self.assertEqual(sec["clickjacking"].severity, "medium")          # sec.html has a password field
+        for check in ("csp-missing", "clickjacking", "nosniff-missing"):
+            with self.subTest(check=check):
+                self.assertNotIn("secure.html", sec[check].description)   # the page with every header
+        self.assertIn("sessionid", sec["cookie-session-not-httponly"].actual)
+        self.assertNotIn("theme", sec["cookie-session-not-httponly"].actual)   # HttpOnly, and not session-like
+        # HTTPS-only checks do not apply to an HTTP site
+        for check in ("hsts-missing", "mixed-content-active", "tls-cert-expiring", "cookie-not-secure"):
+            self.assertNotIn(check, sec)
+
+    def test_security_findings_are_one_per_check(self):
+        checks = [f.check for f in self.result.findings if f.module == "security"]
+        self.assertEqual(len(checks), len(set(checks)))
+
+    def test_cookie_values_never_reach_the_results(self):
+        with open(self.paths["json"], encoding="utf-8") as f:
+            self.assertNotIn("fixture-not-a-secret", f.read())
+
     # --- reports (risk 5, 6) -------------------------------------------------------------------------------
     def test_reports_are_written_and_escaped(self):
         with open(self.paths["html"], encoding="utf-8") as f:
@@ -176,10 +207,75 @@ class NoExternalTraffic:
                                launch_args=["--proxy-bypass-list=<-loopback>"] if self.engine == "chromium" else None,
                                firefox_prefs={"network.proxy.allow_hijacking_localhost": True})
 
-            runner.run(site.url, cfg, [mods["accessibility"]], session_factory=factory)
+            runner.run(site.url, cfg, [mods["accessibility"], mods["security"]], session_factory=factory)
             hosts = set(proxy.hosts)
         self.assertTrue(hosts, "the proxy saw no traffic: the test would prove nothing")
-        self.assertEqual(hosts, {f"127.0.0.1:{site.port}"})
+        self.assertIn(f"127.0.0.1:{site.port}", hosts)
+        # mixed.html references 127.0.0.1:9 on purpose; everything must stay on this machine
+        self.assertEqual({h for h in hosts if not h.startswith("127.0.0.1:")}, set())
+
+
+def https_available(engine: str) -> str:
+    """'' if this engine loads the HTTPS fixture here, else the reason (e.g. Firefox with broken cryptography)."""
+    reason = engine_available(engine)
+    if reason:
+        return reason
+    if not find_openssl():
+        reason = "openssl not found (needed for the HTTPS fixture)"
+    else:
+        from playwright.sync_api import Error, sync_playwright
+        with FixtureSite(tls=True) as site, sync_playwright() as p:
+            b = getattr(p, engine).launch()
+            try:
+                b.new_context(ignore_https_errors=True).new_page().goto(site.url)
+            except Error as e:
+                reason = f"{engine} cannot load HTTPS here: {str(e).splitlines()[0]}"
+            finally:
+                b.close()
+    if reason and os.environ.get("QA_AUDIT_REQUIRE_ENGINES"):
+        raise AssertionError(reason)
+    return reason
+
+
+class HttpsTests:
+    """Security checks that only exist over HTTPS: fixture with a self-signed certificate valid for two days."""
+
+    engine = ""
+
+    @classmethod
+    def setUpClass(cls):
+        reason = https_available(cls.engine)
+        if reason:
+            raise unittest.SkipTest(reason)
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.site = FixtureSite(tls=True).__enter__()
+        mods = registry.discover(use_entry_points=False)
+        cfg = make_cfg(cls.engine, cls.tmp.name, browser={"ignore_https_errors": True})
+        cls.result = runner.run(cls.site.url, cfg, [mods["security"]])
+        cls.sec = {f.check: f for f in cls.result.findings}
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, "site"):
+            cls.site.__exit__(None, None, None)
+            cls.tmp.cleanup()
+
+    def test_https_planted_defects(self):
+        s = self.sec
+        self.assertNotIn("not-https", s)
+        self.assertIn("expires in", s["tls-cert-expiring"].actual)
+        self.assertEqual((s["form-to-http"].status, s["form-to-http"].severity), ("problem", "high"))
+        self.assertIn("mixed.html", s["mixed-content-active"].url)
+        self.assertIn("fixture-insecure.js", " ".join(e.value for e in s["mixed-content-active"].evidence))
+        self.assertIn("fixture-insecure.png", " ".join(e.value for e in s["mixed-content-passive"].evidence))
+        self.assertIn("sessionid", s["cookie-not-secure"].actual)
+        self.assertNotIn("secure.html", s["hsts-missing"].description)   # the page that sends HSTS
+
+    def test_https_nothing_invented(self):
+        self.assertNotIn("tls-old-protocol", self.sec)          # the fixture negotiates TLS 1.2+
+        self.assertNotIn("http-not-redirected", self.sec)       # nothing answers plain HTTP on that port
+        self.assertTrue(any("ignore-https-errors" in n for n in self.result.notes))
+        self.assertEqual(self.result.errors, [])
 
 
 class CliTests:
@@ -199,7 +295,8 @@ class CliTests:
             common = ["--browser", self.engine, "--delay-ms", "0", "--output", tmp, "--max-pages", "3"]
             code, out, _ = self.cli(site.url, *common)
             self.assertEqual(code, 1, out)                          # high-severity problems on a11y.html
-            self.assertIn("[1/3] Discovery", out)
+            self.assertIn("[1/4] Discovery", out)                   # discovery, accessibility, security, report
+            self.assertIn("Security", out)
             self.assertIn("Only audit sites you own or are authorized to test.", out)
             self.assertIn("report.html", out)
             code, out, _ = self.cli(site.url, *common, "--fail-on", "none", "--cleanup", "--report", "json")
@@ -244,7 +341,8 @@ class ReportInBrowser(unittest.TestCase):
 
 
 for _engine in ENGINES:
-    for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli")):
+    for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
+                            (HttpsTests, "Https")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

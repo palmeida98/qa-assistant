@@ -39,9 +39,18 @@ def check_engines(engines) -> list[tuple[str, bool, str]]:
                 b = getattr(p, engine).launch(timeout=60000, **kw)
                 version = b.version
                 page = b.new_page()
-                page.set_content("<p>ok</p>")
+                # the browser's own cryptography: when it is broken (e.g. blocked by Windows application control),
+                # no HTTPS page loads at all (docs/qa-audit.md §13)
+                page.set_content("<script>try { crypto.getRandomValues(new Uint8Array(1)); document.title = 'ok'; }"
+                                 " catch (e) { document.title = 'broken: ' + e.name; }</script>")
+                crypto = page.title()
                 b.close()
-                out.append((engine, True, version))
+                if crypto == "ok":
+                    out.append((engine, True, version))
+                else:
+                    detail = (f"{version} starts, but its cryptography is {crypto}: HTTPS pages will not load "
+                              "(Windows application control?); use another engine")
+                    out.append((engine, False, detail))
             except PWError as e:
                 out.append((engine, False, launch_hint(engine, str(e))))
     return out

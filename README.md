@@ -25,8 +25,9 @@ links, respects `robots.txt`), runs the selected modules on each page, and write
 screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
 is sent anywhere but to the target. Only audit sites you own or are authorized to test.
 
-Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow, manual checklist). Planned:
-security (passive), performance, functional, visual. Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
+Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow, manual checklist) and
+**security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content). Planned: performance, functional,
+visual. Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
 contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ---

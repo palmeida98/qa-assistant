@@ -39,7 +39,7 @@ class Cli(unittest.TestCase):
             secret = os.path.join(tmp, "c.yaml")
             with open(secret, "w", encoding="utf-8") as f:
                 f.write("login: {password: x}\n")
-            for argv in (["not-a-url"], ["https://shop.example", "--type", "security"],
+            for argv in (["not-a-url"], ["https://shop.example", "--type", "performance"],
                          ["https://shop.example", "--type", "nope"], ["https://shop.example", "--viewport", "big"],
                          ["https://shop.example", "--report", "pdf"], ["https://shop.example", "--config", secret],
                          ["https://shop.example", "--browser", "ie"], ["https://shop.example", "--exclude", "("]):

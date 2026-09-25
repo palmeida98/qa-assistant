@@ -25,6 +25,11 @@ class RunContext:
         self.notes: list[str] = []
         self.session = None      # browser session (set by the runner)
         self.pages = []          # PageInfo of the pages visited so far
+        self._state: dict[str, dict] = {}
+
+    def state(self, module: str) -> dict:
+        """Per-run scratch space of a module (module instances are shared between runs)."""
+        return self._state.setdefault(module, {})
 
     def module_config(self, name: str) -> dict:
         return self.cfg["modules"].get(name) or {}
@@ -141,6 +146,9 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
             has_problems = any(f.status == "problem" for f in ctx.findings)
             trace_mode = str(cfg["evidence"]["trace"])
             trace = session.close(keep_trace=trace_mode == "on" or (trace_mode == "retain-on-problem" and has_problems))
+            if cfg["browser"].get("ignore_https_errors"):
+                ctx.notes.append("--ignore-https-errors: certificate errors were ignored; certificate trust was not "
+                                 "judged")
             if session.blocked:
                 ctx.notes.append(f"{len(session.blocked)} third-party requests were blocked (--block-third-party)")
             browser = {"engine": session.engine, "version": session.version, "user_agent": session.user_agent,

@@ -49,7 +49,10 @@ def launch_hint(engine: str, message: str) -> str:
     if "missing dependencies" in m or "application control" in m:
         return (f"{engine} is missing system libraries, or Windows application control (Smart App Control / WDAC) "
                 "blocks its files; on Linux: python -m playwright install-deps "
-                f"{engine}; on Windows use chromium or firefox (docs/qa-audit.md §13)")
+                f"{engine}; on Windows use another engine (docs/qa-audit.md §13)")
+    if "ns_error_failure" in m:
+        return (f"{engine} failed at the network layer (NS_ERROR_FAILURE); on Windows with application control its "
+                "cryptography can be blocked, so HTTPS never loads: run 'qa-audit doctor', use chromium")
     if "spawn unknown" in m or "eperm" in m or "access is denied" in m:
         return "the operating system refused to start the browser process (sandbox, antivirus or permissions)"
     return message.strip().splitlines()[0] if message.strip() else "unknown error"
@@ -136,7 +139,7 @@ class Session:
     # --- options ---------------------------------------------------------------------------------------------
     def _context_options(self) -> dict:
         b, e = self.cfg["browser"], self.cfg["evidence"]
-        opts: dict = {}
+        opts: dict = {"ignore_https_errors": bool(b.get("ignore_https_errors"))}
         device = b.get("device")
         if device:
             try:

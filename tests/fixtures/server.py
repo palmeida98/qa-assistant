@@ -1,14 +1,19 @@
 """Local test site and recording proxy for the qa-audit integration tests (docs/qa-audit.md §15).
 
-FixtureSite serves tests/fixtures/site on 127.0.0.1 and records every request (method, path).
-RecordingProxy is an HTTP forward proxy that records every host the browser contacts; it forwards only to the
-fixture site and refuses everything else (HTTPS CONNECT included), so nothing leaves the machine.
+FixtureSite serves tests/fixtures/site on 127.0.0.1 and records every request (method, path); with tls=True it
+serves the same site over HTTPS. RecordingProxy is an HTTP forward proxy that records every host the browser
+contacts; it forwards only to the fixture site and refuses everything else (HTTPS CONNECT included), so nothing
+leaves the machine.
 """
 
 from __future__ import annotations
 
 import http.client
 import os
+import shutil
+import ssl
+import subprocess
+import tempfile
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -16,13 +21,46 @@ from urllib.parse import urlsplit
 
 SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 
+# planted security defects (docs/qa-audit.md §16): headers per path. Every other page sends no security header,
+# which the security module reports once per check for the whole site.
+EXTRA_HEADERS = {
+    "/sec.html": [("Server", "Apache/2.4.1 (Unix)"), ("X-Powered-By", "PHP/5.6.40"),
+                  ("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-eval'"),
+                  ("Set-Cookie", "sessionid=fixture-not-a-secret; Path=/"),
+                  ("Set-Cookie", "theme=dark; Path=/; HttpOnly")],
+    "/secure.html": [("Content-Security-Policy", "default-src 'self'; frame-ancestors 'self'"),
+                     ("X-Frame-Options", "DENY"), ("X-Content-Type-Options", "nosniff"),
+                     ("Strict-Transport-Security", "max-age=31536000; includeSubDomains")],
+}
+GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
+
+
+def find_openssl() -> str | None:
+    """openssl for the HTTPS fixture: PATH, or the copy that ships with Git for Windows."""
+    return shutil.which("openssl") or next((p for p in GIT_OPENSSL if os.path.isfile(p)), None)
+
 
 class _SiteHandler(SimpleHTTPRequestHandler):
+    server_version = "FixtureServer"      # no version number, unlike sec.html
+    sys_version = ""
+
     def log_message(self, *args):
         pass
 
+    def _extra(self):
+        return EXTRA_HEADERS.get(urlsplit(self.path).path, [])
+
     def _record(self):
         self.server.requests.append((self.command, self.path))
+
+    def version_string(self):
+        return next((v for n, v in self._extra() if n == "Server"), self.server_version)
+
+    def end_headers(self):
+        for name, value in self._extra():
+            if name != "Server":
+                self.send_header(name, value)
+        super().end_headers()
 
     def do_GET(self):
         self._record()
@@ -38,11 +76,23 @@ class _SiteHandler(SimpleHTTPRequestHandler):
 
 
 class FixtureSite:
-    def __init__(self):
+    """tls=True: HTTPS with a self-signed certificate valid for two days (planted: expiring certificate)."""
+
+    def __init__(self, tls: bool = False):
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(_SiteHandler, directory=SITE))
         self.httpd.requests = []
         self.port = self.httpd.server_address[1]
-        self.url = f"http://127.0.0.1:{self.port}/"
+        self._tmp = None
+        if tls:
+            self._tmp = tempfile.TemporaryDirectory()
+            cert, key = os.path.join(self._tmp.name, "cert.pem"), os.path.join(self._tmp.name, "key.pem")
+            subprocess.run([find_openssl() or "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                            "-days", "2", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
+                            "-keyout", key, "-out", cert], check=True, capture_output=True)
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(cert, key)
+            self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True)
+        self.url = f"{'https' if tls else 'http'}://127.0.0.1:{self.port}/"
         self._t = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
     @property
@@ -56,6 +106,8 @@ class FixtureSite:
     def __exit__(self, *exc):
         self.httpd.shutdown()
         self.httpd.server_close()
+        if self._tmp:
+            self._tmp.cleanup()
 
 
 class _ProxyHandler(SimpleHTTPRequestHandler):

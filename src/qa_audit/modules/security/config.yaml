@@ -1,0 +1,5 @@
+# security module defaults (README.md; docs/qa-audit.md §16); override under modules.security
+hsts_min_age: 15552000        # 180 days (OWASP Secure Headers Project; one year recommended)
+cert_expiry_days: 14
+check_http_redirect: true     # one GET of the start URL over http:// when the target is https://
+max_pages_listed: 10          # affected pages listed per finding

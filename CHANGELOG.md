@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added
+- Security module (passive, plan 8.5): HTTPS, HTTP→HTTPS redirect, TLS protocol and certificate expiry, HSTS, CSP,
+  clickjacking, nosniff, version disclosure, cookie flags (names and flags only), mixed content, forms posting to
+  HTTP. Reported once per check with the affected pages.
+- `--ignore-https-errors` for sites with certificates the browser rejects (trust then not judged).
+- `doctor` tests each browser's cryptography (a Firefox that cannot load HTTPS is no longer reported as ready).
+- HTTPS fixture (self-signed, two-day certificate) and security integration tests.
+
 ## [0.1.0] - 2026-09-25
 
 ### Added

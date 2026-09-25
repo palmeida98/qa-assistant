@@ -71,6 +71,7 @@ qa-audit version              print the version
 | `--cleanup` | off | Delete the run folder after printing the summary. |
 | `--config FILE` | none | YAML configuration (§4). |
 | `--fail-on SEVERITY` | `high` | Exit 1 if a problem at or above this severity exists; `none` never fails. |
+| `--ignore-https-errors` | off | Audit a site whose certificate the browser rejects (e.g. a self-signed staging certificate); the report notes it, and the certificate's trust is then not judged. |
 | `--block-third-party` | off | Block every request the page makes outside the target origin (§8). |
 | `--no-color` | auto | Plain terminal output (also `NO_COLOR`). |
 
@@ -117,6 +118,7 @@ browser:
   viewport: {width: 1440, height: 900}
   device: null
   timeout_ms: 30000
+  ignore_https_errors: false
 crawl:
   max_pages: 20
   max_depth: 2
@@ -296,7 +298,8 @@ External modules register through the `qa_audit.modules` entry point group; the 
 | Module | Status |
 |---|---|
 | `accessibility` | Available (§11) |
-| `functional`, `performance`, `security`, `visual` | Planned (plan 8.5–8.8) |
+| `security` | Available, passive only (§16) |
+| `functional`, `performance`, `visual` | Planned (plan 8.6–8.8) |
 
 ---
 
@@ -337,7 +340,7 @@ conformance certification.**
 - Login: credentials from environment variables or a hidden prompt, session state kept only in the run folder.
   Needed before `/auditar-acessibilidade` and `scripts/auditar_a11y.py` move to this engine.
 - Several engines in one run (compatibility), sitemap discovery.
-- Modules `functional`, `performance`, `security`, `visual` (plan 8.5–8.8). Performance thresholds come from
+- Modules `functional`, `performance`, `visual` (plan 8.6–8.8); active security checks, always opt-in. Performance thresholds come from
   a cited source (web.dev Core Web Vitals and TTFB guidance) and are configurable; a measured value is always
   shown, and becomes a finding only above its threshold (risk 8).
 
@@ -350,7 +353,10 @@ Risk 7.
 - **WebKit on Windows** can be blocked by Windows application control (Smart App Control / WDAC): its bundled
   `libEGL.dll` is refused and Playwright reports it as a missing library. `qa-audit doctor` shows the engine as
   unavailable with that hint; use Chromium or Firefox locally. CI runs all three engines on Linux.
-- **Firefox (Playwright build, Windows)**: `crypto.getRandomValues` throws `OperationError` even in the page's
+- **Firefox (Playwright build, Windows with application control)**: the browser's cryptography is broken:
+  `crypto.getRandomValues` throws `OperationError`, and **no HTTPS page loads** (`NS_ERROR_FAILURE`). `doctor` tests
+  the browser's cryptography and flags it; an HTTPS start page that fails this way says so. Use Chromium there.
+  On plain HTTP pages, `crypto.getRandomValues` still throws even in the page's
   realm. Only when the native call fails, the accessibility module installs a `Math.random` substitute while axe
   runs (axe uses it for internal ids) and restores the original; the report notes it.
 - The Bash sandbox of some agent environments refuses to spawn the browser process (`spawn UNKNOWN`); `doctor`
@@ -387,3 +393,44 @@ problems; no trap link is requested and no form is posted; no request leaves `12
 reports are written, escaped and self-contained; `--cleanup` removes the run folder.
 Engines: `QA_AUDIT_TEST_ENGINES` (default `chromium,firefox`; CI adds `webkit`). An engine that cannot start is
 skipped with the reason.
+
+---
+
+## 16. Security module (passive)
+
+`--type security`. **Passive only**: it reads what the audit already received (response headers, cookies the site
+set, the pages' HTML, the TLS details of the connection). The one extra request is a single `GET` of the start URL
+over `http://` when the target is `https://`, to see whether it redirects to HTTPS. No payloads, no probing of
+paths (`/.git/`, `/admin`), no fuzzing, no scanning: those belong to future opt-in modules.
+
+Header checks are made on every audited page and reported **once per check**, listing the affected pages, so a
+site-wide missing header is one finding, not twenty. Cookie values are never read into the results: only names and
+flags.
+
+| Check | When | Status · severity |
+|---|---|---|
+| `not-https` | the target is served over `http://` | problem · **high** when a page has a password field, else medium |
+| `form-to-http` | an `https://` page has a form whose action is `http://` | problem · high |
+| `mixed-content-active` | an `https://` page references `http://` scripts, stylesheets, frames or objects | problem · medium |
+| `mixed-content-passive` | … `http://` images, audio or video | warning · low |
+| `http-not-redirected` | `http://` start URL answers without redirecting to `https://` | warning · medium |
+| `tls-old-protocol` | TLS 1.1 or older | problem · high |
+| `tls-cert-expiring` | the certificate expires within 14 days | warning · medium |
+| `hsts-missing`, `hsts-short` | `https://` without `Strict-Transport-Security`, or `max-age` under 180 days | warning · low |
+| `csp-missing` | no `Content-Security-Policy` header or meta tag | warning · low |
+| `csp-unsafe` | `script-src` (or `default-src`) allows `'unsafe-inline'` without nonce or hash, `'unsafe-eval'`, or `*` | warning · low |
+| `clickjacking` | neither `X-Frame-Options` nor CSP `frame-ancestors` | warning · low (medium on pages with a password field) |
+| `nosniff-missing` | no `X-Content-Type-Options: nosniff` | warning · low |
+| `version-disclosure` | `Server`, `X-Powered-By`, `X-AspNet-Version` or `X-AspNetMvc-Version` carry a version number | warning · low |
+| `cookie-not-secure` | an `https://` site sets a cookie without `Secure` | problem · medium |
+| `cookie-samesite-none-insecure` | `SameSite=None` without `Secure` | problem · medium |
+| `cookie-session-not-httponly` | a cookie whose name looks like a session or token (`sess`, `sid`, `auth`, `token`, `jwt`, `login`) without `HttpOnly` | warning · medium (confidence medium: the name is a heuristic) |
+
+Only cookies of the target's own domain are judged; third-party cookies belong to their owners. Thresholds come
+from the OWASP Secure Headers Project and HTTP Strict Transport Security guidance (`max-age` of at least 180 days;
+a year recommended) and are configurable under `modules.security`. A header check that passes on every page counts
+as passed once per page.
+
+With `--ignore-https-errors` the certificate's trust is not judged (the browser accepted it only because it was
+told to), and the report says so; its protocol and expiry date are still checked.
+

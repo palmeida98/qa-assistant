@@ -44,6 +44,16 @@ COLLECT_JS = """() => {
       'a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]')]
       .filter(vis).length,
     iframes: document.querySelectorAll('iframe, frame').length,
+    metaCsp: [...document.querySelectorAll('meta[http-equiv]')]
+      .filter(m => m.httpEquiv.toLowerCase() === 'content-security-policy').map(m => m.content),
+    passwordFields: document.querySelectorAll('input[type=password]').length,
+    insecureRefs: location.protocol !== 'https:' ? [] : [
+      ...[...document.querySelectorAll('script[src], iframe[src], frame[src], embed[src], object[data], ' +
+                                       'link[rel~=stylesheet][href]')]
+        .map(e => ({tag: e.tagName.toLowerCase(), url: e.src || e.href || e.data || '', active: true})),
+      ...[...document.querySelectorAll('img[src], audio[src], video[src], source[src], input[type=image][src]')]
+        .map(e => ({tag: e.tagName.toLowerCase(), url: e.src || '', active: false})),
+    ].filter(r => r.url.startsWith('http:')).slice(0, 50),
   };
 }"""
 
@@ -64,6 +74,10 @@ class PageInfo:
     forms: list[dict] = field(default_factory=list)
     interactive_count: int = 0
     iframes: int = 0
+    meta_csp: list[str] = field(default_factory=list)
+    password_fields: int = 0
+    insecure_refs: list[dict] = field(default_factory=list)   # http:// resources referenced by an https:// page
+    tls: dict = field(default_factory=dict)                   # protocol, issuer, subjectName, validFrom, validTo
     console_errors: list[str] = field(default_factory=list)
     failed_requests: list[dict] = field(default_factory=list)
     timing: dict = field(default_factory=dict)
@@ -194,7 +208,11 @@ class Crawler:
             except PWError as e:
                 info.error = str(e).splitlines()[0][:300]
                 if is_start:
-                    raise TargetUnreachable(f"{url}: {info.error}") from e
+                    hint = ""
+                    if "NS_ERROR_FAILURE" in info.error and url.startswith("https:"):
+                        hint = (" (this Firefox cannot open HTTPS here, typically Windows application control "
+                                "blocking its cryptography; run 'qa-audit doctor', use --browser chromium)")
+                    raise TargetUnreachable(f"{url}: {info.error}{hint}") from e
                 return info
             if resp is None:
                 info.error = "no response"
@@ -232,6 +250,12 @@ class Crawler:
             data = page.evaluate(COLLECT_JS)
             info.title, info.lang = data["title"], data["lang"]
             info.forms, info.interactive_count, info.iframes = data["forms"], data["interactive"], data["iframes"]
+            info.meta_csp, info.password_fields = data["metaCsp"], data["passwordFields"]
+            info.insecure_refs = data["insecureRefs"]
+            try:
+                info.tls = resp.security_details() or {}
+            except PWError:
+                info.tls = {}
             own = origin(self.s.target)
             links, external = [], []
             for href in data["links"]:
