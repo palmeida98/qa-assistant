@@ -232,7 +232,9 @@ Risk 6. By default the engine:
 - escapes every string taken from the audited site before putting it in a report;
 - launches browsers with Playwright's defaults, which disable background networking, component updates, sync
   and metrics in Chromium, and data reporting and connectivity checks in Firefox; the engine adds Firefox
-  preferences for telemetry, captive-portal detection and safe browsing.
+  preferences for telemetry, captive-portal detection and safe browsing, and for application, add-on and media
+  plugin updates, remote settings, push and search updates (the recording-proxy test caught Firefox contacting
+  Mozilla's update server about a minute into a run).
 
 An integration test runs the browser through a recording proxy and fails if any request, from the page or the
 browser itself, goes anywhere but the local test site.

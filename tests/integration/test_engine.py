@@ -283,7 +283,9 @@ class NoExternalTraffic:
             self.skipTest(reason)
         with FixtureSite() as site, RecordingProxy(f"127.0.0.1:{site.port}") as proxy, \
                 tempfile.TemporaryDirectory() as tmp:
-            cfg = make_cfg(self.engine, tmp)
+            # keep the browser open for over a minute: background timers (updates, telemetry) fire after a while;
+            # a short audit hid Firefox's update check until 8.7
+            cfg = make_cfg(self.engine, tmp, crawl={"delay_ms": 3500})
             mods = registry.discover(use_entry_points=False)
 
             def factory(c, r, t):

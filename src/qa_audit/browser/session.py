@@ -27,6 +27,29 @@ FIREFOX_PREFS = {
     "extensions.update.enabled": False,
     "app.normandy.enabled": False,
     "browser.ping-centre.telemetry": False,
+    # found by the recording-proxy test in CI (8.7): after about a minute Firefox contacted aus5.mozilla.org.
+    # Application, system add-on and media plugin (GMP) updates, remote settings, push and search updates off.
+    "app.update.enabled": False,
+    "app.update.auto": False,
+    "app.update.url": "",
+    "app.update.checkInstallTime": False,
+    "app.update.staging.enabled": False,
+    "extensions.systemAddon.update.enabled": False,
+    "extensions.systemAddon.update.url": "",
+    "extensions.getAddons.cache.enabled": False,
+    "extensions.blocklist.enabled": False,
+    "media.gmp-manager.url": "",
+    "media.gmp-manager.updateEnabled": False,
+    "media.gmp-gmpopenh264.autoupdate": False,
+    "media.gmp-gmpopenh264.enabled": False,
+    "media.gmp-widevinecdm.autoupdate": False,
+    "services.settings.server": "",
+    "security.remote_settings.crlite_filters.enabled": False,
+    "security.OCSP.enabled": 0,
+    "dom.push.connection.enabled": False,
+    "browser.search.update": False,
+    "browser.region.update.enabled": False,
+    "network.trr.mode": 5,
 }
 
 

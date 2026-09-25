@@ -233,7 +233,8 @@ class Crawler:
                 r = r.redirected_from
             info.redirects = chain
             headers = resp.all_headers()
-            info.content_type = headers.get("content-type", "")
+            # a response served from the cache can come without Content-Type (seen in CI on Linux): ask the page
+            info.content_type = headers.get("content-type", "") or page.evaluate("() => document.contentType")
             info.headers = self.redactor.headers(headers)
             if is_start:
                 if resp.status >= 400:
