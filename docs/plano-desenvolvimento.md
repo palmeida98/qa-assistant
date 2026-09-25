@@ -30,8 +30,8 @@
 | 4 | CI da própria framework | Concluída |
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
-| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 a 7.8 concluídas; falta a 7.9, v1.0) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (login) on branch `feat/login`, merged after the pilot; 8.11 (translation) not now, at most after the pilot |
+| 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (login) on branch `feat/login`: the pilot is done, so merging it is the next engine task; 8.11 (translation) not now, at most after the pilot |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -436,8 +436,8 @@ Notas:
 
 ### 7.9 Versão 1.0
 Decisão do utilizador (25.09.2026): a v1.0 é a **camada de workspace** (metodologia, skills, adaptadores, fluxo do piloto), validada em projeto real; o motor `qa-audit` segue com versão própria (`pyproject.toml`, hoje 0.1.0) e não entra no critério da v1.0.
-- [ ] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
-- [ ] README com o estado final; tag `v1.0`; tabela "Estado resumido" com todas as fases concluídas.
+- [x] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
+- [x] README com o estado final; tag `v1.0`; tabela "Estado resumido" com todas as fases da camada de workspace concluídas (a fase 8 é o `qa-audit`, com versão própria).
 
 ---
 
@@ -532,6 +532,7 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | 7.9: **v1.0** da camada de workspace (tag `v1.0`); README com o estado final. |
 | 2026-09-25 | Piloto (2.4 / 7.2) num site público de prática, por decisão do utilizador (sem acesso a projetos de empresa): lote aplicado, golden real OK, lições incorporadas (`--isolated`, `--secrets`, aviso do `.mcp.json` no `validar_projeto`, `etiqueta` do golden, guard `commit-msg`). |
 | 2026-09-25 | Decisões do utilizador: a v1.0 é só a camada de workspace (o `qa-audit` segue versão própria); tradução (8.11) não agora; exceção do detect-secrets mantida e explicada no próprio `axe.yaml`. |
 | 2026-09-25 | 8.10 (login `form` e `manual`, `crawl.pages`) por decisão do utilizador; `storage-state` fica para depois; a tradução passa a 8.11. |

@@ -94,9 +94,9 @@ Só o Excel tem adaptador: os resultados e os bugs passam ao workbook no `/check
 
 ## Testes e CI
 
-- `python -m unittest discover -s tests` — 138 testes (adaptador, inspeção, recálculo, painel, resumo, API, acessibilidade, mobile, validação, código comum dos scripts, denylist, guards, skills, consola, demo reproduzível, golden real). Os que precisam do LibreOffice ficam *skipped* sem ele.
+- `python -m unittest discover -s tests` — 234 testes (adaptador, inspeção, recálculo, painel, resumo, API, acessibilidade, mobile, validação, código comum dos scripts, denylist, guards, skills, consola, demo reproduzível, golden real, e os testes unitários do motor `qa-audit`). Os que precisam do LibreOffice ficam *skipped* sem ele. Os testes de integração do `qa-audit` (browser real contra um site local) correm com `python -m unittest discover -s tests/integration`.
 - `python scripts/golden_check.py` — teste golden do adaptador Excel (precisa de LibreOffice). Com `--dir <workspace>/golden/<lote>` corre também o golden **real** de um projeto: um lote histórico aplicado a uma cópia do workbook de antes tem de dar, célula a célula, o workbook guardado depois (os dados ficam no workspace).
-- O CI (GitHub Actions, Ubuntu 24.04) corre em cada push 5 jobs: `lint` (ruff), `testes`, `secrets` (detect-secrets), `golden` (golden, resumo com fórmulas reais, demo reproduzível e golden real com dados fictícios, com LibreOffice) e `demo-e2e` (specs Playwright do demo contra o site público). O `pre-commit` corre o mesmo localmente, mais a denylist.
+- O CI (GitHub Actions, Ubuntu 24.04) corre em cada push 7 jobs: `lint` (ruff), `testes`, `secrets` (detect-secrets), `golden` (golden, resumo com fórmulas reais, demo reproduzível e golden real com dados fictícios, com LibreOffice), `demo-e2e` (specs Playwright do demo contra o site público), `qa-audit` (integração do motor em Chromium, Firefox e WebKit) e `install` (clone limpo, instalação, auditoria ao site local). O `pre-commit` corre o mesmo localmente, mais a denylist nos ficheiros e na mensagem do commit.
 - Versões fixas: dependências Python exatas (`requirements.txt`), ruff, detect-secrets e Playwright MCP; um teste impede voltar a versões soltas.
 
 As skills correm a partir da cópia global em `~/.claude/skills/` (os workspaces vivem fora deste repositório): depois de mudar uma skill, `python scripts/sincronizar_skills.py --aplicar`.
@@ -105,18 +105,19 @@ Requisitos: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (recá
 
 ## Estado
 
-Setembro de 2026: **pré-v1.0**. O detalhe de cada tarefa, com critérios e commits, está em [`docs/plano-desenvolvimento.md`](docs/plano-desenvolvimento.md).
+**v1.0** (25.09.2026): a camada de workspace — metodologia, técnicas, skills, adaptador Excel, painel e o fluxo completo de um projeto — está concluída e validada ponta a ponta num piloto. O motor `qa-audit` (em inglês, acima) segue com versão própria (0.1.0). O detalhe de cada tarefa, com critérios e commits, está em [`docs/plano-desenvolvimento.md`](docs/plano-desenvolvimento.md).
 
 | Fase | Estado |
 |---|---|
 | 0–1 · Base e núcleo (skills, adaptador Excel, golden) | Concluídas |
-| 2 · Browser (Playwright MCP, demo, regressão N2) | Concluída, menos o piloto num projeto real (2.4) |
+| 2 · Browser (Playwright MCP, demo, regressão N2, piloto) | Concluída |
 | 3 · Módulos API, acessibilidade e mobile | Concluída |
 | 4 · CI da framework | Concluída |
 | 5 · Painel por workspace | Concluída |
 | 6 · Portefólio (README, demo, visibilidade: privado) | Concluída |
-| 7 · Fecho | Em curso: feitas a revisão geral, o CI no Linux, a proteção de `historico/`, as versões fixas, o demo reproduzível, as decisões de âmbito, a arrumação dos scripts e o mecanismo do golden real |
+| 7 · Fecho (revisão geral, CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível) | Concluída: **v1.0** |
+| 8 · Motor `qa-audit` | 8.0–8.9 concluídas (0.1.0); login no ramo `feat/login` |
 
-Falta para a **v1.0**: o piloto num projeto real (7.2, à espera das credenciais), o golden real a passar com um lote desse piloto (7.3) e o fecho (7.9: README final e tag `v1.0`).
+**Piloto** (25.09.2026): num workspace fora do repositório, com um site público de prática (sem acesso a projetos de empresa). Um lote de 16 casos, 10 novos e 6 retestes, executado por uma sessão `claude` no workspace com o Playwright MCP e aplicado ao workbook no `/checkpoint`: os retestes deram o mesmo estado que antes; golden real a passar; proteção de `historico/` confirmada. Lições incorporadas: Playwright MCP com `--secrets .env` (o assistente nunca vê as credenciais) e `--isolated` (o perfil persistente perdia os cliques), avisos do `validar_projeto` para o `.mcp.json`, e a denylist também na mensagem do commit.
 
-Decisões de âmbito (24.09.2026): não há `qa_core` nem CLI `qa` (os adaptadores e os scripts são o motor); o subagente `executor-web` só se cria se o piloto o justificar; Jira e Azure DevOps ficam em registo manual.
+Decisões de âmbito: os adaptadores e os scripts são o motor da camada de workspace, e o `qa-audit` é um motor à parte, ao lado dela (25.09.2026); o subagente `executor-web` não se cria (o piloto correu numa sessão própria sem encher o contexto principal); Jira e Azure DevOps ficam em registo manual.
