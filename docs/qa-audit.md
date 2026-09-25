@@ -478,8 +478,8 @@ budget: above it → warning · low, result `over-budget`); `null` means measure
 the pages above the threshold.
 
 Limits, stated in the report: the first page is measured with a cold cache and later pages may reuse cached
-resources; LCP and CLS are only available where the engine implements them (CLS: Chromium; LCP: Chromium and
-Firefox) and are reported as `n/a` elsewhere, never estimated; CLS covers only the shifts before the measurement
+resources; LCP and CLS are only available where the engine implements them (CLS: Chromium; LCP: Chromium, Firefox and
+WebKit 26) and are reported as `n/a` elsewhere, never estimated; CLS covers only the shifts before the measurement
 (after `load` and network idle); sizes of cross-origin resources without `Timing-Allow-Origin` read as 0 and the
 total is marked partial.
 

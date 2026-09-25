@@ -80,6 +80,27 @@ jobs:
           QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
           QA_AUDIT_REQUIRE_ENGINES: "1"
 
+  install:
+    # plano 8.9: checkout limpo -> scripts/install.sh -> auditoria ao site local de fixtures
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: ./scripts/install.sh --with-deps
+      - name: auditoria ao site local (codigo 1 esperado pelos defeitos plantados)
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory tests/fixtures/site > /dev/null 2>&1 &
+          sleep 2
+          set +e
+          .venv/bin/qa-audit http://127.0.0.1:8765/ --max-pages 8 --delay-ms 0 --no-color             --output "$RUNNER_TEMP/out" --baseline-dir "$RUNNER_TEMP/baselines"
+          code=$?
+          set -e
+          echo "qa-audit exit code: $code"
+          test "$code" = 1
+          ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
+
   demo-e2e:
     # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)
     runs-on: ubuntu-24.04

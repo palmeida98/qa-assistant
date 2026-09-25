@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Install scripts `scripts/install.sh` and `scripts/install.ps1` (virtual environment, package with the visual
+  extra, browsers, `doctor`); user guide `docs/qa-audit-guide.md`; fictional example `examples/qa-audit/` (kept
+  valid by a test); CI job `install`: clean checkout, install script, audit of the local site (plan 8.9).
 - Visual module (plan 8.8): full-page screenshots per viewport compared with baselines (baseline, current and diff
   images; needs-human), horizontal overflow per viewport, missing viewport meta tag. Baselines outside any
   repository (`~/.qa-audit/baselines`, `--baseline-dir`), `--update-baseline`, and `qa-audit baselines` to list or

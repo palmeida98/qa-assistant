@@ -18,7 +18,7 @@ page the audit visits.
 |---|---|---|
 | TTFB | Navigation Timing (`responseStart`) | 800 / 1800 ms (web.dev) |
 | FCP | Paint Timing | 1800 / 3000 ms (web.dev) |
-| LCP | Largest Contentful Paint (Chromium, Firefox) | 2500 / 4000 ms (web.dev) |
+| LCP | Largest Contentful Paint (Chromium, Firefox, WebKit 26) | 2500 / 4000 ms (web.dev) |
 | CLS | Layout Instability, session windows (Chromium) | 0.1 / 0.25 (web.dev) |
 | DNS, connection, TLS, DOMContentLoaded, load | Navigation Timing | measured only |
 | requests, transferred / JavaScript / image / CSS KB | Resource Timing | measured only |

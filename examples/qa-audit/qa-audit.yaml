@@ -1,0 +1,50 @@
+# Example qa-audit configuration for a fictional project (docs/qa-audit-guide.md §4).
+# Copy it next to the project (never into this repository) and run:
+#   qa-audit https://staging.new-project.example --config qa-audit.yaml
+# Every key is optional; anything left out keeps its default (docs/qa-audit.md §4).
+
+browser:
+  engine: chromium
+  viewport: {width: 1440, height: 900}
+  ignore_https_errors: false      # true only for a staging site with a self-signed certificate
+
+crawl:
+  max_pages: 30
+  max_depth: 3
+  delay_ms: 500
+  exclude:                        # added to the built-in exclusions (logout, delete, ...)
+    - "/admin"
+    - "/cart/checkout"
+
+evidence:
+  screenshots: on-problem
+  trace: "off"                    # traces hold cookies and page content: keep off unless debugging
+
+output:
+  directory: qa-output
+  formats: [html, json, csv, md]
+
+fail_on: high
+
+safety:
+  allow_submit: false             # forms below are submitted only when this (or --allow-submit) is true
+
+modules:
+  accessibility:
+    tags: [wcag2a, wcag2aa, wcag21a, wcag21aa]
+  performance:
+    thresholds:
+      lcp_ms: {good: 2500, poor: 4000}
+      transfer_kb: 2000           # a budget for this project: above it -> warning
+  functional:
+    max_link_checks: 100
+    forms:
+      - page: "/contact$"
+        selector: "form#contact"
+        fields: {name: "QA-AUTO Test", message: "QA-AUTO automated check, please ignore"}
+        fields_env: {email: NEW_PROJECT_TEST_EMAIL}   # the value comes from the environment
+  visual:
+    mask: ["#live-chat", ".carousel"]
+    viewports:
+      - {name: desktop, width: 1440, height: 900}
+      - {name: mobile, width: 390, height: 844}

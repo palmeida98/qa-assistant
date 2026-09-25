@@ -13,9 +13,8 @@ A camada de workspace está em português europeu; o motor `qa-audit` (abaixo) e
 An automated first pass over any website, from its URL alone. It lives alongside the workspace layer.
 
 ```bash
-pip install -e .
-python -m playwright install chromium
-qa-audit doctor
+./scripts/install.sh            # Windows: .\scripts\install.ps1  (.venv, package, Chromium, then qa-audit doctor)
+. .venv/bin/activate            # Windows: .\.venv\Scripts\Activate.ps1
 qa-audit https://example.com                         # every available module
 qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
 ```
@@ -30,7 +29,8 @@ Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow
 LCP, CLS against the web.dev thresholds; sizes and timings measured) and **functional** (broken links and
 resources, JavaScript errors, redirect chains, form checks; forms are submitted only with `--allow-submit` and when
 listed in the configuration) and **visual** (screenshots per viewport against baselines kept outside any
-repository, horizontal overflow; `pip install -e .[visual]`). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
+repository, horizontal overflow; `pip install -e .[visual]`). User guide: [`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules,
+client data); example: [`examples/qa-audit/`](examples/qa-audit/). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
 contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ---

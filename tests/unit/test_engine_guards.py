@@ -84,6 +84,23 @@ class Packaging(unittest.TestCase):
         self.assertIn("modules/*/vendor/*", self.py["tool"]["setuptools"]["package-data"]["qa_audit"])
 
 
+class Install(unittest.TestCase):
+    def test_install_scripts(self):
+        for name in ("install.sh", "install.ps1"):
+            with open(os.path.join(ROOT, "scripts", name), encoding="utf-8") as f:
+                text = f.read()
+            with self.subTest(script=name):
+                self.assertIn(".[visual]", text)
+                self.assertIn("doctor", text)
+        try:
+            mode = subprocess.run(["git", "ls-files", "-s", "scripts/install.sh"], cwd=ROOT, capture_output=True,
+                                  text=True, check=True).stdout.split(" ")[0]
+        except (OSError, subprocess.CalledProcessError):
+            self.skipTest("not a git checkout")
+        if mode:                              # tracked: must be executable on a fresh clone
+            self.assertEqual(mode, "100755")
+
+
 class EvidenceNeverTracked(unittest.TestCase):
     def test_gitignore_covers_output_and_secrets(self):
         with open(os.path.join(ROOT, ".gitignore"), encoding="utf-8-sig") as f:

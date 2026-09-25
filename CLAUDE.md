@@ -9,7 +9,7 @@ Referências:
 - docs/tecnica-mobile.md — técnica mobile com Maestro (ler quando o módulo `mobile` estiver ativo; `/testar-mobile`)
 - docs/heuristicas.md — padrões de falha anonimizados para o error guessing (metodologia §17; ler ao gerar casos)
 - docs/plano-desenvolvimento.md — roadmap da framework (ler em sessões de desenvolvimento)
-- docs/qa-audit.md — `qa-audit` automated audit engine (English; read when working on `src/qa_audit`)
+- docs/qa-audit.md — `qa-audit` automated audit engine (English; read when working on `src/qa_audit`); user guide: docs/qa-audit-guide.md
 
 ## Regras fixas
 - Nunca escrever dados de clientes (URLs, contas, nomes, credenciais) neste repositório.

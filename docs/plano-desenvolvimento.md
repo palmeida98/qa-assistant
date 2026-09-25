@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Em curso (7.1 e 7.4 a 7.8 concluídas; 7.3 com o mecanismo pronto; falta o piloto 7.2, que dá o golden real da 7.3, e depois a 7.9) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | In progress |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (translation of the workspace layer) waits for the user's decision |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -487,7 +487,9 @@ Notes (8.7): links not visited by the crawl are checked with `HEAD` (never the e
 Notes (8.8): comparing against a baseline means keeping screenshots of the audited site between runs, the one exception to "nothing persists": they live in `~/.qa-audit/baselines` (never in the output folder or a repository, `.gitignore *` at the root), `--cleanup` leaves them on purpose, the report says where they are, and `qa-audit baselines --delete <host>` removes them. A visual difference is `needs-human`, never a bug. Rendering was deterministic between runs on Chromium and Firefox. The tests always use a temporary baselines folder. Module order: visual (70) resizes the viewport, so it runs after the readers and before accessibility, whose keyboard walk would leave focus rings in the screenshots. The first full run found a discovery bug that every module had: a link redirecting to a page already audited (`/r1` → `about.html`) audited that page twice (visual compared it with the baseline created a moment before); a page whose final URL was already audited is now recorded as "same page as …" and not audited again. On the same afternoon WebKit and Firefox's cryptography started working on this machine with Smart App Control still on (cloud reputation); `doctor` reports it and the spec says to check again rather than assume.
 
 ### 8.9 Documentation, install and example
-- [ ] Install script or `pipx` instructions, fictional example configuration, README section; clean clone → install → audit of the local site green in CI.
+- [x] Install scripts, user guide (`docs/qa-audit-guide.md`, the 11 points asked for: what it is, install, run, new project, modules, browsers, results, new modules, new checks, Git, client data), fictional example configuration, README section; clean clone → install → audit of the local site in CI (job `install`).
+
+Notes (8.9): `install.ps1` was tested on a fresh local clone: its first version failed only inside the script (a one-element array splatted into a native command); fixed. Writing the guide, a claim about WebKit was checked before being written and turned out wrong: WebKit 26 measures LCP (the spec and the performance README said Chromium and Firefox only); corrected in the three places. The example configuration is loaded by a test with every module's validation, so it cannot fall behind the code.
 
 ### 8.10 Language of the workspace layer (to confirm with the user)
 The existing workspace layer (methodology, techniques, skills, scripts) is in European Portuguese. Translating it to English is a separate, large change that touches the skills used by live workspaces; to be confirmed before it starts.
@@ -515,6 +517,7 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-25 | 8.9 concluída: scripts de instalação, guia do utilizador, exemplo fictício, job `install` no CI. |
 | 2026-09-25 | 8.8 concluída: módulo visual; baselines fora de qualquer repositório e comando `qa-audit baselines`. |
 | 2026-09-25 | 8.7 concluída: módulo funcional; submissão de formulários só com `--allow-submit` e formulário listado. |
 | 2026-09-25 | 8.6 concluída: módulo de performance com os limiares do web.dev e tabela de métricas; ordem dos módulos por página. |
