@@ -26,6 +26,7 @@ class RunContext:
         self.metrics: list[dict] = []
         self.session = None      # browser session (set by the runner)
         self.pages = []          # PageInfo of the pages visited so far
+        self.crawl = None        # CrawlResult, set before the modules' finalize
         self._state: dict[str, dict] = {}
 
     def state(self, module: str) -> dict:
@@ -139,6 +140,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
         with session:
             ctx.session = session
             crawl = Crawler(session, cfg, target, on_page=on_page, log=log.info, redactor=Redactor()).run()
+            ctx.crawl = crawl
             progress("discovery_done", pages=len(crawl.pages), skipped=len(crawl.skipped))
             module_rows = []
             for m in modules:

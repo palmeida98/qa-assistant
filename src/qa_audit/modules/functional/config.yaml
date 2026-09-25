@@ -1,0 +1,5 @@
+# functional module defaults (README.md; docs/qa-audit.md §18); override under modules.functional
+max_link_checks: 50           # same-origin links the crawl did not visit, checked with HEAD (GET if refused)
+check_external_links: false   # true sends requests to third-party sites
+max_items_listed: 10
+forms: []                     # forms to submit, only with --allow-submit (docs/qa-audit.md §6, §18)

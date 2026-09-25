@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Broken things — Fictional Shop</title></head>
+<body><main><h1>Planted functional defects</h1>
+<img src="images/missing-photo.png" alt="Missing photo" width="10" height="10">
+<p><a href="gone.html">A page that does not exist</a></p>
+<p><a href="error500.html">A page that fails on the server</a></p>
+<p><a href="/r1">Through three redirects</a></p>
+<form method="post" action="/newsletter">
+  <label for="newsletter-email">Your email</label> <input id="newsletter-email" name="email" type="text">
+  <button type="submit">Subscribe</button>
+</form>
+<p><a href="index.html">Home</a></p>
+</main>
+<script>
+  console.error('fixture console error');
+  setTimeout(() => { throw new Error('fixture uncaught exception'); }, 0);
+</script>
+</body>
+</html>

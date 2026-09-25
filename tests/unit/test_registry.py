@@ -53,8 +53,8 @@ class Registry(unittest.TestCase):
         self.assertEqual(len(registry.select("full", mods)), 2)
         self.assertEqual(len(registry.select(None, mods)), 2)
         self.assertEqual(len(registry.select("accessibility, accessibility", mods)), 1)
-        with self.assertRaisesRegex(ConfigError, "planned in task 8.7"):
-            registry.select("functional", mods)
+        with self.assertRaisesRegex(ConfigError, "planned in task 8.8"):
+            registry.select("visual", mods)
         with self.assertRaisesRegex(ConfigError, "unknown type 'nope'.*Available"):
             registry.select("nope", mods)
         with self.assertRaises(ConfigError):

@@ -35,6 +35,9 @@ EXTRA_HEADERS = {
 }
 # planted performance defect (docs/qa-audit.md §17): the server waits before answering (TTFB "poor" > 1800 ms)
 SLOW_PATHS = {"/slow.html": 2.0}
+# planted functional defects (docs/qa-audit.md §18): a server error and a chain of three redirects
+ERROR_PATHS = {"/error500.html": 500}
+REDIRECTS = {"/r1": "/r2", "/r2": "/r3", "/r3": "/about.html"}
 GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
 
 
@@ -65,16 +68,31 @@ class _SiteHandler(SimpleHTTPRequestHandler):
                 self.send_header(name, value)
         super().end_headers()
 
+    def _special(self) -> bool:
+        path = urlsplit(self.path).path
+        if path in ERROR_PATHS:
+            self.send_error(ERROR_PATHS[path], "fixture: planted server error")
+            return True
+        if path in REDIRECTS:
+            self.send_response(302)
+            self.send_header("Location", REDIRECTS[path])
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        return False
+
     def do_GET(self):
         self._record()
         delay = SLOW_PATHS.get(urlsplit(self.path).path)
         if delay:
             time.sleep(delay)
-        super().do_GET()
+        if not self._special():
+            super().do_GET()
 
     def do_HEAD(self):
         self._record()
-        super().do_HEAD()
+        if not self._special():
+            super().do_HEAD()
 
     def do_POST(self):
         self._record()

@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Functional module (plan 8.7): broken links (visited pages, plus HEAD checks of unvisited same-origin links; never
+  excluded or robots-disallowed ones), broken resources, uncaught exceptions, console errors, redirect chains,
+  e-mail fields without validation; `--allow-submit` submits only the forms listed in the configuration.
+- Pages answering 4xx/5xx are no longer audited as content (they are broken links).
 - Performance module (plan 8.6): TTFB, FCP, LCP and CLS with the web.dev thresholds; DNS, connection, TLS,
   DOMContentLoaded, load, requests and transfer sizes measured only unless a budget is configured. Metrics table
   (observed · threshold · result) in every report and `metrics.csv`; `n/a` where an engine cannot measure.

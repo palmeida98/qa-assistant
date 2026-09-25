@@ -42,7 +42,7 @@ class Performance(AuditModule):
         if "first" not in st:
             st["first"] = url
         values = page.evaluate(checks.MEASURE_JS)
-        values["console_errors"] = len(info.console_errors)
+        values["console_errors"] = len(info.console_errors) + len(info.page_errors)
         if values.pop("unmeasured_cross_origin", 0):
             st.setdefault("partial", []).append(url)
         values.pop("lcp_supported", None)

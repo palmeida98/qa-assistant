@@ -39,7 +39,8 @@ COLLECT_JS = """() => {
       action: f.action,
       fields: [...f.elements].filter(e => e.name || e.id).map(e => ({
         tag: e.tagName.toLowerCase(), type: e.type || '', name: e.name || e.id,
-        required: !!e.required, label: labelOf(e) })) })),
+        required: !!e.required, label: labelOf(e), pattern: e.getAttribute('pattern') || '',
+        autocomplete: e.getAttribute('autocomplete') || '' })) })),
     interactive: [...document.querySelectorAll(
       'a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]')]
       .filter(vis).length,
@@ -78,7 +79,8 @@ class PageInfo:
     password_fields: int = 0
     insecure_refs: list[dict] = field(default_factory=list)   # http:// resources referenced by an https:// page
     tls: dict = field(default_factory=dict)                   # protocol, issuer, subjectName, validFrom, validTo
-    console_errors: list[str] = field(default_factory=list)
+    console_errors: list[str] = field(default_factory=list)   # console.error messages
+    page_errors: list[str] = field(default_factory=list)      # uncaught exceptions
     failed_requests: list[dict] = field(default_factory=list)
     timing: dict = field(default_factory=dict)
     error: str = ""
@@ -194,13 +196,13 @@ class Crawler:
         self.log(f"visit {url}")
         page = self.s.new_page()
         page.on("console", lambda m: info.console_errors.append(m.text[:500]) if m.type == "error" else None)
-        page.on("pageerror", lambda e: info.console_errors.append(str(e)[:500]))
+        page.on("pageerror", lambda e: info.page_errors.append(str(e)[:500]))
         page.on("requestfailed", lambda r: info.failed_requests.append(
-            {"url": r.url, "error": (r.failure or "")[:200]}))
+            {"url": r.url, "error": (r.failure or "")[:200], "type": r.resource_type}))
 
         def on_response(r):
             if r.status >= 400 and r.request.resource_type != "document":
-                info.failed_requests.append({"url": r.url, "status": r.status})
+                info.failed_requests.append({"url": r.url, "status": r.status, "type": r.request.resource_type})
         page.on("response", on_response)
         try:
             try:
@@ -241,6 +243,10 @@ class Crawler:
                 self.s.retarget(info.final_url)
             elif origin(info.final_url) != origin(self.s.target):
                 info.error = f"redirected outside the target origin to {info.final_url}"
+                return info
+            elif resp.status >= 400:
+                # reported as a broken link (functional); an error page is not audited as content
+                info.error = f"HTTP {resp.status}"
                 return info
             if "html" not in info.content_type.lower():
                 if is_start:

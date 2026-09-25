@@ -6,14 +6,20 @@ import os
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 from qa_audit import __version__, cli
 from qa_audit.core.console import Console
 
 
+def never_audit(*args, **kwargs):
+    raise AssertionError("a unit test reached the runner: it would launch a browser and use the network")
+
+
 def run(argv):
     out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+    with (contextlib.redirect_stdout(out), contextlib.redirect_stderr(err),
+          mock.patch("qa_audit.core.runner.run", never_audit)):
         try:
             code = cli.main(argv) if argv[:1] in (["version"], ["--version"]) else cli.audit(argv, Console(out, False))
         except SystemExit as e:        # argparse
@@ -43,7 +49,7 @@ class Cli(unittest.TestCase):
             with open(bad, "w", encoding="utf-8") as f:
                 f.write("modules: {performance: {thresholds: {ttfb_ms: {good: 900, poor: 100}, speed: 1}}}\n")
             for argv in (["https://shop.example", "--config", bad], ["not-a-url"],
-                         ["https://shop.example", "--type", "functional"],
+                         ["https://shop.example", "--type", "visual"],
                          ["https://shop.example", "--type", "nope"], ["https://shop.example", "--viewport", "big"],
                          ["https://shop.example", "--report", "pdf"], ["https://shop.example", "--config", secret],
                          ["https://shop.example", "--browser", "ie"], ["https://shop.example", "--exclude", "("]):

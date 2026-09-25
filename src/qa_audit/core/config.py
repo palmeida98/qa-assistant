@@ -48,6 +48,7 @@ DEFAULTS: dict = {
         "cleanup": False,
     },
     "fail_on": "high",
+    "safety": {"allow_submit": False},
     "modules": {},
 }
 
@@ -156,6 +157,8 @@ def validate(cfg: dict) -> None:
     bad = [f for f in o.get("formats") or [] if f not in REPORT_FORMATS]
     if bad:
         problems.append(f"output.formats: unknown {', '.join(bad)} (available: {', '.join(REPORT_FORMATS)})")
+    if not isinstance((cfg.get("safety") or {}).get("allow_submit"), bool):
+        problems.append("safety.allow_submit must be true or false")
     if cfg.get("fail_on") not in FAIL_ON:
         problems.append(f"fail_on must be one of {', '.join(FAIL_ON)}")
     if problems:

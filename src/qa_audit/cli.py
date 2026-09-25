@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=None, metavar="FILE", help="YAML configuration file")
     p.add_argument("--fail-on", default=None, choices=config_mod.FAIL_ON,
                    help="exit 1 on problems at or above this severity (default: high)")
+    p.add_argument("--allow-submit", action="store_true",
+                   help="submit the forms listed under modules.functional.forms (never forms found by discovery)")
     p.add_argument("--ignore-https-errors", action="store_true",
                    help="accept a certificate the browser rejects (e.g. self-signed staging); trust is then not judged")
     p.add_argument("--block-third-party", action="store_true",
@@ -62,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def overrides_from_args(a: argparse.Namespace) -> dict:
-    o: dict = {"browser": {}, "crawl": {}, "evidence": {}, "output": {}, "network": {}}
+    o: dict = {"browser": {}, "crawl": {}, "evidence": {}, "output": {}, "network": {}, "safety": {}}
     if a.browser:
         o["browser"]["engine"] = a.browser
     if a.headed:
@@ -88,6 +90,8 @@ def overrides_from_args(a: argparse.Namespace) -> dict:
         o["output"]["directory"] = a.output
     if a.cleanup:
         o["output"]["cleanup"] = True
+    if a.allow_submit:
+        o["safety"]["allow_submit"] = True
     if a.ignore_https_errors:
         o["browser"]["ignore_https_errors"] = True
     if a.block_third_party:

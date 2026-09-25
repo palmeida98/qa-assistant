@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import unittest
+from typing import ClassVar
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for p in (os.path.join(ROOT, "src"), os.path.join(ROOT, "tests", "fixtures")):
@@ -31,7 +32,10 @@ from qa_audit.core import config, registry, runner
 from qa_audit.core.console import Console
 
 ENGINES = [e.strip() for e in os.environ.get("QA_AUDIT_TEST_ENGINES", "chromium,firefox").split(",") if e.strip()]
-TRAPS = ("/logout", "/account/delete", "/private/", "/files/brochure.pdf", "/deep/level3.html")
+# never requested in any way (safety exclusions and robots.txt)
+TRAPS = ("/logout", "/account/delete", "/private/")
+# not visited as pages, only checked as links with HEAD (docs/qa-audit.md §18)
+HEAD_ONLY = ("/files/brochure.pdf", "/deep/level3.html", "/deep/level-missing.html")
 _unavailable: dict[str, str] = {}
 
 
@@ -73,7 +77,7 @@ class EngineTests:
         cls.site = FixtureSite().__enter__()
         mods = registry.discover(use_entry_points=False)
         cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name),
-                                [mods["accessibility"], mods["security"], mods["performance"]])
+                                registry.select("full", mods))
         from qa_audit.reports import write_all
         cls.paths = write_all(cls.result, ["html", "json", "csv", "md"])
         cls.requests = list(cls.site.requests)
@@ -92,16 +96,22 @@ class EngineTests:
 
     # --- discovery safety (risk 3, 4) ---------------------------------------------------------------------
     def test_only_get_and_no_trap_requested(self):
-        self.assertEqual({m for m, _ in self.requests}, {"GET"})
+        self.assertEqual({m for m, _ in self.requests}, {"GET", "HEAD"})      # never POST: no --allow-submit
         for method, path in self.requests:
             for trap in TRAPS:
                 self.assertFalse(path.startswith(trap), f"{method} {path} must never be requested")
+            if path.startswith(HEAD_ONLY):
+                self.assertEqual(method, "HEAD", path)
 
     def test_pages_visited_within_limits(self):
         visited = {p.url.split("/", 3)[3] for p in self.result.pages}
         self.assertEqual(visited, {"", "index.html", "about.html", "a11y.html", "form.html", "xss.html",
                                    "csp.html", "sec.html", "secure.html", "mixed.html", "slow.html", "shift.html",
+                                   "broken.html", "gone.html", "error500.html", "r1",
                                    "deep/level1.html", "deep/level2.html"})
+        errors = {p.url.split("/", 3)[3]: p for p in self.result.pages if not p.audited}
+        self.assertEqual({k: v.error for k, v in errors.items()},
+                         {"gone.html": "HTTP 404", "error500.html": "HTTP 500"})      # not audited as content
         reasons = {s["url"].split("/", 3)[3]: s["reason"] for s in self.result.crawl["skipped"]}
         self.assertEqual(reasons["private/secret.html"], "disallowed by robots.txt")
         self.assertEqual(reasons["deep/level3.html"], "beyond max depth")
@@ -203,6 +213,43 @@ class EngineTests:
         self.assertEqual(measured, audited)
         self.assertTrue(any("cold cache" in n for n in self.result.notes))
 
+    # --- functional (docs/qa-audit.md §18) ----------------------------------------------------------------
+    def fun(self) -> dict:
+        return {f.check: f for f in self.result.findings if f.module == "functional"}
+
+    def evidence(self, check: str) -> str:
+        return " | ".join(e.value for e in self.fun()[check].evidence)
+
+    def test_broken_links_with_the_pages_that_link_to_them(self):
+        ev = self.evidence("broken-link")
+        for missing in ("gone.html: HTTP 404", "level-missing.html: HTTP 404", "brochure.pdf: HTTP 404"):
+            self.assertIn(missing, ev)
+        self.assertIn("linked from", ev)
+        self.assertIn("broken.html", ev)
+        f = self.fun()["broken-link-server-error"]
+        self.assertEqual((f.status, f.severity), ("problem", "high"))
+        self.assertIn("error500.html: HTTP 500", self.evidence("broken-link-server-error"))
+        self.assertNotIn("level3.html", ev)                               # exists: checked and fine
+
+    def test_resources_errors_redirects_and_forms(self):
+        self.assertIn("missing-photo.png", self.evidence("broken-resource"))
+        self.assertIn("fixture uncaught exception", self.evidence("js-exception"))
+        console = self.evidence("console-error")
+        self.assertIn("fixture console error", console)
+        self.assertNotIn("Failed to load resource", console)               # that is broken-resource
+        self.assertIn("/r1 -> ", self.evidence("redirect-chain"))
+        emails = self.evidence("form-email-type")
+        self.assertIn('name="email" type="text"', emails)
+        self.assertNotIn("form.html", emails)                              # type=email there
+
+    def test_functional_blames_nothing_else(self):
+        for f in self.fun().values():
+            for clean in ("about.html", "secure.html", "form.html"):
+                self.assertNotIn(clean, f.description, f.check)
+        self.assertLessEqual(set(self.fun()), {"broken-link", "broken-link-server-error", "broken-resource",
+                                               "broken-resource-third-party", "js-exception", "console-error",
+                                               "redirect-chain", "form-email-type"})
+
     def test_cookie_values_never_reach_the_results(self):
         with open(self.paths["json"], encoding="utf-8") as f:
             self.assertNotIn("fixture-not-a-secret", f.read())
@@ -250,6 +297,38 @@ class NoExternalTraffic:
         self.assertIn(f"127.0.0.1:{site.port}", hosts)
         # mixed.html references 127.0.0.1:9 on purpose; everything must stay on this machine
         self.assertEqual({h for h in hosts if not h.startswith("127.0.0.1:")}, set())
+
+
+class FormSubmitTests:
+    """--allow-submit: only listed forms, only with the flag (docs/qa-audit.md §6, §18)."""
+
+    engine = ""
+    FORMS: ClassVar[list] = [{"page": r"/form\.html$", "selector": "form", "fields": {"name": "QA-AUTO Test",
+                                                                      "email": "qa-auto@example.com"}}]
+
+    def audit(self, allow: bool):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            cfg = make_cfg(self.engine, tmp, safety={"allow_submit": allow},
+                           modules={"functional": {"forms": self.FORMS}})
+            mods = registry.discover(use_entry_points=False)
+            result = runner.run(site.url, cfg, [mods["functional"]])
+            return result, list(site.requests)
+
+    def test_listed_form_is_not_submitted_without_the_flag(self):
+        result, requests = self.audit(allow=False)
+        self.assertNotIn("POST", {m for m, _ in requests})
+        self.assertTrue(any("not submitted (--allow-submit not given)" in n for n in result.notes))
+
+    def test_listed_form_is_submitted_with_the_flag_and_only_that_one(self):
+        result, requests = self.audit(allow=True)
+        posts = [p for m, p in requests if m == "POST"]
+        self.assertEqual(posts, ["/submit"])                   # form.html only; sec.html and broken.html not
+        f = next(f for f in result.findings if f.check == "form-submit-failed")
+        self.assertEqual((f.status, f.severity), ("problem", "medium"))    # the fixture answers 405
+        self.assertIn("HTTP 405", f.actual)
 
 
 def https_available(engine: str) -> str:
@@ -332,7 +411,7 @@ class CliTests:
             common = ["--browser", self.engine, "--delay-ms", "0", "--output", tmp, "--max-pages", "3"]
             code, out, _ = self.cli(site.url, *common)
             self.assertEqual(code, 1, out)                          # high-severity problems on a11y.html
-            self.assertIn("[1/5] Discovery", out)       # discovery, performance, security, accessibility, report
+            self.assertIn("[1/6] Discovery", out)   # discovery, performance, security, functional, accessibility, report
             self.assertIn("Security", out)
             self.assertIn("Only audit sites you own or are authorized to test.", out)
             self.assertIn("report.html", out)
@@ -379,7 +458,7 @@ class ReportInBrowser(unittest.TestCase):
 
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
-                            (HttpsTests, "Https")):
+                            (HttpsTests, "Https"), (FormSubmitTests, "Forms")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

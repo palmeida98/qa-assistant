@@ -72,13 +72,14 @@ qa-audit version              print the version
 | `--config FILE` | none | YAML configuration (§4). |
 | `--fail-on SEVERITY` | `high` | Exit 1 if a problem at or above this severity exists; `none` never fails. |
 | `--ignore-https-errors` | off | Audit a site whose certificate the browser rejects (e.g. a self-signed staging certificate); the report notes it, and the certificate's trust is then not judged. |
+| `--allow-submit` | off | Let the functional module submit the forms **listed in the configuration** (§6, §18); forms found by discovery are never submitted. |
 | `--block-third-party` | off | Block every request the page makes outside the target origin (§8). |
 | `--no-color` | auto | Plain terminal output (also `NO_COLOR`). |
 
 Exit codes: `0` ok · `1` problems at or above `--fail-on` · `2` usage or configuration error ·
 `3` target unreachable · `4` browser could not start (run `qa-audit doctor`).
 
-Planned options (not yet available, rejected with exit 2 until they are): `--allow-submit` (§6), login (§12).
+Planned options (not yet available): login (§12).
 
 ---
 
@@ -137,6 +138,8 @@ output:
   formats: [html, json, csv, md]
   cleanup: false
 fail_on: high
+safety:
+  allow_submit: false        # §6: also needs the form listed under modules.functional.forms
 modules:
   accessibility:
     tags: [wcag2a, wcag2aa, wcag21a, wcag21aa]
@@ -177,9 +180,11 @@ owners can identify the traffic.
 
 ## 6. Destructive actions
 
-Nothing in the engine submits forms, clicks buttons, creates accounts, sends messages, pays, or changes data.
-A future option `--allow-submit` (plan 8.7) will only apply to forms explicitly listed in the configuration
-file, never to forms found by discovery alone.
+Nothing in the engine submits forms, clicks buttons, creates accounts, sends messages, pays, or changes data by
+default. The only exception is explicit and double: `--allow-submit` on the command line (or `safety.allow_submit`)
+**and** the form listed under `modules.functional.forms` with its test data (§18). A form found by discovery alone
+is never submitted, with or without the option. Test data should be recognisable and fictional (e.g. prefixed
+`QA-AUTO-`), and only in a test environment.
 
 ---
 
@@ -303,7 +308,8 @@ External modules register through the `qa_audit.modules` entry point group; the 
 | `accessibility` | Available (§11) |
 | `security` | Available, passive only (§16) |
 | `performance` | Available (§17) |
-| `functional`, `visual` | Planned (plan 8.7–8.8) |
+| `functional` | Available (§18) |
+| `visual` | Planned (plan 8.8) |
 
 ---
 
@@ -344,7 +350,8 @@ conformance certification.**
 - Login: credentials from environment variables or a hidden prompt, session state kept only in the run folder.
   Needed before `/auditar-acessibilidade` and `scripts/auditar_a11y.py` move to this engine.
 - Several engines in one run (compatibility), sitemap discovery.
-- Modules `functional`, `visual` (plan 8.7–8.8); active security checks, always opt-in.
+- Module `visual` (plan 8.8); active security checks, always opt-in; scripted user flows (login, checkout) as
+  configured, opt-in functional scenarios.
 
 ---
 
@@ -468,4 +475,50 @@ resources; LCP and CLS are only available where the engine implements them (CLS:
 Firefox) and are reported as `n/a` elsewhere, never estimated; CLS covers only the shifts before the measurement
 (after `load` and network idle); sizes of cross-origin resources without `Timing-Allow-Origin` read as 0 and the
 total is marked partial.
+
+---
+
+## 18. Functional module
+
+`--type functional`. Generic checks that need no knowledge of the application, all non-destructive by default.
+
+| Check | What | Status · severity |
+|---|---|---|
+| `broken-link` | a same-origin link answers 4xx | problem · medium |
+| `broken-link-server-error` | a same-origin link answers 5xx | problem · high |
+| `broken-external-link` | an external link fails (only with `check_external_links: true`) | warning · low |
+| `broken-resource` | a same-origin image, script, stylesheet or fetch of an audited page fails (4xx/5xx or network error) | problem · medium |
+| `broken-resource-third-party` | the same for another origin | warning · low |
+| `js-exception` | an uncaught JavaScript exception on a page | warning · medium |
+| `console-error` | `console.error` messages (resource-load errors excluded: they are `broken-resource`) | warning · low |
+| `redirect-chain` | a link reaches its page through 3 or more redirects | warning · low |
+| `form-email-type` | a field named or labelled as an e-mail is not `type=email` and has no `pattern` (accepts any text in the browser) | warning · low · confidence medium |
+| `form-submit-failed` | a **listed** form, submitted with `--allow-submit`, answers 4xx (medium) or 5xx (high) or throws | problem |
+| `form-submit-no-navigation` | a listed form was submitted but nothing navigated (e.g. a script handles it) | needs-human |
+
+Pages that answer 4xx/5xx are reported here as broken links and are not audited as content by any module.
+
+Links: every same-origin link seen on the audited pages is judged. Visited pages give their status directly; links
+the crawl did not visit (beyond depth or `max_pages`, or non-HTML such as PDFs) are checked with `HEAD` (falling
+back to `GET` when `HEAD` is refused), at most `max_link_checks` (default 50), with the crawl delay between them.
+Links excluded by the safety rules (§5) or disallowed by `robots.txt` are **never** requested. External links are
+not requested unless `check_external_links: true` (it sends traffic to third parties). Each finding lists the
+broken URLs with the pages that link to them. Aborted requests (navigation away, `--block-third-party`) are not
+failures.
+
+Listed forms (`--allow-submit` required):
+
+```yaml
+modules:
+  functional:
+    forms:
+      - page: "/contact"                 # regular expression on the URL of an audited page
+        selector: "form#contact"         # the form
+        fields: {name: "QA-AUTO Test", message: "QA-AUTO automated check"}
+        fields_env: {email: SHOP_TEST_EMAIL}   # values from environment variables
+```
+
+The form is filled and submitted once, in its own tab, on the first audited page whose URL matches; the result is
+the response to the navigation that follows. Literal secrets are refused in the configuration (§4): use
+`fields_env`.
 
