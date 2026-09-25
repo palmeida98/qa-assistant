@@ -38,10 +38,11 @@
 
       # testes unitarios: rapidos, sem LibreOffice. Correm tambem quando mudam os ficheiros
       # que os testes leem: skills e CLAUDE.md (test_skills), demo (test_validar_projeto,
-      # test_painel), template do projeto.yaml e esta configuracao (test_guards)
+      # test_painel), template do projeto.yaml e esta configuracao (test_guards); motor qa-audit (src/,
+      # pyproject.toml, .gitignore e LICENSE: tests/unit/test_engine_guards.py)
       - id: testes
         name: testes unitarios
         entry: python -m unittest discover -s tests
         language: system
         pass_filenames: false
-        files: ^(adapters/|scripts/|tests/|tools/|examples/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|docs/workspace/|\.pre-commit-config\.yaml$)
+        files: ^(adapters/|scripts/|src/|tests/|tools/|examples/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|docs/workspace/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)
