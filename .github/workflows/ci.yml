@@ -61,6 +61,23 @@ jobs:
       # ficticios (plano 7.3); no job testes ficam skipped
       - run: python -m unittest tests.test_resumo tests.test_demo_reproduzivel tests.test_golden_real -v
 
+  qa-audit:
+    # motor qa-audit (plano 8.2): testes de integracao contra o site local, nos tres engines
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - run: python -m playwright install --with-deps chromium firefox webkit
+      - run: qa-audit doctor --no-color
+      - run: python -m unittest discover -s tests/integration -v
+        env:
+          QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
+          QA_AUDIT_REQUIRE_ENGINES: "1"
+
   demo-e2e:
     # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)
     runs-on: ubuntu-24.04

@@ -9,6 +9,7 @@ Referências:
 - docs/tecnica-mobile.md — técnica mobile com Maestro (ler quando o módulo `mobile` estiver ativo; `/testar-mobile`)
 - docs/heuristicas.md — padrões de falha anonimizados para o error guessing (metodologia §17; ler ao gerar casos)
 - docs/plano-desenvolvimento.md — roadmap da framework (ler em sessões de desenvolvimento)
+- docs/qa-audit.md — `qa-audit` automated audit engine (English; read when working on `src/qa_audit`)
 
 ## Regras fixas
 - Nunca escrever dados de clientes (URLs, contas, nomes, credenciais) neste repositório.
@@ -30,6 +31,8 @@ Referências:
 - `python scripts/testar_mobile.py <workspace> [flows…] [--saida …]` — corre os flows Maestro e liga-os aos casos; cada flow é um caminho ou o ID do caso (0 ok · 2 configuração ou flow inexistente · 3 sem alvo)
 - `python scripts/gerar_painel.py <workspace> [--abrir]` — gera (e abre) o `painel.html` do workspace; é o que o `/painel` corre
 - `python scripts/sincronizar_skills.py [--aplicar]` — compara (e copia) `.claude/skills/` com `~/.claude/skills/`, a cópia que os workspaces usam; correr com `--aplicar` depois de mudar uma skill (0 sincronizadas · 1 diferenças)
+- `qa-audit <url> [--type accessibility] [--browser …]` — automated audit of any site (`pip install -e .` first); `qa-audit doctor` checks the environment (docs/qa-audit.md). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
+- `python scripts/update_axe.py <version>` — updates the axe-core bundled with `qa-audit` (npm integrity checked)
 - Testes: `python -m unittest discover -s tests` e `python scripts/golden_check.py` (precisa de LibreOffice); golden real de um workspace: `python scripts/golden_check.py --dir <workspace>/golden/<lote>` (metodologia §15)
 
 ## Ambiente

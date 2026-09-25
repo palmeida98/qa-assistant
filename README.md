@@ -4,7 +4,30 @@
 
 Uma framework de QA para trabalhar com o [Claude Code](https://claude.com/claude-code): a metodologia, as técnicas de teste e as ferramentas vivem aqui, e cada projeto real vive num **workspace** separado, fora deste repositório. O assistente segue a metodologia através de skills (`/onboarding-projeto`, `/executar-lote`, `/checkpoint`, …) e escreve os resultados no tracker do projeto por adaptadores verificados por testes.
 
-Tudo está em português europeu.
+A camada de workspace está em português europeu; o motor `qa-audit` (abaixo) está em inglês.
+
+---
+
+## qa-audit — automated audit engine
+
+An automated first pass over any website, from its URL alone. It lives alongside the workspace layer.
+
+```bash
+pip install -e .
+python -m playwright install chromium
+qa-audit doctor
+qa-audit https://example.com                         # every available module
+qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
+```
+
+It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
+links, respects `robots.txt`), runs the selected modules on each page, and writes `qa-output/<timestamp>/` with
+screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
+is sent anywhere but to the target. Only audit sites you own or are authorized to test.
+
+Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow, manual checklist). Planned:
+security (passive), performance, functional, visual. Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
+contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

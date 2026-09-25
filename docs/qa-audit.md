@@ -304,15 +304,20 @@ External modules register through the `qa_audit.modules` entry point group; the 
 
 Automated checks:
 
-- **axe-core** (version pinned, file shipped in `modules/accessibility/vendor/`, injected with Playwright
-  `evaluate`, so a page's Content-Security-Policy does not block it). Default tags: WCAG 2.0 and 2.1, A and AA.
+- **axe-core** (version pinned, file shipped in `modules/accessibility/vendor/`). It is injected as a `<script>`
+  element and runs in the page's own realm; the result comes back as JSON text through an attribute of `<html>`,
+  removed afterwards. Playwright `evaluate` runs in a separate realm, which fails in Firefox (X-ray wrappers hide
+  axe's functions); it is only the fallback when the page's Content-Security-Policy blocks inline scripts
+  (Chromium does not apply the page CSP to `evaluate`). When both fail, the page gets a `needs-human` finding
+  `axe-not-run`. Default tags: WCAG 2.0 and 2.1, A and AA.
   - `violations` → `problem`, one finding per rule per page with up to 5 affected elements (selector, snippet,
     element screenshot).
   - `incomplete` → `needs-human`.
   - Severity from axe impact: `critical` → `high`, `serious` → `medium`, `moderate` and `minor` → `low`.
     Never `critical` (§9).
-- **Keyboard** (engine's own): tabs through up to 40 stops; a focus that stops moving is a keyboard trap
-  (`warning`, `high`); an element whose outline, box-shadow, border, background and text decoration do not
+- **Keyboard** (engine's own): tabs through up to 40 stops; a focus that stays on one element for three Tabs
+  while tabbable elements follow it is a keyboard trap (`warning`, `high`) — at the last element it is the end of
+  the page (Firefox headless keeps the focus there); an element whose outline, box-shadow, border, background and text decoration do not
   change when focused is reported as `needs-human` (focus visibility, WCAG 2.4.7).
 - **Reflow** (WCAG 1.4.10): at 320 CSS px wide, horizontal scrolling of the page is a `warning`, `medium`, with a
   screenshot; data tables and maps can legitimately scroll.
@@ -345,6 +350,11 @@ Risk 7.
 - **WebKit on Windows** can be blocked by Windows application control (Smart App Control / WDAC): its bundled
   `libEGL.dll` is refused and Playwright reports it as a missing library. `qa-audit doctor` shows the engine as
   unavailable with that hint; use Chromium or Firefox locally. CI runs all three engines on Linux.
+- **Firefox (Playwright build, Windows)**: `crypto.getRandomValues` throws `OperationError` even in the page's
+  realm. Only when the native call fails, the accessibility module installs a `Math.random` substitute while axe
+  runs (axe uses it for internal ids) and restores the original; the report notes it.
+- The Bash sandbox of some agent environments refuses to spawn the browser process (`spawn UNKNOWN`); `doctor`
+  names it. Run from a normal terminal.
 - Video needs Playwright's `ffmpeg` (`python -m playwright install ffmpeg`); `doctor` checks it.
 - The terminal output is UTF-8 on every platform; symbols fall back to ASCII when the console cannot print them.
 
@@ -352,9 +362,13 @@ Risk 7.
 
 ## 14. Maintenance of the bundled axe-core
 
-Risk 9. `vendor/axe.json` records the version, the npm tarball URL, the npm integrity hash and the SHA-256 of
+Risk 9. `vendor/axe.yaml` records the version, the npm tarball URL, the npm integrity hash and the SHA-256 of
 `axe.min.js`. `python scripts/update_axe.py <version>` downloads the tarball, checks npm's integrity hash,
-extracts `axe.min.js` and its licence (MPL-2.0), and rewrites the manifest. A unit test fails if the file and the
+extracts `axe.min.js` and its licence (MPL-2.0), and rewrites the manifest. Its two checksum lines carry
+detect-secrets' inline allowlist pragma, its line-level marker for false positives (public hashes, not secrets;
+no file is excluded from the scan), and a guard test fails if that marker appears on any other line of the
+repository. `.gitattributes` keeps Git from converting the line endings of `vendor/` (a CRLF checkout would break
+the hash). A unit test fails if the file and the
 manifest disagree (hash or version). Updating axe is its own commit, with the accessibility integration tests
 passing.
 

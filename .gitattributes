@@ -1,0 +1,2 @@
+# bundled third-party files are verified by SHA-256 (docs/qa-audit.md §14): never convert their line endings
+src/qa_audit/modules/accessibility/vendor/* -text

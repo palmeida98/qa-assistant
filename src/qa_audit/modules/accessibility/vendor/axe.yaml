@@ -1,0 +1,7 @@
+# written by scripts/update_axe.py; checked by tests/unit/test_engine_guards.py
+package: axe-core
+version: 4.13.0
+license: MPL-2.0
+source: https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz
+npm_integrity: sha512-UzGt8zg7Ny8djbYMhxl2zuEevVa7r2gJjYY5Lwr1xM7+XU2nd6CkIWFTVcCIbAP63vSz71NaVyyuSk9lHKcy0A==  # pragma: allowlist secret
+sha256: c24f097bd2f451d4f933e8bc7d8d539f8672a2ebcb5cc9f9f3eec8ca9470a0c1  # pragma: allowlist secret

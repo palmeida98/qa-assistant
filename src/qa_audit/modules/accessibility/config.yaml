@@ -1,0 +1,9 @@
+# accessibility module defaults (README.md); override under modules.accessibility in a --config file
+tags: [wcag2a, wcag2aa, wcag21a, wcag21aa]
+max_nodes_per_rule: 5
+keyboard:
+  enabled: true
+  max_stops: 40
+reflow:
+  enabled: true
+  width: 320

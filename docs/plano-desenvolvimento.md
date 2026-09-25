@@ -441,22 +441,30 @@ User decisions (25.09.2026): the automated engine **lives alongside** the worksp
 - [x] `docs/qa-audit.md`; this phase; methodology §1.1 updated.
 
 ### 8.1 Package, CLI and core
-- [ ] `pyproject.toml` (exact versions; proprietary, "Private :: Do Not Upload"), `src/qa_audit`, `qa-audit version` / `doctor` / `--help`, configuration with precedence and the no-credentials rule, `Finding` with the evidence rule, run folder with `.gitignore` and `--cleanup`, module registry (built-in + entry points).
-- [ ] `LICENSE` (proprietary), `CONTRIBUTING.md`, `CHANGELOG.md`; `.gitignore` for output, evidence and secrets; guard test for tracked `qa-output/` paths.
-- [ ] Unit tests in `tests/unit/`, run by the existing `unittest` command, pre-commit and CI.
+- [x] `pyproject.toml` (exact versions; proprietary, "Private :: Do Not Upload"), `src/qa_audit`, `qa-audit version` / `doctor` / `--help`, configuration with precedence and the no-credentials rule, `Finding` with the evidence rule, run folder with `.gitignore` and `--cleanup`, module registry (built-in + entry points).
+- [x] `LICENSE` (proprietary), `CONTRIBUTING.md`, `CHANGELOG.md`; `.gitignore` for output, evidence and secrets; guard test for tracked `qa-output/` paths.
+- [x] Unit tests in `tests/unit/`, run by the existing `unittest` command, pre-commit and CI.
+
+Notes (8.1): 49 unit tests (138 → 187 in the whole suite). The pre-commit `testes` hook now also runs on `src/`, `pyproject.toml`, `.gitignore` and `LICENSE`. An existing guard (`test_consola`) caught `scripts/update_axe.py` without the UTF-8 console fix before the commit.
 
 ### 8.2 Browser layer and discovery
-- [ ] Engines chromium/firefox/webkit, viewport, device, video, trace; same-origin GET-only crawl with exclusions, `robots.txt`, delay and identifiable user agent.
-- [ ] Local test site `tests/fixtures/site/` with trap links and a POST form; integration tests: no trap requested, nothing posted, no request outside `127.0.0.1` (recording proxy, browser traffic included).
-- [ ] CI job with the three engines on Linux.
+- [x] Engines chromium/firefox/webkit, viewport, device, video, trace; same-origin GET-only crawl with exclusions, `robots.txt`, delay and identifiable user agent.
+- [x] Local test site `tests/fixtures/site/` with trap links and a POST form; integration tests: no trap requested, nothing posted, no request outside `127.0.0.1` (recording proxy, browser traffic included).
+- [ ] CI job with the three engines on Linux (job `qa-audit` written, with `QA_AUDIT_REQUIRE_ENGINES=1` so a missing engine fails instead of skipping; verified on the first CI run after the push).
+
+Notes (8.2): locally (Windows) Chromium and Firefox pass all integration tests; WebKit cannot start here (Windows application control blocks its `libEGL.dll`: `PrintDeps` reports "An Application Control policy has blocked this file"), skipped with that reason. The recording proxy saw only `127.0.0.1:<port>` for both engines, browser traffic included.
 
 ### 8.3 Reports
-- [ ] Terminal summary, JSON, CSV, Markdown and self-contained HTML (inline CSS, CSP `default-src 'none'`, audited content escaped); tests.
+- [x] Terminal summary, JSON, CSV, Markdown and self-contained HTML (inline CSS, CSP `default-src 'none'`, audited content escaped); tests.
+
+Notes (8.3): two risks found while building the reports, both covered by tests: audited content in the HTML report (escaped + CSP, a fixture page with a hostile title and attribute) and formula injection in the CSV (cells starting with `= + - @` are prefixed with `'`). Images use no lazy loading: inside closed `<details>` they never loaded.
 
 ### 8.4 Accessibility module
-- [ ] axe-core 4.13.0 shipped with manifest and `scripts/update_axe.py`; violations / incomplete / manual checklist; keyboard and reflow checks; disclaimer.
-- [ ] Integration: planted defects found, clean page without problems, on every available engine.
+- [x] axe-core 4.13.0 shipped with manifest and `scripts/update_axe.py`; violations / incomplete / manual checklist; keyboard and reflow checks; disclaimer.
+- [x] Integration: planted defects found, clean page without problems, on every available engine.
 - [ ] Replacing `scripts/auditar_a11y.py` + `tools/a11y/` (and moving `/auditar-acessibilidade`) waits for login support (parity with its authenticated pages); until then both exist.
+
+Notes (8.4): the npm integrity of the bundled axe-core is the same as in `tools/a11y/package-lock.json` (and a test keeps both on the same version). The Firefox integration tests found three things the first design got wrong, all fixed and covered: axe evaluated from Playwright's realm cannot see page functions (X-ray wrappers), so it runs in the page realm through a `<script>` element with `evaluate` only as the CSP fallback; this Firefox build throws from `crypto.getRandomValues` (a substitute is installed only when the native call fails, and noted in the report); and Firefox headless keeps the focus on the last element at the end of a page, which the first keyboard check reported as a trap on a clean page (false positive; now a trap needs tabbable elements after the stuck one). 8.2, 8.3 and 8.4 are one commit: their integration tests exercise the three together.
 
 ### 8.5–8.8 Security (passive), performance, functional, visual
 One commit each, each with planted defects in the local site and no problems on clean pages. Performance thresholds from a cited source, configurable (risk 8). Functional: `--allow-submit` only for forms listed in the configuration.
