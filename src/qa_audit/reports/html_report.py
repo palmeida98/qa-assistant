@@ -160,7 +160,8 @@ def render(result) -> str:
     skipped = result.crawl["skipped"]
     if skipped or result.crawl["not_visited"]:
         out.append(f"<details><summary>Not visited: {len(skipped)} skipped, {result.crawl['not_visited']} beyond "
-                   f"max pages · robots.txt {esc(result.crawl['robots'])}</summary><div><table>"
+                   f"max pages · robots.txt {esc(result.crawl['robots'])}"
+                   f" · sitemap {esc(result.crawl.get('sitemap', 'off'))}</summary><div><table>"
                    "<tr><th>URL</th><th>Reason</th></tr>")
         for x in skipped:
             out.append(f"<tr><td class=wrap>{esc(x['url'])}</td><td>{esc(x['reason'])}</td></tr>")

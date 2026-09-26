@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Sitemap discovery (plan 8.13): `--sitemap` / `crawl.sitemap` (off by default) also queues the pages listed in
+  the site's sitemap (`robots.txt` `Sitemap:` lines, else `/sitemap.xml`; one level of sitemap index), same origin
+  only and through every discovery rule; entity declarations refused, size and count limits; status in the report.
 - Saved login sessions (plan 8.12): `auth.method: storage-state` reuses a session saved once with
   `qa-audit login <url> --config FILE` (`login_method` `manual` or `form`); nothing is submitted during the audit,
   an expired session is exit 3 with the command to renew it. The state file is refused inside the output folder or

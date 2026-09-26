@@ -80,6 +80,7 @@ qa-audit sessions [--delete HOST|all] [--sessions-dir DIR]  list or delete saved
 | `--baseline-dir DIR` | `~/.qa-audit/baselines` | Where visual baselines are kept (§19); never inside the output folder. |
 | `--update-baseline` | off | Replace the visual baselines with this run's screenshots (after reviewing the differences). |
 | `--block-third-party` | off | Block every request the page makes outside the target origin (§8). |
+| `--sitemap` | off | Also queue the pages listed in the site's sitemap (§5.1). |
 | `--no-color` | auto | Plain terminal output (also `NO_COLOR`). |
 
 Exit codes: `0` ok · `1` problems at or above `--fail-on` · `2` usage or configuration error ·
@@ -135,6 +136,7 @@ crawl:
   pages: []                   # explicit pages, visited first (§5)
   follow_links: true          # false: only the start URL and crawl.pages
   audit_error_pages: false    # true: the start URL and crawl.pages are audited even when they answer 4xx (§5)
+  sitemap: false              # true: pages listed in the site's sitemap are queued too (§5.1)
 network:
   block_third_party: false
 evidence:
@@ -177,11 +179,12 @@ modules:
    answers 404 to a deep link and renders the page anyway: the pages **listed** (the start URL and `crawl.pages`)
    that answer **4xx** are audited as content, and the report notes each one with its status. Pages found by
    following links, and 5xx answers, are never audited that way.
+8. With `crawl.sitemap: true` (or `--sitemap`), the pages listed in the site's sitemap are queued too (§5.1).
 
 **Safety rules (risk 3):**
 
-- Pages are only reached with `GET` navigation to `<a href>` targets. The crawler never clicks, never types,
-  never submits a form.
+- Pages are only reached with `GET` navigation to `<a href>` targets, `crawl.pages` entries and, when enabled,
+  sitemap entries. The crawler never clicks, never types, never submits a form.
 - Only the start URL's origin (scheme + host + port) is visited. External links are recorded, never requested.
 - Built-in exclusions (case-insensitive, on the URL path and query): `logout`, `log-out`, `signout`,
   `sign-out`, `logoff`, `delete`, `remove`, `destroy`, `unsubscribe`, `deactivate`, `cancel`, plus
@@ -191,6 +194,25 @@ modules:
 
 **User agent (risk 4):** the engine's default user agent with ` qa-audit/<version>` appended, so site
 owners can identify the traffic.
+
+### 5.1 Sitemap discovery
+
+Pages that no link points to (landing pages, old campaigns) are only found through the sitemap. Off by default
+(`crawl.sitemap: false`), so existing audits do not change; `--sitemap` or `crawl.sitemap: true` turns it on.
+
+1. Where: the `Sitemap:` lines of `robots.txt` (when it was read, §5 step 2), else `/sitemap.xml`. Only sitemaps on
+   the target origin are fetched, through the same browser context and user agent as `robots.txt`; a sitemap
+   elsewhere is recorded as skipped and never requested.
+2. What is read: `urlset` files and one level of `sitemapindex` (at most 10 sitemap files), at most 5 MB per file
+   and 5000 URLs in total; compressed sitemaps (`.gz`) are skipped with the reason. A file with a `<!DOCTYPE` or
+   `<!ENTITY` is refused (entity expansion and external entities; sitemaps never need them), as is anything that is
+   not a sitemap.
+3. Queue: after the start URL and `crawl.pages`, in the sitemap's order, at depth 1, with every rule of §5 (built-in
+   exclusions, `crawl.exclude`, `robots.txt`, the login page, same origin, `max_pages`). With
+   `crawl.follow_links: false` the sitemap's pages are still visited (the option was asked for); the links on them
+   are not followed.
+4. The report records what happened (`crawl.sitemap` in `results.json`, and a note): e.g. `read: 12 URLs from
+   /sitemap.xml`, `none (HTTP 404)`, `refused: DOCTYPE`. A missing or unreadable sitemap never stops the audit.
 
 ---
 
@@ -368,7 +390,7 @@ conformance certification.**
 
 ## 12. Planned
 
-- Several engines in one run (compatibility), sitemap discovery.
+- Several engines in one run (compatibility).
 - Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
 

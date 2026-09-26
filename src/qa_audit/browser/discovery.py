@@ -14,6 +14,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 from ..core.privacy import Redactor
+from . import sitemap as sitemap_mod
 from .session import origin
 
 BUILTIN_EXCLUDE = (r"log[-_]?out|sign[-_]?out|log[-_]?off|delete|remove|destroy|unsubscribe|deactivate|cancel")
@@ -97,6 +98,7 @@ class CrawlResult:
     skipped: list[dict] = field(default_factory=list)    # {"url", "reason"}
     not_visited: int = 0                                   # left in the queue at max_pages
     robots: str = "not checked"
+    sitemap: str = "off"                                   # crawl.sitemap (docs/qa-audit.md §5.1)
     session_expired: str = ""                              # URL where the logged-in session ended (§20)
 
 
@@ -163,6 +165,35 @@ class Crawler:
         self.robots = rp
         result.robots = "respected"
 
+    # --- sitemap (§5.1) --------------------------------------------------------------------------------------
+    def _queue_sitemap(self, result: CrawlResult, queue: deque, seen: set) -> None:
+        target = origin(self.s.target)
+        declared = (self.robots.site_maps() if self.robots is not None else None) or []
+        sitemaps = [urljoin(target + "/", s) for s in declared] or [target + "/sitemap.xml"]
+
+        def fetch(url):
+            resp = self.s.request().get(url, timeout=self.cfg["browser"]["timeout_ms"], max_redirects=3)
+            return resp.status, resp.url, resp.body()
+
+        urls, result.sitemap, skipped = sitemap_mod.collect(fetch, sitemaps, target)
+        result.skipped += skipped
+        for raw in urls:
+            n = normalize(urljoin(self.start, raw))
+            if n in seen:
+                continue
+            seen.add(n)
+            reason = exclusion_reason(n, self.patterns)
+            if not reason and origin(n) != target:
+                reason = "sitemap entry outside the target origin"
+            if not reason and self.expired is not None and self.expired.search(n):
+                reason = "login page"
+            if not reason and self.robots is not None and not self.robots.can_fetch(ROBOTS_AGENT, n):
+                reason = "disallowed by robots.txt"
+            if reason:
+                result.skipped.append({"url": n, "reason": reason})
+            else:
+                queue.append((n, 1))
+
     # --- crawl -----------------------------------------------------------------------------------------------
     def run(self) -> CrawlResult:
         c = self.cfg["crawl"]
@@ -189,6 +220,8 @@ class Crawler:
             if first:
                 first = False
                 self._load_robots(result)
+                if c.get("sitemap"):
+                    self._queue_sitemap(result, queue, seen)
             result.pages.append(info)
             if self.stop:
                 result.session_expired = info.url

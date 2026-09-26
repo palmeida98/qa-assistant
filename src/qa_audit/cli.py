@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--block-third-party", action="store_true",
                    help="block requests outside the target origin (the audit then differs from what visitors see)")
     p.add_argument("--no-robots", action="store_true", help="ignore robots.txt")
+    p.add_argument("--sitemap", action="store_true", help="also queue the pages listed in the site's sitemap")
     p.add_argument("--no-color", action="store_true", help="plain output (also NO_COLOR)")
     return p
 
@@ -85,6 +86,8 @@ def overrides_from_args(a: argparse.Namespace) -> dict:
             o["crawl"][key] = arg
     if a.no_robots:
         o["crawl"]["respect_robots"] = False
+    if a.sitemap:
+        o["crawl"]["sitemap"] = True
     if a.screenshots:
         o["evidence"]["screenshots"] = a.screenshots
     if a.video:

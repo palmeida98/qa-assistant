@@ -186,6 +186,8 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
                     raise TargetUnreachable(f"{e}: the saved session has expired; run qa-audit login {target} "
                                             "--config <file> again (docs/qa-audit.md §20.1)") from e
                 raise
+            if cfg["crawl"].get("sitemap"):
+                ctx.notes.append(f"sitemap: {crawl.sitemap}")
             if crawl.session_expired:
                 ctx.notes.append(f"auth: the session ended at {crawl.session_expired}; the crawl stopped there")
             for p in crawl.pages:
@@ -242,7 +244,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
         modules=module_rows,
         summary=summarize(findings, ctx.tally),
         crawl={"pages": len(crawl.pages), "skipped": crawl.skipped, "not_visited": crawl.not_visited,
-               "robots": crawl.robots, "session_expired": crawl.session_expired},
+               "robots": crawl.robots, "sitemap": crawl.sitemap, "session_expired": crawl.session_expired},
         pages=crawl.pages,
         findings=findings,
         metrics=ctx.metrics,
