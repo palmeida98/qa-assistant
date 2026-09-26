@@ -69,6 +69,11 @@ RULES = {
     "cookie-samesite-none-insecure": ("Cookie with SameSite=None but not Secure", "problem", "medium", "high",
                                       "SameSite=None cookies are also Secure.", "Add Secure, or use SameSite=Lax.",
                                       [MDN + "Set-Cookie"]),
+    "cookie-samesite-unset": ("Cookie without a declared SameSite", "needs-human", "info", "medium",
+                              "Each cookie declares SameSite (Lax, Strict, or None with Secure).",
+                              ("Declare SameSite on the cookie; without it, cross-site behaviour depends on the "
+                               "browser. A cookie set by JavaScript: check the code that sets it."),
+                              [MDN + "Set-Cookie"]),
     "cookie-session-not-httponly": ("Session-like cookie readable by JavaScript", "warning", "medium", "medium",
                                     "Session and token cookies are HttpOnly.",
                                     "Set HttpOnly on cookies that carry sessions or tokens.",
@@ -189,6 +194,9 @@ class Security(AuditModule):
             return
         # names and flags only: the values are dropped here and never stored
         cookies = [{k: c.get(k) for k in ("name", "domain", "secure", "httpOnly", "sameSite")} for c in cookies]
+        declared = getattr(ctx.session, "declared_cookies", {})
+        for c in cookies:
+            c["declared"] = declared.get(c["name"])
         found = checks.cookie_findings(cookies, host, https)
         by_check: dict[str, list[dict]] = {}
         for check, data in found:

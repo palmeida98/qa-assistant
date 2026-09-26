@@ -69,7 +69,8 @@ class Content(unittest.TestCase):
 
 class Cookies(unittest.TestCase):
     def cookie(self, **kw):
-        base = {"name": "theme", "domain": "shop.example", "secure": True, "httpOnly": True, "sameSite": "Lax"}
+        base = {"name": "theme", "domain": "shop.example", "secure": True, "httpOnly": True, "sameSite": "Lax",
+                "declared": "Lax"}
         base.update(kw)
         return base
 
@@ -77,13 +78,26 @@ class Cookies(unittest.TestCase):
         found = checks.cookie_findings([
             self.cookie(name="sessionid", httpOnly=False),
             self.cookie(name="prefs", secure=False),
-            self.cookie(name="track", sameSite="None", secure=False),
+            self.cookie(name="track", sameSite="None", declared="None", secure=False),
             self.cookie(name="ok"),
         ], "shop.example", https=True)
         self.assertIn(("cookie-session-not-httponly", "sessionid"), [(c, d["cookie"]) for c, d in found])
         self.assertIn(("cookie-not-secure", "prefs"), [(c, d["cookie"]) for c, d in found])
         self.assertIn(("cookie-samesite-none-insecure", "track"), [(c, d["cookie"]) for c, d in found])
         self.assertNotIn("ok", [d["cookie"] for _, d in found])
+
+    def test_samesite_none_only_when_declared(self):
+        # Firefox and WebKit report a cookie without SameSite as "None"; only a declared None is SameSite=None
+        found = checks.cookie_findings([
+            self.cookie(name="script", sameSite="None", declared=None, secure=False),
+            self.cookie(name="bare", sameSite="None", declared="", secure=False),
+            self.cookie(name="loose", sameSite="None", declared="None", secure=False),
+        ], "shop.example", https=False)
+        pairs = [(c, d["cookie"]) for c, d in found]
+        self.assertEqual(sorted(pairs), [("cookie-samesite-none-insecure", "loose"),
+                                         ("cookie-samesite-unset", "bare"), ("cookie-samesite-unset", "script")])
+        script = next(d for c, d in found if d["cookie"] == "script")
+        self.assertIn("set by JavaScript", script["observed"])
 
     def test_http_site_is_not_blamed_for_missing_secure(self):
         found = checks.cookie_findings([self.cookie(secure=False)], "shop.example", https=False)

@@ -48,6 +48,13 @@ class Registry(unittest.TestCase):
                   self.assertRaises(registry.RegistryError)):
                 registry.discover()
 
+    def test_full_leaves_out_modules_that_run_only_when_named(self):
+        mods = registry.discover(use_entry_points=False)
+        full = [m.name for m in registry.select("full", mods)]
+        self.assertNotIn("visual", full)                              # docs/qa-audit.md §19
+        self.assertIn("accessibility", full)
+        self.assertEqual([m.name for m in registry.select("visual", mods)], ["visual"])
+
     def test_select(self):
         mods = {"accessibility": Extra(), "extra-check": Extra()}
         self.assertEqual(len(registry.select("full", mods)), 2)

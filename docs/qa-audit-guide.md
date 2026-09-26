@@ -90,8 +90,8 @@ workspace, `qa-workspaces/<company>/<project>/qa-audit.yaml`, or in the project'
 
 ## 5. Choosing modules
 
-`--type full` (default) runs every available module; a module that cannot run here (e.g. `visual` without Pillow)
-is skipped with the reason. A list runs only those: `--type performance,functional`. A module asked for by name
+`--type full` (default) runs every available module except `visual`, which keeps screenshots of the site between
+runs and so runs only when named (`--type visual`); a module that cannot run here is skipped with the reason. A list runs only those: `--type performance,functional`. A module asked for by name
 that cannot run is a usage error (exit 2). Modules run on each page in a fixed order: the ones that only read the
 page first (performance measures an untouched page), the ones that change it (viewport, Tab key) last.
 
@@ -124,7 +124,8 @@ auth:                                   # a plain login form
   login_url: /login
   username_env: NEW_PROJECT_QA_USER     # names of environment variables, never the values
   pass_env: NEW_PROJECT_QA_PASS
-  success_url: "/account"               # or success_selector: "#logout"
+  success_url: '/account'               # a regular expression: use single quotes ('/account\.html'), where
+                                        # a backslash is literal; in double quotes "\." is an invalid escape
 ```
 
 ```yaml

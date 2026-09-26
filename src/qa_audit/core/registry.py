@@ -60,7 +60,7 @@ def select(types: str, available: dict[str, AuditModule]) -> list[AuditModule]:
     """Modules for --type ('full' or a comma list). ConfigError for unknown or not-yet-available names."""
     names = [t.strip().lower() for t in (types or "full").split(",") if t.strip()]
     if not names or names == ["full"]:
-        return sorted(available.values(), key=lambda m: m.order)
+        return sorted((m for m in available.values() if m.in_full), key=lambda m: m.order)
     if "full" in names:
         raise ConfigError("--type full cannot be combined with other types")
     chosen, problems = [], []

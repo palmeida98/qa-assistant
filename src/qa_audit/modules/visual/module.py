@@ -32,6 +32,7 @@ class Visual(AuditModule):
     description = "Screenshots per viewport compared with baselines; horizontal overflow and viewport meta tag."
     id_prefix = "VIS"
     order = 70         # resizes the viewport: after the readers, before accessibility's keyboard walk
+    in_full = False    # keeps screenshots of the site between runs: only when named (docs/qa-audit.md §19)
 
     def applicable(self, ctx) -> tuple[bool, str]:
         if not compare.pillow_available():

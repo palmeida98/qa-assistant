@@ -91,6 +91,8 @@ class Session:
         self.firefox_prefs = {**FIREFOX_PREFS, **(firefox_prefs or {})}
         self.engine = cfg["browser"]["engine"]
         self.blocked: list[str] = []          # third-party requests blocked (--block-third-party)
+        # cookie name -> SameSite declared in a Set-Cookie header ("" = header without it); values never kept
+        self.declared_cookies: dict[str, str] = {}
         self.version = ""
         self.user_agent = ""
         self._pw = self.browser = self.context = None
@@ -124,6 +126,7 @@ class Session:
         except (PWError, ValueError, TypeError) as e:
             self.__exit__(None, None, None)
             raise ConfigError(f"browser context options not supported by {self.engine}: {e}") from e
+        self.context.on("response", self._record_set_cookie)
         self.context.set_default_timeout(int(b.get("timeout_ms", 30000)))
         self.context.set_default_navigation_timeout(int(b.get("timeout_ms", 30000)))
         if self.cfg["network"].get("block_third_party"):
@@ -189,6 +192,26 @@ class Session:
             opts["record_video_dir"] = self.run.sub("videos")
             opts["record_video_size"] = opts.get("viewport") or dict(b["viewport"])
         return opts
+
+    def _record_set_cookie(self, response) -> None:
+        """SameSite as declared by the server (docs/qa-audit.md §16): the browser's cookie store cannot tell a
+        declared SameSite=None from a missing attribute (Firefox and WebKit report both as None)."""
+        try:
+            if "set-cookie" not in response.headers:
+                return
+            lines = [h["value"] for h in response.headers_array() if h["name"].lower() == "set-cookie"]
+        except Exception:  # noqa: BLE001 - a response that went away: nothing to record
+            return
+        for line in (x for value in lines for x in value.split("\n")):
+            parts = [x.strip() for x in line.split(";")]
+            if not parts or "=" not in parts[0]:
+                continue
+            samesite = ""
+            for attr in parts[1:]:
+                key, _, val = attr.partition("=")
+                if key.strip().lower() == "samesite":
+                    samesite = val.strip()
+            self.declared_cookies[parts[0].split("=", 1)[0].strip()] = samesite
 
     def _default_user_agent(self) -> str:
         page = self.browser.new_page()

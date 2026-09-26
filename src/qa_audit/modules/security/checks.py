@@ -122,11 +122,17 @@ def cookie_findings(cookies: list[dict], host: str, https: bool) -> list[tuple[s
         if not own_cookie(c, host):
             continue
         name = c.get("name", "")
-        flags = (f"Secure={c.get('secure')}, HttpOnly={c.get('httpOnly')}, SameSite={c.get('sameSite')}")
+        declared = c.get("declared")      # SameSite in a Set-Cookie header; None: not seen in one (e.g. set by script)
+        source = ("not set in a Set-Cookie header (set by JavaScript or before the audit)" if declared is None
+                  else f"Set-Cookie SameSite={declared or '(absent)'}")
+        flags = (f"Secure={c.get('secure')}, HttpOnly={c.get('httpOnly')}, SameSite as reported by the browser="
+                 f"{c.get('sameSite')}; {source}")
         if https and not c.get("secure"):
             out.append(("cookie-not-secure", {"cookie": name, "observed": flags}))
-        if str(c.get("sameSite", "")).lower() == "none" and not c.get("secure"):
+        if (declared or "").lower() == "none" and not c.get("secure"):
             out.append(("cookie-samesite-none-insecure", {"cookie": name, "observed": flags}))
+        elif not declared:
+            out.append(("cookie-samesite-unset", {"cookie": name, "observed": flags}))
         if SESSION_NAME.search(name) and not c.get("httpOnly"):
             out.append(("cookie-session-not-httponly", {"cookie": name, "observed": flags}))
     return out

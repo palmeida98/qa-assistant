@@ -79,8 +79,9 @@ class EngineTests:
         cls.tmp = tempfile.TemporaryDirectory()
         cls.site = FixtureSite().__enter__()
         mods = registry.discover(use_entry_points=False)
-        cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name),
-                                registry.select("full", mods))
+        # visual is not part of full (docs/qa-audit.md §19): asked for by name, as a person would
+        chosen = sorted(registry.select("full", mods) + [mods["visual"]], key=lambda m: m.order)
+        cls.result = runner.run(cls.site.url, make_cfg(cls.engine, cls.tmp.name), chosen)
         from qa_audit.reports import write_all
         cls.paths = write_all(cls.result, ["html", "json", "csv", "md"])
         cls.requests = list(cls.site.requests)
@@ -173,6 +174,14 @@ class EngineTests:
                 self.assertNotIn("secure.html", sec[check].description)   # the page with every header
         self.assertIn("sessionid", sec["cookie-session-not-httponly"].actual)
         self.assertNotIn("theme", sec["cookie-session-not-httponly"].actual)   # HttpOnly, and not session-like
+        # SameSite: sessionid comes in a Set-Cookie without it, jspref is set by script (about.html). No engine may
+        # report them as SameSite=None: Firefox and WebKit show a missing attribute as None (found on 26.09.2026)
+        unset = sec["cookie-samesite-unset"]
+        self.assertEqual((unset.status, unset.severity), ("needs-human", "info"))
+        self.assertIn("sessionid", unset.actual)
+        self.assertIn("jspref", unset.actual)
+        self.assertIn("set by JavaScript", " ".join(e.value for e in unset.evidence))
+        self.assertNotIn("cookie-samesite-none-insecure", sec)
         # HTTPS-only checks do not apply to an HTTP site
         for check in ("hsts-missing", "mixed-content-active", "tls-cert-expiring", "cookie-not-secure"):
             self.assertNotIn(check, sec)
@@ -526,7 +535,7 @@ class ErrorPageTests:
         with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
             cfg = make_cfg(self.engine, tmp, crawl={"pages": pages, "audit_error_pages": on, "max_depth": 1})
             mods = registry.discover(use_entry_points=False)
-            return runner.run(site.url + start, cfg, [mods["accessibility"]])
+            return runner.run(site.url + start, cfg, [mods["functional"], mods["accessibility"]])
 
     def test_listed_pages_answering_404_are_audited_with_the_option(self):
         r = self.audit("app/home", ["/app/settings", "/error500.html"], on=True)
@@ -541,6 +550,14 @@ class ErrorPageTests:
         self.assertEqual(pages["error500.html"].error, "HTTP 500")
         self.assertEqual(pages["gone.html"].error, "HTTP 404")
         self.assertFalse(pages["gone.html"].error_status_audited)
+        # the functional module: the listed SPA pages are error-status-served, never broken links (26.09.2026)
+        fun = {f.check: f for f in r.findings if f.module == "functional"}
+        served = " ".join(e.value for e in fun["error-status-served"].evidence)
+        self.assertIn("app/home", served)
+        self.assertIn("app/settings", served)
+        broken_targets = [e.value.split(": HTTP")[0] for e in fun["broken-link"].evidence]   # "<url>: HTTP 404; …"
+        self.assertTrue(any(t.endswith("/gone.html") for t in broken_targets), broken_targets)
+        self.assertFalse([t for t in broken_targets if "/app/" in t], broken_targets)
 
     def test_without_the_option_a_404_start_page_stops_the_audit(self):
         from qa_audit.browser.discovery import TargetUnreachable
@@ -822,7 +839,8 @@ class CliTests:
                       "--baseline-dir", os.path.join(tmp, "baselines")]
             code, out, _ = self.cli(site.url, *common)
             self.assertEqual(code, 1, out)                          # high-severity problems on a11y.html
-            self.assertIn("[1/7] Discovery", out)   # + performance, security, functional, visual, accessibility, report
+            self.assertIn("[1/6] Discovery", out)   # + performance, security, functional, accessibility, report
+            self.assertNotIn("Visual", out)         # not part of full (docs/qa-audit.md §19)
             self.assertIn("Security", out)
             self.assertIn("Only audit sites you own or are authorized to test.", out)
             self.assertIn("report.html", out)

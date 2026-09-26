@@ -18,6 +18,7 @@ class AuditModule:
     # modules run on each page in this order: ones that only read the page first (performance measures an untouched
     # page), ones that interact with it (Tab key, viewport changes) last
     order = 50
+    in_full = True             # False: runs only when asked for by name (docs/qa-audit.md §2, §19)
     manual_checks: ClassVar[list[dict]] = []   # [{"id", "title", "how", "references"}], listed in the report, never "done"
     disclaimer = ""            # shown with the module's results
 
