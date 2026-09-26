@@ -1,15 +1,15 @@
 """
-Recalculo seguro de formulas de um workbook (tecnica-excel.md secao 2).
+Safe recalculation of a workbook's formulas (technique-excel.md section 2).
 
-Regra de ouro: nunca recalcular diretamente num caminho dentro de uma pasta
-sincronizada ou montada. recalc_safe() copia sempre o ficheiro para uma pasta
-temporaria local, recalcula la e so depois copia o resultado de volta.
+Golden rule: never recalculate directly on a path inside a synced or mounted
+folder. recalc_safe() always copies the file to a local temporary folder,
+recalculates there and only then copies the result back.
 
-Mecanismos:
-- "libreoffice" (por omissao): soffice --headless com um perfil isolado que
-  forca o recalculo ao abrir (OOXMLRecalcMode=0) e regrava em .xlsx.
-- "excel-com" (opcional, so Windows com Excel desktop): automacao COM via
-  pywin32, corrida num processo filho para o timeout ser efetivo.
+Mechanisms:
+- "libreoffice" (default): soffice --headless with an isolated profile that
+  forces recalculation on open (OOXMLRecalcMode=0) and saves again as .xlsx.
+- "excel-com" (optional, Windows with desktop Excel only): COM automation via
+  pywin32, run in a child process so that the timeout is effective.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 
-MECANISMOS = ("libreoffice", "excel-com")
+MECHANISMS = ("libreoffice", "excel-com")
 
 _SOFFICE_CANDIDATES = [
     r"C:\Program Files\LibreOffice\program\soffice.com",
@@ -31,8 +31,8 @@ _SOFFICE_CANDIDATES = [
     "/Applications/LibreOffice.app/Contents/MacOS/soffice",
 ]
 
-# OOXMLRecalcMode / ODFRecalcMode: 0 = sempre, 1 = nunca, 2 = perguntar.
-# Sem isto o LibreOffice pode reaproveitar valores em cache em vez de recalcular.
+# OOXMLRecalcMode / ODFRecalcMode: 0 = always, 1 = never, 2 = ask.
+# Without this LibreOffice may reuse cached values instead of recalculating.
 _SOFFICE_PROFILE_XCU = """<?xml version="1.0" encoding="UTF-8"?>
 <oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <item oor:path="/org.openoffice.Office.Calc/Formula/Load"><prop oor:name="OOXMLRecalcMode" oor:op="fuse"><value>0</value></prop></item>
@@ -40,8 +40,8 @@ _SOFFICE_PROFILE_XCU = """<?xml version="1.0" encoding="UTF-8"?>
 </oor:items>
 """
 
-# Corre num processo filho: o COM nao tem timeout proprio, e um Excel pendurado
-# num dialogo bloquearia o processo principal para sempre.
+# Runs in a child process: COM has no timeout of its own, and an Excel stuck on a
+# dialog would block the main process forever.
 _COM_SCRIPT = r"""
 import sys
 import pythoncom
@@ -71,20 +71,20 @@ def find_soffice() -> str:
         if os.path.exists(cand):
             return cand
     raise FileNotFoundError(
-        "LibreOffice (soffice) nao encontrado -- instalar (ex.: "
-        "`winget install TheDocumentFoundation.LibreOffice`) ou usar mecanismo 'excel-com'."
+        "LibreOffice (soffice) not found -- install it (e.g. "
+        "`winget install TheDocumentFoundation.LibreOffice`) or use the 'excel-com' mechanism."
     )
 
 
 def _run_with_timeout(cmd: list[str], timeout: int) -> tuple[int, str, str]:
-    # fora do Windows, num grupo de processos proprio: soffice lanca o soffice.bin, que herda os
-    # pipes; matar so o pai deixava o communicate() a espera do filho pendurado, sem timeout
+    # outside Windows, in a process group of its own: soffice starts soffice.bin, which inherits the
+    # pipes; killing only the parent left communicate() waiting for the stuck child, with no timeout
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             start_new_session=os.name != "nt")
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        # soffice.com / Excel lancam processos filhos -- matar a arvore toda
+        # soffice.com / Excel start child processes -- kill the whole tree
         if os.name == "nt":
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)
         else:
@@ -93,7 +93,7 @@ def _run_with_timeout(cmd: list[str], timeout: int) -> tuple[int, str, str]:
             except ProcessLookupError:
                 pass
         proc.communicate()
-        raise TimeoutError(f"recalculo nao terminou em {timeout}s") from None
+        raise TimeoutError(f"recalculation did not finish in {timeout}s") from None
     return proc.returncode, stdout, stderr
 
 
@@ -116,34 +116,34 @@ def _recalc_libreoffice(path: str, timeout: int) -> None:
         rc, stdout, stderr = _run_with_timeout(cmd, timeout)
         out_path = os.path.join(outdir, os.path.splitext(os.path.basename(path))[0] + ".xlsx")
         if rc != 0 or not os.path.exists(out_path):
-            raise RuntimeError(f"LibreOffice falhou (rc={rc}): {stdout.strip()!r} / {stderr.strip()!r}")
+            raise RuntimeError(f"LibreOffice failed (rc={rc}): {stdout.strip()!r} / {stderr.strip()!r}")
         shutil.copy(out_path, path)
 
 
 def _recalc_excel_com(path: str, timeout: int) -> None:
     if os.name != "nt":
-        raise RuntimeError("mecanismo 'excel-com' so existe no Windows")
+        raise RuntimeError("the 'excel-com' mechanism exists only on Windows")
     rc, _stdout, stderr = _run_with_timeout(
         [sys.executable, "-c", _COM_SCRIPT, os.path.abspath(path)], timeout
     )
     if rc != 0:
-        raise RuntimeError(f"Excel COM falhou (rc={rc}): {stderr.strip()[-500:]!r}")
+        raise RuntimeError(f"Excel COM failed (rc={rc}): {stderr.strip()[-500:]!r}")
 
 
-def recalc_safe(path: str, mecanismo: str = "libreoffice", timeout: int = 60) -> dict:
-    """Recalcula as formulas de `path` numa copia temporaria local e, se tudo
-    correr bem, substitui o original pelo resultado. Devolve
-    {"ok": True, "mecanismo": ...} ou {"ok": False, "mecanismo": ..., "erro": ...};
-    em caso de erro o original fica intacto."""
-    if mecanismo not in MECANISMOS:
-        return {"ok": False, "mecanismo": mecanismo, "erro": f"mecanismo desconhecido (validos: {MECANISMOS})"}
-    fn = _recalc_libreoffice if mecanismo == "libreoffice" else _recalc_excel_com
+def recalc_safe(path: str, mechanism: str = "libreoffice", timeout: int = 60) -> dict:
+    """Recalculates the formulas of `path` in a local temporary copy and, if
+    all goes well, replaces the original with the result. Returns
+    {"ok": True, "mechanism": ...} or {"ok": False, "mechanism": ..., "error": ...};
+    on error the original is left untouched."""
+    if mechanism not in MECHANISMS:
+        return {"ok": False, "mechanism": mechanism, "error": f"unknown mechanism (valid: {MECHANISMS})"}
+    fn = _recalc_libreoffice if mechanism == "libreoffice" else _recalc_excel_com
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = os.path.join(tmp, os.path.basename(path))
         shutil.copy(path, tmp_path)
         try:
             fn(tmp_path, timeout)
-        except Exception as e:  # noqa: BLE001 -- qualquer falha vira ok=False; o original fica intacto
-            return {"ok": False, "mecanismo": mecanismo, "erro": str(e)}
+        except Exception as e:  # noqa: BLE001 -- any failure becomes ok=False; the original is untouched
+            return {"ok": False, "mechanism": mechanism, "error": str(e)}
         shutil.copy(tmp_path, path)
-    return {"ok": True, "mecanismo": mecanismo}
+    return {"ok": True, "mechanism": mechanism}

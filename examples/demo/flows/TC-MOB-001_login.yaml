@@ -1,0 +1,14 @@
+# TC-MOB-001 · Login with valid credentials (technique-mobile.md; Maestro Web, beta)
+# Credentials: MAESTRO_<VAR> in the environment, set by scripts/run_mobile.py from .env.
+url: https://www.saucedemo.com
+---
+- launchApp
+- tapOn:
+    id: "user-name"
+- inputText: ${MAESTRO_DEMO_SAUCE_STANDARD_USER}
+- tapOn:
+    id: "password"
+- inputText: ${MAESTRO_DEMO_SAUCE_PASSWORD}
+- tapOn:
+    id: "login-button"
+- assertVisible: "Products"

@@ -1,0 +1,22 @@
+{
+ "results": [
+  {
+   "tc": "TC-MOB-001",
+   "status": "Pass",
+   "ts": "2026-09-24T12:13:46",
+   "actual_result": "Maestro Web (beta) in Chrome: flow examples\\demo\\flows\\TC-MOB-001_login.yaml passed in 13 s; \"Products\" page visible after the login."
+  },
+  {
+   "tc": "TC-MOB-002",
+   "status": "Pass",
+   "ts": "2026-09-24T12:13:46",
+   "actual_result": "Maestro Web (beta) in Chrome: flow examples\\demo\\flows\\TC-MOB-002_locked.yaml passed in 10 s; message \"Epic sadface: Sorry, this user has been locked out.\" visible."
+  },
+  {
+   "tc": "TC-MOB-003",
+   "status": "Pass",
+   "ts": "2026-09-24T12:13:46",
+   "actual_result": "Maestro Web (beta) in Chrome: flow examples\\demo\\flows\\TC-MOB-003_cart.yaml passed in 13 s; \"Remove\" button visible and cart counter at 1."
+  }
+ ]
+}

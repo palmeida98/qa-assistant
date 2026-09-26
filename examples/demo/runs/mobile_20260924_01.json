@@ -1,28 +1,28 @@
 {
- "plataforma": "web",
- "alvo": "Maestro Web (beta) no Chrome",
+ "platform": "web",
+ "target": "Maestro Web (beta) in Chrome",
  "ts": "2026-09-24T12:13:46",
- "resultados": [
+ "results": [
   {
-   "caso": "CT-MOB-001",
-   "flow": "examples\\demo\\flows\\CT-MOB-001_login.yaml",
-   "estado_sugerido": "Pass",
-   "mensagem": "",
-   "tempo_s": 13.499
+   "case": "TC-MOB-001",
+   "flow": "examples\\demo\\flows\\TC-MOB-001_login.yaml",
+   "suggested_status": "Pass",
+   "message": "",
+   "time_s": 13.499
   },
   {
-   "caso": "CT-MOB-002",
-   "flow": "examples\\demo\\flows\\CT-MOB-002_bloqueado.yaml",
-   "estado_sugerido": "Pass",
-   "mensagem": "",
-   "tempo_s": 10.24
+   "case": "TC-MOB-002",
+   "flow": "examples\\demo\\flows\\TC-MOB-002_locked.yaml",
+   "suggested_status": "Pass",
+   "message": "",
+   "time_s": 10.24
   },
   {
-   "caso": "CT-MOB-003",
-   "flow": "examples\\demo\\flows\\CT-MOB-003_carrinho.yaml",
-   "estado_sugerido": "Pass",
-   "mensagem": "",
-   "tempo_s": 12.679
+   "case": "TC-MOB-003",
+   "flow": "examples\\demo\\flows\\TC-MOB-003_cart.yaml",
+   "suggested_status": "Pass",
+   "message": "",
+   "time_s": 12.679
   }
  ]
 }

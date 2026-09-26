@@ -1,35 +1,36 @@
-﻿---
+---
 name: checkpoint
-description: Grava o registo leve, atualiza o contexto.md do workspace no formato da metodologia-core.md seccao 12.2 e faz commit local no workspace.
+description: Saves the run log, updates the workspace's context.md in the format of methodology.md section 12.2 and makes a local commit in the workspace.
 ---
 
-1. Le do projeto.yaml o caminho do registo leve (registo_leve). Se nao estiver definido, usa runs/.
-   Nunca escrevas em historico/: e imutavel (metodologia-core.md seccao 13).
-2. Grava no registo leve todos os resultados da sessao ainda nao gravados: caso, resultado, nota curta,
-   bug associado e timestamp (seccao 7.1). Usa o formato do projeto, se estiver definido.
-3. Casos em Duvida mantem-se como Duvida, com a pergunta concreta (seccao 8.5).
-4. Atualiza o contexto.md com a estrutura da seccao 12.2: estado atual, ponto de execucao
-   (ultimo lote, ultimo caso), trabalho concluido, decisoes (e quem as tomou), duvidas em aberto,
-   bloqueios, trabalho pendente e estado da validacao. Atualiza a data e hora.
-5. Nao reconstruas o progresso do zero: acrescenta ao que ja esta registado (seccao 12.1).
-6. Se o workspace for um repositorio git, faz um commit local por checkpoint (seccao 12.1),
-   so com os ficheiros do registo leve e o contexto.md. Nunca faz push.
-7. Nao passa resultados para o workbook/tracker principal sem confirmacao do utilizador. Com tracker
-   excel e confirmacao dada, aplica o lote pelo adaptador (tecnica-excel.md seccao 1), a partir da raiz
-   do qa-assistant: python -m adapters.excel.aplicar <workspace> <registo_leve>/<lote>.json
-   e so segue se sair com 0. Os outros codigos:
-   - 4 = lote invalido (ex.: Duvida por resolver, estado fora do vocabulario, caso repetido): nada foi
-     escrito; corrige o registo leve com o utilizador e volta a aplicar. Excecao: se o lote JA tinha
-     sido aplicado e foi editado depois, nao o reapliques -- a correcao vai num lote novo, com outro
-     nome, so com os casos a corrigir (e "bug" em vez de "defeito_novo" para defeitos ja criados);
-   - 2 = cross-check com problemas: original intacto, resultado em .REVISTO.xlsx; mostra os problemas;
-   - 3 = gravado, mas o recalculo falhou: rever antes de dar por terminado;
-   - 5 = gravado e recalculado, mas o resumo do workbook nao bate com a contagem direta
-     (aba_resumo): mostra as celulas ao utilizador; corrigem-se as FORMULAS do resumo, nunca os
-     numeros a mao. Os totais do painel e do resumo de sessao vem da contagem direta.
-   Reaplicar o mesmo lote nao muda nada (o adaptador deteta-o).
-7a. Com tracker jira ou azure-devops (sem adaptador; metodologia-core.md seccao 4.2), o registo leve e a
-   fonte: mostra ao utilizador o que passa ao tracker (resultados e bugs aprovados) e so o envia com a
-   ferramenta do tracker disponivel e aprovacao explicita; senao, fica a lista para ele passar a mao.
-8. Indica ao utilizador o ponto exato onde a execucao ficou. Com tracker excel, pode gerar o painel:
-   python scripts/gerar_painel.py <workspace> (a partir da raiz do qa-assistant).
+1. Read the run log's path from project.yaml (run_log). If it is not defined, use runs/.
+   Never write to history/: it is immutable (methodology.md section 13).
+2. Save to the run log every result of the session not saved yet: case, result, short note,
+   linked bug and timestamp (section 7.1). Use the project's format, if defined.
+3. Cases in Question stay as Question, with the concrete question (section 8.5).
+4. Update context.md with the structure of section 12.2: current state, execution point
+   (last batch, last case), work done, decisions (and who made them), open questions,
+   blockers, pending work and validation state. Update the date and time.
+5. Do not rebuild the progress from scratch: add to what is already recorded (section 12.1).
+6. If the workspace is a git repository, make one local commit per checkpoint (section 12.1),
+   only with the run log files and context.md. Never push.
+7. Do not pass results to the main workbook/tracker without the user's confirmation. With the excel
+   tracker and confirmation given, apply the batch through the adapter (technique-excel.md section 1), from
+   the root of qa-assistant: python -m adapters.excel.apply <workspace> <run_log>/<batch>.json
+   and only continue if it exits with 0. The other codes:
+   - 4 = invalid batch (e.g. an unresolved Question, a status outside the vocabulary, a repeated case):
+     nothing was written; fix the run log with the user and apply again. Exception: if the batch HAD
+     already been applied and was edited afterwards, do not apply it again -- the correction goes in a new
+     batch, with another name, with only the cases to correct (and "bug" instead of "new_defect" for
+     defects already created);
+   - 2 = cross-check with problems: original untouched, result in .REVIEWED.xlsx; show the problems;
+   - 3 = saved, but the recalculation failed: review before calling it done;
+   - 5 = saved and recalculated, but the workbook's summary does not match the direct count
+     (summary): show the cells to the user; the summary's FORMULAS are fixed, never the numbers
+     by hand. The totals of the dashboard and of the session summary come from the direct count.
+   Applying the same batch again changes nothing (the adapter detects it).
+7a. With the jira or azure-devops tracker (no adapter; methodology.md section 4.2), the run log is the
+   source: show the user what goes to the tracker (approved results and bugs) and only send it with the
+   tracker's tool available and explicit approval; otherwise, leave the list for them to pass by hand.
+8. Tell the user the exact point where the run stopped. With the excel tracker, the dashboard can be built:
+   python scripts/build_dashboard.py <workspace> (from the root of qa-assistant).

@@ -1,4 +1,11 @@
-from .base import ConfigError, ExcelAdapter, LoteInvalido, load_lote, lote_hash
+from .base import (
+    ConfigError,
+    ExcelAdapter,
+    InvalidBatch,
+    batch_hash,
+    load_batch,
+    read_batch,
+)
 from .recalc import recalc_safe
 
-__all__ = ["ConfigError", "ExcelAdapter", "LoteInvalido", "load_lote", "lote_hash", "recalc_safe"]
+__all__ = ["ConfigError", "ExcelAdapter", "InvalidBatch", "batch_hash", "load_batch", "read_batch", "recalc_safe"]

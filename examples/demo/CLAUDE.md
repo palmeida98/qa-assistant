@@ -1,65 +1,65 @@
 # demo-saucedemo — demo
 
-Workspace de demonstração do qa-assistant, dentro do próprio repositório (`examples/demo/`).
-Serve para desenvolver e validar a framework sem dados de clientes, e é a base do portefólio.
-Tudo aqui é fictício ou público.
+Demo workspace of qa-assistant, inside the repository itself (`examples/demo/`).
+It serves to develop and validate the framework without client data, and it is the base of the portfolio.
+Everything here is fictional or public.
 
-Referencias universais:
-- @../../docs/metodologia-core.md
-- @../../docs/tecnica-browser.md
-- @../../docs/tecnica-excel.md
+Universal references:
+- @../../docs/methodology.md
+- @../../docs/technique-browser.md
+- @../../docs/technique-excel.md
 
-## Ambientes
-- Teste: https://www.saucedemo.com/ — site público de prática de testes. Não há produção.
-- API (módulo `api`): https://restful-booker.herokuapp.com — API pública de prática; documentação em `/apidoc` (fonte do esperado). Não há produção.
-- Respeitar os dois sites: sem testes de carga nem de segurança ativos; ritmo normal de utilizador.
+## Environments
+- Test: https://www.saucedemo.com/ — public test practice site. There is no production.
+- API (`api` module): https://restful-booker.herokuapp.com — public practice API; documentation at `/apidoc` (source of the expected result). There is no production.
+- Respect both sites: no load tests nor active security tests; a normal user's pace.
 
-## Roles / perfis
-Contas de demonstração publicadas pelo próprio site (comportamento documentado na página de login):
-- `standard_user` — comportamento normal; é a referência do resultado esperado
-- `locked_out_user` — conta bloqueada
-- `problem_user` — erros visuais e funcionais intencionais
-- `performance_glitch_user` — respostas lentas
-- `error_user` — erros em algumas ações
-- `visual_user` — diferenças visuais
+## Roles / profiles
+Demo accounts published by the site itself (behaviour documented on the login page):
+- `standard_user` — normal behaviour; it is the reference for the expected result
+- `locked_out_user` — locked account
+- `problem_user` — intentional visual and functional errors
+- `performance_glitch_user` — slow responses
+- `error_user` — errors in some actions
+- `visual_user` — visual differences
 
-Variáveis de credenciais (valores só no `.env` local, nunca aqui):
-- `DEMO_SAUCE_<ROLE>_USER` para cada role (ex.: `DEMO_SAUCE_STANDARD_USER`)
-- `DEMO_SAUCE_PASSWORD` (a mesma palavra-passe de demonstração para todas as contas)
-- API: `DEMO_BOOKER_USER` e `DEMO_BOOKER_PASSWORD` (conta admin publicada na documentação da API). O token vai só para `.api-sessao.env` (ignorado pelo git), via `api_pedido.py --guardar-segredo`.
+Credential variables (values only in the local `.env`, never here):
+- `DEMO_SAUCE_<ROLE>_USER` for each role (e.g. `DEMO_SAUCE_STANDARD_USER`)
+- `DEMO_SAUCE_PASSWORD` (the same demo password for every account)
+- API: `DEMO_BOOKER_USER` and `DEMO_BOOKER_PASSWORD` (admin account published in the API's documentation). The token goes only to `.api-session.env` (ignored by git), through `api_request.py --save-secret`.
 
-## Documentacao de referencia
-- Não há especificação: o workbook `workbook/plano-demo.xlsx` (casos aprovados a 23.09.2026) é a fonte de verdade.
-- O resultado esperado de cada caso é o comportamento normal do site (`standard_user`), com as mensagens da interface em inglês. Se um esperado não bater certo com o site, o caso fica em `Dúvida`, não em `Fail`.
+## Reference documentation
+- There is no specification: the workbook `workbook/demo-plan.xlsx` (cases approved on 23.09.2026) is the source of truth.
+- The expected result of each case is the site's normal behaviour (`standard_user`), with the interface messages in English. If an expected result does not match the site, the case goes to `Question`, not to `Fail`.
 
-## Estrutura do workbook / tracker
-- Tracker: o próprio workbook Excel; layout na secção `excel:` do `projeto.yaml` (lido pelo adaptador `adapters/excel/`).
-- `workbook/plano-demo.xlsx` (gerado por `gerar_workbook.py`):
-  - **Resumo** — totais por área e estado (fórmulas; não editar à mão)
-  - **Login**, **Produtos**, **Checkout** — casos `CT-LOGIN-…`, `CT-PROD-…`, `CT-CHK-…`
-  - **API** — casos `CT-API-…` (restful-booker; `/testar-api`)
-  - **Acessibilidade** — casos `CT-A11Y-…` (WCAG 2.1 AA; `/auditar-acessibilidade`)
-  - **Mobile** — casos `CT-MOB-…`, um flow Maestro por caso em `flows/` (`/testar-mobile`)
-  - **Defeitos** — registo completo (`BUG-{n}`), incluindo resolvidos
-  - **Defeitos Ativos** — vista regenerada pelo adaptador (só abertos)
-- Estados de caso: `Por testar`, `Pass`, `Fail`, `Blocked`, `N/A` (os da metodologia §2)
-- Estados de defeito: `Aberto`, `Em análise`, `Em correção`, `Corrigido`, `Reaberto`, `Fechado`, `Não é defeito` (fechados: `Corrigido`, `Fechado`, `Não é defeito`)
-- Registo leve de sessão: `runs/` (`registo_leve` no `projeto.yaml`)
-- O workbook é reconstruível: `python examples/demo/reconstruir_workbook.py` (a partir da raiz do qa-assistant) gera-o de novo e reaplica os lotes de `runs/` pela ordem de execução. Usar sempre que se acrescentam áreas ou casos ao `gerar_workbook.py`, nunca editar o workbook à mão.
+## Structure of the workbook / tracker
+- Tracker: the Excel workbook itself; layout in the `excel:` section of `project.yaml` (read by the adapter `adapters/excel/`).
+- `workbook/demo-plan.xlsx` (built by `build_workbook.py`):
+  - **Summary** — totals per area and status (formulas; do not edit by hand)
+  - **Login**, **Products**, **Checkout** — cases `TC-LOGIN-…`, `TC-PROD-…`, `TC-CHK-…`
+  - **API** — cases `TC-API-…` (restful-booker; `/test-api`)
+  - **Accessibility** — cases `TC-A11Y-…` (WCAG 2.1 AA; `/audit-accessibility`)
+  - **Mobile** — cases `TC-MOB-…`, one Maestro flow per case in `flows/` (`/test-mobile`)
+  - **Defects** — full register (`BUG-{n}`), resolved ones included
+  - **Active Defects** — view regenerated by the adapter (open ones only)
+- Case statuses: `Not run`, `Pass`, `Fail`, `Blocked`, `N/A` (those of methodology §2)
+- Defect statuses: `Open`, `In analysis`, `In progress`, `Fixed`, `Reopened`, `Closed`, `Not a defect` (closed: `Fixed`, `Closed`, `Not a defect`)
+- Session run log: `runs/` (`run_log` in `project.yaml`)
+- The workbook can be rebuilt: `python examples/demo/rebuild_workbook.py` (from the root of qa-assistant) builds it again and applies the batches of `runs/` in execution order. Use it whenever areas or cases are added to `build_workbook.py`; never edit the workbook by hand.
 
-## Regressão (N2)
-- `e2e/`: specs Playwright dos casos promovidos (tecnica-browser.md §13), hoje CT-LOGIN-001…003 em `e2e/specs/login.spec.ts`. Correr: `npm ci` e `npx playwright test` dentro de `e2e/` (usa o Chrome instalado; credenciais do `.env`).
+## Regression (N2)
+- `e2e/`: Playwright specs of the promoted cases (technique-browser.md §13), today TC-LOGIN-001…003 in `e2e/specs/login.spec.ts`. Run: `npm ci` and `npx playwright test` inside `e2e/` (uses the installed Chrome; credentials from `.env`).
 
-## Formato de bug
-- ID: `BUG-{n}` (o adaptador calcula o próximo número)
-- Campos: colunas da sheet Defeitos — Título, Descrição (passos, esperado → observado), Área, Caso, Role, Severidade, Prioridade, Estado, Reportado por, Data
-- Severidade e Prioridade: `Crítica`, `Alta`, `Média`, `Baixa`
-- Bugs resolvidos: **remover** da vista Defeitos Ativos; o registo completo fica em Defeitos
+## Bug format
+- ID: `BUG-{n}` (the adapter works out the next number)
+- Fields: columns of the Defects sheet — Title, Description (steps, expected → observed), Area, Case, Role, Severity, Priority, Status, Reported by, Date
+- Severity and Priority: `Critical`, `High`, `Medium`, `Low`
+- Resolved bugs: **remove** from the Active Defects view; the full register stays in Defects
 
-## Regras especificas deste projeto
-- Política de evidência: **texto** (screenshot só quando o problema é visual).
-- Módulos ativos: `funcional-web`, `exploratorio`, `api`, `acessibilidade`, `mobile`.
-  - `api`: o saucedemo não tem API; o módulo usa a API de prática restful-booker (secção `api:` do `projeto.yaml`).
-  - `mobile`: o saucedemo tem app nativa, mas esta máquina não tem dispositivo nem emulador; os flows correm em Maestro Web (beta) e valem para a versão web, não para a app nativa.
-  - `acessibilidade`: auditoria automática com `scripts/auditar_a11y.py` (páginas na secção `acessibilidade:` do `projeto.yaml`) e manual guiada.
-- Nada do demo pode passar a denylist nem o detect-secrets: nem a palavra-passe de demonstração vai para o repositório.
+## Rules specific to this project
+- Evidence policy: **text** (screenshot only when the problem is visual).
+- Active modules: `functional-web`, `exploratory`, `api`, `accessibility`, `mobile`.
+  - `api`: saucedemo has no API; the module uses the restful-booker practice API (`api:` section of `project.yaml`).
+  - `mobile`: saucedemo has a native app, but this machine has no device nor emulator; the flows run in Maestro Web (beta) and are valid for the web version, not for the native app.
+  - `accessibility`: automated audit with `scripts/audit_a11y.py` (pages in the `accessibility:` section of `project.yaml`) and guided manual checks.
+- Nothing in the demo may pass the denylist nor detect-secrets: not even the demo password goes into the repository.

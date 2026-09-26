@@ -1,0 +1,126 @@
+project: "demo-saucedemo"
+company: "demo"               # demo workspace inside qa-assistant (examples/demo)
+environments:
+  test: "https://www.saucedemo.com/"   # public practice site; there is no production
+  api-test: "https://restful-booker.herokuapp.com"   # public practice API (api module); there is no production
+roles:
+  - standard_user
+  - locked_out_user
+  - problem_user
+  - performance_glitch_user
+  - error_user
+  - visual_user
+tracker: "excel"             # azure-devops | jira | excel
+bug_format: "BUG-{n}"        # fields = columns of the Defects sheet
+resolved_bugs: "remove"      # or "archive"
+evidence: "text"             # or "text+screenshot"
+modules: [functional-web, exploratory, api, accessibility, mobile]
+run_log: "runs/"             # folder of the session's run log (never history/, which is immutable)
+
+api:                         # api module (docs/technique-api.md, plan 3.1)
+  base_url: "https://restful-booker.herokuapp.com"
+  contract: "https://restful-booker.herokuapp.com/apidoc/index.html"   # published documentation: source of the expected result
+  auth: "cookie"               # token from POST /auth in the cookie token=...; the doc also accepts Basic
+  credentials:
+    admin: {user_var: DEMO_BOOKER_USER, pass_var: DEMO_BOOKER_PASSWORD}
+
+accessibility:                # accessibility module (docs/technique-accessibility.md, plan 3.2)
+  standard: "WCAG 2.1 AA"
+  browser: "chromium"         # browser of the qa-audit engine (qa-audit doctor)
+  audit_error_pages: true     # saucedemo answers 404 to the direct links of the pages with login (SPA)
+  login:                      # login form before the pages with login: true
+    url: "https://www.saucedemo.com/"
+    user_field: "#user-name"
+    pass_field: "#password"
+    button: "#login-button"
+    user_var: DEMO_SAUCE_STANDARD_USER
+    pass_var: DEMO_SAUCE_PASSWORD
+  pages:
+    - {name: login, url: "https://www.saucedemo.com/", login: false}
+    - {name: products, url: "https://www.saucedemo.com/inventory.html", login: true}
+    - {name: cart, url: "https://www.saucedemo.com/cart.html", login: true}
+    - {name: checkout-information, url: "https://www.saucedemo.com/checkout-step-one.html", login: true}
+
+mobile:                       # mobile module (docs/technique-mobile.md, plan 3.3)
+  platform: "web"             # Maestro Web (beta): there is no device/emulator on this machine
+  flows: "flows"              # one flow per case: TC-MOB-<n>_<name>.yaml
+  variables: [DEMO_SAUCE_STANDARD_USER, DEMO_SAUCE_LOCKED_OUT_USER, DEMO_SAUCE_PASSWORD]
+
+dashboard:                   # meaning of each case status in the dashboard (plan 5.1)
+  states: {"Not run": pending, "Pass": ok, "Fail": fail, "Blocked": blocked, "N/A": na}
+
+# ---------------------------------------------------------------------------
+# excel: layout of the workbook, read by the adapter (adapters/excel/base.py).
+# Filled in at the onboarding of 23.09.2026 with `python -m adapters.excel.inspect`
+# + the user's answers. Fields commented in the template docs/project.yaml.
+# ---------------------------------------------------------------------------
+excel:
+  file: "workbook/demo-plan.xlsx"
+
+  cases:
+    sheets:
+      "TC-LOGIN-": "Login"
+      "TC-PROD-": "Products"
+      "TC-CHK-": "Checkout"
+      "TC-API-": "API"
+      "TC-A11Y-": "Accessibility"
+      "TC-MOB-": "Mobile"
+    header_row: 1
+    columns:
+      id: "ID"
+      status: "Status"
+      actual_result: "Actual Result"
+      notes: "Notes"
+    statuses: ["Not run", "Pass", "Fail", "Blocked", "N/A"]
+
+  defects:
+    sheet: "Defects"
+    header_row: 1
+    id_format: "BUG-{n}"
+    columns:
+      id: "ID"
+      status: "Status"
+      case: "Case"
+      severity: "Severity"
+      priority: "Priority"
+      reported_by: "Reported by"
+      report_date: "Date"
+    batch_fields:
+      title: "Title"
+      description: "Description"
+      area: "Area"
+      role: "Role"
+    defaults: {}
+    statuses: ["Open", "In analysis", "In progress", "Fixed", "Reopened", "Closed", "Not a defect"]
+    closed_statuses: ["Fixed", "Closed", "Not a defect"]
+    initial_status: "Open"
+    priorities: ["Critical", "High", "Medium", "Low"]
+
+  summary:                     # checked against the direct count (technique-excel.md section 5)
+    sheet: "Summary"
+    header_row: 3
+    area_column: "Area"
+    total_column: "Total"
+    total_row: "Total"
+    percent_column: "% Run"
+    not_run_status: "Not run"
+
+  active_view:
+    sheet: "Active Defects"
+    header_row: 3
+    columns: {}                # headers equal to those of the Defects sheet
+    sort_by: "Area"
+    summary:
+      cell: "A2"
+      template: "{open} open ({severity[Critical]} Critical, {severity[High]} High, {severity[Medium]} Medium, {severity[Low]} Low) · {closed} closed · updated on {date:%d.%m.%Y}"
+
+  notes:
+    result: "Result: {result}"
+    new_defect: "New defect: {id}."
+
+  batch_control:
+    sheet: "_qa_batches"
+
+  recalc:
+    mechanism: "libreoffice"
+    timeout: 60

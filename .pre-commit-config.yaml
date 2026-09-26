@@ -1,13 +1,13 @@
-﻿# pre-commit install instala os dois tipos de hook: os de ficheiros (pre-commit) e o da mensagem
-# (commit-msg). Os hooks sem "stages" correm so no pre-commit (default_stages), nao outra vez na mensagem.
+# pre-commit install installs both kinds of hook: the file hooks (pre-commit) and the message one
+# (commit-msg). Hooks without "stages" run only at pre-commit (default_stages), not again on the message.
 default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
 
 repos:
-  # detect-secrets 1.5.0 abre os ficheiros com open() sem encoding: no Windows (cp1252)
-  # um ficheiro UTF-8 com certos caracteres (ex.: "Á" = bytes C3 81) da UnicodeDecodeError
-  # e e SALTADO sem aviso, como se fosse binario. Corre-se em modo UTF-8 (-X utf8), igual
-  # ao Linux do CI. Mesmo id: o CI chama `pre-commit run detect-secrets`.
+  # detect-secrets 1.5.0 opens files with open() without an encoding: on Windows (cp1252)
+  # a UTF-8 file with certain characters (e.g. "Á" = bytes C3 81) raises UnicodeDecodeError
+  # and is SKIPPED silently, as if it were binary. It runs in UTF-8 mode (-X utf8), like
+  # the CI's Linux. Same id: the CI calls `pre-commit run detect-secrets`.
   - repo: local
     hooks:
       - id: detect-secrets
@@ -17,7 +17,7 @@ repos:
         entry: python -X utf8 -m detect_secrets.pre_commit_hook
         args: ['--baseline', '.secrets.baseline']
 
-  # lint igual ao do CI (.github/workflows/ci.yml): mesma versao, mesmo ruff.toml
+  # lint as in the CI (.github/workflows/ci.yml): same version, same ruff.toml
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.8
     hooks:
@@ -26,36 +26,36 @@ repos:
   - repo: local
     hooks:
       - id: denylist
-        name: nomes de clientes
+        name: client names
         entry: python scripts/check_denylist.py
         language: system
         pass_filenames: true
 
-      # a mensagem do commit tambem fica no historico: um nome de cliente numa mensagem passou uma vez
-      # (25.09.2026), porque o hook de cima so le ficheiros
-      - id: denylist-mensagem
-        name: nomes de clientes na mensagem do commit
+      # the commit message also stays in the history: a client name in a message got through once
+      # (25.09.2026), because the hook above only reads files
+      - id: denylist-message
+        name: client names in the commit message
         entry: python scripts/check_denylist.py
         language: system
         stages: [commit-msg]
 
-      # teste golden do adaptador Excel (plano 1.5; metodologia-core seccao 15):
-      # so corre quando o commit toca no adaptador, na fixture ou no proprio teste.
-      # Sem LibreOffice sai com 2 e bloqueia o commit -- instalar, nunca --no-verify.
+      # golden test of the Excel adapter (plan 1.5; methodology section 15):
+      # runs only when the commit touches the adapter, the fixture or the test itself.
+      # Without LibreOffice it exits with 2 and blocks the commit -- install it, never --no-verify.
       - id: golden
-        name: golden do adaptador Excel
+        name: Excel adapter golden
         entry: python scripts/golden_check.py
         language: system
         pass_filenames: false
-        files: ^(adapters/|tests/golden/|docs/tecnica-excel\.md$|scripts/golden_check\.py$)
+        files: ^(adapters/|tests/golden/|docs/technique-excel\.md$|scripts/golden_check\.py$|scripts/migrate_workspace\.py$)
 
-      # testes unitarios: rapidos, sem LibreOffice. Correm tambem quando mudam os ficheiros
-      # que os testes leem: skills e CLAUDE.md (test_skills), demo (test_validar_projeto,
-      # test_painel), template do projeto.yaml e esta configuracao (test_guards); motor qa-audit (src/,
-      # pyproject.toml, .gitignore e LICENSE: tests/unit/test_engine_guards.py)
-      - id: testes
-        name: testes unitarios
+      # unit tests: fast, no LibreOffice. They also run when the files the tests read change:
+      # skills and CLAUDE.md (test_skills), demo (test_validate_project, test_dashboard), project.yaml
+      # template and this configuration (test_guards); the qa-audit engine (src/, pyproject.toml, .gitignore and
+      # LICENSE: tests/unit/test_engine_guards.py); the documents (test_language)
+      - id: tests
+        name: unit tests
         entry: python -m unittest discover -s tests
         language: system
         pass_filenames: false
-        files: ^(adapters/|scripts/|src/|tests/|examples/|integrations/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|docs/workspace/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)
+        files: ^(adapters/|scripts/|src/|tests/|examples/|integrations/|docs/|\.claude/skills/|CLAUDE\.md$|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|\.github/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)

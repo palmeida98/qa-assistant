@@ -1,0 +1,17 @@
+# TC-MOB-003 · Add to cart (technique-mobile.md; Maestro Web, beta)
+url: https://www.saucedemo.com
+---
+- launchApp
+- tapOn:
+    id: "user-name"
+- inputText: ${MAESTRO_DEMO_SAUCE_STANDARD_USER}
+- tapOn:
+    id: "password"
+- inputText: ${MAESTRO_DEMO_SAUCE_PASSWORD}
+- tapOn:
+    id: "login-button"
+- tapOn:
+    id: "add-to-cart-sauce-labs-backpack"
+- assertVisible:
+    id: "remove-sauce-labs-backpack"
+- assertVisible: "1"

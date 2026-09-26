@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Bloqueia commits que contenham nomes de clientes/empresas da denylist pessoal.
-A lista fica em ~/.qa-denylist.txt (uma entrada por linha), fora do repositorio;
-QA_DENYLIST aponta para outra lista (usado nos testes).
+"""Blocks commits that contain client/company names from the personal denylist.
+The list lives in ~/.qa-denylist.txt (one entry per line), outside the repository;
+QA_DENYLIST points to another list (used in the tests).
 
-Verifica o caminho de cada ficheiro e o seu texto. Os ficheiros Office (.xlsx,
-.docx, .pptx, ...) sao ZIP comprimidos: o texto le-se de dentro do ZIP, senao um
-workbook de cliente passava sem ser visto.
+Checks the path of each file and its text. Office files (.xlsx, .docx, .pptx,
+...) are compressed ZIPs: the text is read from inside the ZIP, otherwise a
+client workbook would pass unseen.
 """
 import os
 import sys
@@ -42,25 +42,25 @@ def main():
             continue
         try:
             text = file_text(path).lower()
-        except (OSError, zipfile.BadZipFile):  # ficheiro ilegivel nao tem texto a verificar
+        except (OSError, zipfile.BadZipFile):  # an unreadable file has no text to check
             text = ""
         name = filename.replace("\\", "/").lower()
         for term in denylist:
             if term in name:
-                print(f"BLOQUEADO: '{term}' no nome/caminho {filename}")
+                print(f"BLOCKED: '{term}' in the name/path {filename}")
                 found = True
             if term in text:
-                print(f"BLOQUEADO: '{term}' encontrado em {filename}")
+                print(f"BLOCKED: '{term}' found in {filename}")
                 found = True
 
     if found:
-        print("\nCommit recusado: remove estas referencias antes de continuar.")
+        print("\nCommit refused: remove these references before continuing.")
         return 1
     return 0
 
 
 if __name__ == "__main__":
-    # no Windows, a saida lida por um pipe (ex.: Claude Code) vinha em cp1252 e os acentos chegavam trocados
+    # on Windows, output read through a pipe (e.g. Claude Code) came in cp1252 and accents arrived garbled
     for _s in (sys.stdout, sys.stderr):
         _s.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

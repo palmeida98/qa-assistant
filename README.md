@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml)
 
-Uma framework de QA para trabalhar com o [Claude Code](https://claude.com/claude-code): a metodologia, as técnicas de teste e as ferramentas vivem aqui, e cada projeto real vive num **workspace** separado, fora deste repositório. O assistente segue a metodologia através de skills (`/onboarding-projeto`, `/executar-lote`, `/checkpoint`, …) e escreve os resultados no tracker do projeto por adaptadores verificados por testes.
+A QA framework for working with [Claude Code](https://claude.com/claude-code): the methodology, the test techniques and the tools live here, and each real project lives in a separate **workspace**, outside this repository. The assistant follows the methodology through skills (`/project-onboarding`, `/run-batch`, `/checkpoint`, …) and writes the results into the project's tracker through adapters checked by tests.
 
-A camada de workspace está em português europeu; o motor `qa-audit` (abaixo) está em inglês.
+Everything is in English (plan 8.11). A workspace created before the translation is converted once with `python scripts/migrate_workspace.py <workspace>`.
 
 ---
 
@@ -24,101 +24,102 @@ links, respects `robots.txt`), runs the selected modules on each page, and write
 screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
 is sent anywhere but to the target. Only audit sites you own or are authorized to test.
 
-Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow, manual checklist) and
-**security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content) and **performance** (TTFB, FCP,
-LCP, CLS against the web.dev thresholds; sizes and timings measured) and **functional** (broken links and
-resources, JavaScript errors, redirect chains, form checks; forms are submitted only with `--allow-submit` and when
-listed in the configuration) and **visual** (screenshots per viewport against baselines kept outside any
-repository, horizontal overflow; `pip install -e .[visual]`). Pages behind a login: a login form, a person logging
-in (Active Directory, second factor), or a session saved once with `qa-audit login`. User guide: [`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules,
-client data); example: [`examples/qa-audit/`](examples/qa-audit/). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
+Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk with focus visibility decided by pixels,
+reflow, manual checklist) and **security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content) and
+**performance** (TTFB, FCP, LCP, CLS against the web.dev thresholds; sizes and timings measured) and **functional**
+(broken links and resources, JavaScript errors, redirect chains, form checks; forms are submitted only with
+`--allow-submit` and when listed in the configuration) and **visual** (screenshots per viewport against baselines
+kept outside any repository, horizontal overflow; `pip install -e .[visual]`). Pages behind a login: a login form,
+a person logging in (Active Directory, second factor), or a session saved once with `qa-audit login`. User guide:
+[`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules, client data);
+example: [`examples/qa-audit/`](examples/qa-audit/). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
 contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-## Arquitetura em camadas
+## Layered architecture
 
-| Camada | O que é | Onde vive |
+| Layer | What it is | Where it lives |
 |---|---|---|
-| **1. Metodologia** | O método: análise, desenho de casos, lotes, regras de decisão (Pass/Fail/N/A/Blocked/Dúvida), bugs, checkpoints; heurísticas anonimizadas para o *error guessing* | [`docs/metodologia-core.md`](docs/metodologia-core.md), [`docs/heuristicas.md`](docs/heuristicas.md) |
-| **2. Técnicas** | Como testar cada tipo: [browser](docs/tecnica-browser.md), [API](docs/tecnica-api.md), [acessibilidade](docs/tecnica-acessibilidade.md), [mobile](docs/tecnica-mobile.md), [workbooks Excel](docs/tecnica-excel.md) | `docs/` |
-| **3. Adaptadores e ferramentas** | Adaptador Excel universal, scripts de API, acessibilidade, mobile, painel e validação; skills. São o motor da framework: não há um núcleo à parte | `adapters/`, `scripts/`, `tools/`, `.claude/skills/` |
-| **4. Workspace** | O projeto: `CLAUDE.md`, `projeto.yaml`, `contexto.md`, workbook, `.env`, registo leve | `qa-workspaces/<empresa>/<projeto>/` (fora daqui) |
+| **1. Methodology** | The method: analysis, case design, batches, decision rules (Pass/Fail/N/A/Blocked/Question), bugs, checkpoints; anonymised heuristics for *error guessing* | [`docs/methodology.md`](docs/methodology.md), [`docs/heuristics.md`](docs/heuristics.md) |
+| **2. Techniques** | How to test each type: [browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md), [mobile](docs/technique-mobile.md), [Excel workbooks](docs/technique-excel.md) | `docs/` |
+| **3. Adapters and tools** | Universal Excel adapter, scripts for API, accessibility, mobile, dashboard and validation; skills. They are the framework's engine: there is no separate core | `adapters/`, `scripts/`, `.claude/skills/` |
+| **4. Workspace** | The project: `CLAUDE.md`, `project.yaml`, `context.md`, workbook, `.env`, run log | `qa-workspaces/<company>/<project>/` (outside this repository) |
 
-A hierarquia de fontes de verdade, a regra de generalização (o que é universal vs. o que é de um projeto) e o processo para alterar a framework estão na metodologia (§1.3, §1.4, §15).
+The hierarchy of sources of truth, the generalisation rule (what is universal vs. what belongs to a project) and the process for changing the framework are in the methodology (§1.3, §1.4, §15).
 
-## Fronteira de privacidade
+## Privacy boundary
 
-Nada que identifique um cliente entra neste repositório: nomes, URLs de ambientes, contas, credenciais, workbooks, resultados ou bugs de projetos reais. Duas barreiras no `pre-commit`, que nunca se contornam:
+Nothing that identifies a client enters this repository: names, environment URLs, accounts, credentials, workbooks, results or bugs of real projects. Two barriers in `pre-commit`, never worked around:
 
-- **detect-secrets**, com baseline;
-- **denylist pessoal** (`~/.qa-denylist.txt`, fora do repositório): bloqueia nomes de clientes no texto, nos nomes dos ficheiros e **dentro** de ficheiros Office (`.xlsx`, `.docx`, `.pptx`).
+- **detect-secrets**, with a baseline;
+- **personal denylist** (`~/.qa-denylist.txt`, outside the repository): blocks client names in the text, in the file names and **inside** Office files (`.xlsx`, `.docx`, `.pptx`), and in the commit message.
 
-As credenciais vivem só no `.env` de cada workspace e são referidas pelo nome da variável. Os scripts passam-nas por variáveis de ambiente, nunca pela linha de comandos, e redigem a evidência (ex.: `scripts/api_pedido.py` troca tokens e palavras-passe por `«redigido»`). No workspace, o `validar_projeto` avisa se o `.env` e afins não estão no `.gitignore`, e o `.claude/settings.json` proíbe o Claude Code de editar `historico/`, que é imutável.
+Credentials live only in each workspace's `.env` and are referred to by the variable's name. The scripts pass them through environment variables, never on the command line, and redact the evidence (e.g. `scripts/api_request.py` replaces tokens and passwords with `«redacted»`). In the workspace, `validate_project` warns if `.env` and the like are not in `.gitignore`, and `.claude/settings.json` forbids Claude Code from editing `history/`, which is immutable.
 
-## Como trabalhar
+## How to work
 
 ```mermaid
 flowchart LR
-  O["/onboarding-projeto<br/>(uma vez)"] --> A["/analisar-funcionalidade<br/>/gerar-casos"]
-  A --> P["/planear-lote"]
-  P --> E["/executar-lote · /testar-api<br/>/auditar-acessibilidade · /testar-mobile"]
-  E -->|"registo leve<br/>runs/lote_*.json"| C["/checkpoint<br/>(aplicar ao workbook)"]
-  C -->|próximo lote| P
-  C --> F["/fim-sessao · /painel"]
+  O["/project-onboarding<br/>(once)"] --> A["/analyze-feature<br/>/generate-cases"]
+  A --> P["/plan-batch"]
+  P --> E["/run-batch · /test-api<br/>/audit-accessibility · /test-mobile"]
+  E -->|"run log<br/>runs/batch_*.json"| C["/checkpoint<br/>(apply to the workbook)"]
+  C -->|next batch| P
+  C --> F["/end-session · /dashboard"]
 ```
 
-Os casos gerados são propostas até o utilizador os aprovar; um bug só é criado depois de aprovado; os resultados passam ao workbook apenas no checkpoint, pelo adaptador, e só se o lote for válido e o cross-check der 0 problemas.
+The generated cases are proposals until the user approves them; a bug is only created once approved; the results go to the workbook only at the checkpoint, through the adapter, and only if the batch is valid and the cross-check gives 0 problems.
 
-### Começar um projeto novo
+### Starting a new project
 
-1. Criar a pasta `qa-workspaces/<empresa>/<projeto>/` (ao lado deste repositório).
-2. Abrir o `claude` nessa pasta e correr `/onboarding-projeto`: cria o `CLAUDE.md`, o `projeto.yaml` e o `.claude/settings.json` (proteção de `historico/`), pergunta ambientes, roles, tracker e módulos, inspeciona o workbook real (`python -m adapters.excel.inspecionar`), regista o Playwright MCP com versão fixa e acaba com `python scripts/validar_projeto.py <workspace>` sem problemas (valida também que os URLs dos módulos são de ambientes de teste declarados).
-3. Preencher o `.env` localmente.
+1. Create the folder `qa-workspaces/<company>/<project>/` (next to this repository).
+2. Open `claude` in that folder and run `/project-onboarding`: it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`), registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
+3. Fill in `.env` locally.
 
-### Módulos
+### Modules
 
-| Módulo | Técnica | Skill | Ferramenta |
+| Module | Technique | Skill | Tool |
 |---|---|---|---|
-| `funcional-web`, `exploratorio` | browser | `/executar-lote` | Playwright MCP |
-| `api` | API | `/testar-api` | `scripts/api_pedido.py` |
-| `acessibilidade` | WCAG 2.1 AA | `/auditar-acessibilidade` | `scripts/auditar_a11y.py` (motor `qa-audit`: axe-core, teclado, reflow) |
-| `mobile` | Maestro | `/testar-mobile` | `scripts/testar_mobile.py` |
+| `functional-web`, `exploratory` | browser | `/run-batch` | Playwright MCP |
+| `api` | API | `/test-api` | `scripts/api_request.py` |
+| `accessibility` | WCAG 2.1 AA | `/audit-accessibility` | `scripts/audit_a11y.py` (`qa-audit` engine: axe-core, keyboard, reflow) |
+| `mobile` | Maestro | `/test-mobile` | `scripts/run_mobile.py` |
 
 ### Trackers
 
-Só o Excel tem adaptador: os resultados e os bugs passam ao workbook no `/checkpoint`, e há painel. Com `jira` ou `azure-devops`, o registo leve em `runs/` é a fonte e a passagem ao tracker é manual, sempre com aprovação (metodologia §4.2). Um adaptador novo só se escreve quando um projeto real precisar dele.
+Only Excel has an adapter: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. With `jira` or `azure-devops`, the run log in `runs/` is the source and passing it to the tracker is manual, always with approval (methodology §4.2). A new adapter is only written when a real project needs it.
 
 ## Demo
 
-[`examples/demo/`](examples/demo) é um workspace completo contra sites públicos de prática ([saucedemo.com](https://www.saucedemo.com) e a API [restful-booker](https://restful-booker.herokuapp.com)), com 38 casos em 6 áreas, lotes executados em `runs/`, 3 bugs de exemplo, flows Maestro e specs Playwright de regressão (`e2e/`). O workbook reconstrói-se a partir do gerador e dos lotes (`python examples/demo/reconstruir_workbook.py`), com a data de execução de cada lote, e dá sempre as mesmas células (o CI verifica-o contra o workbook versionado); `python scripts/gerar_painel.py examples/demo --abrir` mostra o painel de progresso.
+[`examples/demo/`](examples/demo) is a complete workspace against public practice sites ([saucedemo.com](https://www.saucedemo.com) and the [restful-booker](https://restful-booker.herokuapp.com) API), with 38 cases in 6 areas, batches run in `runs/`, 3 example bugs, Maestro flows and Playwright regression specs (`e2e/`). The workbook is rebuilt from the builder and the batches (`python examples/demo/rebuild_workbook.py`), with each batch's execution date, and always gives the same cells (the CI checks it against the versioned workbook); `python scripts/build_dashboard.py examples/demo --open` shows the progress dashboard.
 
-## Testes e CI
+## Tests and CI
 
-- `python -m unittest discover -s tests` — 234 testes (adaptador, inspeção, recálculo, painel, resumo, API, acessibilidade, mobile, validação, código comum dos scripts, denylist, guards, skills, consola, demo reproduzível, golden real, e os testes unitários do motor `qa-audit`). Os que precisam do LibreOffice ficam *skipped* sem ele. Os testes de integração do `qa-audit` (browser real contra um site local) correm com `python -m unittest discover -s tests/integration`.
-- `python scripts/golden_check.py` — teste golden do adaptador Excel (precisa de LibreOffice). Com `--dir <workspace>/golden/<lote>` corre também o golden **real** de um projeto: um lote histórico aplicado a uma cópia do workbook de antes tem de dar, célula a célula, o workbook guardado depois (os dados ficam no workspace).
-- O CI (GitHub Actions, Ubuntu 24.04) corre em cada push 7 jobs: `lint` (ruff), `testes`, `secrets` (detect-secrets), `golden` (golden, resumo com fórmulas reais, demo reproduzível e golden real com dados fictícios, com LibreOffice), `demo-e2e` (specs Playwright do demo contra o site público), `qa-audit` (integração do motor em Chromium, Firefox e WebKit) e `install` (clone limpo, instalação, auditoria ao site local). O `pre-commit` corre o mesmo localmente, mais a denylist nos ficheiros e na mensagem do commit.
-- Versões fixas: dependências Python exatas (`requirements.txt`), ruff, detect-secrets e Playwright MCP; um teste impede voltar a versões soltas.
+- `python -m unittest discover -s tests` — the unit tests (adapter, inspection, recalculation, dashboard, summary, API, accessibility, mobile, validation, workspace migration, the scripts' common code, denylist, guards, skills, console, language, reproducible demo, real golden, and the `qa-audit` engine's unit tests). Those that need LibreOffice are *skipped* without it. The `qa-audit` integration tests (a real browser against a local site) run with `python -m unittest discover -s tests/integration`.
+- `python scripts/golden_check.py` — golden test of the Excel adapter (needs LibreOffice). With `--dir <workspace>/golden/<batch>` it also runs a project's **real** golden: a historical batch applied to a copy of the workbook from before must give, cell by cell, the workbook saved afterwards (the data stays in the workspace).
+- The CI (GitHub Actions, Ubuntu 24.04) runs 7 jobs on each push: `lint` (ruff), `tests`, `secrets` (detect-secrets), `golden` (golden, summary with real formulas, reproducible demo and real golden with fictional data, with LibreOffice), `demo-e2e` (the demo's Playwright specs against the public site), `qa-audit` (engine integration in Chromium, Firefox and WebKit) and `install` (clean clone, install, audit of the local site). `pre-commit` runs the same locally, plus the denylist on the files and on the commit message.
+- Fixed versions: exact Python dependencies (`requirements.txt`), ruff, detect-secrets and Playwright MCP; a test prevents going back to loose versions.
 
-As skills correm a partir da cópia global em `~/.claude/skills/` (os workspaces vivem fora deste repositório): depois de mudar uma skill, `python scripts/sincronizar_skills.py --aplicar`.
+The skills run from the global copy in `~/.claude/skills/` (the workspaces live outside this repository): after changing a skill, `python scripts/sync_skills.py --apply` (it also removes the skills' old names).
 
-Requisitos: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (recálculo de workbooks), Node.js 22+ (acessibilidade e specs), Maestro CLI (mobile).
+Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (workbook recalculation), Node.js 22+ (accessibility and specs), Maestro CLI (mobile).
 
-## Estado
+## State
 
-**v1.0** (25.09.2026): a camada de workspace — metodologia, técnicas, skills, adaptador Excel, painel e o fluxo completo de um projeto — está concluída e validada ponta a ponta num piloto. O motor `qa-audit` (em inglês, acima) segue com versão própria (0.2.0, ver [`CHANGELOG.md`](CHANGELOG.md)). O detalhe de cada tarefa, com critérios e commits, está em [`docs/plano-desenvolvimento.md`](docs/plano-desenvolvimento.md).
+**v1.0** (25.09.2026): the workspace layer — methodology, techniques, skills, Excel adapter, dashboard and a project's full flow — is done and validated end to end in a pilot. The `qa-audit` engine (above) has its own version (0.2.0, see [`CHANGELOG.md`](CHANGELOG.md)). The detail of each task, with criteria and commits, is in [`docs/development-plan.md`](docs/development-plan.md).
 
-| Fase | Estado |
+| Phase | State |
 |---|---|
-| 0–1 · Base e núcleo (skills, adaptador Excel, golden) | Concluídas |
-| 2 · Browser (Playwright MCP, demo, regressão N2, piloto) | Concluída |
-| 3 · Módulos API, acessibilidade e mobile | Concluída |
-| 4 · CI da framework | Concluída |
-| 5 · Painel por workspace | Concluída |
-| 6 · Portefólio (README, demo, visibilidade: privado) | Concluída |
-| 7 · Fecho (revisão geral, CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível) | Concluída: **v1.0** |
-| 8 · Motor `qa-audit` | 8.0–8.10 e 8.12–8.14 concluídas (0.2.0: login, sessões guardadas, sitemap, vários browsers); 8.11 adiada |
+| 0–1 · Base and core (skills, Excel adapter, golden) | Done |
+| 2 · Browser (Playwright MCP, demo, N2 regression, pilot) | Done |
+| 3 · API, accessibility and mobile modules | Done |
+| 4 · The framework's CI | Done |
+| 5 · Dashboard per workspace | Done |
+| 6 · Portfolio (README, demo, visibility: private) | Done |
+| 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
+| 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
 
-**Piloto** (25.09.2026): num workspace fora do repositório, com um site público de prática (sem acesso a projetos de empresa). Um lote de 16 casos, 10 novos e 6 retestes, executado por uma sessão `claude` no workspace com o Playwright MCP e aplicado ao workbook no `/checkpoint`: os retestes deram o mesmo estado que antes; golden real a passar; proteção de `historico/` confirmada. Lições incorporadas: Playwright MCP com `--secrets .env` (o assistente nunca vê as credenciais) e `--isolated` (o perfil persistente perdia os cliques), avisos do `validar_projeto` para o `.mcp.json`, e a denylist também na mensagem do commit.
+**Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
 
-Decisões de âmbito: os adaptadores e os scripts são o motor da camada de workspace, e o `qa-audit` é um motor à parte, ao lado dela (25.09.2026); o subagente `executor-web` não se cria (o piloto correu numa sessão própria sem encher o contexto principal); Jira e Azure DevOps ficam em registo manual.
+Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stay as manual logging.

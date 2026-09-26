@@ -1,0 +1,72 @@
+{
+ "results": [
+  {
+   "tc": "TC-API-001",
+   "status": "Pass",
+   "actual_result": "GET /ping -> 201 Created.",
+   "ts": "2026-09-24T11:31:00"
+  },
+  {
+   "tc": "TC-API-002",
+   "status": "Pass",
+   "actual_result": "POST /auth -> 200 with a token (15 characters; saved as a session secret, never shown).",
+   "ts": "2026-09-24T11:31:05"
+  },
+  {
+   "tc": "TC-API-003",
+   "status": "Pass",
+   "actual_result": "POST /booking -> 200, bookingid 2501, booking equal to the one sent.",
+   "ts": "2026-09-24T11:31:06"
+  },
+  {
+   "tc": "TC-API-004",
+   "status": "Pass",
+   "actual_result": "GET /booking/2501 -> 200, data equal to the data sent.",
+   "ts": "2026-09-24T11:31:07"
+  },
+  {
+   "tc": "TC-API-005",
+   "status": "Pass",
+   "actual_result": "GET /booking?firstname=QA-AUTO-20260924-api01 -> 200, the list contains bookingid 2501.",
+   "ts": "2026-09-24T11:31:08"
+  },
+  {
+   "tc": "TC-API-006",
+   "status": "Pass",
+   "actual_result": "PUT without authentication -> 403 Forbidden; the next GET equal to the original.",
+   "ts": "2026-09-24T11:31:09"
+  },
+  {
+   "tc": "TC-API-007",
+   "status": "Pass",
+   "actual_result": "PUT with a token -> 200 with the new data; the next GET returns it.",
+   "ts": "2026-09-24T11:31:11"
+  },
+  {
+   "tc": "TC-API-008",
+   "status": "Pass",
+   "actual_result": "PATCH firstname with a token -> 200; GET: only the firstname changed.",
+   "ts": "2026-09-24T11:31:13"
+  },
+  {
+   "tc": "TC-API-009",
+   "status": "Fail",
+   "actual_result": "POST /booking with only lastname -> 500 Internal Server Error (expected 4xx).",
+   "ts": "2026-09-24T11:31:14",
+   "new_defect": {
+    "title": "POST /booking with required fields missing answers 500",
+    "description": "Environment: restful-booker practice API (api-test). Role: none (no authentication).\nSteps: POST /booking with the JSON body {\"lastname\": \"OnlyLastname\"} (no firstname, totalprice, depositpaid, bookingdates).\nExpected: 4xx (client error). The documentation is silent about errors; RFC 9110 §15.5–15.6: invalid input = 4xx.\nObserved: 500 Internal Server Error, body \"Internal Server Error\" (555 ms, 24.09.2026 11:31).\nRedacted evidence: runs/evidence/TC-API-009.json.",
+    "area": "API",
+    "role": "—",
+    "severity": "Medium",
+    "priority": "Medium"
+   }
+  },
+  {
+   "tc": "TC-API-010",
+   "status": "Pass",
+   "actual_result": "DELETE /booking/2501 with a token -> 201 Created; the next GET -> 404 (test booking deleted).",
+   "ts": "2026-09-24T11:31:15"
+  }
+ ]
+}

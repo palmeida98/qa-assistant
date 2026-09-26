@@ -185,7 +185,7 @@ clear violation with a workaround; `low` minor; `info` an observation (§9). The
 value with its threshold. The manual checklist (accessibility) is never "done" by the tool.
 
 A finding is a lead with evidence, not a verdict: reproduce it before filing a bug. In a workspace, a confirmed
-finding becomes a bug through the usual flow (`/registar-bug`).
+finding becomes a bug through the usual flow (`/log-bug`).
 
 ---
 

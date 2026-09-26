@@ -1,0 +1,10 @@
+{
+ "results": [
+  {
+   "tc": "TC-LOGIN-006",
+   "status": "Pass",
+   "ts": "2026-09-24T13:29:13",
+   "actual_result": "Without a session, /inventory.html shows the login form with \"Epic sadface: You can only access '/inventory.html' when you are logged in.\"; the URL stays /inventory.html (accepted by the revised expected result). Observation of the run of 24.09.2026 (UI batch 01), reclassified after the answer to the Question."
+  }
+ ]
+}

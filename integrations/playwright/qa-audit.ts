@@ -1,64 +1,64 @@
-// Auditar um estado a meio de uma spec N2 com o motor qa-audit (docs/qa-audit.md seccao 22;
-// tecnica-browser.md seccao 13). Copiar este ficheiro para a pasta das specs do workspace.
+// Audit a state in the middle of an N2 spec with the qa-audit engine (docs/qa-audit.md section 22;
+// technique-browser.md section 13). Copy this file into the workspace's specs folder.
 //
-// Uso numa spec (Chromium ou Chrome):
+// Use in a spec (Chromium or Chrome):
 //   test("...", async ({ page }, testInfo) => {
-//     ...interacoes ate ao estado...
-//     await auditarEstado(page, testInfo, "checkout-erro", { falharEm: "none" });
+//     ...interactions up to the state...
+//     await auditState(page, testInfo, "checkout-error", { failOn: "none" });
 //   });
 //
-// Requisitos:
-// - o motor instalado (pip install -e . no qa-assistant; comando em QA_AUDIT_CMD, por omissao "qa-audit");
-// - QA_AUDIT_CDP_PORT definido e o playwright.config.ts a acrescentar
-//   `--remote-debugging-port=${QA_AUDIT_CDP_PORT}` aos argumentos do Chromium, com workers: 1
-//   (cada worker abria um browser na mesma porta).
-// So importa tipos do @playwright/test: funciona fora da pasta do projeto Node.
+// Requirements:
+// - the engine installed (pip install -e . in qa-assistant; command in QA_AUDIT_CMD, default "qa-audit");
+// - QA_AUDIT_CDP_PORT defined and playwright.config.ts adding
+//   `--remote-debugging-port=${QA_AUDIT_CDP_PORT}` to Chromium's arguments, with workers: 1
+//   (each worker would open a browser on the same port).
+// Imports only types from @playwright/test: it works outside the Node project's folder.
 import type { Page, TestInfo } from "@playwright/test";
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-export type Severidade = "none" | "critical" | "high" | "medium" | "low" | "info";
+export type Severity = "none" | "critical" | "high" | "medium" | "low" | "info";
 
-export interface Opcoes {
-  /** Falha o teste com problemas a partir desta severidade (por omissao "none": so regista). */
-  falharEm?: Severidade;
-  /** "axe" (por omissao); "axe,keyboard,reflow" mexe no foco e no tamanho da janela. */
-  verificacoes?: string;
-  /** Nomes das variaveis de ambiente cujos valores sao redigidos no relatorio (ex.: credenciais usadas). */
-  redigir?: string[];
+export interface Options {
+  /** Fails the test with problems from this severity up (default "none": only records). */
+  failOn?: Severity;
+  /** "axe" (default); "axe,keyboard,reflow" moves the focus and changes the window's size. */
+  checks?: string;
+  /** Names of the environment variables whose values are redacted in the report (e.g. credentials used). */
+  redact?: string[];
 }
 
-const escapar = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export async function auditarEstado(page: Page, testInfo: TestInfo, nome: string, opcoes: Opcoes = {}): Promise<void> {
-  const porta = process.env.QA_AUDIT_CDP_PORT;
-  if (!porta) {
-    throw new Error("QA_AUDIT_CDP_PORT em falta: definir a porta e acrescentar --remote-debugging-port ao Chromium");
+export async function auditState(page: Page, testInfo: TestInfo, name: string, options: Options = {}): Promise<void> {
+  const port = process.env.QA_AUDIT_CDP_PORT;
+  if (!port) {
+    throw new Error("QA_AUDIT_CDP_PORT missing: define the port and add --remote-debugging-port to Chromium");
   }
   const browser = page.context().browser();
   if (!browser || browser.browserType().name() !== "chromium") {
-    throw new Error("auditarEstado so funciona com Chromium ou Chrome (ligacao por CDP)");
+    throw new Error("auditState only works with Chromium or Chrome (connection over CDP)");
   }
-  const saida = testInfo.outputPath("qa-audit", nome); // uma pasta por estado: varias chamadas no mesmo teste
+  const output = testInfo.outputPath("qa-audit", name); // one folder per state: several calls in the same test
   const args = [
-    "check", "--cdp", `http://127.0.0.1:${porta}`, "--page-url", `^${escapar(page.url())}$`,
-    "--label", nome, "--checks", opcoes.verificacoes ?? "axe", "--output", saida,
-    "--fail-on", opcoes.falharEm ?? "none",
-    ...(opcoes.redigir ?? []).flatMap((v) => ["--redact-env", v]),
+    "check", "--cdp", `http://127.0.0.1:${port}`, "--page-url", `^${escape(page.url())}$`,
+    "--label", name, "--checks", options.checks ?? "axe", "--output", output,
+    "--fail-on", options.failOn ?? "none",
+    ...(options.redact ?? []).flatMap((v) => ["--redact-env", v]),
   ];
   const r = spawnSync(process.env.QA_AUDIT_CMD ?? "qa-audit", args, { encoding: "utf-8", timeout: 120_000 });
-  if (r.error) throw new Error(`qa-audit nao correu (${r.error.message}); instalado? ver QA_AUDIT_CMD`);
-  const pasta = existsSync(saida) ? readdirSync(saida).find((d) => d.startsWith(`check_`)) : undefined;
-  if (pasta) {
+  if (r.error) throw new Error(`qa-audit did not run (${r.error.message}); installed? see QA_AUDIT_CMD`);
+  const folder = existsSync(output) ? readdirSync(output).find((d) => d.startsWith(`check_`)) : undefined;
+  if (folder) {
     for (const f of ["check.md", "check.json"]) {
-      await testInfo.attach(`qa-audit ${nome} (${f})`, { path: join(saida, pasta, f) });
+      await testInfo.attach(`qa-audit ${name} (${f})`, { path: join(output, folder, f) });
     }
   }
   if (r.status === 1) {
-    throw new Error(`qa-audit: problemas a partir de "${opcoes.falharEm}" no estado ${nome}: ${r.stdout.trim()}`);
+    throw new Error(`qa-audit: problems from "${options.failOn}" up in the state ${name}: ${r.stdout.trim()}`);
   }
   if (r.status !== 0) {
-    throw new Error(`qa-audit check saiu com ${r.status}: ${(r.stderr || r.stdout).trim()}`);
+    throw new Error(`qa-audit check exited with ${r.status}: ${(r.stderr || r.stdout).trim()}`);
   }
 }
