@@ -14,6 +14,10 @@ from . import checks
 MDN_STATUS = "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
 # check -> (title, status, severity, confidence, expected, recommendation)
 RULES = {
+    "error-status-served": ("Page answers an HTTP error but shows content", "warning", "low", "high",
+                            "Pages that exist answer 2xx.",
+                            ("Serve the page's real status for its URL (for a single-page application, route deep "
+                             "links to the app with 200).")),
     "broken-link": ("Links to pages that do not exist (4xx)", "problem", "medium", "high",
                     "Every link leads to a page that answers 2xx/3xx.",
                     "Fix or remove the links, or restore the pages (redirect moved pages)."),
@@ -117,7 +121,8 @@ class Functional(AuditModule):
             if p.audited:
                 src = p.final_url or p.url
                 for link in p.links:
-                    referrers.setdefault(link, []).append(src)
+                    if link not in (p.url, src):          # a page linking to itself is not its own referrer
+                        referrers.setdefault(link, []).append(src)
                 for link in p.external_links:
                     external.setdefault(link, []).append(src)
         visited = {p.url: p for p in crawl.pages}
@@ -132,7 +137,13 @@ class Functional(AuditModule):
             else:
                 ctx.passed(self.name)
 
+        for p in crawl.pages:
+            if getattr(p, "error_status_audited", False) and p.audited:
+                served = f"HTTP {p.status}, rendered and audited as content (crawl.audit_error_pages)"
+                self._hit(st, "error-status-served", p.url, [served])
         for url in referrers:
+            if url in visited and getattr(visited[url], "error_status_audited", False):
+                continue                                    # reported above as error-status-served
             if url in visited:
                 p = visited[url]
                 judge(url, p.status, "" if p.status else p.error)

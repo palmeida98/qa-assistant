@@ -59,7 +59,7 @@ qa-audit check --cdp URL --page-url REGEX --label NAME     audit a page another 
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--type LIST` | `full` | Comma-separated module names, or `full` (every available module that applies to the target). Unknown or not-yet-available names are a usage error (exit 2) listing what exists. |
+| `--type LIST` | `full` | Comma-separated module names, or `full` (every available module that applies to the target, except `visual`, which stores screenshots between runs and runs only when named, §19). Unknown or not-yet-available names are a usage error (exit 2) listing what exists. |
 | `--browser ENGINE` | `chromium` | `chromium`, `firefox` or `webkit`; a comma-separated list, or `all`, runs one audit per engine and compares them (§21). |
 | `--headed` | off | Show the browser window. |
 | `--viewport WxH` | `1440x900` | Viewport size. |
@@ -178,8 +178,9 @@ modules:
 7. A page answering 4xx or 5xx is not audited as content, and a start URL answering one stops the audit (exit 3).
    `crawl.audit_error_pages: true` (off by default) is the one exception, for single-page applications whose server
    answers 404 to a deep link and renders the page anyway: the pages **listed** (the start URL and `crawl.pages`)
-   that answer **4xx** are audited as content, and the report notes each one with its status. Pages found by
-   following links, and 5xx answers, are never audited that way.
+   that answer **4xx** are audited as content, and the report notes each one with its status; the functional
+   module reports them as `error-status-served` (§18), not as broken links. Pages found by following links, and 5xx
+   answers, are never audited that way.
 8. With `crawl.sitemap: true` (or `--sitemap`), the pages listed in the site's sitemap are queued too (§5.1).
 
 **Safety rules (risk 3):**
@@ -479,7 +480,8 @@ flags.
 | `nosniff-missing` | no `X-Content-Type-Options: nosniff` | warning · low |
 | `version-disclosure` | `Server`, `X-Powered-By`, `X-AspNet-Version` or `X-AspNetMvc-Version` carry a version number | warning · low |
 | `cookie-not-secure` | an `https://` site sets a cookie without `Secure` | problem · medium |
-| `cookie-samesite-none-insecure` | `SameSite=None` without `Secure` | problem · medium |
+| `cookie-samesite-none-insecure` | `SameSite=None` **declared in a `Set-Cookie` header**, without `Secure` | problem · medium |
+| `cookie-samesite-unset` | no `SameSite` declared in a `Set-Cookie` header, or the cookie was set by JavaScript (its attributes are not visible): what the browser does depends on the browser | needs-human · info |
 | `cookie-session-not-httponly` | a cookie whose name looks like a session or token (`sess`, `sid`, `auth`, `token`, `jwt`, `login`) without `HttpOnly` | warning · medium (confidence medium: the name is a heuristic) |
 
 Only cookies of the target's own domain are judged; third-party cookies belong to their owners. Thresholds come
@@ -532,6 +534,7 @@ total is marked partial.
 | Check | What | Status · severity |
 |---|---|---|
 | `broken-link` | a same-origin link answers 4xx | problem · medium |
+| `error-status-served` | a page listed with `crawl.audit_error_pages` answers 4xx but renders content (e.g. a single-page application's deep link): bookmarks, monitoring and search engines see an error | warning · low |
 | `broken-link-server-error` | a same-origin link answers 5xx | problem · high |
 | `broken-external-link` | an external link fails (only with `check_external_links: true`) | warning · low |
 | `broken-resource` | a same-origin image, script, stylesheet or fetch of an audited page fails (4xx/5xx or network error) | problem · medium |
@@ -544,7 +547,8 @@ total is marked partial.
 | `form-submit-no-navigation` | a listed form was submitted but nothing navigated (e.g. a script handles it) | needs-human |
 
 Pages that answer 4xx/5xx are reported here as broken links and are not audited as content by any module (the
-one exception is a listed page with `crawl.audit_error_pages`, §5, which is still reported as a broken link).
+one exception is a listed page with `crawl.audit_error_pages`, §5, reported as `error-status-served`). A page linking
+to itself is not its own referrer.
 
 Links: every same-origin link seen on the audited pages is judged. Visited pages give their status directly; links
 the crawl did not visit (beyond depth or `max_pages`, or non-HTML such as PDFs) are checked with `HEAD` (falling
@@ -574,8 +578,10 @@ the response to the navigation that follows. Literal secrets are refused in the 
 
 ## 19. Visual module
 
-`--type visual` (needs Pillow: `pip install -e .[visual]`; without it the module is skipped in `full` and
-`--type visual` is a usage error).
+`--type visual` (needs Pillow: `pip install -e .[visual]`; without it `--type visual` is a usage error). **Not part
+of `full`** (decision of 26.09.2026, after the first real use): it keeps screenshots of the audited site, logged-in
+pages included, in the home folder between runs, so it runs only when named (`--type visual`, or in a list such as
+`--type accessibility,visual`).
 
 For every audited page and every configured viewport (default: desktop 1440×900, tablet 768×1024, mobile 390×844)
 the module takes a full-page screenshot with animations disabled and the text caret hidden, after web fonts are

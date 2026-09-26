@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run and 8.15 `qa-audit check` done (26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -585,10 +585,10 @@ User decision (26.09.2026): after 8.13, design agreed before the code. Specifica
 
 Notes (8.14): one change to the agreed design: performance findings are not compared at all (the design only left
 out `n/a` metrics), since timings differ between engines and between runs and a threshold crossed in one engine is
-noise. A full compatibility run of the fixture site (three engines) gave four differences, all real engine
-behaviour rather than noise from the engine's own checks: console messages on two pages, mixed content blocked
-differently by Chromium, and the `SameSite=None` cookie handled differently by Chromium; the keyboard and focus
-checks agreed in all three.
+noise. A full compatibility run of the fixture site (three engines) gave four differences: console messages on
+two pages and mixed content blocked differently by Chromium are real engine behaviour; the `SameSite=None` one was
+**not**, contrary to what was written here at first: it was the engine's false positive found and fixed in 8.16
+(Firefox and WebKit report a cookie without SameSite as `None`). The keyboard and focus checks agreed in all three.
 
 ### 8.15 Auditing states in the middle of an N2 spec (`qa-audit check`)
 User decision (26.09.2026): option (c) of the comparison (flows stay in the workspace's specs; the engine never
@@ -610,6 +610,29 @@ types from `@playwright/test`; and the instruction to copy the helper sits in `t
 specs are created) instead of `/onboarding-projeto`, which never creates specs. Each call writes to its own
 folder (a second call in the same test would otherwise attach the first report). The demo's spec audits the
 checkout error state (no WCAG violation found there); it is not the promotion of a case to N2.
+
+### 8.16 Fixes from the first real use
+User decisions (26.09.2026): stop adding features and use the engine on the public practice site
+(`--browser all`, login, `crawl.pages`, `audit_error_pages`, `--sitemap`), then fix what that shows.
+- [x] `cookie-samesite-none-insecure` was a false positive in Firefox and WebKit: the security module read cookies
+  from the browser's store, where those engines show a cookie without SameSite as `None`. The session now records,
+  per cookie name, the SameSite declared in `Set-Cookie` headers (never the value); `SameSite=None` is reported only
+  when declared, and a cookie without a declaration (or set by JavaScript) is `cookie-samesite-unset`
+  (needs-human, info).
+- [x] The SPA pages listed with `audit_error_pages` were reported as `broken-link` (problem, medium) "linked from"
+  themselves: they are now `error-status-served` (warning, low), and a page linking to itself is not its own
+  referrer.
+- [x] `visual` is no longer part of `full` (user decision): it stored 36 screenshots of logged-in pages in the home
+  folder without being asked for; it runs when named.
+- [x] Guide: regular expressions in YAML in single quotes (a `\.` in double quotes is an invalid escape; it
+  happened in this first use).
+- [x] Tests reproduce each case: a script-set cookie (`about.html`) and the `Set-Cookie` without SameSite
+  (`sec.html`) are `cookie-samesite-unset` in every engine and never `SameSite=None`; the SPA pages are
+  `error-status-served` and not broken links; `full` without `visual`.
+
+Notes (8.16): a second run on the practice site gave identical results in the three engines and no compatibility
+difference (the first run had one: the false positive). Still open from that use, for a person to judge:
+`focus-visible` (needs-human) on the four pages.
 ---
 
 ## Registo de alterações a este plano
@@ -633,6 +656,7 @@ checkout error state (no WCAG violation found there); it is not the promotion of
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.16: correções da primeira utilização real (falso positivo de SameSite no Firefox/WebKit, páginas SPA como links partidos) e `visual` fora do `full` (decisão do utilizador). |
 | 2026-09-26 | `docs/qa-audit.md` §12: fluxos com script no motor recusados (ficam nas specs do workspace, auditados com `qa-audit check`); segurança ativa só com necessidade concreta (decisões do utilizador). A seguir: usar o motor no site público de prática antes de novas funcionalidades. |
 | 2026-09-26 | 8.15 (`qa-audit check`, auditoria de estados a meio das specs N2) concluída por decisão do utilizador (opção c). |
 | 2026-09-26 | `qa-audit` 0.2.0 (tag `qa-audit-v0.2.0`): 8.5–8.10 e 8.12–8.14; `CHANGELOG` reorganizado (Added / Changed / Fixed). |

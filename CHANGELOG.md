@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed
+- `visual` is no longer part of `--type full` (plan 8.16): it keeps screenshots of the audited site, logged-in
+  pages included, in the home folder between runs, so it runs only when named (`--type visual`).
+- Security: `cookie-samesite-unset` (needs-human, info) for a cookie without a declared SameSite, or set by
+  JavaScript.
+- Functional: a page listed with `crawl.audit_error_pages` that answers 4xx is `error-status-served` (warning, low),
+  no longer a broken link; a page linking to itself is not its own referrer.
+
+### Fixed
+- `cookie-samesite-none-insecure` was reported in Firefox and WebKit for cookies without any SameSite (those engines
+  show a missing attribute as `None`); it is now reported only when `SameSite=None` is declared in `Set-Cookie`.
+
 ### Added
 - `qa-audit check` (plan 8.15): audits a page another tool has open, in its current state, over the Chrome DevTools
   Protocol (loopback only): the accessibility checks (axe by default; keyboard and reflow opt-in) without
