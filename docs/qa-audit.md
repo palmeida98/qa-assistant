@@ -391,8 +391,12 @@ conformance certification.**
 
 ## 12. Planned
 
-- Active security checks, always opt-in; scripted user flows (login, checkout) as
-  configured, opt-in functional scenarios.
+- Active security checks, always opt-in, only with an explicit, recorded authorization per target; not started
+  until there is a concrete need (user decision, 26.09.2026).
+
+Decided against (26.09.2026): scripted user flows in the engine (a `flows:` section with clicks and typing). The
+engine keeps never clicking; flows live in the workspace's Playwright specs, and the states they reach are audited
+with `qa-audit check` (§22).
 
 ---
 
