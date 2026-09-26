@@ -45,7 +45,7 @@ VARIANTS = {"/visual.html": "visual-v2.html"}
 # login flow (docs/qa-audit.md §20): fictional account; /account/* needs the session cookie,
 # account/expire.html ends the session
 VALID_LOGIN = ("qa-auto-fixture", "open-sesame-fixture")
-SESSION_COOKIE = "fixture_session=valid"
+SESSION_COOKIE = "fixture_session=valid-session-fixture"   # long enough to be redacted (§20.1)
 EXTRA_HEADERS["/account/expire.html"] = [("Set-Cookie", "fixture_session=; Path=/; Max-Age=0")]
 GIT_OPENSSL = (r"C:\Program Files\Git\usr\bin\openssl.exe", r"C:\Program Files\Git\mingw64\bin\openssl.exe")
 

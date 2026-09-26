@@ -29,7 +29,8 @@ Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow
 LCP, CLS against the web.dev thresholds; sizes and timings measured) and **functional** (broken links and
 resources, JavaScript errors, redirect chains, form checks; forms are submitted only with `--allow-submit` and when
 listed in the configuration) and **visual** (screenshots per viewport against baselines kept outside any
-repository, horizontal overflow; `pip install -e .[visual]`). User guide: [`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules,
+repository, horizontal overflow; `pip install -e .[visual]`). Pages behind a login: a login form, a person logging
+in (Active Directory, second factor), or a session saved once with `qa-audit login`. User guide: [`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules,
 client data); example: [`examples/qa-audit/`](examples/qa-audit/). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
 contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
 

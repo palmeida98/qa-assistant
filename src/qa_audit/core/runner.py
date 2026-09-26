@@ -125,7 +125,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
     """Audit target. progress(event, **data) receives: page, module_done, discovery_done.
 
     session_factory(cfg, run, target) -> Session is injectable for tests (e.g. a recording proxy)."""
-    from ..browser.discovery import Crawler
+    from ..browser.discovery import Crawler, TargetUnreachable
     from ..browser.session import Session
 
     progress = progress or (lambda event, **data: None)
@@ -157,20 +157,35 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
                     f.evidence.append(ev)
 
     session = factory(cfg, run_folder, target)
-    redactor = Redactor(auth.secrets(cfg))
+    redactor = Redactor(auth.secrets(cfg, target=target))
     try:
         with session:
             ctx.session = session
             expired = None
-            if auth.configured(cfg):
+            if auth.logs_in(cfg):
                 progress("auth_start", method=cfg["auth"]["method"])
                 done = auth.login(session, cfg, target, progress=progress)
                 log.info("auth: %s", done)
                 ctx.notes.append(f"auth: {done}; one attempt")
                 progress("auth_done", detail=done)
+            elif auth.configured(cfg):
+                # storage-state (§20.1): the context started from the saved session; nothing is submitted
+                path = auth.state_path(cfg, target)
+                done = f"saved session from qa-audit login ({auth.state_age(path)} old); no login submitted"
+                log.info("auth: %s", done)
+                ctx.notes.append(f"auth: {done}")
+                progress("auth_done", detail=done)
+            if auth.configured(cfg):
                 expired = auth.expired_pattern(cfg, target)
-            crawl = Crawler(session, cfg, target, on_page=on_page, log=log.info, redactor=redactor,
-                            expired=expired).run()
+            try:
+                crawl = Crawler(session, cfg, target, on_page=on_page, log=log.info, redactor=redactor,
+                                expired=expired).run()
+            except TargetUnreachable as e:
+                saved = (cfg.get("auth") or {}).get("method") == "storage-state"
+                if saved and "login page" in str(e):
+                    raise TargetUnreachable(f"{e}: the saved session has expired; run qa-audit login {target} "
+                                            "--config <file> again (docs/qa-audit.md §20.1)") from e
+                raise
             if crawl.session_expired:
                 ctx.notes.append(f"auth: the session ended at {crawl.session_expired}; the crawl stopped there")
             for p in crawl.pages:

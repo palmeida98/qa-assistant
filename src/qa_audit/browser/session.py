@@ -178,6 +178,10 @@ class Session:
             opts.pop("default_browser_type", None)
         else:
             opts["viewport"] = dict(b["viewport"])
+        a = self.cfg.get("auth") or {}
+        if a.get("method") == "storage-state":
+            from ..core.auth import state_path
+            opts["storage_state"] = state_path(self.cfg, self.target)   # saved by qa-audit login (§20.1)
         base_ua = opts.get("user_agent") or self._default_user_agent()
         self.user_agent = f"{base_ua} qa-audit/{__version__}"
         opts["user_agent"] = self.user_agent

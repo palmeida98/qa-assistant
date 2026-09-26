@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Saved login sessions (plan 8.12): `auth.method: storage-state` reuses a session saved once with
+  `qa-audit login <url> --config FILE` (`login_method` `manual` or `form`); nothing is submitted during the audit,
+  an expired session is exit 3 with the command to renew it. The state file is refused inside the output folder or
+  a Git working tree, its cookie values are redacted in every output, and `qa-audit sessions` lists or deletes the
+  saved sessions.
 - `crawl.audit_error_pages` (off by default): the listed pages (start URL and `crawl.pages`) that answer 4xx are
   audited as content, for single-page applications whose server answers 404 to a deep link; each one is noted in the
   report. Pages found by following links and 5xx answers are never audited that way.

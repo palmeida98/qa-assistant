@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions done (26.09.2026); 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -533,6 +533,25 @@ would make a pilot failure ambiguous (translation or method).
 
 The existing workspace layer (methodology, techniques, skills, scripts) is in European Portuguese. Translating it to English is a separate, large change that touches the skills used by live workspaces; to be confirmed before it starts.
 
+### 8.12 Saved login sessions (`auth.method: storage-state`)
+User decision (26.09.2026): next engine task after 8.10, with the design agreed before the code. Specification:
+`docs/qa-audit.md` §20.1.
+- [x] `qa-audit login <url> --config FILE`: the `login_method` login (`manual` by default, or `form`), one attempt,
+  success check, storage state saved (default `~/.qa-audit/sessions/<host>.json`, `.gitignore *`, owner-only on
+  Linux and macOS); nothing audited.
+- [x] Audit with `method: storage-state`: context from the saved state, nothing submitted; expired session (start
+  URL on the login page) is exit 3 with the `qa-audit login` hint; the file's age in the report notes.
+- [x] State file refused inside the output folder or a Git working tree; a missing file is exit 2 naming the
+  command; cookie values (6+ characters) redacted as `«cookie:NAME»`; `qa-audit sessions [--delete HOST|all]`.
+- [x] Tests: unit (validation, locations, redaction, list/delete, CLI) and integration on the fixture login (login
+  saves with exactly one POST, the audit posts nothing, an expired session stops with the hint, a wrong password
+  saves nothing, no cookie value in any written file).
+
+Notes (8.12): the fixture's session cookie became long enough to be redacted (`valid-session-fixture`) and the
+settings page carries it in the planted image's attributes, like the user name, so the redaction test proves
+something appears redacted instead of passing because nothing was written. Linking the workspace's
+`scripts/auditar_a11y.py` to saved sessions is left out (a separate task, if a project needs it).
+
 ---
 
 ## Registo de alterações a este plano
@@ -556,6 +575,7 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.12 (sessões guardadas, `storage-state`) concluída por decisão do utilizador; `/auditar-acessibilidade` passa a correr sobre o `qa-audit` e o `tools/a11y/` é retirado (notas da 8.10). |
 | 2026-09-26 | 8.10 (login) integrado no `main` depois do piloto (ramo `feat/login`, CI verde). |
 | 2026-09-25 | 7.9: **v1.0** da camada de workspace (tag `v1.0`); README com o estado final. |
 | 2026-09-25 | Piloto (2.4 / 7.2) num site público de prática, por decisão do utilizador (sem acesso a projetos de empresa): lote aplicado, golden real OK, lições incorporadas (`--isolated`, `--secrets`, aviso do `.mcp.json` no `validar_projeto`, `etiqueta` do golden, guard `commit-msg`). |
