@@ -435,7 +435,7 @@ Notas:
 - Visto de passagem, sem mudar (fora do âmbito): `testar_mobile.py` com um flow que não é um ficheiro (ex.: `CT-MOB-001` em vez do caminho) dá `Blocked` "o flow nao correu" em vez de erro de uso (código 2). Corrigido a seguir, à parte (ver registo de alterações).
 
 ### 7.9 Versão 1.0
-Decisão do utilizador (25.09.2026): a v1.0 é a **camada de workspace** (metodologia, skills, adaptadores, fluxo do piloto), validada em projeto real; o motor `qa-audit` segue com versão própria (`pyproject.toml`, hoje 0.1.0) e não entra no critério da v1.0.
+Decisão do utilizador (25.09.2026): a v1.0 é a **camada de workspace** (metodologia, skills, adaptadores, fluxo do piloto), validada em projeto real; o motor `qa-audit` segue com versão própria (`pyproject.toml`; 0.1.0 a 25.09.2026, 0.2.0 a 26.09.2026) e não entra no critério da v1.0.
 - [x] 7.1 a 7.6 feitas e decisões da 7.7 escritas nos documentos.
 - [x] README com o estado final; tag `v1.0`; tabela "Estado resumido" com todas as fases da camada de workspace concluídas (a fase 8 é o `qa-audit`, com versão própria).
 
@@ -612,6 +612,7 @@ checks agreed in all three.
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | `qa-audit` 0.2.0 (tag `qa-audit-v0.2.0`): 8.5–8.10 e 8.12–8.14; `CHANGELOG` reorganizado (Added / Changed / Fixed). |
 | 2026-09-26 | 8.14 (vários browsers numa só execução) concluída por decisão do utilizador; performance fora da comparação (ruído entre browsers). |
 | 2026-09-26 | 8.13 (descoberta pelo sitemap) concluída por decisão do utilizador; desligada por omissão (`--sitemap`). |
 | 2026-09-26 | 8.12 (sessões guardadas, `storage-state`) concluída por decisão do utilizador; `/auditar-acessibilidade` passa a correr sobre o `qa-audit` e o `tools/a11y/` é retirado (notas da 8.10). |

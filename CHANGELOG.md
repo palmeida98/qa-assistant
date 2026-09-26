@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-26
+
 ### Added
 - Several engines in one run (plan 8.14): `--browser chromium,firefox,webkit` or `--browser all` runs one audit per
   engine (a sub-folder each) and writes `compatibility.json/.md/.html`: findings, pages and HTTP statuses that
@@ -21,10 +23,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 - `crawl.audit_error_pages` (off by default): the listed pages (start URL and `crawl.pages`) that answer 4xx are
   audited as content, for single-page applications whose server answers 404 to a deep link; each one is noted in the
   report. Pages found by following links and 5xx answers are never audited that way.
-- Accessibility findings' `references` carry the WCAG version and level of each axe tag (`WCAG 2.0 AA`,
-  `WCAG 2.2 AA`), besides the criteria.
-- The workspace's `scripts/auditar_a11y.py` (`/auditar-acessibilidade`) runs on this engine; the separate Node tool
-  `tools/a11y/` is gone.
 - Login before the crawl (plan 8.10): `auth.method` `form` (credentials from environment variables) and `manual`
   (the person logs in in a visible browser: Active Directory, second factors); one attempt, success check, session
   expiry stops the crawl, credentials redacted in every output, traces refused with `auth`. Explicit page list
@@ -36,23 +34,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   images; needs-human), horizontal overflow per viewport, missing viewport meta tag. Baselines outside any
   repository (`~/.qa-audit/baselines`, `--baseline-dir`), `--update-baseline`, and `qa-audit baselines` to list or
   delete them. A module asked for by name that cannot run here is a usage error.
-
-### Fixed
-- A page reached again through a redirect was audited twice by every module; it is now recorded as the same page.
 - Functional module (plan 8.7): broken links (visited pages, plus HEAD checks of unvisited same-origin links; never
   excluded or robots-disallowed ones), broken resources, uncaught exceptions, console errors, redirect chains,
   e-mail fields without validation; `--allow-submit` submits only the forms listed in the configuration.
-- Pages answering 4xx/5xx are no longer audited as content (they are broken links).
 - Performance module (plan 8.6): TTFB, FCP, LCP and CLS with the web.dev thresholds; DNS, connection, TLS,
   DOMContentLoaded, load, requests and transfer sizes measured only unless a budget is configured. Metrics table
   (observed · threshold · result) in every report and `metrics.csv`; `n/a` where an engine cannot measure.
-- Module `order` (readers before page-changing modules) and `validate_config` (bad module configuration is exit 2).
 - Security module (passive, plan 8.5): HTTPS, HTTP→HTTPS redirect, TLS protocol and certificate expiry, HSTS, CSP,
   clickjacking, nosniff, version disclosure, cookie flags (names and flags only), mixed content, forms posting to
   HTTP. Reported once per check with the affected pages.
 - `--ignore-https-errors` for sites with certificates the browser rejects (trust then not judged).
-- `doctor` tests each browser's cryptography (a Firefox that cannot load HTTPS is no longer reported as ready).
 - HTTPS fixture (self-signed, two-day certificate) and security integration tests.
+
+### Changed
+- Accessibility findings' `references` carry the WCAG version and level of each axe tag (`WCAG 2.0 AA`,
+  `WCAG 2.2 AA`), besides the criteria.
+- The workspace's `scripts/auditar_a11y.py` (`/auditar-acessibilidade`) runs on this engine; the separate Node tool
+  `tools/a11y/` is gone.
+- Pages answering 4xx/5xx are no longer audited as content (they are broken links).
+- Module `order` (readers before page-changing modules) and `validate_config` (bad module configuration is exit 2).
+
+### Fixed
+- A page reached again through a redirect was audited twice by every module; it is now recorded as the same page.
+- `doctor` tests each browser's cryptography (a Firefox that cannot load HTTPS is no longer reported as ready).
 
 ## [0.1.0] - 2026-09-25
 
