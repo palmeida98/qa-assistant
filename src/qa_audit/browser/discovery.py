@@ -85,6 +85,7 @@ class PageInfo:
     timing: dict = field(default_factory=dict)
     error: str = ""
     audited: bool = False     # modules ran on it
+    error_status_audited: bool = False   # a listed page answering 4xx, audited with crawl.audit_error_pages (§5)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -140,6 +141,8 @@ class Crawler:
         self.audited_urls: dict[str, str] = {}      # final URL -> the requested URL that audited it
         self.expired = expired                     # login page pattern: reaching it means the session ended
         self.stop = False
+        # the pages the person listed (start URL and crawl.pages): only these may be audited despite a 4xx (§5)
+        self.listed = {self.start} | {normalize(urljoin(self.start, p)) for p in c.get("pages") or []}
 
     # --- robots.txt ------------------------------------------------------------------------------------------
     def _load_robots(self, result: CrawlResult) -> None:
@@ -257,8 +260,13 @@ class Crawler:
             # a response served from the cache can come without Content-Type (seen in CI on Linux): ask the page
             info.content_type = headers.get("content-type", "") or page.evaluate("() => document.contentType")
             info.headers = self.redactor.headers(headers)
+            listed_4xx = (400 <= resp.status < 500 and self.cfg["crawl"].get("audit_error_pages")
+                          and url in self.listed)
+            if listed_4xx:
+                # e.g. a single-page application whose server answers 404 to a deep link and renders it anyway
+                info.error_status_audited = True
             if is_start:
-                if resp.status >= 400:
+                if resp.status >= 400 and not listed_4xx:
                     raise TargetUnreachable(f"{url}: HTTP {resp.status}")
                 if origin(info.final_url) != origin(self.s.target):
                     self.log(f"start page redirected to {info.final_url}; auditing that origin")
@@ -266,7 +274,7 @@ class Crawler:
             elif origin(info.final_url) != origin(self.s.target):
                 info.error = f"redirected outside the target origin to {info.final_url}"
                 return info
-            elif resp.status >= 400:
+            elif resp.status >= 400 and not listed_4xx:
                 # reported as a broken link (functional); an error page is not audited as content
                 info.error = f"HTTP {resp.status}"
                 return info

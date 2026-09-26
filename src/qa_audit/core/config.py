@@ -36,6 +36,7 @@ DEFAULTS: dict = {
         "exclude": [],
         "pages": [],
         "follow_links": True,
+        "audit_error_pages": False,
     },
     "network": {"block_third_party": False},
     "evidence": {
@@ -157,6 +158,8 @@ def validate(cfg: dict) -> None:
         problems.append("crawl.pages must be a list of URLs or paths")
     if not isinstance(c.get("follow_links"), bool):
         problems.append("crawl.follow_links must be true or false")
+    if not isinstance(c.get("audit_error_pages"), bool):
+        problems.append("crawl.audit_error_pages must be true or false")
     if e.get("screenshots") not in SCREENSHOT_MODES:
         problems.append(f"evidence.screenshots must be one of {', '.join(SCREENSHOT_MODES)}")
     if str(e.get("trace")) not in TRACE_MODES:

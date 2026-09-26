@@ -26,7 +26,8 @@ api:                         # modulo api (docs/tecnica-api.md, plano 3.1)
 
 acessibilidade:               # modulo acessibilidade (docs/tecnica-acessibilidade.md, plano 3.2)
   norma: "WCAG 2.1 AA"
-  browser: "chrome"           # o Chrome instalado (sem descarregar browsers do Playwright)
+  browser: "chromium"         # browser do motor qa-audit (qa-audit doctor)
+  auditar_paginas_com_erro_http: true  # o saucedemo responde 404 aos links diretos das paginas com login (SPA)
   login:                      # formulario de login antes das paginas com login: true
     url: "https://www.saucedemo.com/"
     campo_utilizador: "#user-name"

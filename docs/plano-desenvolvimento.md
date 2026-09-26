@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026); next: `/auditar-acessibilidade` on `qa-audit`; 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -470,7 +470,7 @@ Notes (8.3): two risks found while building the reports, both covered by tests: 
 ### 8.4 Accessibility module
 - [x] axe-core 4.13.0 shipped with manifest and `scripts/update_axe.py`; violations / incomplete / manual checklist; keyboard and reflow checks; disclaimer.
 - [x] Integration: planted defects found, clean page without problems, on every available engine.
-- [ ] Replacing `scripts/auditar_a11y.py` + `tools/a11y/` (and moving `/auditar-acessibilidade`) waits for login support (parity with its authenticated pages); until then both exist.
+- [x] `tools/a11y/` retired: `scripts/auditar_a11y.py` and `/auditar-acessibilidade` run on this engine (see 8.10, 26.09.2026).
 
 Notes (8.4): the npm integrity of the bundled axe-core is the same as in `tools/a11y/package-lock.json` (and a test keeps both on the same version). The Firefox integration tests found three things the first design got wrong, all fixed and covered: axe evaluated from Playwright's realm cannot see page functions (X-ray wrappers), so it runs in the page realm through a `<script>` element with `evaluate` only as the CSP fallback; this Firefox build throws from `crypto.getRandomValues` (a substitute is installed only when the native call fails, and noted in the report); and Firefox headless keeps the focus on the last element at the end of a page, which the first keyboard check reported as a trap on a clean page (false positive; now a trap needs tabbable elements after the stuck one). 8.2, 8.3 and 8.4 are one commit: their integration tests exercise the three together.
 
@@ -503,7 +503,26 @@ Notes (8.9): `install.ps1` was tested on a fresh local clone: its first version 
 User decision (25.09.2026): login is the next engine task; methods `form` and `manual` now, `storage-state` later. Specification: `docs/qa-audit.md` §20 and §5 (`crawl.pages`). Kept on the branch `feat/login` until the pilot (user decision, 25.09.2026) and merged into `main` on 26.09.2026, with the branch's CI green on the three engines.
 - [x] `auth:` with `form` and `manual`, one attempt, success check, session-expiry detection, credentials redacted everywhere, trace refused with auth; `crawl.pages` / `follow_links`.
 - [x] Fixture login flow (form, protected area, session that expires, wrong password) and tests: exactly one POST, credentials in no output file, a wrong password stops at the first attempt, expiry detected; `manual` tested with a login page that completes itself (the "person").
-- [ ] Afterwards (separate task): `/auditar-acessibilidade` on `qa-audit`, then retire `scripts/auditar_a11y.py` and `tools/a11y/`.
+- [x] Afterwards (separate task): `/auditar-acessibilidade` on `qa-audit`, and `tools/a11y/` retired (26.09.2026).
+
+Notes (8.10, accessibility on the engine): user decisions (26.09.2026): `scripts/auditar_a11y.py` stays as a thin
+workspace script (same command line, `projeto.yaml` section and workspace report; the engine opens the browser and
+runs axe), so the skill, the demo and the workbook texts keep working; `acessibilidade.browser` takes the engine's
+browsers and the old `chrome` becomes `chromium` with a warning. The script runs one engine audit per (login,
+origin) group, only the declared pages (`crawl.pages`, `follow_links: false`), with the credentials in the engine
+process's environment only; a login succeeds by default when the URL leaves the login page (`login.sucesso_url` /
+`sucesso_seletor` override it). Two engine changes came out of the comparison with the old script (methodology
+§15, on the practice workspace with the public practice site): (1) the WCAG criteria alone could not tell a
+WCAG 2.2 rule from a 2.1 one, so the axe findings' `references` now carry each tag's version and level
+(`WCAG 2.2 AA`), and the script keeps the old split (a 2.2-only rule is a best practice under WCAG 2.1);
+(2) the practice site answers **HTTP 404** to the direct links of its logged-in pages (a single-page application)
+and renders them anyway: the old tool ignored the status, the engine refuses error pages. New opt-in
+`crawl.audit_error_pages` (listed pages answering 4xx only; noted in the report; user decision), set from
+`acessibilidade.auditar_paginas_com_erro_http`, with integration tests on a fixture route. Result of the comparison,
+per page: the same WCAG violations (none), best practices and incompletes, except `color-contrast` incomplete on the
+products page (3 elements before, 2 now), stable over two runs of each and explained by the viewport: the engine's
+1440×900 against Playwright's default 1280×720 (at 1280×720 the engine also finds 3); the engine's viewport was
+kept. New in the report: the engine's keyboard, focus and reflow checks, as leads for the manual part.
 
 Notes (8.10): the login runs in the crawl's own browser context before the first page; the login page is excluded from the crawl, and a page that lands on it afterwards stops the crawl as "session ended" (the fixture's `account/expire.html` clears the cookie). Credentials are redacted in findings, evidence, page data, notes and errors after the run; the test greps every written file (json, csv, md, html, log) for both values and requires the `«QA_FIXTURE_USER»` placeholder to appear (the settings page shows the user name, so redaction is proven, not assumed). `success_url` matching the login page itself is a configuration error (a failed login would look like success). `manual` forces a visible browser; its test uses a fixture login page that fills and submits itself after a second, and in CI it runs under `xvfb-run`. Locally the auth tests passed on Chromium, Firefox and WebKit.
 
