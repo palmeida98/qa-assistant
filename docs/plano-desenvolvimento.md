@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) defined; 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -633,6 +633,29 @@ User decisions (26.09.2026): stop adding features and use the engine on the publ
 Notes (8.16): a second run on the practice site gave identical results in the three engines and no compatibility
 difference (the first run had one: the false positive). Still open from that use, for a person to judge:
 `focus-visible` (needs-human) on the four pages.
+
+### 8.17 Focus visibility decided by pixels (what was left from the first real use)
+Left from 8.16: `focus-visible` was `needs-human` / confidence low on the four pages in the three engines, because
+the check only compares computed styles (outline, shadow, border, background, colour, underline) and cannot see a
+focus style drawn another way. Checked on 26.09.2026 on the practice site's public login page (no login): after a
+real Tab (`:focus-visible` true), the element's area with a 6 px margin gives **identical pixels** focused and
+blurred for the three stops, in chromium, firefox and webkit. The site has no focus indicator. A person was only
+needed because the engine did not look at the pixels.
+- [ ] The keyboard walk also compares a screenshot of the element's box plus a margin, focused vs blurred (caret
+  hidden, after the focus transition settles). Identical pixels mean `focus-not-visible` (problem, medium, confidence
+  high, WCAG 2.4.7) with both crops as evidence. Pixels that differ with no computed-style change pass. The style-only
+  `needs-human` stays only where the pixel test cannot decide (element off screen, zero size, or the crop keeps
+  changing on its own, e.g. an animation).
+- [ ] The walk never clicks or types. The page is left as it was (focus, scroll, viewport). The time added per page
+  is measured and noted.
+- [ ] The finding lists every element or says "and N more". Today `actual` names 5 of 6 without saying so.
+  `data:` URIs in the evidence HTML are shortened (a base64 image filled the snippet of `#continue-shopping`).
+- [ ] Tests (local fixtures, no network): a button with `outline: none` and no other style is `focus-not-visible`;
+  a focus style drawn only by `::after` or by a parent's `:focus-within` passes (today it is needs-human); an
+  animated element falls back to `needs-human`. Same result in the three engines.
+- [ ] A new run on the practice site (same `qa-audit.yaml`, `--browser all`) gives `focus-not-visible` on the four
+  pages, identical in the three engines, and no compatibility difference.
+
 ---
 
 ## Registo de alterações a este plano
@@ -656,6 +679,7 @@ difference (the first run had one: the false positive). Still open from that use
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.17 definida (o que ficou da primeira utilização real): `focus-visible` decidido por comparação de píxeis; verificado no login público do site de prática, píxeis idênticos com e sem foco nos três motores. |
 | 2026-09-26 | 8.16: correções da primeira utilização real (falso positivo de SameSite no Firefox/WebKit, páginas SPA como links partidos) e `visual` fora do `full` (decisão do utilizador). |
 | 2026-09-26 | `docs/qa-audit.md` §12: fluxos com script no motor recusados (ficam nas specs do workspace, auditados com `qa-audit check`); segurança ativa só com necessidade concreta (decisões do utilizador). A seguir: usar o motor no site público de prática antes de novas funcionalidades. |
 | 2026-09-26 | 8.15 (`qa-audit check`, auditoria de estados a meio das specs N2) concluída por decisão do utilizador (opção c). |
