@@ -46,7 +46,7 @@
    - **violações WCAG** (regras do axe com critério WCAG da norma): cada uma com regra, critério(s), nível, impacto sugerido, número de elementos e os primeiros seletores;
    - **boas práticas** (regras do axe sem critério WCAG): observações, não Fail;
    - **incompletos** (o axe não conseguiu decidir, ex. contraste sobre imagens): vão para a revisão manual (§3), não para Fail nem Pass;
-   - **outras verificações do motor**: armadilha de teclado (2.1.2), foco possivelmente invisível (2.4.7) e scroll horizontal a 320 px (1.4.10). São indícios para a parte manual (§3), que os confirma ou descarta; sozinhos não dão Fail.
+   - **outras verificações do motor**: armadilha de teclado (2.1.2), foco invisível (2.4.7: `focus-not-visible` quando a captura do elemento é igual com e sem foco; `focus-visible` quando as capturas não chegam para decidir) e scroll horizontal a 320 px (1.4.10). São indícios para a parte manual (§3), que os confirma ou descarta; sozinhos não dão Fail.
 4. O impacto do axe (`critical`, `serious`, `moderate`, `minor`) passa pelo motor como severidade (`high`, `medium`, `low`) e é só uma sugestão de severidade; a decisão é do utilizador (metodologia §9.2).
 5. Códigos de saída: `0` auditoria feita (as violações são resultados, não erros) · `2` configuração inválida ou motor por instalar (nada corrido) · `3` browser não arrancou, login falhado ou página não auditada (Blocked por ambiente).
 

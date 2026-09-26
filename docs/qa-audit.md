@@ -375,8 +375,14 @@ Automated checks:
     Never `critical` (§9).
 - **Keyboard** (engine's own): tabs through up to 40 stops; a focus that stays on one element for three Tabs
   while tabbable elements follow it is a keyboard trap (`warning`, `high`) — at the last element it is the end of
-  the page (Firefox headless keeps the focus there); an element whose outline, box-shadow, border, background and text decoration do not
-  change when focused is reported as `needs-human` (focus visibility, WCAG 2.4.7).
+  the page (Firefox headless keeps the focus there). Focus visibility (WCAG 2.4.7): an element whose outline,
+  box-shadow, border, background, colour and text decoration change when focused passes; for the others the
+  pixels decide: a screenshot of the element's box plus `keyboard.focus_margin` px (8), taken right after Tab and
+  again blurred (transitions finished, caret hidden), identical in both states is `focus-not-visible` (`problem`,
+  `medium`, confidence high, both screenshots as evidence), different passes (a ring drawn by a pseudo-element or a
+  parent). Where the pixels cannot decide (no size, outside the viewport, an area that keeps changing on its own)
+  the element stays `focus-visible` (`needs-human`, confidence low). Only Tab is pressed; the focus and the scroll
+  are put back where they were at the end of the walk.
 - **Reflow** (WCAG 1.4.10): at 320 CSS px wide, horizontal scrolling of the page is a `warning`, `medium`, with a
   screenshot; data tables and maps can legitimately scroll.
 - Frames are not scanned inside; a page with iframes gets a `needs-human` note.
@@ -744,9 +750,10 @@ qa-audit check --cdp http://127.0.0.1:9222 --page-url REGEX --label NAME
    exit 3. The engine does not navigate, reload, click or type; when it finishes it disconnects and leaves the
    browser, its contexts and its pages as they were.
 3. **Checks.** Accessibility only (§11), on the page as it is. By default only axe-core, which reads the page. The
-   keyboard walk (it presses Tab and moves the focus) and the reflow check (it resizes the viewport, then restores
+   keyboard walk (it presses Tab, moving the focus) and the reflow check (it resizes the viewport, then restores
    it) change the state in the middle of a flow, so they run only when asked for (`--checks axe,keyboard,reflow`);
-   the report notes that the focus was moved. Security, performance, functional and visual checks need the
+   the walk puts the focus and the scroll back at the end, but the page has seen focus and blur events in between,
+   and the report notes it. Security, performance, functional and visual checks need the
    engine's own navigation (responses, timings, baselines) and are not available here.
 4. **Output.** A run folder `check_<label>_<date_time>/` under `--output` (default `./qa-output`, which ignores
    itself in Git) with `check.json`, `check.md` and, per `--screenshots`, element screenshots. Findings, evidence,

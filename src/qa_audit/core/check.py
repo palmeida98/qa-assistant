@@ -105,8 +105,8 @@ def run_check(cdp: str, page_url: str, label: str, checks: list[str], output: st
         info = types.SimpleNamespace(url=url, final_url=url, iframes=frames)
         ACCESSIBILITY.on_page(page, info, ctx)
         if "keyboard" in checks:
-            ctx.notes.append("keyboard: the check pressed Tab on the page; the focus is no longer where the test "
-                             "left it")
+            ctx.notes.append("keyboard: the check pressed Tab on the page, then put the focus and the scroll back "
+                             "where the test left them")
         for h in list(log.handlers):
             h.close()
             log.removeHandler(h)

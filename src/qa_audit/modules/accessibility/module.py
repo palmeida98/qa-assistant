@@ -53,6 +53,15 @@ def wcag_levels(tags: list[str]) -> list[str]:
             for t in tags or [] if (m := WCAG_LEVEL_TAG.match(t))]
 
 
+LISTED = 5         # elements named in a finding's text and evidence
+
+
+def listed(items: list[dict]) -> str:
+    """The selectors of the first LISTED items, saying how many more there are."""
+    names = ", ".join(i["selector"] for i in items[:LISTED])
+    return names + (f" and {len(items) - LISTED} more" if len(items) > LISTED else "")
+
+
 def selector_of(node: dict) -> str:
     t = node.get("target") or []
     # a list inside the list means shadow DOM: host >>> inner
@@ -75,7 +84,7 @@ class Accessibility(AuditModule):
         self._axe(page, url, cfg, ctx)
         kb = cfg.get("keyboard") or {}
         if kb.get("enabled", True):
-            self._keyboard(page, url, int(kb.get("max_stops", 40)), ctx)
+            self._keyboard(page, url, int(kb.get("max_stops", 40)), int(kb.get("focus_margin", 8)), ctx)
         rf = cfg.get("reflow") or {}
         if rf.get("enabled", True):
             self._reflow(page, url, int(rf.get("width", 320)), ctx)
@@ -112,7 +121,8 @@ class Accessibility(AuditModule):
     def _rule_finding(self, page, url, rule, status, max_shots, ctx) -> Finding:
         nodes = rule["nodes"]
         first = nodes[0] if nodes else {}
-        evidence = [Evidence(kind="html", value=n["html"][:500], label=selector_of(n)) for n in nodes if n.get("html")]
+        evidence = [Evidence(kind="html", value=checks.shorten_data_uris(n["html"])[:500], label=selector_of(n))
+                    for n in nodes if n.get("html")]
         shots = 0
         for n in nodes:
             if shots >= max_shots:
@@ -146,14 +156,14 @@ class Accessibility(AuditModule):
             expected="No element fails the rule." if status == "problem" else "A person confirms the rule is met.",
             actual=actual,
             recommendation=f"{rule['help']}. Details: {help_url}" if help_url else rule["help"],
-            element={"selector": selector_of(first), "snippet": (first.get("html") or "")[:500]},
+            element={"selector": selector_of(first), "snippet": checks.shorten_data_uris(first.get("html") or "")[:500]},
             steps=[f"Open {url}", f"Inspect the element {selector_of(first)}",
                    f"Check it against the rule '{rule['id']}' ({', '.join(wcag_refs(rule.get('tags'))) or 'axe'})"],
             evidence=evidence, references=refs)
 
     # --- keyboard ----------------------------------------------------------------------------------------------
-    def _keyboard(self, page, url: str, max_stops: int, ctx) -> None:
-        walk = checks.keyboard_walk(page, max_stops)
+    def _keyboard(self, page, url: str, max_stops: int, margin: int, ctx) -> None:
+        walk = checks.keyboard_walk(page, max_stops, margin)
         order = [s["selector"] for s in walk["stops"]]
         if walk["trap"]:
             t = walk["trap"]
@@ -174,23 +184,60 @@ class Accessibility(AuditModule):
                 evidence=ev, references=["WCAG 2.1.2"]))
         else:
             ctx.passed(self.name)
-        if walk["no_visible_change"]:
-            items = walk["no_visible_change"]
+        ctx.log.info("keyboard walk %s: %d stop(s), %d decided by pixels, %.2f s", url, len(walk["stops"]),
+                     walk["pixel_checks"], walk["seconds"])
+        if walk["not_visible"]:
+            items = walk["not_visible"]
+            ev = []
+            for i in items[:LISTED]:
+                ev.append(Evidence(kind="html", value=i["html"], label=i["selector"]))
+                for state in ("focused", "blurred"):
+                    shot = self._png(ctx, i[f"{state}_png"], f"focus {state} {i['selector']}")
+                    if shot:
+                        ev.append(shot)
+            ctx.add_finding(Finding(
+                module=self.name, check="focus-not-visible", title="Focus is not visible on some elements",
+                status="problem", severity="medium", confidence="high", url=url,
+                element={"selector": items[0]["selector"], "snippet": items[0]["html"]},
+                description=(f"{len(items)} of {len(walk['stops'])} focus stops look exactly the same focused and not "
+                             f"focused: a screenshot of each element with a {margin} px margin gives identical "
+                             "pixels in both states."),
+                expected="Every focused element has a visible focus indicator.",
+                actual="Identical pixels focused and not focused: " + listed(items),
+                recommendation="Give every focusable element a visible focus style, for example "
+                               ":focus-visible { outline: 2px solid; } (WCAG 2.4.7).",
+                steps=[f"Open {url}", "Press Tab until each listed element is focused",
+                       "Compare the element with and without focus"],
+                evidence=ev, references=["WCAG 2.4.7"]))
+        if walk["undecided"]:
+            items = walk["undecided"]
             ctx.add_finding(Finding(
                 module=self.name, check="focus-visible", title="Focus may not be visible on some elements",
                 status="needs-human", severity="medium", confidence="low", url=url,
                 element={"selector": items[0]["selector"], "snippet": items[0]["html"]},
                 description=(f"{len(items)} of {len(walk['stops'])} focus stops showed no change in outline, shadow, "
-                             "border, background, colour or underline when focused. A focus style drawn another way "
-                             "(pseudo-elements, a parent) is not detected, so a person must look."),
+                             "border, background, colour or underline when focused, and the screenshots could not "
+                             "decide (" + "; ".join(sorted({i["reason"] for i in items})) + "), so a person must "
+                             "look."),
                 expected="Every focused element has a visible focus indicator.",
-                actual="No computed style change on: " + ", ".join(i["selector"] for i in items[:5]),
+                actual="No computed style change on: " + listed(items),
                 recommendation="Tab through the page and look at each listed element (WCAG 2.4.7).",
                 steps=[f"Open {url}", "Press Tab until each listed element is focused", "Look for a focus indicator"],
-                evidence=[Evidence(kind="html", value=i["html"], label=i["selector"]) for i in items[:5]],
+                evidence=[Evidence(kind="html", value=i["html"], label=f"{i['selector']} ({i['reason']})")
+                          for i in items[:LISTED]],
                 references=["WCAG 2.4.7"]))
-        elif walk["stops"]:
+        if walk["stops"] and not walk["not_visible"] and not walk["undecided"]:
             ctx.passed(self.name)
+
+    @staticmethod
+    def _png(ctx, data: bytes, label: str) -> Evidence | None:
+        """A screenshot the walk already took (bytes), saved as evidence; None if screenshots are off."""
+        if ctx.cfg["evidence"]["screenshots"] == "off":
+            return None
+        path, rel = ctx.run.new_file("screenshots", label, "png")
+        with open(path, "wb") as f:
+            f.write(data)
+        return Evidence(kind="screenshot", path=rel, label=label)
 
     # --- reflow ------------------------------------------------------------------------------------------------
     def _reflow(self, page, url: str, width: int, ctx) -> None:

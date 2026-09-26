@@ -52,7 +52,8 @@ ELEMENTOS = re.compile(r"^(\d+) element")
 # variaveis com as credenciais, so no ambiente do processo do motor
 VAR_UTILIZADOR, VAR_PALAVRA_PASSE = "QA_A11Y_UTILIZADOR", "QA_A11Y_PALAVRA_PASSE"
 # verificacoes proprias do motor: indicios para a parte manual (tecnica-acessibilidade.md secao 2)
-OUTRAS = {"keyboard-trap": ["2.1.2"], "focus-visible": ["2.4.7"], "reflow": ["1.4.10"]}
+OUTRAS = {"keyboard-trap": ["2.1.2"], "focus-not-visible": ["2.4.7"], "focus-visible": ["2.4.7"],
+          "reflow": ["1.4.10"]}
 
 
 class Erro(Exception):
