@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) in progress |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -526,12 +526,48 @@ kept. New in the report: the engine's keyboard, focus and reflow checks, as lead
 
 Notes (8.10): the login runs in the crawl's own browser context before the first page; the login page is excluded from the crawl, and a page that lands on it afterwards stops the crawl as "session ended" (the fixture's `account/expire.html` clears the cookie). Credentials are redacted in findings, evidence, page data, notes and errors after the run; the test greps every written file (json, csv, md, html, log) for both values and requires the `«QA_FIXTURE_USER»` placeholder to appear (the settings page shows the user name, so redaction is proven, not assumed). `success_url` matching the login page itself is a configuration error (a failed login would look like success). `manual` forces a visible browser; its test uses a fixture login page that fills and submits itself after a second, and in CI it runs under `xvfb-run`. Locally the auth tests passed on Chromium, Firefox and WebKit.
 
-### 8.11 Language of the workspace layer
-User decision (25.09.2026): **not now**; at most after the pilot, and only with a concrete reason (sharing with
-international teams, for example). The client's team works in Portuguese, and translating the skills the pilot uses
-would make a pilot failure ambiguous (translation or method).
+### 8.11 Everything in English (workspace layer included)
+User decisions (26.09.2026, replacing "not now" of 25.09.2026): the whole repository is in English, documentation
+included; the names change too (commands, files, scripts, configuration keys); existing workspaces are converted by
+a migration script (no permanent dual vocabulary in the code); the default states and the demo are in English.
+The `qa-audit` engine is already in English and only changes where it names workspace files.
 
-The existing workspace layer (methodology, techniques, skills, scripts) is in European Portuguese. Translating it to English is a separate, large change that touches the skills used by live workspaces; to be confirmed before it starts.
+Names (old -> new):
+- Docs: `metodologia-core.md` -> `methodology.md`, `tecnica-<x>.md` -> `technique-<x>.md` (`browser`, `excel`,
+  `api`, `accessibility`, `mobile`), `heuristicas.md` -> `heuristics.md`, `plano-desenvolvimento.md` ->
+  `development-plan.md`, `contexto-template.md` -> `context-template.md`, `projeto.yaml` -> `project.yaml`.
+- Skills: `/onboarding-projeto` -> `/project-onboarding`, `/analisar-funcionalidade` -> `/analyze-feature`,
+  `/gerar-casos` -> `/generate-cases`, `/planear-lote` -> `/plan-batch`, `/executar-lote` -> `/run-batch`,
+  `/registar-bug` -> `/log-bug`, `/checkpoint`, `/fim-sessao` -> `/end-session`, `/painel` -> `/dashboard`,
+  `/testar-api` -> `/test-api`, `/auditar-acessibilidade` -> `/audit-accessibility`, `/testar-mobile` ->
+  `/test-mobile`. The global copies with the old names are removed.
+- Scripts: `validar_projeto` -> `validate_project`, `api_pedido` -> `api_request`, `auditar_a11y` -> `audit_a11y`,
+  `testar_mobile` -> `run_mobile`, `gerar_painel` -> `build_dashboard`, `sincronizar_skills` -> `sync_skills`,
+  `comum` -> `common`; `adapters.excel.aplicar` -> `apply`, `inspecionar` -> `inspect`, `exemplo.yaml` ->
+  `example.yaml`; demo `gerar_workbook` -> `build_workbook`, `reconstruir_workbook` -> `rebuild_workbook`.
+- Workspace: `projeto.yaml` -> `project.yaml`, `contexto.md` -> `context.md`, `historico/` -> `history/` (moved
+  unchanged, protection rule updated), new run logs `batch_*.json`.
+- Keys: every key of `project.yaml` (e.g. `modulos` -> `modules`, `excel.casos.estados` -> `excel.cases.statuses`,
+  `aba_resumo` -> `summary`), of a batch (`resultados` -> `results`, `estado` -> `status`, `resultado_obtido` ->
+  `actual_result`, `defeito_novo` -> `new_defect`) and of `golden.yaml` (`agora` -> `now`, `etiqueta` -> `label`),
+  and the values the framework defines (`remover` -> `remove`, `texto` -> `text`, module and dashboard types).
+  Values that come from a project (sheet, column and state names, texts) are never translated.
+
+Criteria:
+- [ ] `python scripts/migrate_workspace.py <workspace>` (dry run by default, `--apply` to write): converts
+  `project.yaml` (keys, framework values, templates such as `{resultado}` -> `{result}`), the batches in the run
+  log folder, `golden.yaml`, `CLAUDE.md` references and the settings file; renames `projeto.yaml`, `contexto.md`,
+  `historico/` (contents byte for byte, checked by hash). It pins what an old workbook shows: the old note texts,
+  the `_qa_lotes` control sheet and the reporter "QA automatizado" when the project had the defaults, so the next
+  batch writes the same cells as before. Idempotent; refuses a workspace with uncommitted changes.
+- [ ] The adapter reads an existing control sheet with the old headers (workbook data, not configuration); the
+  golden check converts an old batch and `golden.yaml` in memory, with the old defaults.
+- [ ] Docs, skills, scripts, adapter, tests, CI, README, CONTRIBUTING, CHANGELOG and this plan in English;
+  messages and JSON outputs of the scripts in English. A test fails if Portuguese words come back into the
+  framework files (list of common words, outside the migration's own mapping and the plan's history).
+- [ ] Demo in English (cases, sheets, states, batches, workbook rebuilt) and still reproducible; e2e specs pass.
+- [ ] Practice workspace migrated with the script; golden real still identical; `/` shows only the new skills.
+- [ ] Unit, integration (three engines) and golden tests pass; CI green.
 
 ### 8.12 Saved login sessions (`auth.method: storage-state`)
 User decision (26.09.2026): next engine task after 8.10, with the design agreed before the code. Specification:
@@ -689,6 +725,7 @@ scroll back where they were: the note of `qa-audit check` now says so, and its t
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.11 redefinida por decisão do utilizador: tudo em inglês, nomes incluídos, com script de migração dos workspaces. |
 | 2026-09-26 | 8.17 concluída: `focus-not-visible` (problem) quando a captura do elemento é igual com e sem foco; o `needs-human` fica só onde as capturas não decidem; reexecução no site de prática com o achado nas 4 páginas e nos 3 motores. |
 | 2026-09-26 | 8.17 definida (o que ficou da primeira utilização real): `focus-visible` decidido por comparação de píxeis; verificado no login público do site de prática, píxeis idênticos com e sem foco nos três motores. |
 | 2026-09-26 | 8.16: correções da primeira utilização real (falso positivo de SameSite no Firefox/WebKit, páginas SPA como links partidos) e `visual` fora do `full` (decisão do utilizador). |
