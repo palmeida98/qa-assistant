@@ -1,5 +1,5 @@
-# versoes exatas (plano 7.5): o golden depende do openpyxl; atualizar e uma alteracao
-# propria, com golden_check.py e testes a passar (metodologia seccao 15)
+# exact versions (plan 7.5): the golden depends on openpyxl; updating is a change of its
+# own, with golden_check.py and the tests passing (methodology section 15)
 openpyxl==3.1.5
 et-xmlfile==2.0.0
 pyyaml==6.0.3

@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Changed
+- The Playwright helper `integrations/playwright/qa-audit.ts` is in English (plan 8.11): `auditState(page, testInfo,
+  name, { failOn, checks, redact })`, before `auditarEstado(…, { falharEm, verificacoes, redigir })`. The workspace
+  layer that calls the engine is in English too (`scripts/audit_a11y.py`, `/audit-accessibility`).
 - `visual` is no longer part of `--type full` (plan 8.16): it keeps screenshots of the audited site, logged-in
   pages included, in the home folder between runs, so it runs only when named (`--type visual`).
 - Security: `cookie-samesite-unset` (needs-human, info) for a cookie without a declared SameSite, or set by

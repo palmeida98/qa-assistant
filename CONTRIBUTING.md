@@ -4,9 +4,9 @@ This repository is private and proprietary (see `LICENSE`). These are the rules 
 
 ## Before you change anything
 
-1. Read `docs/metodologia-core.md` §15 (validation before adoption): **specification first, then code, then
+1. Read `docs/methodology.md` §15 (validation before adoption): **specification first, then code, then
    tests**, then commit.
-2. The roadmap is `docs/plano-desenvolvimento.md`: one task per commit, message `<phase>.<task>: <summary>`.
+2. The roadmap is `docs/development-plan.md`: one task per commit, message `<phase>.<task>: <summary>`.
 3. The engine's specification is `docs/qa-audit.md`. Change it in the same commit as the behaviour it
    describes.
 

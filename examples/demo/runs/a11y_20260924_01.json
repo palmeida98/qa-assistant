@@ -1,142 +1,142 @@
 {
- "norma": "WCAG 2.1 AA",
+ "standard": "WCAG 2.1 AA",
  "browser": "chrome 153.0.8010.53",
- "paginas": [
+ "pages": [
   {
-   "nome": "login",
+   "name": "login",
    "url": "https://www.saucedemo.com/",
-   "url_final": "https://www.saucedemo.com/",
-   "titulo": "Swag Labs",
-   "erro": null,
-   "violacoes_wcag": [],
-   "boas_praticas": [
+   "final_url": "https://www.saucedemo.com/",
+   "title": "Swag Labs",
+   "error": null,
+   "wcag_violations": [],
+   "best_practices": [
     {
-     "regra": "page-has-heading-one",
-     "criterios": [],
-     "nivel": null,
-     "impacto": "moderate",
-     "ajuda": "Page should contain a level-one heading",
-     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
-     "elementos": 1,
-     "exemplos": [
+     "rule": "page-has-heading-one",
+     "criteria": [],
+     "level": null,
+     "impact": "moderate",
+     "help": "Page should contain a level-one heading",
+     "help_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elements": 1,
+     "examples": [
       {
-       "alvo": "html",
+       "target": "html",
        "html": "<html lang=\"en\">",
-       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+       "summary": "Fix all of the following:\n  Page must have a level-one heading"
       }
      ]
     },
     {
-     "regra": "region",
-     "criterios": [],
-     "nivel": null,
-     "impacto": "moderate",
-     "ajuda": "All page content should be contained by landmarks",
-     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/region?application=playwright",
-     "elementos": 1,
-     "exemplos": [
+     "rule": "region",
+     "criteria": [],
+     "level": null,
+     "impact": "moderate",
+     "help": "All page content should be contained by landmarks",
+     "help_url": "https://dequeuniversity.com/rules/axe/4.13/region?application=playwright",
+     "elements": 1,
+     "examples": [
       {
-       "alvo": ".login_logo",
+       "target": ".login_logo",
        "html": "<div class=\"login_logo\">Swag Labs</div>",
-       "resumo": "Fix any of the following:\n  Some page content is not contained by landmarks"
+       "summary": "Fix any of the following:\n  Some page content is not contained by landmarks"
       }
      ]
     }
    ],
-   "incompletos": [],
-   "passaram": 28
+   "incomplete": [],
+   "passed": 28
   },
   {
-   "nome": "produtos",
+   "name": "products",
    "url": "https://www.saucedemo.com/inventory.html",
-   "url_final": "https://www.saucedemo.com/inventory.html",
-   "titulo": "Swag Labs",
-   "erro": null,
-   "violacoes_wcag": [],
-   "boas_praticas": [
+   "final_url": "https://www.saucedemo.com/inventory.html",
+   "title": "Swag Labs",
+   "error": null,
+   "wcag_violations": [],
+   "best_practices": [
     {
-     "regra": "page-has-heading-one",
-     "criterios": [],
-     "nivel": null,
-     "impacto": "moderate",
-     "ajuda": "Page should contain a level-one heading",
-     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
-     "elementos": 1,
-     "exemplos": [
+     "rule": "page-has-heading-one",
+     "criteria": [],
+     "level": null,
+     "impact": "moderate",
+     "help": "Page should contain a level-one heading",
+     "help_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elements": 1,
+     "examples": [
       {
-       "alvo": "html",
+       "target": "html",
        "html": "<html lang=\"en\">",
-       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+       "summary": "Fix all of the following:\n  Page must have a level-one heading"
       }
      ]
     }
    ],
-   "incompletos": [
+   "incomplete": [
     {
-     "regra": "color-contrast",
-     "criterios": [
+     "rule": "color-contrast",
+     "criteria": [
       "1.4.3"
      ],
-     "elementos": 4
+     "elements": 4
     }
    ],
-   "passaram": 39
+   "passed": 39
   },
   {
-   "nome": "carrinho",
+   "name": "cart",
    "url": "https://www.saucedemo.com/cart.html",
-   "url_final": "https://www.saucedemo.com/cart.html",
-   "titulo": "Swag Labs",
-   "erro": null,
-   "violacoes_wcag": [],
-   "boas_praticas": [
+   "final_url": "https://www.saucedemo.com/cart.html",
+   "title": "Swag Labs",
+   "error": null,
+   "wcag_violations": [],
+   "best_practices": [
     {
-     "regra": "page-has-heading-one",
-     "criterios": [],
-     "nivel": null,
-     "impacto": "moderate",
-     "ajuda": "Page should contain a level-one heading",
-     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
-     "elementos": 1,
-     "exemplos": [
+     "rule": "page-has-heading-one",
+     "criteria": [],
+     "level": null,
+     "impact": "moderate",
+     "help": "Page should contain a level-one heading",
+     "help_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elements": 1,
+     "examples": [
       {
-       "alvo": "html",
+       "target": "html",
        "html": "<html lang=\"en\">",
-       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+       "summary": "Fix all of the following:\n  Page must have a level-one heading"
       }
      ]
     }
    ],
-   "incompletos": [],
-   "passaram": 37
+   "incomplete": [],
+   "passed": 37
   },
   {
-   "nome": "checkout-dados",
+   "name": "checkout-information",
    "url": "https://www.saucedemo.com/checkout-step-one.html",
-   "url_final": "https://www.saucedemo.com/checkout-step-one.html",
-   "titulo": "Swag Labs",
-   "erro": null,
-   "violacoes_wcag": [],
-   "boas_praticas": [
+   "final_url": "https://www.saucedemo.com/checkout-step-one.html",
+   "title": "Swag Labs",
+   "error": null,
+   "wcag_violations": [],
+   "best_practices": [
     {
-     "regra": "page-has-heading-one",
-     "criterios": [],
-     "nivel": null,
-     "impacto": "moderate",
-     "ajuda": "Page should contain a level-one heading",
-     "ajuda_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
-     "elementos": 1,
-     "exemplos": [
+     "rule": "page-has-heading-one",
+     "criteria": [],
+     "level": null,
+     "impact": "moderate",
+     "help": "Page should contain a level-one heading",
+     "help_url": "https://dequeuniversity.com/rules/axe/4.13/page-has-heading-one?application=playwright",
+     "elements": 1,
+     "examples": [
       {
-       "alvo": "html",
+       "target": "html",
        "html": "<html lang=\"en\">",
-       "resumo": "Fix all of the following:\n  Page must have a level-one heading"
+       "summary": "Fix all of the following:\n  Page must have a level-one heading"
       }
      ]
     }
    ],
-   "incompletos": [],
-   "passaram": 41
+   "incomplete": [],
+   "passed": 41
   }
  ],
  "ts": "2026-09-24T11:31:03"

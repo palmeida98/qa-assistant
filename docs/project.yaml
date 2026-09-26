@@ -1,0 +1,112 @@
+project: ""
+company: ""
+environments:
+  test: ""
+roles: []
+tracker: ""          # excel (with an adapter) | jira | azure-devops (manual logging: methodology 4.2)
+bug_format: ""
+resolved_bugs: "remove"      # or "archive"
+evidence: "text"             # or "text+screenshot"
+modules: [functional-web]     # closed list (methodology 4.1): functional-web | exploratory | api | accessibility | mobile
+run_log: "runs/"             # folder of the session's run log (never history/, which is immutable)
+
+# api: only with the api module active (docs/technique-api.md). Never credential values: only variable names.
+api:
+  base_url: ""                 # base URL of the TEST environment (relative paths of api_request.py)
+  contract: ""                 # (opt.) OpenAPI or published documentation: the source of the expected result
+  auth: ""                     # bearer | basic | cookie | api-key | none
+  credentials: {}              # role -> {user_var: VAR_NAME, pass_var: VAR_NAME} (names of .env variables)
+
+# accessibility: only with the accessibility module active (docs/technique-accessibility.md).
+accessibility:
+  standard: "WCAG 2.1 AA"      # WCAG 2.0 AA | WCAG 2.1 AA | WCAG 2.2 AA
+  browser: "chromium"          # chromium | firefox | webkit (browsers of the qa-audit engine; see qa-audit doctor)
+  login: {}                    # (opt.) {url, user_field, pass_field, button, user_var, pass_var}
+                               #   + (opt.) success_url (regex) or success_selector (CSS); by default: the URL leaves the login page
+  pages: []                    # [{name, url, login: true|false}] -- only URLs of the test environment
+  audit_error_pages: false     # (opt.) true: audit the declared pages that answer 4xx but show
+                               #   content (an SPA that answers 404 to a direct link); the report names them
+
+# mobile: only with the mobile module active (docs/technique-mobile.md).
+mobile:
+  platform: ""                 # android | ios | web (Maestro Web, beta)
+  flows: "flows"               # folder of the Maestro flows in the workspace; one per case: TC-MOB-<n>_<name>.yaml
+  variables: []                # .env variables the flows use as ${MAESTRO_<VAR>}
+
+# dashboard: meaning of each case status in the dashboard (scripts/build_dashboard.py, plan 5.1).
+# (opt.) Types: pending | ok | fail | blocked | na. "Run" = cases outside pending.
+# Without this section, the 1st status of excel.cases.statuses counts as pending and the others are neutral.
+dashboard:
+  states: {}                 # e.g. {"Not run": pending, "Pass": ok, "Fail": fail, "Blocked": blocked, "N/A": na}
+
+# ---------------------------------------------------------------------------
+# excel: layout of the workbook, read by the adapter (adapters/excel/base.py).
+# Fill in ONLY when tracker: "excel". Never guess: /project-onboarding
+# runs `python -m adapters.excel.inspect <workbook>` and confirms each value
+# with the user. Filled example (fictional): adapters/excel/example.yaml
+# (req.) = required; (opt.) = optional, the line can be deleted.
+# ---------------------------------------------------------------------------
+excel:
+  file: ""                     # (req.) path of the workbook, relative to this project.yaml
+
+  cases:
+    sheets: {}                 # (req.) case ID prefix -> sheet, e.g. {"TC-SHOP-": "Shop"}
+    header_row: 1              # (opt.) header row in the case sheets
+    columns:
+      id: ""                   # (req.) column with the case ID
+      status: ""               # (req.) column with the case status
+      actual_result: ""        # (opt.) only used in the sheets where it exists
+      notes: ""                # (opt.) session notes; only used in the sheets where it exists
+    statuses: []               # (req.) valid case statuses, exactly as in the workbook
+
+  defects:
+    sheet: ""                  # (req.) sheet with the full register of defects
+    header_row: 1              # (opt.)
+    id_format: ""              # (req.) ID format with {n} in place of the number, e.g. "BUG-{n}"
+    columns:
+      id: ""                   # (req.) column with the defect ID
+      status: ""               # (req.) column with the defect status
+      case: ""                 # (opt.) column with the related case(s); used in the cross-check
+      severity: ""             # (opt.)
+      priority: ""             # (opt.) used to sort the active view
+      reported_by: ""          # (opt.)
+      report_date: ""          # (opt.) filled with the day's date (YYYY-MM-DD)
+    batch_fields: {}           # (opt.) defect key in the batch -> column, e.g. {title: "Summary", description: "Description"}
+    defaults: {}               # (opt.) defect key in the batch -> value used when the batch does not bring it
+    reported_by: ""            # (opt.) value of the reporter column (default "Automated QA")
+    statuses: []               # (req.) valid defect statuses
+    closed_statuses: []        # (opt.) statuses that take the defect out of the active view (resolved_bugs rule)
+    initial_status: ""         # (req.) status of a new defect; must be in statuses
+    priorities: []             # (opt.) order of the priorities, highest first
+
+  summary:                     # (opt.) totals sheet with formulas, checked against the direct count
+    sheet: ""                  #   (technique-excel.md section 5); delete the block if the workbook has no summary
+    header_row: 1
+    area_column: ""            # header of the column with the name of each case sheet (one row per sheet)
+    total_column: ""           # (opt.) header of the column with the area's total number of cases
+    total_row: ""              # (opt.) text of area_column in the totals row, e.g. "Total"
+    status_columns: {}         # (opt.) status -> header, only when the header is not the status name
+    percent_column: ""         # (opt.) header of the % run: (total - not run) / total (methodology 16.3)
+    not_run_status: ""         # (req. with percent_column) status that counts as not run
+    percent_tolerance: 0.001   # (opt.) in percentage points; only raise it if the summary rounds
+
+  active_view:                 # (opt.) sheet with the list of active defects, regenerated; delete the block if it does not exist
+    sheet: ""
+    header_row: 1              # the rows above this one stay untouched; the data starts on the next one
+    columns: {}                # view header -> defects column (equal headers do not need to be here)
+    sort_by: ""                # (opt.) defects column used as the 2nd sorting criterion
+    summary:                   # (opt.) cell with a summary text; delete if it does not exist
+      cell: ""                 # e.g. "A2"
+      template: ""             # e.g. "{open} open, {closed} closed, {severity[High]} of High severity, {date:%d.%m.%Y}"
+
+  notes:                       # (opt.) text added to the case's notes, after the session's label
+    result: "Result: {result}"             # used in the sheets without an actual_result column
+    new_defect: "New defect: {id}."
+    existing_defect: "Linked defect: {id}."   # batch item with "bug" (existing defect)
+
+  batch_control:
+    sheet: "_qa_batches"       # (opt.) hidden sheet where the adapter records the batches applied
+
+  recalc:
+    mechanism: "libreoffice"   # (opt.) "libreoffice" or "excel-com" (Windows with desktop Excel only)
+    timeout: 60                # (opt.) seconds

@@ -1,5 +1,5 @@
-# CI da framework (plano 4.1): lint, testes unitarios, segredos e teste golden em cada push.
-# A denylist pessoal nao corre aqui de proposito -- vive so no pre-commit local.
+# The framework's CI (plan 4.1): lint, unit tests, secrets and golden test on each push.
+# The personal denylist does not run here on purpose -- it lives only in the local pre-commit.
 name: CI
 
 on:
@@ -20,7 +20,7 @@ jobs:
       - run: pip install ruff==0.16.8
       - run: ruff check --output-format github .
 
-  testes:
+  tests:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -29,7 +29,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      # extra do motor visual (Pillow): sem ele os testes de comparacao de imagens ficariam skipped
+      # extra of the visual engine (Pillow): without it the image comparison tests would be skipped
       - run: pip install pillow==12.3.0
       - run: python -m unittest discover -s tests -v
 
@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pre-commit
-      # so o hook detect-secrets do .pre-commit-config.yaml (mesma versao e baseline)
+      # only the detect-secrets hook of .pre-commit-config.yaml (same version and baseline)
       - run: pre-commit run detect-secrets --all-files --show-diff-on-failure
 
   golden:
@@ -52,19 +52,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Instalar LibreOffice (recalculo do golden)
+      - name: Install LibreOffice (recalculation of the golden)
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libreoffice-calc-nogui
       - run: pip install -r requirements.txt
       - run: python scripts/golden_check.py
-      # testes que recalculam formulas reais (resumo vs contagem direta), a reconstrucao do demo
-      # (workbook versionado = gerador + lotes; plano 7.6) e o mecanismo do golden real com dados
-      # ficticios (plano 7.3); no job testes ficam skipped
-      - run: python -m unittest tests.test_resumo tests.test_demo_reproduzivel tests.test_golden_real -v
+      # tests that recalculate real formulas (summary vs direct count), the rebuild of the demo
+      # (versioned workbook = builder + batches; plan 7.6) and the real golden's mechanism with fictional
+      # data (plan 7.3); in the tests job they are skipped
+      - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real -v
 
   qa-audit:
-    # motor qa-audit (plano 8.2): testes de integracao contra o site local, nos tres engines
+    # qa-audit engine (plan 8.2): integration tests against the local site, in the three engines
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -75,7 +75,7 @@ jobs:
       - run: pip install -e .[visual]
       - run: python -m playwright install --with-deps chromium firefox webkit
       - run: qa-audit doctor --no-color
-      # xvfb: o metodo de login manual abre o browser visivel (docs/qa-audit.md 20)
+      # xvfb: the manual login method opens the browser visibly (docs/qa-audit.md 20)
       - run: sudo apt-get install -y -q xvfb
       - run: xvfb-run -a python -m unittest discover -s tests/integration -v
         env:
@@ -83,7 +83,7 @@ jobs:
           QA_AUDIT_REQUIRE_ENGINES: "1"
 
   install:
-    # plano 8.9: checkout limpo -> scripts/install.sh -> auditoria ao site local de fixtures
+    # plan 8.9: clean checkout -> scripts/install.sh -> audit of the local fixture site
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -91,7 +91,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: ./scripts/install.sh --with-deps
-      - name: auditoria ao site local (codigo 1 esperado pelos defeitos plantados)
+      - name: audit of the local site (code 1 expected from the planted defects)
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory tests/fixtures/site > /dev/null 2>&1 &
           sleep 2
@@ -104,7 +104,7 @@ jobs:
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
 
   demo-e2e:
-    # regressao N2 do demo contra o site publico (plano 4.2; specs em examples/demo/e2e)
+    # the demo's N2 regression against the public site (plan 4.2; specs in examples/demo/e2e)
     runs-on: ubuntu-24.04
     env:
       DEMO_SAUCE_STANDARD_USER: ${{ secrets.DEMO_SAUCE_STANDARD_USER }}
@@ -115,33 +115,33 @@ jobs:
         working-directory: examples/demo/e2e
     steps:
       - uses: actions/checkout@v5
-      - name: Secrets do demo presentes?
-        id: segredos
+      - name: Demo secrets present?
+        id: secrets
         run: |
           if [ -z "$DEMO_SAUCE_PASSWORD" ] || [ -z "$DEMO_SAUCE_STANDARD_USER" ] || [ -z "$DEMO_SAUCE_LOCKED_OUT_USER" ]; then
-            echo "::warning title=demo-e2e nao correu::secrets DEMO_SAUCE_* em falta no repositorio (Settings > Secrets and variables > Actions)"
+            echo "::warning title=demo-e2e did not run::secrets DEMO_SAUCE_* missing in the repository (Settings > Secrets and variables > Actions)"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/setup-node@v5
-        if: steps.segredos.outputs.ok == 'true'
+        if: steps.secrets.outputs.ok == 'true'
         with:
           node-version: "22"
-      - if: steps.segredos.outputs.ok == 'true'
+      - if: steps.secrets.outputs.ok == 'true'
         run: npm ci
-      - if: steps.segredos.outputs.ok == 'true'
+      - if: steps.secrets.outputs.ok == 'true'
         run: npx playwright install --with-deps chromium
-      # motor qa-audit para a auditoria de estados (docs/qa-audit.md seccao 22): liga-se ao Chromium das specs
-      # por CDP, por isso so precisa do pacote, nao dos browsers do Playwright para Python
+      # qa-audit engine for the state audit (docs/qa-audit.md section 22): it connects to the specs' Chromium
+      # over CDP, so it only needs the package, not the Playwright browsers for Python
       - uses: actions/setup-python@v6
-        if: steps.segredos.outputs.ok == 'true'
+        if: steps.secrets.outputs.ok == 'true'
         with:
           python-version: "3.12"
-      - if: steps.segredos.outputs.ok == 'true'
+      - if: steps.secrets.outputs.ok == 'true'
         working-directory: .
         run: pip install -e .
-      - if: steps.segredos.outputs.ok == 'true'
+      - if: steps.secrets.outputs.ok == 'true'
         env:
           QA_AUDIT_CDP_PORT: "9222"
         run: npx playwright test

@@ -1,8 +1,8 @@
-"""Skills do projeto (.claude/skills): frontmatter valido e coerente.
+"""Project skills (.claude/skills): valid and consistent frontmatter.
 
-python -m unittest discover -s tests   (a partir da raiz do qa-assistant)
-Um frontmatter com YAML invalido (ex.: ': ' na descricao sem aspas) faz o
-Claude Code mostrar a primeira linha do corpo em vez da descricao.
+python -m unittest discover -s tests   (from the root of qa-assistant)
+A frontmatter with invalid YAML (e.g. ': ' in the description without quotes) makes
+Claude Code show the first line of the body instead of the description.
 """
 
 import os
@@ -18,32 +18,32 @@ CLAUDE_MD = os.path.join(ROOT, "CLAUDE.md")
 
 def frontmatter(path: str) -> dict:
     with open(path, encoding="utf-8-sig") as f:
-        texto = f.read().replace("\r\n", "\n")
-    m = re.match(r"^---\n(.*?)\n---\n", texto, re.DOTALL)
+        text = f.read().replace("\r\n", "\n")
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     if not m:
-        raise AssertionError(f"{path}: sem bloco --- frontmatter --- no inicio")
+        raise AssertionError(f"{path}: no --- frontmatter --- block at the start")
     return yaml.safe_load(m.group(1))
 
 
 class Skills(unittest.TestCase):
-    def nomes(self):
+    def names(self):
         return sorted(d for d in os.listdir(SKILLS) if os.path.isfile(os.path.join(SKILLS, d, "SKILL.md")))
 
-    def test_frontmatter_valido_com_nome_e_descricao(self):
-        for nome in self.nomes():
-            with self.subTest(skill=nome):
-                fm = frontmatter(os.path.join(SKILLS, nome, "SKILL.md"))
+    def test_valid_frontmatter_with_name_and_description(self):
+        for name in self.names():
+            with self.subTest(skill=name):
+                fm = frontmatter(os.path.join(SKILLS, name, "SKILL.md"))
                 self.assertIsInstance(fm, dict)
-                self.assertEqual(fm.get("name"), nome)
+                self.assertEqual(fm.get("name"), name)
                 self.assertIsInstance(fm.get("description"), str)
                 self.assertGreater(len(fm["description"]), 20)
 
-    def test_cada_skill_esta_nos_comandos_do_claude_md(self):
+    def test_each_skill_is_in_the_commands_of_claude_md(self):
         with open(CLAUDE_MD, encoding="utf-8-sig") as f:
-            comandos = f.read()
-        for nome in self.nomes():
-            with self.subTest(skill=nome):
-                self.assertIn(f"/{nome}", comandos)
+            commands = f.read()
+        for name in self.names():
+            with self.subTest(skill=name):
+                self.assertIn(f"/{name}", commands)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "tc": "TC-SHOP-002",
+      "status": "Pass",
+      "actual_result": "Checkout completed",
+      "new_defect": null
+    },
+    {
+      "tc": "TC-ACCOUNT-001",
+      "status": "Fail",
+      "actual_result": "Error 500 on save",
+      "new_defect": {
+        "title": "Account save fails",
+        "description": "HTTP 500 when saving profile",
+        "severity": "High",
+        "priority": "P1",
+        "area": "Account"
+      }
+    },
+    {
+      "tc": "TC-ADMIN-003",
+      "status": "Blocked",
+      "actual_result": "No test data",
+      "new_defect": null
+    }
+  ]
+}

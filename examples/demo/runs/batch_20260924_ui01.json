@@ -1,0 +1,54 @@
+{
+ "results": [
+  {
+   "tc": "TC-LOGIN-003",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "Shows \"Epic sadface: Username is required\"; stays on /."
+  },
+  {
+   "tc": "TC-LOGIN-002",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "Shows \"Epic sadface: Sorry, this user has been locked out.\"; stays on /."
+  },
+  {
+   "tc": "TC-LOGIN-001",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "Opens /inventory.html with the title \"Products\"."
+  },
+  {
+   "tc": "TC-PROD-001",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "6 products, all with name, description, price, image and an \"Add to cart\" button."
+  },
+  {
+   "tc": "TC-PROD-002",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "Prices in ascending order: 7.99, 9.99, 15.99, 15.99, 29.99, 49.99."
+  },
+  {
+   "tc": "TC-CHK-001",
+   "status": "Pass",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "Cart counter = 1; the button becomes \"Remove\" (product removed afterwards, to clean up)."
+  },
+  {
+   "tc": "TC-PROD-005",
+   "status": "Fail",
+   "ts": "2026-09-24T12:24:30",
+   "actual_result": "The 6 products show the same image (/assets/sl-404-….jpg); with standard_user each product has its own.",
+   "new_defect": {
+    "title": "problem_user: every product shows the same image",
+    "description": "Environment: saucedemo.com (test), Chrome 153 through the Playwright library (not the Playwright MCP, which was not available in this session). Role: problem_user.\nSteps: log in with problem_user; look at each product's image in Products; repeat with standard_user.\nExpected: each product with its own image, the same one shown to standard_user.\nObserved: the 6 products show the same image (/assets/sl-404-….jpg); with standard_user the 6 images are different and match each product.",
+    "area": "Products",
+    "role": "problem_user",
+    "severity": "Medium",
+    "priority": "Medium"
+   }
+  }
+ ]
+}

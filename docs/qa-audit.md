@@ -18,15 +18,15 @@ It discovers pages, runs the selected QA modules, stores evidence in a local out
 It stores nothing about the audited target outside that output folder, and sends nothing anywhere except to
 the target itself.
 
-It lives **alongside** the workspace layer (methodology, skills, Excel adapter; `docs/metodologia-core.md`):
+It lives **alongside** the workspace layer (methodology, skills, Excel adapter; `docs/methodology.md`):
 
 | Layer | Use it for |
 |---|---|
 | `qa-audit` (this document) | A first, automated pass over any site: discovery, accessibility, and later functional, performance, security and visual checks. No project setup needed. |
-| Workspace layer (`/onboarding-projeto`, `/executar-lote`, …) | A real project: designed test cases, roles, tracker, checkpoints. |
+| Workspace layer (`/project-onboarding`, `/run-batch`, …) | A real project: designed test cases, roles, tracker, checkpoints. |
 
-A workspace skill may call `qa-audit`: `/auditar-acessibilidade` runs it through `scripts/auditar_a11y.py`, which
-translates the workspace's `acessibilidade:` section into an engine configuration (`docs/tecnica-acessibilidade.md` §2).
+A workspace skill may call `qa-audit`: `/audit-accessibility` runs it through `scripts/audit_a11y.py`, which
+translates the workspace's `accessibility:` section into an engine configuration (`docs/technique-accessibility.md` §2).
 
 ---
 
@@ -734,7 +734,7 @@ exit codes as before.
 ## 22. Auditing a page another tool has open (`qa-audit check`)
 
 Some states exist only after an interaction: step 2 of a checkout, an error message, an open dialog. The engine never
-clicks (§5, §6), so it cannot reach them; a Playwright test (the workspace's N2 specs, `docs/tecnica-browser.md`
+clicks (§5, §6), so it cannot reach them; a Playwright test (the workspace's N2 specs, `docs/technique-browser.md`
 §13) can. `qa-audit check` audits the page that test has open, in the state it is in, without touching it.
 
 ```text
@@ -763,7 +763,7 @@ qa-audit check --cdp http://127.0.0.1:9222 --page-url REGEX --label NAME
 6. **Exit codes.** `0` ok · `1` problems at or above `--fail-on` (default `none`: a check records, the test decides)
    · `2` usage error (e.g. `--cdp` not on loopback) · `3` CDP unreachable or no tab matching.
 
-The workspace side is a TypeScript helper, `integrations/playwright/qa-audit.ts`: `await auditarEstado(page,
-"checkout-erro", { falharEm: "high" })` runs `qa-audit check` for the page's current URL, attaches the report to the
-test's result and fails the test only when `falharEm` asks for it. The Playwright configuration adds
+The workspace side is a TypeScript helper, `integrations/playwright/qa-audit.ts`: `await auditState(page,
+"checkout-error", { failOn: "high" })` runs `qa-audit check` for the page's current URL, attaches the report to the
+test's result and fails the test only when `failOn` asks for it. The Playwright configuration adds
 `--remote-debugging-port=<QA_AUDIT_CDP_PORT>` to Chromium's launch arguments.

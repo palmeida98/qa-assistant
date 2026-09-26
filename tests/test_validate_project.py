@@ -1,0 +1,198 @@
+"""scripts/validate_project.py (methodology 4.1): closed list of modules, section
+of each active module, Excel and dashboard. The demo must pass.
+
+python -m unittest discover -s tests   (from the root of qa-assistant)
+"""
+
+import contextlib
+import io
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import yaml
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:0] = [os.path.join(ROOT, "scripts")]
+
+import validate_project as vp
+
+BASE = {"project": "demo-shop", "company": "demo", "environments": {"test": "https://shop.demo"},
+        "tracker": "jira", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
+        "modules": ["functional-web"]}
+
+
+class Validate(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        # history/ protected, as the onboarding leaves it (docs/workspace/settings.json)
+        os.makedirs(os.path.join(self.tmp.name, ".claude"))
+        shutil.copy(os.path.join(ROOT, "docs", "workspace", "settings.json"), os.path.join(self.tmp.name, ".claude"))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def with_(self, **changes):
+        proj = {**BASE, **changes}
+        with open(os.path.join(self.tmp.name, "project.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump(proj, f, allow_unicode=True)
+        return vp.validate(self.tmp.name)
+
+    def test_base_is_valid(self):
+        self.assertEqual(self.without_tracker_warning(), ([], []))
+
+    def without_tracker_warning(self, **changes):
+        """validate() without the warning of a tracker with no adapter (the base uses jira, no workbook)."""
+        problems, warnings = self.with_(**changes)
+        return problems, [w for w in warnings if "has no adapter" not in w]
+
+    def test_a_tracker_without_an_adapter_is_a_warning(self):
+        for tracker in ("jira", "azure-devops"):
+            with self.subTest(tracker=tracker):
+                problems, warnings = self.with_(tracker=tracker)
+                self.assertEqual(problems, [])
+                self.assertTrue(any(f"tracker '{tracker}' has no adapter" in w for w in warnings), warnings)
+
+    def test_a_module_outside_the_list(self):
+        problems, _ = self.with_(modules=["functional-web", "smoke"])
+        self.assertTrue(any("outside the closed list" in p and "smoke" in p for p in problems), problems)
+
+    def test_an_active_module_without_its_section(self):
+        problems, _ = self.with_(modules=["api", "mobile"], mobile={"platform": "web"})
+        self.assertTrue(any("'api'" in p and "base_url" in p for p in problems), problems)
+        self.assertTrue(any("'mobile'" in p and "flows" in p for p in problems), problems)
+
+    def test_a_section_without_its_module_is_a_warning(self):
+        problems, warnings = self.with_(api={"base_url": "https://api.shop.demo"})
+        self.assertEqual(problems, [])
+        self.assertTrue(any("section api:" in w for w in warnings), warnings)
+
+    def test_base_fields(self):
+        problems, _ = self.with_(project="", tracker="trello", evidence="video", environments={})
+        text = " | ".join(problems)
+        for fragment in ("'project' is empty", "tracker 'trello'", "evidence", "'environments' is empty"):
+            self.assertIn(fragment, text)
+
+    def test_old_values_are_problems(self):
+        # a project.yaml written by hand with the values from before the translation (plan 8.11)
+        problems, _ = self.with_(resolved_bugs="remover", evidence="texto", modules=["funcional-web"])
+        text = " | ".join(problems)
+        self.assertIn("resolved_bugs", text)
+        self.assertIn("evidence", text)
+        self.assertIn("funcional-web", text)
+
+    def test_an_environment_without_a_url_or_badly_written(self):
+        problems, _ = self.with_(environments={"test": "", "uat": "shop.demo"})
+        text = " | ".join(problems)
+        self.assertIn("environment 'test' without a URL", text)
+        self.assertIn("environment 'uat'", text)
+
+    def test_module_urls_inside_the_environments(self):
+        a11y = {"pages": [{"name": "home", "url": "https://shop.demo/"},
+                          {"name": "account", "url": "https://shop.demo.other.pt/account"}]}
+        problems, _ = self.with_(modules=["api", "accessibility"], accessibility=a11y,
+                                 api={"base_url": "https://api.shop.demo/v1"})
+        text = " | ".join(problems)
+        self.assertIn("api.base_url (https://api.shop.demo/v1) outside the environments", text)
+        self.assertIn("accessibility.pages[account]", text)  # a similar host does not count
+        self.assertNotIn("pages[home]", text)
+
+    def test_a_production_url_is_a_problem(self):
+        problems, _ = self.with_(modules=["api"], api={"base_url": "https://shop.pt/api"},
+                                 environments={"test": "https://test.shop.pt", "production": "https://shop.pt"})
+        self.assertTrue(any("'production'" in p for p in problems), problems)
+
+    def test_a_url_with_the_environments_path(self):
+        problems, _ = self.with_(modules=["api"], environments={"test": "https://shop.demo/app/"},
+                                 api={"base_url": "https://shop.demo/app/api"})
+        self.assertEqual(problems, [])
+        problems, _ = self.with_(modules=["api"], environments={"test": "https://shop.demo/app/"},
+                                 api={"base_url": "https://shop.demo/application"})
+        self.assertTrue(problems)
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_gitignore_in_a_workspace_with_git(self):
+        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
+        _, warnings = self.with_(modules=["api"], api={"base_url": "https://shop.demo/api"})
+        self.assertTrue(any(w.startswith(".env is not in the workspace") for w in warnings), warnings)
+        self.assertTrue(any(".api-session.env" in w for w in warnings), warnings)
+        with open(os.path.join(self.tmp.name, ".gitignore"), "w", encoding="utf-8") as f:
+            f.write("*.env\n")
+        _, warnings = self.without_tracker_warning(modules=["api"], api={"base_url": "https://shop.demo/api"})
+        self.assertEqual(warnings, [])
+
+    def test_history_without_protection_is_a_warning(self):
+        settings = os.path.join(self.tmp.name, ".claude", "settings.json")
+        for content in (None, "{}", '{"permissions": {"deny": ["Write(/history/**)"]}}',
+                        '{"permissions": {"deny": ["Edit(/historico/**)"]}}', "not json"):
+            with self.subTest(content=content):
+                if content is None:
+                    os.remove(settings)
+                else:
+                    with open(settings, "w", encoding="utf-8") as f:
+                        f.write(content)
+                problems, warnings = self.with_()
+                self.assertEqual(problems, [])
+                self.assertTrue(any("history/ is not protected" in w for w in warnings), warnings)
+
+    def test_the_workspaces_mcp(self):
+        # lessons of the pilot (25.09.2026): fixed version, --secrets .env and --isolated
+        mcp = os.path.join(self.tmp.name, ".mcp.json")
+        cases = {
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env", "--isolated"]': [],
+            '["/c", "npx", "@playwright/mcp@latest", "--secrets", ".env", "--isolated"]': ["without a fixed version"],
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--isolated"]': ["--secrets .env is missing"],
+            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env"]': ["--isolated is missing"],
+        }
+        for args, expected in cases.items():
+            with self.subTest(args=args):
+                with open(mcp, "w", encoding="utf-8") as f:
+                    f.write('{"mcpServers": {"playwright": {"command": "cmd", "args": ' + args + '}}}')
+                warnings = vp.mcp_warnings(self.tmp.name)
+                self.assertEqual(len(warnings), len(expected), warnings)
+                for text in expected:
+                    self.assertTrue(any(text in a for a in warnings), warnings)
+        os.remove(mcp)
+        self.assertEqual(vp.mcp_warnings(self.tmp.name), [])          # no .mcp.json: nothing to check
+
+    def test_history_protected_with_other_rules(self):
+        with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
+            f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(history/**)"]}}')
+        self.assertEqual(self.without_tracker_warning(), ([], []))
+
+
+class Demo(unittest.TestCase):
+    def test_the_demo_passes(self):
+        # a copy of the demo's project.yaml and workbook (the original is only read)
+        tmp = tempfile.mkdtemp()
+        try:
+            demo = os.path.join(ROOT, "examples", "demo")
+            shutil.copy(os.path.join(demo, "project.yaml"), tmp)
+            shutil.copytree(os.path.join(demo, ".claude"), os.path.join(tmp, ".claude"))
+            os.makedirs(os.path.join(tmp, "workbook"))
+            shutil.copy(os.path.join(demo, "workbook", "demo-plan.xlsx"), os.path.join(tmp, "workbook"))
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                rc = vp.main([tmp])
+            self.assertEqual(rc, 0, out.getvalue())
+            self.assertIn("0 problem(s), 0 warning(s)", out.getvalue())
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_without_a_project_exits_with_2(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(vp.main([tmp]), 2)
+
+    def test_a_workspace_from_before_the_translation_says_how_to_convert_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "projeto.yaml"), "w", encoding="utf-8") as f:
+                f.write("projeto: x\n")
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(vp.main([tmp]), 2)
+        self.assertIn("migrate_workspace.py", err.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

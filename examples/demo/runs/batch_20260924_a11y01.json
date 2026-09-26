@@ -1,0 +1,42 @@
+{
+ "results": [
+  {
+   "tc": "TC-A11Y-001",
+   "status": "Pass",
+   "actual_result": "axe-core (chrome 153.0.8010.53): 0 WCAG 2.1 A/AA violations; 28 rules passed. Best practices (observation): page-has-heading-one, region.",
+   "ts": "2026-09-24T11:31:03"
+  },
+  {
+   "tc": "TC-A11Y-002",
+   "status": "Pass",
+   "actual_result": "axe-core (chrome 153.0.8010.53): 0 WCAG 2.1 A/AA violations; 39 rules passed. Best practices (observation): page-has-heading-one. Incomplete, for manual review: color-contrast.",
+   "ts": "2026-09-24T11:31:03"
+  },
+  {
+   "tc": "TC-A11Y-003",
+   "status": "Pass",
+   "actual_result": "axe-core (chrome 153.0.8010.53): 0 WCAG 2.1 A/AA violations; 37 rules passed. Best practices (observation): page-has-heading-one.",
+   "ts": "2026-09-24T11:31:03"
+  },
+  {
+   "tc": "TC-A11Y-004",
+   "status": "Pass",
+   "actual_result": "axe-core (chrome 153.0.8010.53): 0 WCAG 2.1 A/AA violations; 41 rules passed. Best practices (observation): page-has-heading-one.",
+   "ts": "2026-09-24T11:31:03"
+  },
+  {
+   "tc": "TC-A11Y-006",
+   "status": "Fail",
+   "ts": "2026-09-24T11:31:03",
+   "actual_result": "The 4 pages audited have the same title: login = \"Swag Labs\"; products = \"Swag Labs\"; cart = \"Swag Labs\"; checkout-information = \"Swag Labs\".",
+   "new_defect": {
+    "title": "[2.4.2 A] Every page has the same title (\"Swag Labs\")",
+    "description": "Environment: saucedemo.com (test). Role: standard_user.\nSteps: open login, Products, cart and Checkout: Your Information; read each page's title.\nExpected: each page with a title that identifies its content (WCAG 2.1, criterion 2.4.2, level A; Understanding 2.4.2, technique G88).\nObserved: the 4 pages have the title \"Swag Labs\"; a screen reader user cannot tell the pages apart by their title.\nEvidence: runs/a11y_20260924_01.json (title field of each page).",
+    "area": "Accessibility",
+    "role": "standard_user",
+    "severity": "Low",
+    "priority": "Low"
+   }
+  }
+ ]
+}

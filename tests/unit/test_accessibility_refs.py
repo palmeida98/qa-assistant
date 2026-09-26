@@ -1,5 +1,5 @@
 """WCAG criteria, version and level taken from axe tags (docs/qa-audit.md §11): what the workspace script
-(scripts/auditar_a11y.py) reads back from the findings' references."""
+(scripts/audit_a11y.py) reads back from the findings' references."""
 
 import unittest
 

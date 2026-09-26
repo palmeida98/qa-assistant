@@ -1,0 +1,73 @@
+# FICTIONAL configuration of the Excel adapter (adapters/excel/base.py).
+# Serves as an example and as the base of the golden test (plan, task 1.4).
+# No real data: sheets, columns, statuses and IDs are made up.
+# In a real project this section lives in the workspace's project.yaml (key `excel:`).
+
+file: "example-plan.xlsx"
+
+cases:
+  sheets:                      # case ID prefix -> sheet where it lives
+    "TC-SHOP-": "Shop"
+    "TC-ACCOUNT-": "Account"
+    "TC-ADMIN-": "Admin"
+  header_row: 1
+  columns:
+    id: "ID"
+    status: "Status"
+    actual_result: "Actual Result"   # optional
+    notes: "Notes"                   # optional
+  statuses: ["To Do", "Pass", "Fail", "Blocked", "N/A"]
+
+defects:
+  sheet: "Defects"
+  header_row: 1
+  id_format: "BUG-{n}"
+  columns:
+    id: "Key"
+    status: "Status"
+    case: "Test Case"
+    severity: "Severity"
+    priority: "Priority"
+    reported_by: "Reporter"
+    report_date: "Created"
+  batch_fields:                # defect key in the batch -> column
+    title: "Summary"
+    description: "Description"
+    area: "Component"
+  defaults: {}
+  statuses: ["New", "In Progress", "Resolved", "Won't Fix"]
+  closed_statuses: ["Resolved", "Won't Fix"]
+  initial_status: "New"
+  priorities: ["P1", "P2", "P3", "P4"]
+
+summary:                       # totals sheet, checked against the direct count
+  sheet: "Summary"
+  header_row: 1
+  area_column: "Sheet"
+  total_column: "Total"
+  total_row: "Total"
+
+active_view:
+  sheet: "Open Defects"
+  header_row: 3
+  columns:                     # view header -> defects column
+    "Bug": "Key"
+    "Prio": "Priority"
+    "Sev": "Severity"
+    "Title": "Summary"
+    "Case": "Test Case"
+  sort_by: "Component"
+  summary:
+    cell: "A2"
+    template: "{open} open ({severity[High]} High, {severity[Medium]} Medium, {severity[Low]} Low) - {closed} closed - updated {date:%Y-%m-%d}"
+
+notes:
+  result: "Actual: {result}"
+  new_defect: "New defect: {id}."
+
+batch_control:
+  sheet: "_qa_batches"
+
+recalc:
+  mechanism: "libreoffice"     # or "excel-com" (Windows with Excel only)
+  timeout: 60

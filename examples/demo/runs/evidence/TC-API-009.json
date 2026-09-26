@@ -1,0 +1,22 @@
+{
+ "ts": "2026-09-24T11:15:48",
+ "request": {
+  "method": "POST",
+  "url": "https://restful-booker.herokuapp.com/booking",
+  "headers": {
+   "Content-Type": "application/json",
+   "Accept": "application/json"
+  },
+  "body": {
+   "lastname": "OnlyLastname"
+  }
+ },
+ "response": {
+  "status": 500,
+  "time_ms": 555,
+  "headers": {
+   "Content-Type": "text/plain; charset=utf-8"
+  },
+  "body": "Internal Server Error"
+ }
+}

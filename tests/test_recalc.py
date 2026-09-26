@@ -1,9 +1,9 @@
-"""Recalculo seguro (adapters/excel/recalc.py; tecnica-excel.md secao 2): o
-timeout tem de ser efetivo mesmo quando o processo lanca filhos (soffice ->
-soffice.bin), e uma falha deixa o original intacto.
+"""Safe recalculation (adapters/excel/recalc.py; technique-excel.md section 2): the
+timeout must be effective even when the process starts children (soffice ->
+soffice.bin), and a failure leaves the original untouched.
 
-python -m unittest discover -s tests   (a partir da raiz do qa-assistant)
-Nao precisa de LibreOffice.
+python -m unittest discover -s tests   (from the root of qa-assistant)
+Does not need LibreOffice.
 """
 
 import os
@@ -17,48 +17,48 @@ sys.path.insert(0, ROOT)
 
 from adapters.excel import recalc
 
-# um pai que lanca um neto com os mesmos pipes e fica os dois pendurados
-PAI_COM_NETO = ("import subprocess, sys, time; "
-                "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); time.sleep(60)")
+# a parent that starts a grandchild with the same pipes, and both hang
+PARENT_WITH_CHILD = ("import subprocess, sys, time; "
+                     "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); time.sleep(60)")
 
 
 class Recalc(unittest.TestCase):
-    def test_timeout_mata_a_arvore_de_processos(self):
+    def test_timeout_kills_the_process_tree(self):
         t0 = time.monotonic()
         with self.assertRaises(TimeoutError):
-            recalc._run_with_timeout([sys.executable, "-c", PAI_COM_NETO], timeout=2)
-        # sem matar o neto, o communicate() ficava a espera dele (60 s)
+            recalc._run_with_timeout([sys.executable, "-c", PARENT_WITH_CHILD], timeout=2)
+        # without killing the grandchild, communicate() waited for it (60 s)
         self.assertLess(time.monotonic() - t0, 30)
 
-    def test_mecanismo_desconhecido_nao_toca_no_ficheiro(self):
+    def test_unknown_mechanism_does_not_touch_the_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "a.xlsx")
             with open(path, "wb") as f:
                 f.write(b"original")
-            r = recalc.recalc_safe(path, mecanismo="calc-magico")
+            r = recalc.recalc_safe(path, mechanism="magic-calc")
             self.assertFalse(r["ok"])
             with open(path, "rb") as f:
                 self.assertEqual(f.read(), b"original")
 
-    def test_falha_do_mecanismo_deixa_o_original_intacto(self):
+    def test_a_failing_mechanism_leaves_the_original_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "a.xlsx")
             with open(path, "wb") as f:
                 f.write(b"original")
             original = recalc._recalc_libreoffice
 
-            def partido(p, timeout):
+            def broken(p, timeout):
                 with open(p, "wb") as f:
-                    f.write(b"meio escrito")
-                raise RuntimeError("LibreOffice falhou")
+                    f.write(b"half written")
+                raise RuntimeError("LibreOffice failed")
 
-            recalc._recalc_libreoffice = partido
+            recalc._recalc_libreoffice = broken
             try:
                 r = recalc.recalc_safe(path)
             finally:
                 recalc._recalc_libreoffice = original
             self.assertFalse(r["ok"])
-            self.assertIn("falhou", r["erro"])
+            self.assertIn("failed", r["error"])
             with open(path, "rb") as f:
                 self.assertEqual(f.read(), b"original")
 
