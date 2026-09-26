@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.9 done; 8.10 (login) on branch `feat/login`: the pilot is done, so merging it is the next engine task; 8.11 (translation) not now, at most after the pilot |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026); next: `/auditar-acessibilidade` on `qa-audit`; 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -499,8 +499,13 @@ Notes (8.8): comparing against a baseline means keeping screenshots of the audit
 
 Notes (8.9): `install.ps1` was tested on a fresh local clone: its first version failed only inside the script (a one-element array splatted into a native command); fixed. Writing the guide, a claim about WebKit was checked before being written and turned out wrong: WebKit 26 measures LCP (the spec and the performance README said Chromium and Firefox only); corrected in the three places. The example configuration is loaded by a test with every module's validation, so it cannot fall behind the code.
 
-### 8.10 Login (`form` and `manual`) and explicit pages: on branch `feat/login`, merged after the pilot
-Implemented and committed on the branch `feat/login` (`7fcae15`): `auth:` with `form` and `manual`, one attempt, session-expiry detection, credentials redacted everywhere, `crawl.pages`; specification in that branch's `docs/qa-audit.md` §20. User decision (25.09.2026): login waits until **after the pilot**; then it is the next task: merge the branch (with its CI green), then move `/auditar-acessibilidade` onto `qa-audit` and retire `scripts/auditar_a11y.py` and `tools/a11y/`. `storage-state` later.
+### 8.10 Login (`form` and `manual`) and explicit pages
+User decision (25.09.2026): login is the next engine task; methods `form` and `manual` now, `storage-state` later. Specification: `docs/qa-audit.md` §20 and §5 (`crawl.pages`). Kept on the branch `feat/login` until the pilot (user decision, 25.09.2026) and merged into `main` on 26.09.2026, with the branch's CI green on the three engines.
+- [x] `auth:` with `form` and `manual`, one attempt, success check, session-expiry detection, credentials redacted everywhere, trace refused with auth; `crawl.pages` / `follow_links`.
+- [x] Fixture login flow (form, protected area, session that expires, wrong password) and tests: exactly one POST, credentials in no output file, a wrong password stops at the first attempt, expiry detected; `manual` tested with a login page that completes itself (the "person").
+- [ ] Afterwards (separate task): `/auditar-acessibilidade` on `qa-audit`, then retire `scripts/auditar_a11y.py` and `tools/a11y/`.
+
+Notes (8.10): the login runs in the crawl's own browser context before the first page; the login page is excluded from the crawl, and a page that lands on it afterwards stops the crawl as "session ended" (the fixture's `account/expire.html` clears the cookie). Credentials are redacted in findings, evidence, page data, notes and errors after the run; the test greps every written file (json, csv, md, html, log) for both values and requires the `«QA_FIXTURE_USER»` placeholder to appear (the settings page shows the user name, so redaction is proven, not assumed). `success_url` matching the login page itself is a configuration error (a failed login would look like success). `manual` forces a visible browser; its test uses a fixture login page that fills and submits itself after a second, and in CI it runs under `xvfb-run`. Locally the auth tests passed on Chromium, Firefox and WebKit.
 
 ### 8.11 Language of the workspace layer
 User decision (25.09.2026): **not now**; at most after the pilot, and only with a concrete reason (sharing with
@@ -532,6 +537,7 @@ The existing workspace layer (methodology, techniques, skills, scripts) is in Eu
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.10 (login) integrado no `main` depois do piloto (ramo `feat/login`, CI verde). |
 | 2026-09-25 | 7.9: **v1.0** da camada de workspace (tag `v1.0`); README com o estado final. |
 | 2026-09-25 | Piloto (2.4 / 7.2) num site público de prática, por decisão do utilizador (sem acesso a projetos de empresa): lote aplicado, golden real OK, lições incorporadas (`--isolated`, `--secrets`, aviso do `.mcp.json` no `validar_projeto`, `etiqueta` do golden, guard `commit-msg`). |
 | 2026-09-25 | Decisões do utilizador: a v1.0 é só a camada de workspace (o `qa-audit` segue versão própria); tradução (8.11) não agora; exceção do detect-secrets mantida e explicada no próprio `axe.yaml`. |

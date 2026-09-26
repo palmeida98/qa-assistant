@@ -103,7 +103,10 @@ class Session:
 
         b = self.cfg["browser"]
         self._pw = sync_playwright().start()
-        kwargs: dict = {"headless": bool(b.get("headless", True))}
+        headless = bool(b.get("headless", True))
+        if (self.cfg.get("auth") or {}).get("method") == "manual":
+            headless = False      # a person logs in: the window must be visible (docs/qa-audit.md §20)
+        kwargs: dict = {"headless": headless}
         if self.engine == "firefox":
             kwargs["firefox_user_prefs"] = self.firefox_prefs
         if self.proxy:

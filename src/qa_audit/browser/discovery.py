@@ -10,7 +10,7 @@ import re
 import time
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 from ..core.privacy import Redactor
@@ -96,6 +96,7 @@ class CrawlResult:
     skipped: list[dict] = field(default_factory=list)    # {"url", "reason"}
     not_visited: int = 0                                   # left in the queue at max_pages
     robots: str = "not checked"
+    session_expired: str = ""                              # URL where the logged-in session ended (§20)
 
 
 class TargetUnreachable(RuntimeError):
@@ -125,7 +126,8 @@ def exclusion_reason(url: str, patterns: list[re.Pattern]) -> str:
 
 
 class Crawler:
-    def __init__(self, session, cfg: dict, start_url: str, on_page=None, log=None, redactor: Redactor | None = None):
+    def __init__(self, session, cfg: dict, start_url: str, on_page=None, log=None, redactor: Redactor | None = None,
+                 expired: re.Pattern | None = None):
         self.s, self.cfg = session, cfg
         self.start = normalize(start_url)
         self.on_page = on_page or (lambda page, info: None)
@@ -136,6 +138,8 @@ class Crawler:
                         [re.compile(p, re.IGNORECASE) for p in c.get("exclude") or []]
         self.robots: RobotFileParser | None = None
         self.audited_urls: dict[str, str] = {}      # final URL -> the requested URL that audited it
+        self.expired = expired                     # login page pattern: reaching it means the session ended
+        self.stop = False
 
     # --- robots.txt ------------------------------------------------------------------------------------------
     def _load_robots(self, result: CrawlResult) -> None:
@@ -162,8 +166,19 @@ class Crawler:
         result = CrawlResult()
         queue: deque[tuple[str, int]] = deque([(self.start, 0)])
         seen = {self.start}
+        for page_url in c.get("pages") or []:
+            # explicit pages (docs/qa-audit.md §5), visited right after the start URL, in order
+            n = normalize(urljoin(self.start, page_url))
+            reason = exclusion_reason(n, self.patterns)   # listed or not, a logout link is never visited
+            if origin(n) != origin(self.start):
+                result.skipped.append({"url": n, "reason": "crawl.pages entry outside the target origin"})
+            elif reason:
+                result.skipped.append({"url": n, "reason": reason})
+            elif n not in seen:
+                seen.add(n)
+                queue.append((n, 0))
         first = True
-        while queue and len(result.pages) < c["max_pages"]:
+        while queue and len(result.pages) < c["max_pages"] and not self.stop:
             url, depth = queue.popleft()
             if not first and c["delay_ms"]:
                 time.sleep(c["delay_ms"] / 1000)
@@ -172,13 +187,18 @@ class Crawler:
                 first = False
                 self._load_robots(result)
             result.pages.append(info)
-            if not info.audited:
+            if self.stop:
+                result.session_expired = info.url
+                break
+            if not info.audited or not c.get("follow_links", True):
                 continue
             for link in info.links:
                 if link in seen:
                     continue
                 seen.add(link)
                 reason = exclusion_reason(link, self.patterns)
+                if not reason and self.expired is not None and self.expired.search(link):
+                    reason = "login page"
                 if not reason and self.robots is not None and not self.robots.can_fetch(ROBOTS_AGENT, link):
                     reason = "disallowed by robots.txt"
                 if not reason and depth + 1 > c["max_depth"]:
@@ -249,6 +269,13 @@ class Crawler:
             elif resp.status >= 400:
                 # reported as a broken link (functional); an error page is not audited as content
                 info.error = f"HTTP {resp.status}"
+                return info
+            if self.expired is not None and self.expired.search(info.final_url):
+                # sent back to the login page: the session ended (docs/qa-audit.md §20)
+                if is_start:
+                    raise TargetUnreachable(f"{url}: redirected to the login page right after logging in")
+                info.error = "session expired: redirected to the login page"
+                self.stop = True
                 return info
             if info.final_url in self.audited_urls:
                 # e.g. a redirect to a page already audited: every module would repeat its work on it

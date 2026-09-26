@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from typing import ClassVar
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for p in (os.path.join(ROOT, "src"), os.path.join(ROOT, "tests", "fixtures")):
@@ -399,6 +400,71 @@ class VisualTests:
             self.assertEqual(set(fifth.values()), {"unchanged"})
 
 
+class AuthTests:
+    """Login before the crawl (docs/qa-audit.md §20), with the fixture's fictional account."""
+
+    engine = ""
+    ENV: ClassVar[dict] = {"QA_FIXTURE_USER": "qa-auto-fixture", "QA_FIXTURE_PASS": "open-sesame-fixture"}
+    FORM: ClassVar[dict] = {"method": "form", "login_url": "/login.html", "username_env": "QA_FIXTURE_USER",
+                            "pass_env": "QA_FIXTURE_PASS", "success_url": "/account/"}
+
+    def audit(self, auth_section, env, modules=("accessibility", "security")):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        mods = registry.discover(use_entry_points=False)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        with FixtureSite() as site, mock.patch.dict(os.environ, env):
+            cfg = make_cfg(self.engine, self.tmp.name, auth=auth_section, browser={"timeout_ms": 8000})
+            try:
+                result = runner.run(site.url + "account/index.html", cfg, [mods[m] for m in modules])
+            finally:
+                self.requests = list(site.requests)
+        return result
+
+    def posts(self):
+        return [path for method, path in self.requests if method == "POST"]
+
+    def test_form_login_audits_the_protected_area_once(self):
+        r = self.audit(self.FORM, self.ENV)
+        self.assertEqual(self.posts(), ["/login"])                          # one login, nothing else posted
+        audited = {p.url.rsplit("/", 1)[-1] for p in r.pages if p.audited}
+        self.assertTrue({"index.html", "settings.html", "expire.html"} <= audited, audited)
+        self.assertTrue(r.crawl["session_expired"].endswith("/account/after.html"))
+        self.assertTrue(any("session ended" in n for n in r.notes))
+        self.assertNotIn("/logout", [path for _, path in self.requests])   # the session is never ended by us
+
+    def test_credentials_never_reach_any_output(self):
+        r = self.audit(self.FORM, self.ENV)
+        from qa_audit.reports import write_all
+        write_all(r, ["html", "json", "csv", "md"])
+        seen_placeholder = False
+        for folder, _, files in os.walk(r.run_folder):
+            for name in files:
+                if name.endswith((".json", ".csv", ".md", ".html", ".log")):
+                    with open(os.path.join(folder, name), encoding="utf-8", errors="ignore") as f:
+                        text = f.read()
+                    for value in self.ENV.values():
+                        self.assertNotIn(value, text, f"{value!r} in {name}")
+                    seen_placeholder |= "«QA_FIXTURE_USER»" in text
+        self.assertTrue(seen_placeholder, "the user name shown on settings.html was not redacted anywhere")
+
+    def test_wrong_password_stops_after_one_attempt(self):
+        from qa_audit.core.auth import AuthError
+        with self.assertRaises(AuthError):
+            self.audit(self.FORM, {**self.ENV, "QA_FIXTURE_PASS": "wrong-on-purpose"})
+        self.assertEqual(self.posts(), ["/login"])
+        self.assertFalse([p for _, p in self.requests if p.startswith("/account/") and p != "/account/index.html"])
+
+    def test_manual_login_waits_for_the_person(self):
+        manual = {"method": "manual", "login_url": "/login-auto.html", "success_url": "/account/",
+                  "expired_url": "/login", "manual_timeout_s": 30}
+        r = self.audit(manual, {}, modules=("security",))                 # the page plays the person
+        self.assertEqual(self.posts(), ["/login"])
+        self.assertIn("index.html", {p.url.rsplit("/", 1)[-1] for p in r.pages if p.audited})
+
+
 def https_available(engine: str) -> str:
     """'' if this engine loads the HTTPS fixture here, else the reason (e.g. Firefox with broken cryptography)."""
     reason = engine_available(engine)
@@ -527,7 +593,8 @@ class ReportInBrowser(unittest.TestCase):
 
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
-                            (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual")):
+                            (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual"),
+                            (AuthTests, "Auth")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

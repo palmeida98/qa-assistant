@@ -19,7 +19,7 @@ qa-audit https://example.com                         # every available module
 qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
 ```
 
-It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
+It can log in first (a form, or you log in by hand for Active Directory / 2FA). It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
 links, respects `robots.txt`), runs the selected modules on each page, and writes `qa-output/<timestamp>/` with
 screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
 is sent anywhere but to the target. Only audit sites you own or are authorized to test.
@@ -116,7 +116,7 @@ Requisitos: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (recá
 | 5 · Painel por workspace | Concluída |
 | 6 · Portefólio (README, demo, visibilidade: privado) | Concluída |
 | 7 · Fecho (revisão geral, CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível) | Concluída: **v1.0** |
-| 8 · Motor `qa-audit` | 8.0–8.9 concluídas (0.1.0); login no ramo `feat/login` |
+| 8 · Motor `qa-audit` | 8.0–8.10 concluídas (0.1.0, com login `form` e `manual`) |
 
 **Piloto** (25.09.2026): num workspace fora do repositório, com um site público de prática (sem acesso a projetos de empresa). Um lote de 16 casos, 10 novos e 6 retestes, executado por uma sessão `claude` no workspace com o Playwright MCP e aplicado ao workbook no `/checkpoint`: os retestes deram o mesmo estado que antes; golden real a passar; proteção de `historico/` confirmada. Lições incorporadas: Playwright MCP com `--secrets .env` (o assistente nunca vê as credenciais) e `--isolated` (o perfil persistente perdia os cliques), avisos do `validar_projeto` para o `.mcp.json`, e a denylist também na mensagem do commit.
 

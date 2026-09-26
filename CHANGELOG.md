@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Login before the crawl (plan 8.10): `auth.method` `form` (credentials from environment variables) and `manual`
+  (the person logs in in a visible browser: Active Directory, second factors); one attempt, success check, session
+  expiry stops the crawl, credentials redacted in every output, traces refused with `auth`. Explicit page list
+  `crawl.pages` and `crawl.follow_links`.
 - Install scripts `scripts/install.sh` and `scripts/install.ps1` (virtual environment, package with the visual
   extra, browsers, `doctor`); user guide `docs/qa-audit-guide.md`; fictional example `examples/qa-audit/` (kept
   valid by a test); CI job `install`: clean checkout, install script, audit of the local site (plan 8.9).

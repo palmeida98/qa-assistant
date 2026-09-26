@@ -80,9 +80,9 @@ qa-audit baselines [--delete HOST|all] [--baseline-dir DIR]   list or delete sto
 | `--no-color` | auto | Plain terminal output (also `NO_COLOR`). |
 
 Exit codes: `0` ok · `1` problems at or above `--fail-on` · `2` usage or configuration error ·
-`3` target unreachable · `4` browser could not start (run `qa-audit doctor`).
+`3` target unreachable or login failed · `4` browser could not start (run `qa-audit doctor`).
 
-Planned options (not yet available): login (§12).
+Login is configured in the configuration file (`auth:`, §20), not on the command line.
 
 ---
 
@@ -129,6 +129,8 @@ crawl:
   delay_ms: 500
   respect_robots: true
   exclude: []                 # added to the built-in exclusions (§5)
+  pages: []                   # explicit pages, visited first (§5)
+  follow_links: true          # false: only the start URL and crawl.pages
 network:
   block_third_party: false
 evidence:
@@ -151,7 +153,7 @@ modules:
 **No credentials in configuration files.** A key whose name looks like a secret (`password`, `passwd`,
 `secret`, `token`, `api_key`, `apikey`, `authorization`, `cookie`) with a literal value is a configuration error
 (exit 2). Credentials, when login exists (§12), come from environment variables named in the file
-(`password_env: SHOP_ADMIN_PASSWORD`) or from a hidden terminal prompt.
+(`pass_env: SHOP_ADMIN_PASS`) or from a hidden terminal prompt.
 
 ---
 
@@ -164,6 +166,8 @@ modules:
    response headers, links, forms (method, action, fields with name/type/required/label), interactive element
    count, console errors, failed requests, and timing.
 5. Queue links breadth-first while under `max_pages` and `max_depth`.
+6. With `crawl.pages` (a list of URLs or paths on the target origin), those pages are visited first, in order,
+   after the start URL; `crawl.follow_links: false` visits only them (the start URL and the list).
 
 **Safety rules (risk 3):**
 
@@ -352,8 +356,8 @@ conformance certification.**
 
 ## 12. Planned
 
-- Login: credentials from environment variables or a hidden prompt, session state kept only in the run folder.
-  Needed before `/auditar-acessibilidade` and `scripts/auditar_a11y.py` move to this engine.
+- Login with a saved session (`auth.method: storage-state`, plan: after 8.10).
+- `/auditar-acessibilidade` and `scripts/auditar_a11y.py` moving to this engine (after 8.10).
 - Several engines in one run (compatibility), sitemap discovery.
 - Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
@@ -562,4 +566,45 @@ change. The report says where they are.
 Screenshots taller than `max_height` (default 8000 px) are cut there. The viewport is restored after the module
 runs; it runs after the modules that only read the page and before accessibility (whose keyboard walk leaves
 focus rings on screen).
+
+---
+
+## 20. Authentication
+
+Pages behind a login are audited after one login at the start of the run, in the same browser context (the
+session's cookies are shared by every page). Configured under `auth:`; without it, the audit is anonymous.
+
+```yaml
+auth:
+  method: form                      # form | manual   (storage-state: planned)
+  login_url: /login                 # absolute, or a path on the target origin
+  username_env: SHOP_QA_USER        # form: names of environment variables, never values (§4)
+  pass_env: SHOP_QA_PASS
+  # username_selector / pass_selector / submit_selector: optional; detected otherwise
+  success_url: "/account"           # regular expression on the URL after login ...
+  # success_selector: "#logout"     # ... or a CSS selector that appears after login (one of the two is required)
+  # expired_url: "/login"           # optional; default: the path of login_url
+  # manual_timeout_s: 300
+```
+
+| Method | What happens |
+|---|---|
+| `form` | Opens `login_url`, fills the user and password fields (detected: the first visible `input[type=password]`, the visible text/e-mail field before it in the same form, the form's submit button; or the configured selectors), submits **once**, and waits for the success check. |
+| `manual` | For Active Directory, second factors or CAPTCHAs: the browser opens **visibly** (headless is overridden), the terminal asks the person to log in, and the audit waits up to `manual_timeout_s` for the success check. The engine types nothing. |
+
+Rules:
+
+- **One attempt.** A failed login (success check not met within the timeout) stops the audit with exit 3 and is
+  never retried, so a shared account is not locked.
+- **The login is the only form the engine submits without `--allow-submit`**, and only because it is configured.
+  Logout-style links stay excluded (§5), so the crawl does not end the session.
+- **Session expiry.** A page whose final URL matches `expired_url` (default: the login path) after the login means
+  the session ended: the crawl stops, the page is not audited, and the report says so.
+- **Credentials.** Values are read from the environment at run time and never written anywhere: the redactor
+  replaces them (username and password) in every text the engine writes — findings, evidence, page data and logs.
+  Traces are refused together with `auth` (they record what is typed); screenshots and videos can show the
+  logged-in user's data, as any page content can.
+- **Configuration errors are exit 2 before the browser starts**: unknown method, `form` without `username_env` /
+  `pass_env`, neither `success_url` nor `success_selector`, invalid regular expressions, environment variables
+  not set, `auth` with `evidence.trace`.
 

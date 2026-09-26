@@ -56,6 +56,18 @@ class Cli(unittest.TestCase):
                     code, _, err = run(argv)
                     self.assertEqual(code, 2, err)
 
+    def test_login_without_its_environment_variables_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "auth.yaml")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("auth: {method: form, login_url: /login, username_env: NOT_SET_USER_X, "
+                        "pass_env: NOT_SET_PASS_X, success_url: /account}\n")
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("NOT_SET_USER_X", None)
+                code, _, err = run(["https://shop.example", "--config", path])
+        self.assertEqual(code, 2)
+        self.assertIn("NOT_SET_USER_X", err)
+
     def test_a_module_asked_for_by_name_that_cannot_run_is_an_error(self):
         with mock.patch("qa_audit.modules.visual.compare.pillow_available", return_value=False):
             code, _, err = run(["https://shop.example", "--type", "visual"])
