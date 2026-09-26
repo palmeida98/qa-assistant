@@ -121,7 +121,8 @@ def _redact(ctx: RunContext, crawl, redactor: Redactor) -> None:
         e["message"] = t(e["message"])
 
 
-def run(target: str, cfg: dict, modules: list, progress=None, session_factory=None) -> RunResult:
+def run(target: str, cfg: dict, modules: list, progress=None, session_factory=None,
+        run_name: str | None = None) -> RunResult:
     """Audit target. progress(event, **data) receives: page, module_done, discovery_done.
 
     session_factory(cfg, run, target) -> Session is injectable for tests (e.g. a recording proxy)."""
@@ -132,7 +133,7 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
     modules = sorted(modules, key=lambda m: m.order)          # readers first, page-changing modules last
     target = validate_url(target)
     started = dt.datetime.now()
-    run_folder = RunFolder(cfg["output"]["directory"], now=started)
+    run_folder = RunFolder(cfg["output"]["directory"], now=started, name=run_name)
     log = _logger(run_folder)
     log.info("qa-audit %s target %s modules %s", __version__, target, [m.name for m in modules])
     ctx = RunContext(cfg, run_folder, log)

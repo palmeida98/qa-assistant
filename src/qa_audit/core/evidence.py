@@ -23,9 +23,9 @@ def _slug(text: str, limit: int = 60) -> str:
 
 
 class RunFolder:
-    def __init__(self, root: str, now: dt.datetime | None = None):
+    def __init__(self, root: str, now: dt.datetime | None = None, name: str | None = None):
         self.root = os.path.abspath(root)
-        stamp = (now or dt.datetime.now()).strftime("%Y-%m-%d_%H%M%S")
+        stamp = name or (now or dt.datetime.now()).strftime("%Y-%m-%d_%H%M%S")   # name: one engine's sub-folder (§21)
         os.makedirs(self.root, exist_ok=True)
         self._protect_root()
         path, n = os.path.join(self.root, stamp), 1

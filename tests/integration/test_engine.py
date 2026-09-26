@@ -365,6 +365,38 @@ class SitemapTests:
         self.assertFalse([p for p in requested if "sitemap" in p or p == "/orphan.html"])
 
 
+class CompatibilityRun(unittest.TestCase):
+    """--browser with several engines (docs/qa-audit.md §21): one run per engine, one planted difference."""
+
+    def test_one_difference_where_only_firefox_differs(self):
+        engines = [e for e in ENGINES if not engine_available(e)]
+        if "firefox" not in engines or len(engines) < 2:
+            self.skipTest(f"needs firefox and another engine; available here: {engines}")
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "qa-audit.yaml")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("crawl: {pages: [/about.html], follow_links: false, delay_ms: 0}\n")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = cli.main([site.url + "engines.html", "--config", path, "--type", "accessibility",
+                                 "--browser", ",".join(engines), "--output", tmp, "--fail-on", "none",
+                                 "--report", "json,html", "--no-color"])
+            run_dir = next(os.path.join(tmp, d) for d in os.listdir(tmp) if not d.startswith((".", "qa-audit")))
+            with open(os.path.join(run_dir, "compatibility.json"), encoding="utf-8") as f:
+                comp = json.load(f)
+            files = set(os.listdir(run_dir))
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertTrue(set(engines) <= files and {"compatibility.json", "compatibility.html"} <= files, files)
+        self.assertEqual([e["engine"] for e in comp["engines"]], engines)
+        self.assertTrue(all(e["result"] == "audited" for e in comp["engines"]), comp["engines"])
+        diffs = comp["differences"]
+        others = ", ".join(e for e in engines if e != "firefox")
+        self.assertEqual([(d["check"], d["url"].rsplit("/", 1)[-1], d["actual"]) for d in diffs],
+                         [("engine-difference", "engines.html", f"present in: firefox; absent in: {others}")],
+                         json.dumps(diffs, indent=1))
+        self.assertIn("image-alt", diffs[0]["title"])
+
+
 class FormSubmitTests:
     """--allow-submit: only listed forms, only with the flag (docs/qa-audit.md §6, §18)."""
 

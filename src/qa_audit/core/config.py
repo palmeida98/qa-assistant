@@ -14,6 +14,26 @@ from urllib.parse import urlsplit
 import yaml
 
 ENGINES = ("chromium", "firefox", "webkit")
+
+
+def parse_engines(text: str):
+    """--browser: one engine (a string, as before), several (a list) or "all" (docs/qa-audit.md §21)."""
+    items = [x.strip().lower() for x in text.split(",") if x.strip()]
+    return items[0] if len(items) == 1 else items
+
+
+def engines(cfg: dict) -> list[str]:
+    """The engines of browser.engine, in order. ValueError for anything but known, distinct engines."""
+    e = (cfg.get("browser") or {}).get("engine")
+    items = list(ENGINES) if e == "all" else [e] if isinstance(e, str) else e
+    if not isinstance(items, list) or not items or not all(isinstance(x, str) for x in items):
+        raise ValueError(f"browser.engine must be one of {', '.join(ENGINES)}, a list of them, or 'all'")
+    bad = [x for x in items if x not in ENGINES]
+    if bad:
+        raise ValueError(f"browser.engine: unknown engine(s) {', '.join(bad)} (use {', '.join(ENGINES)} or 'all')")
+    if len(set(items)) != len(items):
+        raise ValueError("browser.engine lists an engine twice")
+    return items
 SCREENSHOT_MODES = ("off", "on-problem", "all")
 TRACE_MODES = ("off", "on", "retain-on-problem")
 REPORT_FORMATS = ("html", "json", "csv", "md")
@@ -139,8 +159,10 @@ def build(file_path: str | None = None, overrides: dict | None = None, module_de
 def validate(cfg: dict) -> None:
     problems = []
     b, c, e, o = cfg["browser"], cfg["crawl"], cfg["evidence"], cfg["output"]
-    if b.get("engine") not in ENGINES:
-        problems.append(f"browser.engine must be one of {', '.join(ENGINES)}")
+    try:
+        engines(cfg)
+    except ValueError as ex:
+        problems.append(str(ex))
     vp = b.get("viewport") or {}
     if not (isinstance(vp.get("width"), int) and isinstance(vp.get("height"), int)):
         problems.append("browser.viewport needs integer width and height")

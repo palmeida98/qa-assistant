@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions and 8.13 sitemap discovery done (26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run done (26.09.2026); 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -568,6 +568,27 @@ Specification: `docs/qa-audit.md` §5.1.
 
 Notes (8.13): the first status line dropped the problems when a sitemap had no page URLs (e.g. a nested index
 ignored); the unit test for nested indexes caught it.
+
+### 8.14 Several engines in one run (compatibility)
+User decision (26.09.2026): after 8.13, design agreed before the code. Specification: `docs/qa-audit.md` §21.
+- [x] `--browser chromium,firefox,webkit` / `all` (or `browser.engine` as a list): one complete audit per engine,
+  one after the other, in one run folder with a sub-folder per engine; one engine is exactly as before.
+- [x] Comparison (`core/compatibility.py`): a finding (module, check, page, element) in some engines only; a page
+  visited, audited or answered differently; each one a `compatibility/engine-difference` finding, `needs-human`,
+  `info`. Performance and visual baseline comparisons are not compared. `compatibility.json/.md/.html` at the
+  root of the run folder.
+- [x] An engine that cannot start is recorded and the others run; `form` logs in once per engine (noted);
+  `manual` refused with several engines (exit 2, pointing to `storage-state`); exit code the worst of the runs,
+  4 only when no engine starts, 3 when the target was reached nowhere.
+- [x] Tests: unit (comparison, engine list, manual refused, combined exit codes with fake runs) and integration
+  (a fixture page that adds an image without alt in Firefox only: exactly one difference across the three engines).
+
+Notes (8.14): one change to the agreed design: performance findings are not compared at all (the design only left
+out `n/a` metrics), since timings differ between engines and between runs and a threshold crossed in one engine is
+noise. A full compatibility run of the fixture site (three engines) gave four differences, all real engine
+behaviour rather than noise from the engine's own checks: console messages on two pages, mixed content blocked
+differently by Chromium, and the `SameSite=None` cookie handled differently by Chromium; the keyboard and focus
+checks agreed in all three.
 ---
 
 ## Registo de alterações a este plano
@@ -591,6 +612,7 @@ ignored); the unit test for nested indexes caught it.
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.14 (vários browsers numa só execução) concluída por decisão do utilizador; performance fora da comparação (ruído entre browsers). |
 | 2026-09-26 | 8.13 (descoberta pelo sitemap) concluída por decisão do utilizador; desligada por omissão (`--sitemap`). |
 | 2026-09-26 | 8.12 (sessões guardadas, `storage-state`) concluída por decisão do utilizador; `/auditar-acessibilidade` passa a correr sobre o `qa-audit` e o `tools/a11y/` é retirado (notas da 8.10). |
 | 2026-09-26 | 8.10 (login) integrado no `main` depois do piloto (ramo `feat/login`, CI verde). |
