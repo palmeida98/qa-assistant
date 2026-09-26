@@ -59,7 +59,7 @@ qa-audit sessions [--delete HOST|all] [--sessions-dir DIR]  list or delete saved
 | Option | Default | Meaning |
 |---|---|---|
 | `--type LIST` | `full` | Comma-separated module names, or `full` (every available module that applies to the target). Unknown or not-yet-available names are a usage error (exit 2) listing what exists. |
-| `--browser ENGINE` | `chromium` | `chromium`, `firefox` or `webkit`. |
+| `--browser ENGINE` | `chromium` | `chromium`, `firefox` or `webkit`; a comma-separated list, or `all`, runs one audit per engine and compares them (§21). |
 | `--headed` | off | Show the browser window. |
 | `--viewport WxH` | `1440x900` | Viewport size. |
 | `--device NAME` | none | Playwright device descriptor (e.g. `"iPhone 15"`); overrides the viewport. |
@@ -390,7 +390,6 @@ conformance certification.**
 
 ## 12. Planned
 
-- Several engines in one run (compatibility).
 - Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
 
@@ -677,3 +676,38 @@ The state file holds live session cookies: it is a credential.
 - Traces stay refused with `auth` (§20).
 - `qa-audit sessions` lists the saved sessions (host, age, size) in the default folder or `--sessions-dir`;
   `--delete HOST|all` removes them. Deleting a session does not log it out on the server.
+
+---
+
+## 21. Several engines in one run (compatibility)
+
+`--browser chromium,firefox,webkit` (or `--browser all`, or `browser.engine` as a list in the configuration) runs
+the same audit once per engine and compares the results. With one engine nothing changes: same folder, reports and
+exit codes as before.
+
+1. **Runs.** One complete audit per engine (discovery, modules, reports), one after the other, with the same
+   configuration; each engine discovers on its own, since the pages found can differ. `delay_ms` applies between
+   pages and between engines. The target receives the traffic once per engine; the report says so.
+2. **Output.** One run folder, `qa-output/<date_time>/`, with one sub-folder per engine (`chromium/`, `firefox/`,
+   …) holding that engine's usual reports, and the compatibility reports at its root: `compatibility.json`,
+   `compatibility.md`, `compatibility.html` (the formats asked for with `--report`).
+3. **What is a difference.**
+   - A finding (module, check, page, element selector) present in some engines and not in others.
+   - A page visited or audited in some engines and not in others, or answering a different HTTP status.
+
+   Each difference becomes a finding `compatibility/engine-difference` with status `needs-human` and severity `info`:
+   a difference is not a defect by itself (one engine can be right and the others wrong). Its evidence names the
+   engines where it appears and where it does not.
+4. **Not differences.** Performance findings and metrics (§17): timings differ between engines and between runs, and
+   an engine may not measure a metric (`n/a`), so a threshold crossed in one engine only is noise, not
+   compatibility. Notes the engine records about an engine (e.g. the Firefox `crypto.getRandomValues` substitute,
+   §13). Visual baseline comparisons (`visual-diff`, `visual-size-changed`), whose baselines are already per engine
+   (§19); the visual module's overflow checks are compared.
+5. **Engines that cannot start.** Recorded in the compatibility report; the other engines still run.
+6. **Login.** `form` logs in once per engine (one attempt each): the account receives one login per engine, and the
+   report says how many. `manual` is refused with several engines (exit 2), because the person would have to log in
+   once per engine; the message suggests `storage-state` (§20.1), whose saved session works in every engine.
+7. **Exit code.** The worst of the runs: `1` if any engine has problems at or above `--fail-on`; `3` if the target
+   is unreachable (or the login fails) in every engine that started; `4` only when no engine starts. A target
+   unreachable in some engines only is recorded as a difference. Compatibility differences are `needs-human` and
+   never change the exit code. `--cleanup` removes the whole run folder.

@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- Several engines in one run (plan 8.14): `--browser chromium,firefox,webkit` or `--browser all` runs one audit per
+  engine (a sub-folder each) and writes `compatibility.json/.md/.html`: findings, pages and HTTP statuses that
+  differ between engines, as needs-human findings. An engine that cannot start does not stop the others; `manual`
+  login is refused with several engines (use `storage-state`).
 - Sitemap discovery (plan 8.13): `--sitemap` / `crawl.sitemap` (off by default) also queues the pages listed in
   the site's sitemap (`robots.txt` `Sitemap:` lines, else `/sitemap.xml`; one level of sitemap index), same origin
   only and through every discovery rule; entity declarations refused, size and count limits; status in the report.

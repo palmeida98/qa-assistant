@@ -34,7 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("url", help="target URL (http or https)")
     p.add_argument("--type", default=None, metavar="LIST",
                    help="comma-separated modules, or 'full' (default: full)")
-    p.add_argument("--browser", choices=config_mod.ENGINES, default=None, help="browser engine (default: chromium)")
+    p.add_argument("--browser", default=None, metavar="ENGINE",
+                   help="chromium, firefox or webkit (default: chromium); a comma-separated list, or 'all', runs one "
+                        "audit per engine and compares them")
     p.add_argument("--headed", action="store_true", help="show the browser window")
     p.add_argument("--viewport", default=None, metavar="WxH", help="viewport size (default: 1440x900)")
     p.add_argument("--device", default=None, metavar="NAME", help="Playwright device, e.g. 'iPhone 15'")
@@ -74,7 +76,7 @@ def overrides_from_args(a: argparse.Namespace) -> dict:
     o: dict = {"browser": {}, "crawl": {}, "evidence": {}, "output": {}, "network": {}, "safety": {},
                "modules": {}}
     if a.browser:
-        o["browser"]["engine"] = a.browser
+        o["browser"]["engine"] = config_mod.parse_engines(a.browser)
     if a.headed:
         o["browser"]["headless"] = False
     if a.viewport:
@@ -133,6 +135,14 @@ def configure(a: argparse.Namespace):
     from .core import auth
     problems = [p for m in modules for p in m.validate_config(cfg["modules"].get(m.name) or {})]
     problems += auth.validate(cfg, target=target)
+    try:
+        several = len(config_mod.engines(cfg)) > 1
+    except ValueError:
+        several = False                   # already reported by the configuration validation
+    if several and (cfg.get("auth") or {}).get("method") == "manual":
+        problems.append("auth.method manual cannot run with several engines (the person would log in once per "
+                        "engine): save the session once with auth.method storage-state and qa-audit login "
+                        "(docs/qa-audit.md §20.1, §21)")
     if a.type not in (None, "full"):
         # asked for by name: a module that cannot run here is an error, not a silent skip
         for m in modules:
@@ -173,6 +183,16 @@ def audit(argv: list[str], console: Console | None = None) -> int:
                 console.print(f"skipping {m.title}: {reason}", "dim")
         modules = kept
 
+    engines = config_mod.engines(cfg)
+    if len(engines) == 1:
+        cfg["browser"]["engine"] = engines[0]
+        return _audit_one(target, cfg, modules, console, err)[0]
+    return _audit_many(target, cfg, modules, engines, console, err)
+
+
+def _audit_one(target, cfg, modules, console, err, run_name: str | None = None):
+    """One engine. (exit code, result or None, report paths, result label). With run_name, the run is one engine
+    of several (§21): no cleanup and no final summary here."""
     from .browser.discovery import TargetUnreachable
     from .browser.session import BrowserError
     from .core import runner
@@ -201,30 +221,91 @@ def audit(argv: list[str], console: Console | None = None) -> int:
             prog.step(state["i"], True, f"{d['findings']} findings")
 
     try:
-        result = runner.run(target, cfg, modules, progress=progress)
+        result = runner.run(target, cfg, modules, progress=progress, run_name=run_name)
     except ConfigError as e:
         err.print(f"qa-audit: error: {e}", "red")
-        return 2
+        return 2, None, {}, f"configuration error: {e}"
     except AuthError as e:
         prog.step(1, False, "login failed")
         err.print(f"qa-audit: login failed: {e}", "red")
-        return 3
+        return 3, None, {}, f"login failed: {e}"
     except TargetUnreachable as e:
         prog.step(1, False, "target unreachable")
         err.print(f"qa-audit: {e}", "red")
-        return 3
+        return 3, None, {}, f"target unreachable: {e}"
     except BrowserError as e:
         err.print(f"qa-audit: the browser could not start: {e}", "red")
         err.print("run 'qa-audit doctor' for details", "dim")
-        return 4
+        return 4, None, {}, f"browser could not start: {e}"
     paths = write_all(result, cfg["output"]["formats"])
     prog.step(len(steps), True, ", ".join(paths) if paths else "terminal only")
+    if run_name:
+        return exit_code(result, cfg["fail_on"]), result, paths, "audited"
     cleaned = False
     if cfg["output"]["cleanup"]:
         result.run.cleanup()
         cleaned = True
     terminal.summary(console, result, paths, cleaned, cfg["fail_on"])
-    return exit_code(result, cfg["fail_on"])
+    return exit_code(result, cfg["fail_on"]), result, paths, "audited"
+
+
+def _audit_many(target, cfg, modules, engines, console, err) -> int:
+    """Several engines: one audit each, one after the other, then the comparison (docs/qa-audit.md §21)."""
+    import copy
+    import datetime as dt
+    import time
+
+    from .core import compatibility
+    from .core.evidence import RunFolder
+    from .reports import compat_report
+
+    parent = RunFolder(cfg["output"]["directory"])
+    started = dt.datetime.now().isoformat(timespec="seconds")
+    rows, results, codes = [], {}, {}
+    for i, engine in enumerate(engines):
+        if i and cfg["crawl"]["delay_ms"]:
+            time.sleep(cfg["crawl"]["delay_ms"] / 1000)
+        run_cfg = copy.deepcopy(cfg)
+        run_cfg["browser"]["engine"] = engine
+        run_cfg["output"].update({"directory": parent.path, "cleanup": False})
+        console.print(f"\n=== {engine} ({i + 1} of {len(engines)}) ===", "bold")
+        code, result, paths, label = _audit_one(target, run_cfg, modules, console, err, run_name=engine)
+        codes[engine] = code
+        row = {"engine": engine, "folder": engine, "exit_code": code, "result": label, "report": "html" in paths}
+        if result is not None:
+            results[engine] = result
+            row.update(version=result.browser.get("version", ""), summary=result.summary)
+        rows.append(row)
+
+    differences = compatibility.compare(results)
+    unreachable = [r for r in rows if r["engine"] not in results and codes[r["engine"]] == 3]
+    if results and unreachable:
+        reached = {r["engine"] for r in rows if codes[r["engine"]] != 3}
+        differences.insert(0, compatibility.difference(
+            target, "Target reachable in some engines only", compatibility.split(engines, reached),
+            "; ".join(f"{r['engine']}: {r['result']}" for r in unreachable)))
+    notes = [f"the target was audited {len(results)} time(s), once per engine that ran ({', '.join(results)})"]
+    if (cfg.get("auth") or {}).get("method") == "form":
+        notes.append(f"auth: the account was logged in {sum(1 for c in codes.values() if c != 4)} time(s), "
+                     "once per engine that started")
+    comp = {"tool": {"name": "qa-audit", "version": __version__}, "target": target, "started_at": started,
+            "engines": rows, "differences": differences, "notes": notes}
+    paths = compat_report.write_all(comp, parent.path, cfg["output"]["formats"])
+
+    console.print("")
+    for r in rows:
+        console.print(f"  {r['engine']:<9} {r['result']}", "green" if r["engine"] in results else "red")
+    console.print(f"  {len(differences)} compatibility difference(s) (needs human)")
+    for fmt, path in paths.items():
+        console.print(f"  {fmt}: {path}", "dim")
+    if cfg["output"]["cleanup"]:
+        parent.cleanup()
+        console.print(f"  run folder removed (--cleanup): {parent.path}", "dim")
+    if all(c == 4 for c in codes.values()):
+        return 4
+    if not results:
+        return 3 if any(c == 3 for c in codes.values()) else 2
+    return max(exit_code(r, cfg["fail_on"]) for r in results.values())
 
 
 def baselines(argv: list[str]) -> int:
