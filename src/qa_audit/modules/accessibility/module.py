@@ -11,6 +11,7 @@ from . import axe, checks
 # axe impact -> severity (docs/qa-audit.md §9: automated heuristics never assign "critical")
 SEVERITY = {"critical": "high", "serious": "medium", "moderate": "low", "minor": "low"}
 WCAG_TAG = re.compile(r"^wcag(\d)(\d)(\d+)$")
+WCAG_LEVEL_TAG = re.compile(r"^wcag(\d)(\d?)(a{1,3})$")  # wcag2a -> WCAG 2.0 A, wcag21aa -> WCAG 2.1 AA
 WCAG_UNDERSTANDING = "https://www.w3.org/WAI/WCAG21/quickref/"
 
 MANUAL = [
@@ -43,6 +44,13 @@ def wcag_refs(tags: list[str]) -> list[str]:
         if m:
             out.append(f"WCAG {m.group(1)}.{m.group(2)}.{m.group(3)}")
     return out
+
+
+def wcag_levels(tags: list[str]) -> list[str]:
+    """The WCAG version and level tags of a rule, readable: wcag2aa -> "WCAG 2.0 AA", wcag22aa -> "WCAG 2.2 AA".
+    Empty for a rule outside WCAG (e.g. best-practice)."""
+    return [f"WCAG {m.group(1)}.{m.group(2) or '0'} {m.group(3).upper()}"
+            for t in tags or [] if (m := WCAG_LEVEL_TAG.match(t))]
 
 
 def selector_of(node: dict) -> str:
@@ -124,7 +132,7 @@ class Accessibility(AuditModule):
                 evidence.append(ev)
                 shots += 1
         help_url = (rule.get("helpUrl") or "").split("?")[0]
-        refs = wcag_refs(rule.get("tags")) + ([help_url] if help_url else [])
+        refs = wcag_refs(rule.get("tags")) + wcag_levels(rule.get("tags")) + ([help_url] if help_url else [])
         more = rule["total"] - len(nodes)
         actual = f"{rule['total']} element(s) fail this rule" + (f" ({more} not listed)" if more > 0 else "")
         if first.get("failureSummary"):

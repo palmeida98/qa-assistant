@@ -81,7 +81,7 @@ Os casos gerados são propostas até o utilizador os aprovar; um bug só é cria
 |---|---|---|---|
 | `funcional-web`, `exploratorio` | browser | `/executar-lote` | Playwright MCP |
 | `api` | API | `/testar-api` | `scripts/api_pedido.py` |
-| `acessibilidade` | WCAG 2.1 AA | `/auditar-acessibilidade` | `scripts/auditar_a11y.py` (axe-core) |
+| `acessibilidade` | WCAG 2.1 AA | `/auditar-acessibilidade` | `scripts/auditar_a11y.py` (motor `qa-audit`: axe-core, teclado, reflow) |
 | `mobile` | Maestro | `/testar-mobile` | `scripts/testar_mobile.py` |
 
 ### Trackers

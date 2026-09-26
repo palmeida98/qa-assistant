@@ -36,6 +36,7 @@ class Precedence(unittest.TestCase):
         self.assertFalse(cfg["evidence"]["video"])
         self.assertTrue(cfg["crawl"]["respect_robots"])
         self.assertGreater(cfg["crawl"]["delay_ms"], 0)
+        self.assertFalse(cfg["crawl"]["audit_error_pages"])     # error pages are not content unless asked (§5)
 
 
 class NoCredentials(unittest.TestCase):
@@ -69,7 +70,8 @@ class Validation(unittest.TestCase):
 
     def test_invalid_values(self):
         for over in ({"browser": {"engine": "ie"}}, {"crawl": {"max_pages": 0}}, {"crawl": {"exclude": ["("]}},
-                     {"evidence": {"trace": "always"}}, {"output": {"formats": ["pdf"]}}, {"fail_on": "blocker"}):
+                     {"evidence": {"trace": "always"}}, {"output": {"formats": ["pdf"]}}, {"fail_on": "blocker"},
+                     {"crawl": {"audit_error_pages": "yes"}}):
             with self.subTest(over=over), self.assertRaises(ConfigError):
                 config.build(None, over)
 

@@ -173,6 +173,10 @@ def run(target: str, cfg: dict, modules: list, progress=None, session_factory=No
                             expired=expired).run()
             if crawl.session_expired:
                 ctx.notes.append(f"auth: the session ended at {crawl.session_expired}; the crawl stopped there")
+            for p in crawl.pages:
+                if p.error_status_audited and p.audited:
+                    ctx.notes.append(f"crawl.audit_error_pages: {p.url} answered HTTP {p.status} and was audited "
+                                     "as content")
             ctx.crawl = crawl
             progress("discovery_done", pages=len(crawl.pages), skipped=len(crawl.skipped))
             module_rows = []

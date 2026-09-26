@@ -2,7 +2,6 @@
 Playwright at import time (docs/qa-audit.md §7, §8, §14)."""
 
 import hashlib
-import json
 import os
 import re
 import subprocess
@@ -57,12 +56,6 @@ class AxeBundle(unittest.TestCase):
         for name in os.listdir(axe.VENDOR):
             with self.subTest(file=name), open(os.path.join(axe.VENDOR, name), "rb") as f:
                 self.assertNotIn(b"\r\n", f.read())
-
-    def test_same_version_as_the_workspace_tool(self):
-        # tools/a11y (the workspace script) and the engine must report the same axe until the script is retired
-        with open(os.path.join(ROOT, "tools", "a11y", "package-lock.json"), encoding="utf-8") as f:
-            lock = json.load(f)
-        self.assertEqual(lock["packages"]["node_modules/axe-core"]["version"], axe.manifest()["version"])
 
 
 class Packaging(unittest.TestCase):

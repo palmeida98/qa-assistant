@@ -25,7 +25,8 @@ It lives **alongside** the workspace layer (methodology, skills, Excel adapter; 
 | `qa-audit` (this document) | A first, automated pass over any site: discovery, accessibility, and later functional, performance, security and visual checks. No project setup needed. |
 | Workspace layer (`/onboarding-projeto`, `/executar-lote`, …) | A real project: designed test cases, roles, tracker, checkpoints. |
 
-A workspace skill may call `qa-audit` (e.g. `/auditar-acessibilidade`, once `qa-audit` supports login; §12).
+A workspace skill may call `qa-audit`: `/auditar-acessibilidade` runs it through `scripts/auditar_a11y.py`, which
+translates the workspace's `acessibilidade:` section into an engine configuration (`docs/tecnica-acessibilidade.md` §2).
 
 ---
 
@@ -131,6 +132,7 @@ crawl:
   exclude: []                 # added to the built-in exclusions (§5)
   pages: []                   # explicit pages, visited first (§5)
   follow_links: true          # false: only the start URL and crawl.pages
+  audit_error_pages: false    # true: the start URL and crawl.pages are audited even when they answer 4xx (§5)
 network:
   block_third_party: false
 evidence:
@@ -168,6 +170,11 @@ modules:
 5. Queue links breadth-first while under `max_pages` and `max_depth`.
 6. With `crawl.pages` (a list of URLs or paths on the target origin), those pages are visited first, in order,
    after the start URL; `crawl.follow_links: false` visits only them (the start URL and the list).
+7. A page answering 4xx or 5xx is not audited as content, and a start URL answering one stops the audit (exit 3).
+   `crawl.audit_error_pages: true` (off by default) is the one exception, for single-page applications whose server
+   answers 404 to a deep link and renders the page anyway: the pages **listed** (the start URL and `crawl.pages`)
+   that answer **4xx** are audited as content, and the report notes each one with its status. Pages found by
+   following links, and 5xx answers, are never audited that way.
 
 **Safety rules (risk 3):**
 
@@ -335,6 +342,9 @@ Automated checks:
   - `violations` → `problem`, one finding per rule per page with up to 5 affected elements (selector, snippet,
     element screenshot).
   - `incomplete` → `needs-human`.
+  - `references`: the WCAG criteria of the rule (`WCAG 1.4.3`), the WCAG version and level of each of its axe
+    tags (`wcag2aa` → `WCAG 2.0 AA`, `wcag22aa` → `WCAG 2.2 AA`) and the rule's help page. A rule outside WCAG
+    (e.g. `best-practice`, only when that tag is configured) has neither criteria nor levels.
   - Severity from axe impact: `critical` → `high`, `serious` → `medium`, `moderate` and `minor` → `low`.
     Never `critical` (§9).
 - **Keyboard** (engine's own): tabs through up to 40 stops; a focus that stays on one element for three Tabs
@@ -357,7 +367,6 @@ conformance certification.**
 ## 12. Planned
 
 - Login with a saved session (`auth.method: storage-state`, plan: after 8.10).
-- `/auditar-acessibilidade` and `scripts/auditar_a11y.py` moving to this engine (after 8.10).
 - Several engines in one run (compatibility), sitemap discovery.
 - Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
@@ -507,7 +516,8 @@ total is marked partial.
 | `form-submit-failed` | a **listed** form, submitted with `--allow-submit`, answers 4xx (medium) or 5xx (high) or throws | problem |
 | `form-submit-no-navigation` | a listed form was submitted but nothing navigated (e.g. a script handles it) | needs-human |
 
-Pages that answer 4xx/5xx are reported here as broken links and are not audited as content by any module.
+Pages that answer 4xx/5xx are reported here as broken links and are not audited as content by any module (the
+one exception is a listed page with `crawl.audit_error_pages`, §5, which is still reported as a broken link).
 
 Links: every same-origin link seen on the audited pages is judged. Visited pages give their status directly; links
 the crawl did not visit (beyond depth or `max_pages`, or non-HTML such as PDFs) are checked with `HEAD` (falling

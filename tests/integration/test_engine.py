@@ -359,6 +359,40 @@ class FormSubmitTests:
         self.assertIn("HTTP 405", f.actual)
 
 
+class ErrorPageTests:
+    """crawl.audit_error_pages: listed pages answering 4xx audited as content, and only those (docs/qa-audit.md §5)."""
+
+    engine = ""
+
+    def audit(self, start: str, pages: list[str], on: bool):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            cfg = make_cfg(self.engine, tmp, crawl={"pages": pages, "audit_error_pages": on, "max_depth": 1})
+            mods = registry.discover(use_entry_points=False)
+            return runner.run(site.url + start, cfg, [mods["accessibility"]])
+
+    def test_listed_pages_answering_404_are_audited_with_the_option(self):
+        r = self.audit("app/home", ["/app/settings", "/error500.html"], on=True)
+        pages = {p.url.split("/", 3)[-1]: p for p in r.pages}
+        for listed in ("app/home", "app/settings"):
+            with self.subTest(page=listed):
+                self.assertTrue(pages[listed].audited and pages[listed].error_status_audited)
+                self.assertEqual(pages[listed].status, 404)
+                self.assertTrue(any(f.check == "axe/image-alt" and f.url.endswith(listed) for f in r.findings))
+                self.assertTrue(any(listed in n and "HTTP 404" in n for n in r.notes), r.notes)
+        # a 5xx, even listed, and a 404 found by following a link, are still error pages
+        self.assertEqual(pages["error500.html"].error, "HTTP 500")
+        self.assertEqual(pages["gone.html"].error, "HTTP 404")
+        self.assertFalse(pages["gone.html"].error_status_audited)
+
+    def test_without_the_option_a_404_start_page_stops_the_audit(self):
+        from qa_audit.browser.discovery import TargetUnreachable
+        with self.assertRaises(TargetUnreachable):
+            self.audit("app/home", [], on=False)
+
+
 class VisualTests:
     """Baselines: created, unchanged, a planted change found only where it happened, then updated."""
 
@@ -594,7 +628,7 @@ class ReportInBrowser(unittest.TestCase):
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
                             (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual"),
-                            (AuthTests, "Auth")):
+                            (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

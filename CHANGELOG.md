@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Added
+- `crawl.audit_error_pages` (off by default): the listed pages (start URL and `crawl.pages`) that answer 4xx are
+  audited as content, for single-page applications whose server answers 404 to a deep link; each one is noted in the
+  report. Pages found by following links and 5xx answers are never audited that way.
+- Accessibility findings' `references` carry the WCAG version and level of each axe tag (`WCAG 2.0 AA`,
+  `WCAG 2.2 AA`), besides the criteria.
+- The workspace's `scripts/auditar_a11y.py` (`/auditar-acessibilidade`) runs on this engine; the separate Node tool
+  `tools/a11y/` is gone.
 - Login before the crawl (plan 8.10): `auth.method` `form` (credentials from environment variables) and `manual`
   (the person logs in in a visible browser: Active Directory, second factors); one attempt, success check, session
   expiry stops the crawl, credentials redacted in every output, traces refused with `auth`. Explicit page list

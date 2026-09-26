@@ -38,6 +38,8 @@ SLOW_PATHS = {"/slow.html": 2.0}
 # planted functional defects (docs/qa-audit.md §18): a server error and a chain of three redirects
 ERROR_PATHS = {"/error500.html": 500}
 REDIRECTS = {"/r1": "/r2", "/r2": "/r3", "/r3": "/about.html"}
+# single-page application (docs/qa-audit.md §5, crawl.audit_error_pages): /app/* answers 404 with the app's page
+SPA_PREFIX, SPA_PAGE = "/app/", "spa.html"
 # planted visual change (docs/qa-audit.md §19): with FixtureSite.variant on, /visual.html serves visual-v2.html
 VARIANTS = {"/visual.html": "visual-v2.html"}
 # login flow (docs/qa-audit.md §20): fictional account; /account/* needs the session cookie,
@@ -94,6 +96,16 @@ class _SiteHandler(SimpleHTTPRequestHandler):
             return True
         if path in ERROR_PATHS:
             self.send_error(ERROR_PATHS[path], "fixture: planted server error")
+            return True
+        if path.startswith(SPA_PREFIX):
+            with open(os.path.join(SITE, SPA_PAGE), "rb") as f:
+                body = f.read()
+            self.send_response(404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
             return True
         if path in REDIRECTS:
             self.send_response(302)

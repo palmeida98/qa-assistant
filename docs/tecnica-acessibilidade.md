@@ -1,7 +1,7 @@
 # Técnica Acessibilidade
 
 > **Camada 2 — Técnica de auditoria de acessibilidade web (WCAG 2.1 AA)**
-> Versão 1.0 · 2026-09-24 · Plano, tarefa 3.2.
+> Versão 1.1 · 2026-09-26 · Plano, tarefas 3.2 e 8.10 (parte automática sobre o motor `qa-audit`).
 >
 > Descreve **como** o assistente audita a acessibilidade de uma aplicação web. É agnóstica de projeto: não contém URLs, contas nem regras de nenhum cliente. Os exemplos usam o projeto fictício **Loja Demo**.
 >
@@ -13,7 +13,7 @@
 
 - Norma de referência: **WCAG 2.1, nível AA** (inclui o nível A), salvo se o `projeto.yaml` indicar outra (`acessibilidade.norma`).
 - Duas partes, sempre as duas:
-  - **automática**: axe-core via Playwright, página a página (§2);
+  - **automática**: axe-core, teclado e reflow pelo motor `qa-audit`, página a página (§2);
   - **manual guiada**: teclado, foco, leitor de ecrã, contraste, zoom e reflow (§3). A parte automática deteta uma fração dos problemas; **"0 violações do axe" não quer dizer "acessível"**.
 - Cada falha fica mapeada ao **critério WCAG** (ex. 1.4.3) e ao **nível** (A/AA).
 - **Não** cobre certificação formal nem auditorias de conformidade legal: o resultado é evidência de testes, não uma declaração de conformidade.
@@ -25,7 +25,7 @@
 | Nível | Ferramenta | Serve para |
 |---|---|---|
 | **N0 · Estático** | HTML da página | `lang`, `title`, estrutura de headings, `alt` em imagens estáticas |
-| **N1 · Automático** | `scripts/auditar_a11y.py` (axe-core + Playwright, em `tools/a11y/`) | Varrimento das páginas declaradas, com e sem login |
+| **N1 · Automático** | `scripts/auditar_a11y.py` sobre o motor `qa-audit` (axe-core empacotado, `docs/qa-audit.md` §11) | Varrimento das páginas declaradas, com e sem login |
 | **N1 · Manual guiado** | Playwright MCP ou browser, pelo agente com o utilizador | Teclado, foco, leitor de ecrã, zoom, reflow (§3) |
 | **N2 · Determinístico** | Specs Playwright com `@axe-core/playwright` no workspace | Regressão: "a página X continua sem violações A/AA" |
 
@@ -36,12 +36,19 @@
 1. As páginas a auditar vêm da secção `acessibilidade:` do `projeto.yaml` (nome, URL, se precisa de login). Só ambientes de teste declarados.
 2. Correr, a partir da raiz do qa-assistant:
    `python scripts/auditar_a11y.py <workspace> [--saida runs/a11y_<data>.json]`
-   O script abre cada página no browser configurado (o Chrome instalado, por omissão), faz o login declarado quando a página o exige (credenciais do `.env`, passadas ao browser por variáveis de ambiente, nunca na linha de comandos) e corre o axe-core com as regras da norma.
+   O script traduz a secção `acessibilidade:` para uma configuração do motor `qa-audit` e corre-o só com o módulo de acessibilidade, só nas páginas declaradas (sem seguir links):
+   - as páginas sem login numa execução anónima; as páginas com login noutra, depois de **um** login pelo formulário declarado (`acessibilidade.login`). As credenciais vêm do `.env` do workspace e passam ao motor por variáveis de ambiente, nunca na linha de comandos nem em ficheiros;
+   - o login só conta como feito quando a URL sai da página de login (ou quando se cumpre `login.sucesso_url` / `login.sucesso_seletor`, se estiverem definidos). Um login falhado não se repete (a conta partilhada não fica bloqueada) e as páginas com login ficam **não auditadas**;
+   - uma página que abre noutra URL (ex.: sessão perdida, devolvida ao login) fica **não auditada**, para não dar um falso Pass;
+   - uma página que responde 4xx/5xx fica **não auditada** (é uma página de erro, não o conteúdo). Exceção: numa SPA cujo servidor responde 404 a um link direto e mostra a página na mesma, `acessibilidade.auditar_paginas_com_erro_http: true` audita as páginas declaradas que respondem 4xx; o relatório indica cada uma nas notas. O 404 continua a ser um problema do servidor, a registar como observação;
+   - a configuração e o relatório do motor são temporários: só fica o relatório do workspace (`--saida`).
 3. O relatório separa, por página:
-   - **violações WCAG** (tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`): cada uma com regra, critério(s), nível, impacto do axe, número de elementos e os primeiros seletores;
+   - **violações WCAG** (regras do axe com critério WCAG da norma): cada uma com regra, critério(s), nível, impacto sugerido, número de elementos e os primeiros seletores;
    - **boas práticas** (regras do axe sem critério WCAG): observações, não Fail;
-   - **incompletos** (o axe não conseguiu decidir, ex. contraste sobre imagens): vão para a revisão manual (§3), não para Fail nem Pass.
-4. O impacto do axe (`critical`, `serious`, `moderate`, `minor`) é uma sugestão de severidade; a decisão é do utilizador (metodologia §9.2).
+   - **incompletos** (o axe não conseguiu decidir, ex. contraste sobre imagens): vão para a revisão manual (§3), não para Fail nem Pass;
+   - **outras verificações do motor**: armadilha de teclado (2.1.2), foco possivelmente invisível (2.4.7) e scroll horizontal a 320 px (1.4.10). São indícios para a parte manual (§3), que os confirma ou descarta; sozinhos não dão Fail.
+4. O impacto do axe (`critical`, `serious`, `moderate`, `minor`) passa pelo motor como severidade (`high`, `medium`, `low`) e é só uma sugestão de severidade; a decisão é do utilizador (metodologia §9.2).
+5. Códigos de saída: `0` auditoria feita (as violações são resultados, não erros) · `2` configuração inválida ou motor por instalar (nada corrido) · `3` browser não arrancou, login falhado ou página não auditada (Blocked por ambiente).
 
 ---
 
@@ -98,13 +105,13 @@ Cada verificação manual é um caso (ou um passo de um caso) com um esperado ve
 
 ## 7. Instalação da ferramenta
 
-Uma vez por máquina, a partir da raiz do qa-assistant:
+Uma vez por máquina, a partir da raiz do qa-assistant, instalar o motor `qa-audit` (`docs/qa-audit-guide.md`: `scripts/install.ps1` ou `scripts/install.sh`, ou `pip install -e .` e `python -m playwright install chromium`) e confirmar com:
 
 ```
-npm ci --prefix tools/a11y
+qa-audit doctor
 ```
 
-Instala as versões fixadas em `tools/a11y/package.json`. Usa o Chrome instalado (`acessibilidade.browser: chrome`); em máquinas sem Chrome, `chromium` com `npx --prefix tools/a11y playwright install chromium`.
+O axe-core vem empacotado com o motor (versão fixada, `docs/qa-audit.md` §14): nada se descarrega de uma CDN. `acessibilidade.browser` aceita `chromium` (por omissão), `firefox` ou `webkit`, os browsers do Playwright que o `doctor` mostra como disponíveis; o valor antigo `chrome` é tratado como `chromium`, com um aviso.
 
 ---
 
@@ -123,9 +130,9 @@ Instala as versões fixadas em `tools/a11y/package.json`. Usa o Chrome instalado
 ## 9. Checklist
 
 - [ ] Páginas e norma confirmadas no `projeto.yaml`
-- [ ] Ferramenta instalada (`npm ci --prefix tools/a11y`)
+- [ ] Motor instalado (`qa-audit doctor` sem falhas no browser escolhido)
 - [ ] Parte automática corrida em todas as páginas declaradas
-- [ ] Incompletos do axe revistos na parte manual
+- [ ] Incompletos do axe e outras verificações do motor revistos na parte manual
 - [ ] Parte manual feita nos fluxos principais (pelo menos teclado, foco e zoom)
 - [ ] Cada falha com critério WCAG e nível
 - [ ] Um defeito por problema distinto

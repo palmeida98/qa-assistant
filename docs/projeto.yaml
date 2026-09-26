@@ -20,9 +20,12 @@ api:
 # acessibilidade: so com o modulo acessibilidade ativo (docs/tecnica-acessibilidade.md).
 acessibilidade:
   norma: "WCAG 2.1 AA"         # WCAG 2.0 AA | WCAG 2.1 AA | WCAG 2.2 AA
-  browser: "chrome"            # chrome (o instalado) | chromium (npx --prefix tools/a11y playwright install chromium)
+  browser: "chromium"          # chromium | firefox | webkit (browsers do motor qa-audit; ver qa-audit doctor)
   login: {}                    # (opc.) {url, campo_utilizador, campo_palavra_passe, botao, var_utilizador, var_palavra_passe}
+                               #   + (opc.) sucesso_url (regex) ou sucesso_seletor (CSS); por omissao: a URL sai da pagina de login
   paginas: []                  # [{nome, url, login: true|false}] -- so URLs do ambiente de testes
+  auditar_paginas_com_erro_http: false  # (opc.) true: auditar as paginas declaradas que respondem 4xx mas mostram
+                               #   conteudo (SPA que responde 404 a um link direto); o relatorio indica-as
 
 # mobile: so com o modulo mobile ativo (docs/tecnica-mobile.md).
 mobile:
