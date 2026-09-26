@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added
+- `qa-audit check` (plan 8.15): audits a page another tool has open, in its current state, over the Chrome DevTools
+  Protocol (loopback only): the accessibility checks (axe by default; keyboard and reflow opt-in) without
+  navigating, reloading, clicking or typing. Playwright helper `integrations/playwright/qa-audit.ts`
+  (`auditarEstado`) for the workspace's N2 specs.
+
 ## [0.2.0] - 2026-09-26
 
 ### Added

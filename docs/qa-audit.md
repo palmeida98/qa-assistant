@@ -54,6 +54,7 @@ qa-audit version              print the version
 qa-audit baselines [--delete HOST|all] [--baseline-dir DIR]   list or delete stored visual baselines (§19)
 qa-audit login <url> --config FILE [--browser ENGINE]      log in once and save the session (§20)
 qa-audit sessions [--delete HOST|all] [--sessions-dir DIR]  list or delete saved sessions (§20)
+qa-audit check --cdp URL --page-url REGEX --label NAME     audit a page another tool has open (§22)
 ```
 
 | Option | Default | Meaning |
@@ -711,3 +712,41 @@ exit codes as before.
    is unreachable (or the login fails) in every engine that started; `4` only when no engine starts. A target
    unreachable in some engines only is recorded as a difference. Compatibility differences are `needs-human` and
    never change the exit code. `--cleanup` removes the whole run folder.
+
+---
+
+## 22. Auditing a page another tool has open (`qa-audit check`)
+
+Some states exist only after an interaction: step 2 of a checkout, an error message, an open dialog. The engine never
+clicks (§5, §6), so it cannot reach them; a Playwright test (the workspace's N2 specs, `docs/tecnica-browser.md`
+§13) can. `qa-audit check` audits the page that test has open, in the state it is in, without touching it.
+
+```text
+qa-audit check --cdp http://127.0.0.1:9222 --page-url REGEX --label NAME
+               [--checks axe|axe,keyboard,reflow] [--output DIR] [--fail-on SEVERITY]
+               [--redact-env NAME ...] [--screenshots off|on-problem|all]
+```
+
+1. **Connection.** Chrome DevTools Protocol (`connect_over_cdp`) to the test's browser, which must be launched with
+   `--remote-debugging-port`. Chromium and Chrome only (Firefox and WebKit have no CDP endpoint). `--cdp` must be a
+   loopback address (`127.0.0.1`, `localhost`, `::1`): a debugging port gives full control of the browser.
+2. **Page.** The open tab whose URL matches `--page-url` (the most recent one if several match). No tab matching is
+   exit 3. The engine does not navigate, reload, click or type; when it finishes it disconnects and leaves the
+   browser, its contexts and its pages as they were.
+3. **Checks.** Accessibility only (§11), on the page as it is. By default only axe-core, which reads the page. The
+   keyboard walk (it presses Tab and moves the focus) and the reflow check (it resizes the viewport, then restores
+   it) change the state in the middle of a flow, so they run only when asked for (`--checks axe,keyboard,reflow`);
+   the report notes that the focus was moved. Security, performance, functional and visual checks need the
+   engine's own navigation (responses, timings, baselines) and are not available here.
+4. **Output.** A run folder `check_<label>_<date_time>/` under `--output` (default `./qa-output`, which ignores
+   itself in Git) with `check.json`, `check.md` and, per `--screenshots`, element screenshots. Findings, evidence,
+   severities and the evidence rule are those of §9 and §11.
+5. **Redaction.** The values of the environment variables named with `--redact-env` (e.g. the credentials the test
+   typed) are replaced by `«NAME»` in everything written, as with `auth` (§20).
+6. **Exit codes.** `0` ok · `1` problems at or above `--fail-on` (default `none`: a check records, the test decides)
+   · `2` usage error (e.g. `--cdp` not on loopback) · `3` CDP unreachable or no tab matching.
+
+The workspace side is a TypeScript helper, `integrations/playwright/qa-audit.ts`: `await auditarEstado(page,
+"checkout-erro", { falharEm: "high" })` runs `qa-audit check` for the page's current URL, attaches the report to the
+test's result and fails the test only when `falharEm` asks for it. The Playwright configuration adds
+`--remote-debugging-port=<QA_AUDIT_CDP_PORT>` to Chromium's launch arguments.

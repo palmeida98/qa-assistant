@@ -31,7 +31,7 @@
 | 5 | Interface: painel de progresso por workspace | Concluída |
 | 6 | Portefólio: README, demo, decisão sobre visibilidade do repositório | Concluída (repositório fica privado por decisão do utilizador, 24.09.2026) |
 | 7 | Fecho: CI no Linux, piloto, golden real, histórico protegido, versões fixas, demo reproduzível, decisões de âmbito, v1.0 | Concluída: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run done (26.09.2026); 8.11 (translation) not now |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/auditar-acessibilidade` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run and 8.15 `qa-audit check` done (26.09.2026); 8.11 (translation) not now |
 
 Ordem recomendada: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. O piloto real (2.4) pode avançar em paralelo, no respetivo workspace, a qualquer momento depois de 2.2.
 
@@ -589,6 +589,27 @@ noise. A full compatibility run of the fixture site (three engines) gave four di
 behaviour rather than noise from the engine's own checks: console messages on two pages, mixed content blocked
 differently by Chromium, and the `SameSite=None` cookie handled differently by Chromium; the keyboard and focus
 checks agreed in all three.
+
+### 8.15 Auditing states in the middle of an N2 spec (`qa-audit check`)
+User decision (26.09.2026): option (c) of the comparison (flows stay in the workspace's specs; the engine never
+clicks), design agreed before the code. Specification: `docs/qa-audit.md` §22.
+- [x] `qa-audit check --cdp URL --page-url REGEX --label NAME`: connects over CDP (loopback only) to the test's
+  browser, audits the matching tab as it is (axe by default; keyboard and reflow opt-in, noted), never navigates,
+  reloads, clicks or types, and disconnects leaving everything as it was; `check.json` / `check.md` in a run folder;
+  `--redact-env`; exit 0 / 1 (`--fail-on`, default none) / 2 / 3.
+- [x] Workspace helper `integrations/playwright/qa-audit.ts` (`auditarEstado(page, testInfo, name, options)`):
+  runs the check for the page's URL, attaches the report, fails the test only with `falharEm`; demo configuration
+  (`QA_AUDIT_CDP_PORT`, `workers: 1`) and an auditing spec of the checkout error state, run in the `demo-e2e` CI job.
+- [x] Tests: unit (loopback only, checks, tab choice, exit codes, nothing listening) and integration (a dialog that
+  opens only after a click: the defect is found only in the open state, no request reaches the site, the dialog stays
+  open and the focus is untouched; keyboard opt-in noted and viewport restored; no matching tab is exit 3).
+
+Notes (8.15): two changes to the agreed design: the helper takes the test's `testInfo` as a parameter
+(`auditarEstado(page, testInfo, …)`), because the file lives outside the demo's Node project and can only import
+types from `@playwright/test`; and the instruction to copy the helper sits in `tecnica-browser.md` §13 (where N2
+specs are created) instead of `/onboarding-projeto`, which never creates specs. Each call writes to its own
+folder (a second call in the same test would otherwise attach the first report). The demo's spec audits the
+checkout error state (no WCAG violation found there); it is not the promotion of a case to N2.
 ---
 
 ## Registo de alterações a este plano
@@ -612,6 +633,7 @@ checks agreed in all three.
 | 2026-09-24 | 7.8 concluída (`799e068`): `scripts/comum.py` com a leitura do `projeto.yaml` e do `.env` e a redação, sem mudança de comportamento. A 1.ª tentativa de commit foi bloqueada pelo detect-secrets (falso positivo: os nomes das constantes de redação numa nota deste plano); corrigido o texto, sem allowlist. |
 | 2026-09-24 | `testar_mobile.py`: um flow indicado que não existe passa a ser erro de uso (código 2, nada corrido, com sugestões dos flows do mesmo caso), em vez de `Blocked` "o flow nao correu", que parecia um problema de ambiente. Cada flow pode ser um caminho (pasta atual, workspace ou pasta dos flows) ou o ID do caso (o único `<ID>_*.yaml`). 3 testes novos; skill `/testar-mobile` e `CLAUDE.md` atualizados. |
 | 2026-09-24 | 7.9 pedida pelo utilizador: os critérios dela ainda não se cumprem (faltam 7.2 e 7.3). Por decisão do utilizador, adiantou-se o 1.º critério da 7.3, o golden real com `--dir`/`QA_GOLDEN_DIR` (`e74c281`), e a v1.0 fica para depois do piloto. |
+| 2026-09-26 | 8.15 (`qa-audit check`, auditoria de estados a meio das specs N2) concluída por decisão do utilizador (opção c). |
 | 2026-09-26 | `qa-audit` 0.2.0 (tag `qa-audit-v0.2.0`): 8.5–8.10 e 8.12–8.14; `CHANGELOG` reorganizado (Added / Changed / Fixed). |
 | 2026-09-26 | 8.14 (vários browsers numa só execução) concluída por decisão do utilizador; performance fora da comparação (ruído entre browsers). |
 | 2026-09-26 | 8.13 (descoberta pelo sitemap) concluída por decisão do utilizador; desligada por omissão (`--sitemap`). |

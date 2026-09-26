@@ -111,7 +111,7 @@ def _redact(ctx: RunContext, crawl, redactor: Redactor) -> None:
         f.element = {k: t(str(v)) for k, v in f.element.items()}
         for e in f.evidence:
             e.value, e.label = t(e.value), t(e.label)
-    for p in crawl.pages:
+    for p in (crawl.pages if crawl is not None else []):
         p.title = t(p.title)
         p.console_errors = [t(x) for x in p.console_errors]
         p.page_errors = [t(x) for x in p.page_errors]
