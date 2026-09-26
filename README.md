@@ -106,7 +106,7 @@ Requisitos: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (recá
 
 ## Estado
 
-**v1.0** (25.09.2026): a camada de workspace — metodologia, técnicas, skills, adaptador Excel, painel e o fluxo completo de um projeto — está concluída e validada ponta a ponta num piloto. O motor `qa-audit` (em inglês, acima) segue com versão própria (0.1.0). O detalhe de cada tarefa, com critérios e commits, está em [`docs/plano-desenvolvimento.md`](docs/plano-desenvolvimento.md).
+**v1.0** (25.09.2026): a camada de workspace — metodologia, técnicas, skills, adaptador Excel, painel e o fluxo completo de um projeto — está concluída e validada ponta a ponta num piloto. O motor `qa-audit` (em inglês, acima) segue com versão própria (0.2.0, ver [`CHANGELOG.md`](CHANGELOG.md)). O detalhe de cada tarefa, com critérios e commits, está em [`docs/plano-desenvolvimento.md`](docs/plano-desenvolvimento.md).
 
 | Fase | Estado |
 |---|---|
@@ -117,7 +117,7 @@ Requisitos: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (recá
 | 5 · Painel por workspace | Concluída |
 | 6 · Portefólio (README, demo, visibilidade: privado) | Concluída |
 | 7 · Fecho (revisão geral, CI no Linux, piloto, golden real, `historico/` protegido, versões fixas, demo reproduzível) | Concluída: **v1.0** |
-| 8 · Motor `qa-audit` | 8.0–8.10 concluídas (0.1.0, com login `form` e `manual`) |
+| 8 · Motor `qa-audit` | 8.0–8.10 e 8.12–8.14 concluídas (0.2.0: login, sessões guardadas, sitemap, vários browsers); 8.11 adiada |
 
 **Piloto** (25.09.2026): num workspace fora do repositório, com um site público de prática (sem acesso a projetos de empresa). Um lote de 16 casos, 10 novos e 6 retestes, executado por uma sessão `claude` no workspace com o Playwright MCP e aplicado ao workbook no `/checkpoint`: os retestes deram o mesmo estado que antes; golden real a passar; proteção de `historico/` confirmada. Lições incorporadas: Playwright MCP com `--secrets .env` (o assistente nunca vê as credenciais) e `--isolated` (o perfil persistente perdia os cliques), avisos do `validar_projeto` para o `.mcp.json`, e a denylist também na mensagem do commit.
 
