@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Focus styles — Fictional Shop</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  /* planted (docs/qa-audit.md §11): one element with no focus style at all, two whose focus style the computed
+     style of the element cannot show (a pseudo-element, a parent), one that keeps changing on its own */
+  button { font: 16px sans-serif; padding: 6px 12px; border: 1px solid #333; background: #fff; color: #000; }
+  button:focus { outline: none; }
+  #after { position: relative; }
+  #after:focus-visible::after { content: ""; position: absolute; inset: -4px; border: 2px solid #000; }
+  .wrap { display: inline-block; padding: 2px; border: 2px solid transparent; }
+  .wrap:focus-within { border-color: #000; }
+  .tall { height: 1400px; }
+</style></head>
+<body>
+<main><h1>Focus styles</h1>
+<p><button id="plain">No focus style</button></p>
+<p><button id="after">Ring drawn by ::after</button></p>
+<p><span class="wrap"><button id="wrapped">Ring drawn by the parent</button></span></p>
+<p><button id="anim">Counter <span id="count">0</span></button></p>
+<div class="tall"></div>
+<p><button id="below">Below the fold, no focus style</button></p>
+</main>
+<script>
+var n = 0;
+setInterval(function () { document.getElementById("count").textContent = String(++n); }, 30);
+</script>
+</body>
+</html>

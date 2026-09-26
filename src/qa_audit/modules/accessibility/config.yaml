@@ -4,6 +4,7 @@ max_nodes_per_rule: 5
 keyboard:
   enabled: true
   max_stops: 40
+  focus_margin: 8     # px around a focused element compared focused vs blurred (focus-not-visible)
 reflow:
   enabled: true
   width: 320

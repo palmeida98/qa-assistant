@@ -133,7 +133,7 @@ class EngineTests:
     def test_planted_defects_are_found(self):
         checks = {f.check for f in self.by_page("a11y.html") if f.status in ("problem", "warning")}
         for expected in ("axe/image-alt", "axe/label", "axe/color-contrast", "axe/button-name", "keyboard-trap",
-                         "reflow"):
+                         "focus-not-visible", "reflow"):
             self.assertIn(expected, checks)
 
     def test_strict_csp_page(self):
@@ -464,9 +464,12 @@ class CheckOpenPage(unittest.TestCase):
             try:
                 page = browser.new_page()
                 page.goto(site.url + "dialog.html")
+                page.click("#open")                                        # focus on #close
                 code, result = self.check("kb", "--checks", "axe,keyboard,reflow")
                 self.assertEqual(code, 0)
-                self.assertTrue(any("pressed Tab" in n for n in result["notes"]), result["notes"])
+                self.assertTrue(any("pressed Tab" in n and "put the focus" in n for n in result["notes"]),
+                                result["notes"])
+                self.assertEqual(page.evaluate("document.activeElement.id"), "close")   # focus put back
                 self.assertEqual(page.viewport_size, {"width": 1280, "height": 720})   # reflow put it back
             finally:
                 browser.close()
@@ -521,6 +524,53 @@ class FormSubmitTests:
         f = next(f for f in result.findings if f.check == "form-submit-failed")
         self.assertEqual((f.status, f.severity), ("problem", "medium"))    # the fixture answers 405
         self.assertIn("HTTP 405", f.actual)
+
+
+class FocusTests:
+    """Focus visibility decided by pixels (docs/qa-audit.md §11): identical screenshots focused and blurred are a
+    problem; a focus style the computed style cannot show passes; an area that keeps changing is left to a person."""
+
+    engine = ""
+
+    @classmethod
+    def setUpClass(cls):
+        reason = engine_available(cls.engine)
+        if reason:
+            raise unittest.SkipTest(f"{cls.engine} unavailable here: {reason}")
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            mods = registry.discover(use_entry_points=False)
+            cfg = make_cfg(cls.engine, tmp, crawl={"max_pages": 1})
+            cls.result = runner.run(site.url + "focus.html", cfg, [mods["accessibility"]])
+            cls.focus = {f.check: f for f in cls.result.findings if f.check.startswith("focus")}
+            cls.shots = [os.path.isfile(os.path.join(cls.result.run_folder, e.path))
+                         for f in cls.focus.values() for e in f.evidence
+                         if e.kind == "screenshot" and e.label.startswith("focus ")]
+
+    def labels(self, check: str) -> list[str]:
+        f = self.focus.get(check)
+        return [e.label.split(" (")[0] for e in f.evidence if e.kind == "html"] if f else []
+
+    def test_no_focus_style_is_a_problem_with_both_screenshots(self):
+        f = self.focus["focus-not-visible"]
+        self.assertEqual((f.status, f.severity, f.confidence), ("problem", "medium", "high"))
+        self.assertEqual(self.labels("focus-not-visible"), ["#plain", "#below"])   # below the fold: scrolled to
+        self.assertEqual(len(self.shots), 4)                   # focused and blurred, for each element
+        self.assertTrue(all(self.shots))
+
+    def test_focus_drawn_by_a_pseudo_element_or_a_parent_passes(self):
+        for check in ("focus-not-visible", "focus-visible"):
+            for sel in ("#after", "#wrapped"):
+                self.assertNotIn(sel, self.labels(check), check)
+
+    def test_an_area_that_keeps_changing_is_left_to_a_person(self):
+        f = self.focus["focus-visible"]
+        self.assertEqual((f.status, f.confidence), ("needs-human", "low"))
+        self.assertEqual(self.labels("focus-visible"), ["#anim"])
+        self.assertIn("keeps changing on its own", f.description)
+
+    def test_nothing_else_and_no_errors(self):
+        self.assertEqual(set(self.focus), {"focus-not-visible", "focus-visible"})
+        self.assertEqual(self.result.errors, [])
 
 
 class ErrorPageTests:
@@ -889,7 +939,7 @@ for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
                             (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual"),
                             (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages"), (SavedSessionTests, "Sessions"),
-                            (SitemapTests, "Sitemap")):
+                            (SitemapTests, "Sitemap"), (FocusTests, "Focus")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

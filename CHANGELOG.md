@@ -14,6 +14,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   no longer a broken link; a page linking to itself is not its own referrer.
 
 ### Fixed
+- Accessibility (plan 8.17): focus visibility is decided by pixels. An element with no computed style change when
+  focused is compared with a screenshot of its box plus a margin, focused and blurred: identical pixels are
+  `focus-not-visible` (problem, medium, confidence high); different pixels pass (focus drawn by a pseudo-element or
+  a parent). `focus-visible` (needs-human) is left only where the pixels cannot decide. The keyboard walk puts the
+  focus and the scroll back where they were; findings say "and N more" past five elements; `data:` URIs in HTML
+  evidence are shortened.
 - `cookie-samesite-none-insecure` was reported in Firefox and WebKit for cookies without any SameSite (those engines
   show a missing attribute as `None`); it is now reported only when `SameSite=None` is declared in `Set-Cookie`.
 

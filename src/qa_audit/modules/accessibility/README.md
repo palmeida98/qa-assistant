@@ -19,6 +19,7 @@ A browser engine (`qa-audit doctor`). axe-core ships with the package (`vendor/`
 | `tags` | `wcag2a, wcag2aa, wcag21a, wcag21aa` | axe-core rule tags to run |
 | `max_nodes_per_rule` | `5` | affected elements listed per finding |
 | `keyboard.enabled`, `keyboard.max_stops` | `true`, `40` | keyboard walk |
+| `keyboard.focus_margin` | `8` | px around a focused element compared focused vs blurred |
 | `reflow.enabled`, `reflow.width` | `true`, `320` | reflow check width in CSS px |
 
 ## Checks, statuses and severities
@@ -28,7 +29,8 @@ A browser engine (`qa-audit doctor`). axe-core ships with the package (`vendor/`
 | `axe/<rule>` violations | problem | axe `critical` → high, `serious` → medium, `moderate`/`minor` → low | high |
 | `axe/<rule>` incomplete | needs-human | same mapping | low |
 | `keyboard-trap`: Tab three times leaves focus on one element while tabbable elements follow | warning | high | medium |
-| `focus-visible`: no computed style change when focused | needs-human | medium | low |
+| `focus-not-visible`: no computed style change and identical pixels focused and blurred (element box + margin) | problem | medium | high |
+| `focus-visible`: no computed style change, and the pixels cannot decide (no size, off screen, area changing on its own) | needs-human | medium | low |
 | `reflow`: horizontal scrolling at 320 CSS px | warning | medium | medium |
 | `frames-not-scanned`: the page has frames | needs-human | info | high |
 | `axe-not-run`: axe could not load (usually a strict CSP in Firefox/WebKit) | needs-human | info | high |
