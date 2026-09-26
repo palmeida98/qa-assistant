@@ -397,6 +397,82 @@ class CompatibilityRun(unittest.TestCase):
         self.assertIn("image-alt", diffs[0]["title"])
 
 
+class CheckOpenPage(unittest.TestCase):
+    """qa-audit check (docs/qa-audit.md §22): a state reached by a click, audited over CDP without touching it."""
+
+    def setUp(self):
+        reason = engine_available("chromium")
+        if reason:
+            self.skipTest(reason)
+        import socket
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        self.port = s.getsockname()[1]
+        s.close()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def check(self, label: str, *extra: str):
+        import subprocess
+        r = subprocess.run([sys.executable, "-m", "qa_audit.cli", "check", "--cdp", f"http://127.0.0.1:{self.port}",
+                            "--page-url", r"/dialog\.html$", "--label", label, "--output", self.tmp.name, *extra],
+                           capture_output=True, text=True, encoding="utf-8", timeout=120, check=False,
+                           env={**os.environ, "PYTHONPATH": os.path.join(ROOT, "src")})
+        folders = [d for d in os.listdir(self.tmp.name) if d.startswith(f"check_{label}_")]
+        if not folders:
+            return r.returncode, None
+        with open(os.path.join(self.tmp.name, folders[0], "check.json"), encoding="utf-8") as f:
+            return r.returncode, json.load(f)
+
+    def test_the_state_after_a_click_is_audited_and_left_as_it_was(self):
+        from playwright.sync_api import sync_playwright
+        with FixtureSite() as site, sync_playwright() as p:
+            browser = p.chromium.launch(args=[f"--remote-debugging-port={self.port}"])
+            try:
+                page = browser.new_page()
+                page.goto(site.url + "dialog.html")
+                code, closed = self.check("closed")
+                self.assertEqual(code, 0)
+                self.assertFalse([f for f in closed["findings"] if f["check"] == "axe/image-alt"])
+                page.click("#open")                                        # the state only the test can reach
+                before = len(site.requests)
+                code, opened = self.check("open", "--fail-on", "medium")
+                self.assertEqual(code, 1)                                  # a problem, and --fail-on asked for it
+                self.assertEqual([(f["check"], f["element"]["selector"]) for f in opened["findings"]],
+                                 [("axe/image-alt", "#offer-banner")])
+                self.assertEqual(site.requests[before:], [])               # no navigation, no reload
+                self.assertTrue(page.is_visible("#offer"))                 # the dialog is still open
+                self.assertEqual(page.evaluate("document.activeElement.id"), "close")   # focus untouched by default
+                page.click("#close")                                       # and the test's browser still works
+                self.assertFalse(page.is_visible("#offer"))
+            finally:
+                browser.close()
+
+    def test_keyboard_walk_is_opt_in_and_noted(self):
+        from playwright.sync_api import sync_playwright
+        with FixtureSite() as site, sync_playwright() as p:
+            browser = p.chromium.launch(args=[f"--remote-debugging-port={self.port}"])
+            try:
+                page = browser.new_page()
+                page.goto(site.url + "dialog.html")
+                code, result = self.check("kb", "--checks", "axe,keyboard,reflow")
+                self.assertEqual(code, 0)
+                self.assertTrue(any("pressed Tab" in n for n in result["notes"]), result["notes"])
+                self.assertEqual(page.viewport_size, {"width": 1280, "height": 720})   # reflow put it back
+            finally:
+                browser.close()
+
+    def test_no_matching_tab_is_exit_3(self):
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=[f"--remote-debugging-port={self.port}"])
+            try:
+                browser.new_page().goto("about:blank")
+                self.assertEqual(self.check("none")[0], 3)
+            finally:
+                browser.close()
+
+
 class FormSubmitTests:
     """--allow-submit: only listed forms, only with the flag (docs/qa-audit.md §6, §18)."""
 

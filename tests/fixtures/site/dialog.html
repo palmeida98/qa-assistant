@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Dialog — Fictional Shop</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body>
+<main><h1>Newsletter</h1>
+<p>Planted (docs/qa-audit.md §22): the dialog below opens only after a click, and it holds an image without
+alternative text. An audit of the page as loaded cannot see it; qa-audit check on the open state can.</p>
+<button type="button" id="open">Open the offer</button>
+<div id="offer" role="dialog" aria-modal="true" aria-labelledby="offer-title" hidden>
+  <h2 id="offer-title">Special offer</h2>
+  <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40" id="offer-banner">
+  <button type="button" id="close">Close</button>
+</div>
+<script>
+document.getElementById("open").addEventListener("click", function () {
+  document.getElementById("offer").hidden = false;
+  document.getElementById("close").focus();
+});
+document.getElementById("close").addEventListener("click", function () {
+  document.getElementById("offer").hidden = true;
+});
+</script>
+</main>
+</body>
+</html>

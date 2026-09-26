@@ -7,6 +7,7 @@ Exit codes: 0 ok · 1 problems at or above --fail-on · 2 usage or configuration
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import __version__
@@ -401,6 +402,37 @@ def sessions(argv: list[str]) -> int:
     return 0
 
 
+def check(argv: list[str]) -> int:
+    """Audit a page another tool has open, in its current state (docs/qa-audit.md §22)."""
+    from .core import check as check_mod
+
+    p = argparse.ArgumentParser(prog="qa-audit check", description="Audit a page another tool has open (CDP).")
+    p.add_argument("--cdp", required=True, metavar="URL", help="loopback CDP endpoint, e.g. http://127.0.0.1:9222")
+    p.add_argument("--page-url", required=True, metavar="REGEX", help="regular expression for the tab's URL")
+    p.add_argument("--label", required=True, metavar="NAME", help="name of this state (e.g. checkout-error)")
+    p.add_argument("--checks", default="axe", metavar="LIST", help="axe (default), axe,keyboard,reflow")
+    p.add_argument("--output", default="./qa-output", metavar="DIR", help="output root (default: ./qa-output)")
+    p.add_argument("--fail-on", default="none", choices=config_mod.FAIL_ON,
+                   help="exit 1 on problems at or above this severity (default: none)")
+    p.add_argument("--redact-env", action="append", default=[], metavar="NAME",
+                   help="environment variable whose value is redacted in the output (repeatable)")
+    p.add_argument("--screenshots", default="on-problem", choices=config_mod.SCREENSHOT_MODES)
+    a = p.parse_args(argv)
+    try:
+        checks = check_mod.parse_checks(a.checks)
+        result = check_mod.run_check(a.cdp, a.page_url, a.label, checks, a.output, a.screenshots, a.redact_env)
+    except check_mod.CheckUsageError as e:
+        print(f"qa-audit check: error: {e}", file=sys.stderr)
+        return 2
+    except check_mod.CheckUnreachable as e:
+        print(f"qa-audit check: {e}", file=sys.stderr)
+        return 3
+    st = result["summary"]["by_status"]
+    print(f"{a.label}: {st['problem']} problem(s), {st['warning']} warning(s), {st['needs-human']} needs human"
+          f" -- {os.path.join(result['run_folder'], 'check.json')}")
+    return check_mod.exit_code(result, a.fail_on)
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_streams()
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -413,6 +445,8 @@ def main(argv: list[str] | None = None) -> int:
         return login(argv[1:])
     if argv[:1] == ["sessions"]:
         return sessions(argv[1:])
+    if argv[:1] == ["check"]:
+        return check(argv[1:])
     if argv[:1] == ["doctor"]:
         from .doctor import run as doctor
         return doctor(argv[1:])

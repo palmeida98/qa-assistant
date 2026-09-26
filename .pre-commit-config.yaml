@@ -58,4 +58,4 @@ repos:
         entry: python -m unittest discover -s tests
         language: system
         pass_filenames: false
-        files: ^(adapters/|scripts/|src/|tests/|examples/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|docs/workspace/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)
+        files: ^(adapters/|scripts/|src/|tests/|examples/|integrations/|\.claude/skills/|CLAUDE\.md$|docs/projeto\.yaml$|docs/workspace/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)

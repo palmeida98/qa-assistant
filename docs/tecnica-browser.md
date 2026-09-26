@@ -206,13 +206,21 @@ Na conversão:
 - credenciais e URLs lidos de variáveis de ambiente, nunca escritos na spec;
 - as specs vivem no workspace do projeto (ou no repositório da empresa), **não** no `qa-assistant`.
 
+**Auditar estados a meio de uma spec.** Um estado que só existe depois de interagir (passo 2 de um checkout, mensagem de erro, diálogo aberto) pode ser auditado pelo motor `qa-audit` sem ele tocar na página (`docs/qa-audit.md` §22):
+
+- copiar `integrations/playwright/qa-audit.ts` do `qa-assistant` para a pasta das specs do workspace;
+- no `playwright.config.ts`, com `QA_AUDIT_CDP_PORT` definido: `launchOptions.args` com `--remote-debugging-port=<porta>` e `workers: 1` (ver `examples/demo/e2e/playwright.config.ts`);
+- na spec, depois de chegar ao estado: `await auditarEstado(page, testInfo, "<nome-do-estado>", { falharEm: "none", redigir: [<variáveis das credenciais>] })`. O relatório fica anexado ao resultado do teste;
+- só Chromium ou Chrome (ligação por CDP). Por omissão só corre o axe, que não mexe na página. O teclado e o reflow (`verificacoes: "axe,keyboard,reflow"`) movem o foco e mudam a largura da janela, por isso ficam para o fim do fluxo;
+- uma violação encontrada assim segue as regras da `tecnica-acessibilidade.md` §4 e §5. Com `falharEm: "none"` o teste não falha por causa dela: o resultado entra no registo leve pelo caso de acessibilidade correspondente.
+
 ---
 
 ## 14. Pontos de ligação com outros módulos
 
 | Módulo | O que acrescenta a esta técnica |
 |---|---|
-| `acessibilidade` | axe-core, teclado e reflow pelo motor `qa-audit` + verificações manuais de teclado, foco e nomes acessíveis (`tecnica-acessibilidade.md`, `scripts/auditar_a11y.py`) |
+| `acessibilidade` | axe-core, teclado e reflow pelo motor `qa-audit` + verificações manuais de teclado, foco e nomes acessíveis (`tecnica-acessibilidade.md`, `scripts/auditar_a11y.py`); estados a meio de uma spec N2 com `auditarEstado` (§13) |
 | `visual` | Screenshots de referência e comparação com os frames do Figma |
 | `cross-browser` | O mesmo lote em Chromium, Firefox, WebKit e viewports móveis |
 | `formularios` | Geração sistemática de valores-limite e classes de equivalência por campo |

@@ -55,6 +55,7 @@ qa-audit https://new-project.example --type accessibility,security
 qa-audit https://new-project.example --max-pages 5 --depth 1 --browser firefox
 qa-audit https://new-project.example --sitemap           # also the pages listed in the sitemap (none linked)
 qa-audit https://new-project.example --browser all       # one audit per engine + compatibility report
+qa-audit check --cdp http://127.0.0.1:9222 --page-url '/checkout' --label step-2   # a page a test has open (§22)
 qa-audit https://new-project.example --report html --cleanup
 qa-audit https://new-project.example --config qa-audit.yaml
 ```

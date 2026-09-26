@@ -14,8 +14,14 @@ if (existsSync(envFile)) {
   }
 }
 
+// Auditoria de estados a meio das specs (qa-audit check, docs/qa-audit.md seccao 22): com QA_AUDIT_CDP_PORT
+// definido, o Chromium abre essa porta de depuracao (so em 127.0.0.1) e corre um worker de cada vez
+// (cada worker abriria um browser na mesma porta). Sem a variavel, as specs de auditoria sao saltadas.
+const cdpPort = process.env.QA_AUDIT_CDP_PORT;
+
 export default defineConfig({
   testDir: "./specs",
+  workers: cdpPort ? 1 : undefined,
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0, // tecnica-browser 9: uma nova tentativa so para falhas de ambiente
   reporter: [["list"], ["junit", { outputFile: "test-results/junit.xml" }]],
@@ -23,5 +29,6 @@ export default defineConfig({
     baseURL: "https://www.saucedemo.com",
     channel: process.env.CI ? undefined : "chrome",
     trace: "retain-on-failure",
+    launchOptions: cdpPort ? { args: [`--remote-debugging-port=${cdpPort}`] } : {},
   },
 });
