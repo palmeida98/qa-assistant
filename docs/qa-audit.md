@@ -52,6 +52,8 @@ qa-audit <url> [options]      audit a target
 qa-audit doctor               check the environment (exit 0 ok · 1 something required is missing)
 qa-audit version              print the version
 qa-audit baselines [--delete HOST|all] [--baseline-dir DIR]   list or delete stored visual baselines (§19)
+qa-audit login <url> --config FILE [--browser ENGINE]      log in once and save the session (§20)
+qa-audit sessions [--delete HOST|all] [--sessions-dir DIR]  list or delete saved sessions (§20)
 ```
 
 | Option | Default | Meaning |
@@ -366,7 +368,6 @@ conformance certification.**
 
 ## 12. Planned
 
-- Login with a saved session (`auth.method: storage-state`, plan: after 8.10).
 - Several engines in one run (compatibility), sitemap discovery.
 - Active security checks, always opt-in; scripted user flows (login, checkout) as
   configured, opt-in functional scenarios.
@@ -586,7 +587,7 @@ session's cookies are shared by every page). Configured under `auth:`; without i
 
 ```yaml
 auth:
-  method: form                      # form | manual   (storage-state: planned)
+  method: form                      # form | manual | storage-state
   login_url: /login                 # absolute, or a path on the target origin
   username_env: SHOP_QA_USER        # form: names of environment variables, never values (§4)
   pass_env: SHOP_QA_PASS
@@ -601,6 +602,7 @@ auth:
 |---|---|
 | `form` | Opens `login_url`, fills the user and password fields (detected: the first visible `input[type=password]`, the visible text/e-mail field before it in the same form, the form's submit button; or the configured selectors), submits **once**, and waits for the success check. |
 | `manual` | For Active Directory, second factors or CAPTCHAs: the browser opens **visibly** (headless is overridden), the terminal asks the person to log in, and the audit waits up to `manual_timeout_s` for the success check. The engine types nothing. |
+| `storage-state` | Reuses a session saved earlier by `qa-audit login` (below): the browser context starts with its cookies and local storage, and **nothing is submitted** during the audit. |
 
 Rules:
 
@@ -618,3 +620,38 @@ Rules:
   `pass_env`, neither `success_url` nor `success_selector`, invalid regular expressions, environment variables
   not set, `auth` with `evidence.trace`.
 
+### 20.1 Saved sessions (`storage-state`)
+
+A login that needs a person (Active Directory, a second factor) should not be repeated before every audit. The
+session is saved once and reused until it expires:
+
+```yaml
+auth:
+  method: storage-state
+  login_method: manual              # how `qa-audit login` creates the session: manual (default) | form
+  login_url: https://staging.shop.example/login
+  success_selector: "#user-menu"    # checked by `qa-audit login`; one of success_url / success_selector
+  # state_file: ~/somewhere/shop.json   # default: ~/.qa-audit/sessions/<host>.json
+  # username_env / pass_env: only with login_method: form
+```
+
+1. `qa-audit login <url> --config FILE` performs the `login_method` login exactly as §20 describes (one attempt,
+   success check, a visible browser for `manual`), then saves the browser's storage state (cookies and local
+   storage) to `state_file` and exits: nothing is audited and no output folder is created. Exit codes: `0` saved ·
+   `2` configuration error · `3` login failed · `4` browser could not start.
+2. An audit with `method: storage-state` starts the browser context from that file and does not log in. If the
+   start URL lands on the login page (`expired_url`, default the path of `login_url`), the saved session has
+   expired: exit 3 with a hint to run `qa-audit login` again. A page that lands there later stops the crawl, as in
+   §20. The report notes the file's age.
+
+The state file holds live session cookies: it is a credential.
+
+- It is never written or read inside the output folder or inside a Git working tree (configuration error, exit 2),
+  so it cannot be committed or shipped with a report. The default folder `~/.qa-audit/sessions/` gets a
+  `.gitignore` containing `*`; on Linux and macOS the file is created readable by its owner only (`0600`).
+- A missing file is a configuration error (exit 2) that names the `qa-audit login` command to create it.
+- Every cookie value of the state (six characters or more) goes to the redactor: it is replaced by
+  `«cookie:NAME»` in everything the engine writes, like the credentials of `form`.
+- Traces stay refused with `auth` (§20).
+- `qa-audit sessions` lists the saved sessions (host, age, size) in the default folder or `--sessions-dir`;
+  `--delete HOST|all` removes them. Deleting a session does not log it out on the server.

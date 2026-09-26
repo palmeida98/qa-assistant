@@ -80,7 +80,8 @@ workspace, `qa-workspaces/<company>/<project>/qa-audit.yaml`, or in the project'
    to `./qa-output/` there, which ignores itself in Git.
 4. First run with `visual`: it creates the baselines (in `~/.qa-audit/baselines`, outside every repository).
    Review later differences and accept intended ones with `--update-baseline`.
-5. When the project ends: `qa-audit baselines --delete <host>` and delete its `qa-output/`.
+5. When the project ends: `qa-audit baselines --delete <host>`, `qa-audit sessions --delete <host>` (if you saved
+   a login session) and delete its `qa-output/`.
 
 ---
 
@@ -112,7 +113,7 @@ per engine.
 
 ### Pages behind a login
 
-Configure `auth:` in the project's configuration file (§20 of the spec). Two methods:
+Configure `auth:` in the project's configuration file (§20 of the spec). Three methods:
 
 ```yaml
 auth:                                   # a plain login form
@@ -137,6 +138,25 @@ not locked), the session's logout links are never followed, a page that sends yo
 crawl ("session ended"), and the credential values are replaced by `«VARIABLE_NAME»` in everything the engine
 writes. Traces are refused with `auth`. To audit a fixed set of pages rather than crawl, list them in
 `crawl.pages` and set `crawl.follow_links: false`.
+
+To log in once (for example with a second factor) and reuse the session in later audits, save it:
+
+```yaml
+auth:
+  method: storage-state
+  login_method: manual                  # or form, with username_env / pass_env
+  login_url: https://staging.new-project.example/login
+  success_selector: "#user-menu"
+```
+
+```bash
+qa-audit login https://staging.new-project.example --config qa-audit.yaml   # once; you log in in the window
+qa-audit https://staging.new-project.example --config qa-audit.yaml         # as often as needed, no login
+qa-audit sessions                                                           # list; --delete HOST removes one
+```
+
+The session is saved in `~/.qa-audit/sessions/` (never inside a Git repository or the output folder: it holds live
+cookies). When it expires the audit stops with exit 3 and asks you to run `qa-audit login` again (§20.1).
 
 ---
 
@@ -227,7 +247,8 @@ the engine's integration tests on Chromium, Firefox and WebKit.
 
 - The repository holds the tool, never a project: no client names, URLs, accounts, credentials, screenshots,
   reports or findings. Project configuration and output live with the project (§4 above).
-- `qa-output/` ignores itself (`.gitignore` with `*`), and so do the visual baselines' root; this repository's
+- `qa-output/` ignores itself (`.gitignore` with `*`), and so do the visual baselines' root and the saved
+  sessions' root (`~/.qa-audit/sessions`; a session file is refused inside any Git working tree); this repository's
   `.gitignore` also covers evidence, traces, HAR files and local configuration.
 - Credentials only in environment variables; configuration files with literal secrets are refused.
 - Traces and videos (which hold cookies and page content) are off by default.

@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="qa-audit", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EPILOG,
         description="Automated QA audit of a website. Other commands: 'qa-audit doctor', 'qa-audit version', "
-                    "'qa-audit baselines'.")
+                    "'qa-audit baselines', 'qa-audit login', 'qa-audit sessions'.")
     p.add_argument("url", help="target URL (http or https)")
     p.add_argument("--type", default=None, metavar="LIST",
                    help="comma-separated modules, or 'full' (default: full)")
@@ -129,7 +129,7 @@ def configure(a: argparse.Namespace):
     modules = registry.select(a.type or "full", available)
     from .core import auth
     problems = [p for m in modules for p in m.validate_config(cfg["modules"].get(m.name) or {})]
-    problems += auth.validate(cfg)
+    problems += auth.validate(cfg, target=target)
     if a.type not in (None, "full"):
         # asked for by name: a module that cannot run here is an error, not a silent skip
         for m in modules:
@@ -246,6 +246,77 @@ def baselines(argv: list[str]) -> int:
     return 0
 
 
+def login(argv: list[str], console: Console | None = None) -> int:
+    """Log in once and save the session for auth.method storage-state (docs/qa-audit.md §20.1)."""
+    import copy
+
+    from .browser.session import BrowserError, Session
+    from .core import auth
+
+    p = argparse.ArgumentParser(prog="qa-audit login", description="Log in once and save the browser session.")
+    p.add_argument("url", help="target URL (http or https)")
+    p.add_argument("--config", required=True, metavar="FILE", help="YAML configuration with auth.method storage-state")
+    p.add_argument("--browser", choices=config_mod.ENGINES, default=None, help="browser engine (default: chromium)")
+    p.add_argument("--no-color", action="store_true", help="plain output (also NO_COLOR)")
+    a = p.parse_args(argv)
+    console = console or Console(color=False if a.no_color else None)
+    err = Console(stream=sys.stderr, color=console.color)
+    try:
+        target = config_mod.validate_url(a.url)
+        cfg = config_mod.build(a.config, {"browser": {"engine": a.browser}} if a.browser else {})
+        problems = auth.validate(cfg, target=target, mode="login")
+        if problems:
+            raise ConfigError("; ".join(problems))
+    except ConfigError as e:
+        err.print(f"qa-audit: error: {e}", "red")
+        return 2
+    path = auth.state_path(cfg, target)
+    # the session is created with the login method itself (form or manual); nothing is recorded or audited
+    run_cfg = copy.deepcopy(cfg)
+    run_cfg["auth"]["method"] = auth.login_method(cfg["auth"])
+    run_cfg["evidence"].update({"video": False, "trace": "off"})
+
+    def progress(event, **d):
+        if event == "auth_manual":
+            console.print(f"Log in in the browser window ({d['url']}); waiting up to {d['timeout_s']} s ...", "yellow")
+
+    try:
+        with Session(run_cfg, None, target) as session:
+            done = auth.login(session, run_cfg, target, progress=progress)
+            auth.save_state(session.context, path)
+    except BrowserError as e:
+        err.print(f"qa-audit: browser could not start: {e} (run qa-audit doctor)", "red")
+        return 4
+    except auth.AuthError as e:
+        err.print(f"qa-audit: login failed: {e}", "red")
+        return 3
+    console.print(f"{done}; session saved to {path}", "green")
+    console.print("It holds live cookies: keep it out of repositories; 'qa-audit sessions --delete HOST' removes it.")
+    return 0
+
+
+def sessions(argv: list[str]) -> int:
+    """List or delete the saved sessions (docs/qa-audit.md §20.1)."""
+    from .core import auth
+
+    p = argparse.ArgumentParser(prog="qa-audit sessions", description="List or delete saved login sessions.")
+    p.add_argument("--sessions-dir", default=None, metavar="DIR", help="default: ~/.qa-audit/sessions")
+    p.add_argument("--delete", default=None, metavar="HOST", help="a host as listed, or 'all'")
+    a = p.parse_args(argv)
+    root = auth.sessions_root(a.sessions_dir)
+    if a.delete:
+        removed = auth.delete_sessions(root, a.delete)
+        print(f"deleted: {', '.join(removed)}" if removed else f"nothing to delete for {a.delete!r} in {root}")
+        return 0 if removed else 1
+    rows = auth.list_sessions(root)
+    print(f"saved sessions in {root}")
+    for host, age, size in rows:
+        print(f"  {host:<40} {age:>8.1f} h old {size / 1024:>8.1f} KB")
+    if not rows:
+        print("  (none)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     setup_streams()
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -254,6 +325,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if argv[:1] == ["baselines"]:
         return baselines(argv[1:])
+    if argv[:1] == ["login"]:
+        return login(argv[1:])
+    if argv[:1] == ["sessions"]:
+        return sessions(argv[1:])
     if argv[:1] == ["doctor"]:
         from .doctor import run as doctor
         return doctor(argv[1:])

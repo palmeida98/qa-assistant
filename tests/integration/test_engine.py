@@ -499,6 +499,93 @@ class AuthTests:
         self.assertIn("index.html", {p.url.rsplit("/", 1)[-1] for p in r.pages if p.audited})
 
 
+class SavedSessionTests:
+    """qa-audit login + auth.method storage-state (docs/qa-audit.md §20.1), with the fixture's fictional account."""
+
+    engine = ""
+    ENV: ClassVar[dict] = AuthTests.ENV
+    COOKIE = "valid-session-fixture"
+
+    def setUp(self):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.state = os.path.join(self.tmp.name, "sessions", "fixture.json")
+        self.section = {"method": "storage-state", "login_method": "form", "login_url": "/login.html",
+                        "username_env": "QA_FIXTURE_USER", "pass_env": "QA_FIXTURE_PASS",
+                        "success_url": "/account/", "state_file": self.state}
+        self.site = FixtureSite().__enter__()
+        self.addCleanup(self.site.__exit__, None, None, None)
+
+    def login(self) -> int:
+        import yaml
+        path = os.path.join(self.tmp.name, "qa-audit.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump({"auth": self.section, "browser": {"timeout_ms": 8000},
+                            "output": {"directory": os.path.join(self.tmp.name, "out")}}, f)
+        with mock.patch.dict(os.environ, self.ENV), contextlib.redirect_stdout(io.StringIO()):
+            return cli.main(["login", self.site.url, "--config", path, "--browser", self.engine, "--no-color"])
+
+    def audit(self, env=None):
+        mods = registry.discover(use_entry_points=False)
+        cfg = make_cfg(self.engine, os.path.join(self.tmp.name, "out"), auth=self.section,
+                       browser={"timeout_ms": 8000})
+        with mock.patch.dict(os.environ, env or {}):
+            return runner.run(self.site.url + "account/index.html", cfg, [mods["accessibility"]])
+
+    def posts(self):
+        return [path for method, path in self.site.requests if method == "POST"]
+
+    def test_login_saves_the_session_and_the_audit_reuses_it_without_posting(self):
+        self.assertEqual(self.login(), 0)
+        self.assertTrue(os.path.isfile(self.state))
+        if os.name == "posix":
+            self.assertEqual(os.stat(self.state).st_mode & 0o777, 0o600)
+        self.assertEqual(self.posts(), ["/login"])                        # the one login, by qa-audit login
+        r = self.audit()                                                  # no credentials in the environment
+        self.assertEqual(self.posts(), ["/login"])                        # the audit posted nothing
+        audited = {p.url.rsplit("/", 1)[-1] for p in r.pages if p.audited}
+        self.assertTrue({"index.html", "settings.html"} <= audited, audited)
+        self.assertTrue(any("saved session" in n for n in r.notes), r.notes)
+
+    def test_cookie_values_never_reach_any_output(self):
+        self.assertEqual(self.login(), 0)
+        r = self.audit()
+        from qa_audit.reports import write_all
+        write_all(r, ["html", "json", "csv", "md"])
+        seen_placeholder = False
+        for folder, _, files in os.walk(r.run_folder):
+            for name in files:
+                if name.endswith((".json", ".csv", ".md", ".html", ".log")):
+                    with open(os.path.join(folder, name), encoding="utf-8", errors="ignore") as f:
+                        text = f.read()
+                    self.assertNotIn(self.COOKIE, text, name)
+                    seen_placeholder |= "«cookie:fixture_session»" in text
+        self.assertTrue(seen_placeholder, "the session id shown on settings.html was not redacted anywhere")
+
+    def test_an_expired_session_stops_the_audit_and_says_how_to_renew_it(self):
+        from qa_audit.browser.discovery import TargetUnreachable
+        self.assertEqual(self.login(), 0)
+        with open(self.state, encoding="utf-8") as f:
+            state = json.load(f)
+        for c in state["cookies"]:
+            c["value"] = "expired-on-purpose"                             # the server no longer knows it
+        with open(self.state, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        with self.assertRaises(TargetUnreachable) as cm:
+            self.audit()
+        self.assertIn("qa-audit login", str(cm.exception))
+        self.assertEqual(self.posts(), ["/login"])
+
+    def test_wrong_password_saves_nothing(self):
+        self.ENV = {**AuthTests.ENV, "QA_FIXTURE_PASS": "wrong-on-purpose"}
+        self.assertEqual(self.login(), 3)
+        self.assertFalse(os.path.exists(self.state))
+        self.assertEqual(self.posts(), ["/login"])
+
+
 def https_available(engine: str) -> str:
     """'' if this engine loads the HTTPS fixture here, else the reason (e.g. Firefox with broken cryptography)."""
     reason = engine_available(engine)
@@ -628,7 +715,7 @@ class ReportInBrowser(unittest.TestCase):
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
                             (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual"),
-                            (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages")):
+                            (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages"), (SavedSessionTests, "Sessions")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

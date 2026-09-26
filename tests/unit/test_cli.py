@@ -87,6 +87,38 @@ class Cli(unittest.TestCase):
                 self.assertEqual(cli.main(["baselines", "--baseline-dir", tmp, "--delete", "shop.example"]), 0)
             self.assertFalse(os.path.exists(os.path.join(tmp, "shop.example")))
 
+    def test_sessions_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "shop.example.json"), "w", encoding="utf-8") as f:
+                f.write('{"cookies": [], "origins": []}')
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(cli.main(["sessions", "--sessions-dir", tmp]), 0)
+                self.assertIn("shop.example", out.getvalue())
+                self.assertEqual(cli.main(["sessions", "--sessions-dir", tmp, "--delete", "other.example"]), 1)
+                self.assertEqual(cli.main(["sessions", "--sessions-dir", tmp, "--delete", "shop.example"]), 0)
+            self.assertFalse(os.path.exists(os.path.join(tmp, "shop.example.json")))
+
+    def test_login_command_refuses_a_configuration_without_storage_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "auth.yaml")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("auth: {method: manual, login_url: /login, success_url: /account}\n")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(cli.main(["login", "https://shop.example", "--config", path, "--no-color"]), 2)
+        self.assertIn("storage-state", err.getvalue())
+
+    def test_an_audit_with_storage_state_and_no_saved_session_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "auth.yaml")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"auth: {{method: storage-state, login_url: /login, success_url: /account, "
+                        f"state_file: '{os.path.join(tmp, 'missing.json')}'}}\n")
+            code, _, err = run(["https://shop.example", "--config", path])
+        self.assertEqual(code, 2)
+        self.assertIn("qa-audit login", err)
+
     def test_overrides_only_what_was_given(self):
         a = cli.build_parser().parse_args(["https://shop.example", "--max-pages", "3", "--screenshots"])
         self.assertEqual(cli.overrides_from_args(a),
