@@ -462,6 +462,15 @@ class CheckOpenPage(unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_nothing_listening_is_exit_3(self):
+        # nothing listens on port 9 (discard) on 127.0.0.1; moved from the unit tests, which run without Playwright
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = cli.main(["check", "--cdp", "http://127.0.0.1:9", "--page-url", "x", "--label", "a",
+                             "--output", self.tmp.name])
+        self.assertEqual(code, 3)
+        self.assertIn("remote-debugging-port", err.getvalue())
+
     def test_no_matching_tab_is_exit_3(self):
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
