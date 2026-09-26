@@ -1,4 +1,5 @@
-"""qa-audit check (docs/qa-audit.md §22): argument validation, tab choice and exit codes. No browser."""
+"""qa-audit check (docs/qa-audit.md §22): argument validation, tab choice and exit codes. No browser and no
+Playwright (the CI unit job does not install it): connecting is tested in tests/integration (CheckOpenPage)."""
 
 import contextlib
 import io
@@ -51,11 +52,6 @@ class Cli(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("loopback", err)
 
-    def test_nothing_listening_is_exit_3(self):
-        # nothing listens on port 9 (discard) on 127.0.0.1
-        code, err = self.run_cli(["--cdp", "http://127.0.0.1:9", "--page-url", "x", "--label", "a"])
-        self.assertEqual(code, 3)
-        self.assertIn("remote-debugging-port", err)
 
 
 if __name__ == "__main__":
