@@ -311,7 +311,8 @@ class NoExternalTraffic:
                 tempfile.TemporaryDirectory() as tmp:
             # keep the browser open for over a minute: background timers (updates, telemetry) fire after a while;
             # a short audit hid Firefox's update check until 8.7
-            cfg = make_cfg(self.engine, tmp, crawl={"delay_ms": 3500})
+            # sitemap on: its external entries (sitemap-index.xml, sitemap-pages.xml) must never leave either
+            cfg = make_cfg(self.engine, tmp, crawl={"delay_ms": 3500, "sitemap": True})
             mods = registry.discover(use_entry_points=False)
 
             def factory(c, r, t):
@@ -325,6 +326,43 @@ class NoExternalTraffic:
         self.assertIn(f"127.0.0.1:{site.port}", hosts)
         # mixed.html references 127.0.0.1:9 on purpose; everything must stay on this machine
         self.assertEqual({h for h in hosts if not h.startswith("127.0.0.1:")}, set())
+
+
+class SitemapTests:
+    """crawl.sitemap (docs/qa-audit.md §5.1): robots.txt → sitemap index → pages, with every discovery rule."""
+
+    engine = ""
+
+    def audit(self, on: bool):
+        reason = engine_available(self.engine)
+        if reason:
+            self.skipTest(reason)
+        with FixtureSite() as site, tempfile.TemporaryDirectory() as tmp:
+            cfg = make_cfg(self.engine, tmp, crawl={"sitemap": on, "max_pages": 40})
+            mods = registry.discover(use_entry_points=False)
+            result = runner.run(site.url, cfg, [mods["accessibility"]])
+            return result, [p for _, p in site.requests]
+
+    def test_orphan_page_found_and_nothing_unsafe_requested(self):
+        r, requested = self.audit(on=True)
+        self.assertIn("orphan.html", {p.url.rsplit("/", 1)[-1] for p in r.pages if p.audited})
+        self.assertIn("/sitemap-index.xml", requested)
+        self.assertIn("/sitemap-pages.xml", requested)
+        for never in ("/logout", "/private/report.html"):
+            self.assertNotIn(never, requested)
+        reasons = {x["url"].split("/", 3)[-1]: x["reason"] for x in r.crawl["skipped"]}
+        self.assertEqual(reasons["sitemap.xml"], "sitemap outside the target origin")       # external index entry
+        self.assertEqual(reasons["page.html"], "sitemap entry outside the target origin")
+        self.assertEqual(reasons["private/report.html"], "disallowed by robots.txt")
+        self.assertTrue(reasons["logout"].startswith("excluded"))
+        self.assertTrue(r.crawl["sitemap"].startswith("read: 5 URLs from /sitemap-index.xml, /sitemap-pages.xml"),
+                        r.crawl["sitemap"])
+        self.assertTrue(any(n.startswith("sitemap: read: 5 URLs") for n in r.notes), r.notes)
+
+    def test_off_by_default_nothing_changes(self):
+        r, requested = self.audit(on=False)
+        self.assertEqual(r.crawl["sitemap"], "off")
+        self.assertFalse([p for p in requested if "sitemap" in p or p == "/orphan.html"])
 
 
 class FormSubmitTests:
@@ -715,7 +753,8 @@ class ReportInBrowser(unittest.TestCase):
 for _engine in ENGINES:
     for _mixin, _suffix in ((EngineTests, "Audit"), (NoExternalTraffic, "Network"), (CliTests, "Cli"),
                             (HttpsTests, "Https"), (FormSubmitTests, "Forms"), (VisualTests, "Visual"),
-                            (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages"), (SavedSessionTests, "Sessions")):
+                            (AuthTests, "Auth"), (ErrorPageTests, "ErrorPages"), (SavedSessionTests, "Sessions"),
+                            (SitemapTests, "Sitemap")):
         _name = f"{_engine.capitalize()}{_suffix}"
         globals()[_name] = type(_name, (_mixin, unittest.TestCase), {"engine": _engine})
 del _engine, _mixin, _suffix, _name

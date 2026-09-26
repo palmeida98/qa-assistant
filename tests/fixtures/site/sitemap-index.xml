@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- fixture (docs/qa-audit.md §5.1): declared in robots.txt, one level of index, relative locations -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>/sitemap-pages.xml</loc></sitemap>
+  <sitemap><loc>https://external.example/sitemap.xml</loc></sitemap>
+</sitemapindex>
