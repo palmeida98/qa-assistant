@@ -33,7 +33,7 @@
 | 5 | Interface: progress dashboard per workspace | Done |
 | 6 | Portfolio: README, demo, decision on the repository's visibility | Done (the repository stays private by the user's decision, 24.09.2026) |
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
-| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done except the CI check after the push (26.09.2026) |
+| 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -572,7 +572,8 @@ Criteria:
   framework files (list of common words, outside the migration's own mapping).
 - [x] Demo in English (cases, sheets, states, batches, workbook rebuilt) and still reproducible; e2e specs pass.
 - [x] Practice workspace migrated with the script; golden real still identical; `/` shows only the new skills.
-- [ ] Unit, integration (three engines) and golden tests pass; CI green.
+- [x] Unit, integration (three engines) and golden tests pass; CI green (run 36305490201, 27.09.2026, after
+  giving `scripts/migrate_workspace.py` its execute bit: the first run failed only in `lint`, ruff EXE001 on Linux).
 
 Notes (8.11): the batch hash was the one design problem: the control sheet of a workbook keeps the hash of each batch
 applied, so a batch converted to the new keys would have looked new (and the real golden's `after.xlsx` would not
@@ -745,6 +746,7 @@ scroll back where they were: the note of `qa-audit check` now says so, and its t
 | 2026-09-24 | 7.8 done (`799e068`): `scripts/common.py` with the reading of `project.yaml` and `.env` and the redaction, without a change of behaviour. The 1st commit attempt was blocked by detect-secrets (a false positive: the names of the redaction constants in a note of this plan); the text fixed, without an allowlist. |
 | 2026-09-24 | `run_mobile.py`: a flow given that does not exist becomes a usage error (code 2, nothing run, with suggestions of the same case's flows), instead of `Blocked` "the flow did not run", which looked like an environment problem. Each flow can be a path (current folder, workspace or flows folder) or the case ID (the only `<ID>_*.yaml`). 3 new tests; skill `/test-mobile` and `CLAUDE.md` updated. |
 | 2026-09-24 | 7.9 asked for by the user: its criteria were not met yet (7.2 and 7.3 missing). By the user's decision, the 1st criterion of 7.3 was brought forward, the real golden with `--dir`/`QA_GOLDEN_DIR` (`e74c281`), and v1.0 is left for after the pilot. |
+| 2026-09-27 | 8.11 closed: CI green; the history rewritten to remove a client's short name (force push of `main`, `feat/login` and the tags, by the user's decision), and the name added to the denylist. |
 | 2026-09-26 | 8.11: everything in English (docs, skills, scripts, adapter, tests, demo), `scripts/migrate_workspace.py`, the practice workspace converted with its real golden unchanged. |
 | 2026-09-26 | 8.11 redefined by the user's decision: everything in English, names included, with a migration script for the workspaces. |
 | 2026-09-26 | 8.17 done: `focus-not-visible` (problem) when the element's screenshot is identical with and without focus; `needs-human` stays only where the screenshots do not decide; a new run on the practice site with the finding on the 4 pages and in the 3 engines. |
