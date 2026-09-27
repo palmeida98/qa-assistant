@@ -2,8 +2,8 @@
 
 References:
 - @docs/methodology.md — universal methodology
-- @docs/technique-browser.md — browser automation technique
-- @docs/technique-excel.md — Excel workbook automation technique
+- docs/technique-browser.md — browser automation technique (read when running browser batches; `/run-batch`, `/project-onboarding`)
+- docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/log-bug`)
 - docs/technique-api.md — API testing technique (read when the `api` module is active; `/test-api`)
 - docs/technique-accessibility.md — WCAG 2.1 AA accessibility technique (read when the `accessibility` module is active; `/audit-accessibility`)
 - docs/technique-mobile.md — mobile technique with Maestro (read when the `mobile` module is active; `/test-mobile`)
