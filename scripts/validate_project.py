@@ -2,7 +2,7 @@
 Validates a workspace's project.yaml (methodology.md sections 4 and 4.1; plan,
 task 3.4): base fields, the URL of each environment, modules from the closed
 list, the section of each active module, module URLs inside the declared
-environments (never production), the emulator keys of mobile: (plan 9.2),
+environments (never production), the device and emulator keys of mobile: (plan 9.2, 9.3),
 Excel (when tracker: excel), the dashboard: section and, in a workspace with
 git, the .gitignore of the files with secrets (warning) and the protection of
 history/ in .claude/settings.json (warning).
@@ -83,12 +83,34 @@ def gitignore_warnings(workspace: str, proj: dict, modules: list) -> list[str]:
     return [f"{f} is not in the workspace's .gitignore (it has secrets or project data)" for f in missing]
 
 
+PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
+
+
+def is_texts(v) -> bool:
+    return isinstance(v, list) and all(isinstance(x, str) and x.strip() for x in v)
+
+
 def mobile_target(proj: dict) -> tuple[list[str], list[str]]:
-    """The keys of mobile: that scripts/setup_emulator.py reads (plan 9.2): avd, image, build, permissions."""
+    """The keys of mobile: that scripts/setup_emulator.py reads (plan 9.2: avd, image, build, permissions) and
+    those that scripts/device.py reads (plan 9.3: serial, send_label, ignore_labels, evidence_batch, browser)."""
     m = proj.get("mobile")
     if not isinstance(m, dict):
         return [], []
     problems, warnings = [], []
+    if m.get("serial") is not None and not (isinstance(m["serial"], str) and re.fullmatch(r"\S+", m["serial"])):
+        problems.append(f"mobile.serial {m['serial']!r}: a device serial as a quoted text, e.g. \"emulator-5554\"")
+    label = m.get("send_label")
+    if label is not None and not ((isinstance(label, str) and label.strip()) or (is_texts(label) and label)):
+        problems.append("mobile.send_label must be a text or a list of texts (the send control's label)")
+    if m.get("ignore_labels") is not None and not is_texts(m["ignore_labels"]):
+        problems.append("mobile.ignore_labels must be a list of texts (the app's chrome dropped from `send`)")
+    batch = m.get("evidence_batch")
+    if batch is not None and not (isinstance(batch, str) and re.fullmatch(r"[A-Za-z0-9._-]+", batch)
+                                  and batch.strip(".")):
+        problems.append(f"mobile.evidence_batch {batch!r}: a folder name as a quoted text (letters, digits, "
+                        "'.', '_', '-'), e.g. \"20260928\"")
+    if m.get("browser") is not None and not (isinstance(m["browser"], str) and PACKAGE.fullmatch(m["browser"])):
+        problems.append(f"mobile.browser {m['browser']!r}: an Android package name, e.g. com.android.chrome")
     if m.get("avd") is not None and not (isinstance(m["avd"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", m["avd"])):
         problems.append(f"mobile.avd {m['avd']!r}: an AVD name (letters, digits, '.', '_', '-')")
     if m.get("image") is not None and not (isinstance(m["image"], str) and m["image"].startswith("system-images;")

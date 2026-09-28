@@ -781,12 +781,12 @@ on any computer and run its tests. All phases, in order.
 - [x] Tests with a fake SDK/`adb`: each step skipped when already done; the ARM-only detection from a fixture APK.
 
 ### 9.3 Skill `/test-mobile` with both modes
-- [ ] The skill picks the mode per batch (flows or conversational) and says why; in conversational mode: one new
+- [x] The skill picks the mode per batch (flows or conversational) and says why; in conversational mode: one new
   conversation per theme when the case asks for it, a note per turn in the run log, screenshot when the dump misses
   content, the same classification (methodology §8, technique §6).
-- [ ] `/project-onboarding` asks for the mobile target and records it in `project.yaml` (`mobile.device`,
+- [x] `/project-onboarding` asks for the mobile target and records it in `project.yaml` (`mobile.device`,
   `mobile.build`, `mobile.permissions`); `scripts/validate_project.py` checks the new keys.
-- [ ] `sync_skills.py --apply` run and the global copy in sync.
+- [ ] `sync_skills.py --apply` run and the global copy in sync (apply by the parent session).
 
 ### 9.4 Portable workspace (git + private remote)
 - [ ] `/project-onboarding` runs `git init` in the workspace, writes a `.gitignore` from a template in
@@ -827,6 +827,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.3 (skills and validation): `/test-mobile` picks the mode per batch and writes it with the reason at the top of the run log (`"mode"`); conversational mode with `setup_emulator.py` and `device.py check` first, a `send --capture <case>_t<N>` per turn, the screenshot read whenever the dump may miss content, one note per turn, guardrail answers judged by the spec's text; assisted mode (the user taps, the driver only reads). `/project-onboarding` asks for the target (`mobile.serial`, or `mobile.avd` + `mobile.image` — the plan's `mobile.device`), `mobile.build`, `mobile.permissions` and, for conversational apps, `send_label`, `ignore_labels`, `browser`, and shows `setup_emulator.py --dry-run`. `validate_project.py` checks `serial`, `send_label`, `ignore_labels`, `evidence_batch` (a quoted folder name: an unquoted date is a YAML integer and is refused) and `browser` (371 → 372 tests); the template has them as comments. Global copy of the skills still to sync. |
 | 2026-09-28 | 9.2 done: `scripts/setup_emulator.py` (SDK, AVD, boot, build checked against `mobile.build.sha256`, ARM-only native libraries on an x86_64 image with root, permissions, Chrome's first run; `--dry-run`, production builds refused) and the new `mobile:` keys (`avd`, `image`, `build`, `permissions`) in `validate_project.py` and the template; `tests/test_setup_emulator.py` with a fake SDK and fixture APKs built in the test (26 tests, 345 → 371). Decisions where the spec was open: default AVD `qa-<project>`; a missing `build.sha256` installs with a `skip` line that prints the hash to record; the dry run still does the local checks (SDK folders, SHA-256, the APK's libraries); a device step that fails stops the run (exit 3). Not run against a real SDK or emulator. |
 | 2026-09-28 | 9.1 done: `scripts/device.py` (check, dump, tap, type, send, shot, link) with the foreground guard, `.env` values refused in typed text and the link never printed; `tests/test_device.py` with a fake `adb` (29 tests, 316 → 345). Checked read-only on a real emulator: `check`, the guard refusing another app, and a real uiautomator dump parsed. Found on the way: committing from a linked git worktree, the `tests` hook failed in `test_validate_project` and `test_migrate_workspace` (git's hook variables, e.g. `GIT_DIR`, are absolute there and the `git -C <tmp>` of the scripts read this repository); both modules now drop them while they run. |
 | 2026-09-28 | Phase 9 planned by the user's decision, from a real mobile pilot run with helpers outside the framework: device driver and conversational mode, reproducible emulator, one git repository per workspace with a private remote, resume on another computer. |

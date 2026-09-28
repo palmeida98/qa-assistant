@@ -78,4 +78,15 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
     of .env variables). At the end validate, from the root of qa-assistant:
     python scripts/validate_project.py <workspace>
     and only call the onboarding done with 0 problems (the warnings are shown to the user).
+8b. With mobile active (technique-mobile.md sections 1.1 and 4.1), ASK and record in mobile: of project.yaml:
+    - app_id and the target: mobile.serial (a real device or a running emulator) OR mobile.avd + mobile.image
+      (an emulator setup_emulator.py creates);
+    - mobile.build: source (where the TEST build comes from) and sha256 of the file. The APK/IPA is never
+      committed nor copied into the workspace's git;
+    - mobile.permissions (grant / revoke);
+    - for a conversational app (generated content): mobile.send_label, mobile.ignore_labels (the app's
+      chrome) and mobile.browser (if the login is by e-mail link).
+    With an emulator, show the plan without touching anything: python scripts/setup_emulator.py <workspace>
+    --dry-run [--apk <path of the build>]
+    (from the root of qa-assistant), then validate again (8a).
 9. Never write this project's information into the universal layers (docs/ of qa-assistant).

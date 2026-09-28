@@ -36,6 +36,7 @@ def tearDownModule():
 BASE = {"project": "demo-shop", "company": "demo", "environments": {"test": "https://shop.demo"},
         "tracker": "jira", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
         "modules": ["functional-web"]}
+MOBILE = {"platform": "android", "flows": "flows", "app_id": "com.demoshop.app"}
 
 
 class Validate(unittest.TestCase):
@@ -175,6 +176,20 @@ class Validate(unittest.TestCase):
         with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
             f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(history/**)"]}}')
         self.assertEqual(self.without_tracker_warning(), ([], []))
+
+    def test_the_device_keys_of_mobile(self):
+        """The keys scripts/device.py reads (plan 9.3): accepted when well written, refused otherwise."""
+        good = {"serial": "emulator-5554", "send_label": ["Send", "Send message"], "ignore_labels": ["New chat"],
+                "evidence_batch": "20260928", "browser": "com.android.chrome"}
+        self.assertEqual(self.without_tracker_warning(modules=["mobile"], mobile={**MOBILE, **good}), ([], []))
+        problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, "send_label": "Send"})
+        self.assertEqual(problems, [])                                  # one label as a text is also valid
+        for key, value in [("serial", 5554), ("serial", "emulator 5554"), ("send_label", []),
+                           ("send_label", ["Send", 3]), ("ignore_labels", "New chat"), ("ignore_labels", [""]),
+                           ("evidence_batch", 20260928), ("evidence_batch", "../other"),
+                           ("browser", "chrome"), ("browser", "com.android.chrome/.Main")]:
+            problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, key: value})
+            self.assertTrue(any(f"mobile.{key}" in p for p in problems), (key, value, problems))
 
 
 class Demo(unittest.TestCase):
