@@ -1,0 +1,20 @@
+[
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [
+   {"id": "10001", "key": "DS-1", "fields": {"summary": "Valid coupon gives the discount", "issuetype": {"name": "Test"}, "labels": []}},
+   {"id": "10002", "key": "DS-2", "fields": {"summary": "Invalid coupon shows an error", "issuetype": {"name": "Test"}, "labels": []}}
+  ], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10010", "key": "DS-10", "fields": {"summary": "Release 2.4", "issuetype": {"name": "Test Plan"}}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [], "isLast": true}},
+ {"request": {"method": "POST", "path": "/api/v2/authenticate"},
+  "json": "fictional-xray-token"},
+ {"request": {"method": "POST", "path": "/api/v2/import/execution/multipart"},
+  "json": {"id": "10100", "key": "DS-100", "self": "https://demo-shop.atlassian.net/rest/api/2/issue/10100"}},
+ {"request": {"method": "POST", "path": "/api/v2/graphql"},
+  "json": {"data": {"getTestExecution": {"issueId": "10100", "testRuns": {"total": 2, "start": 0, "limit": 100, "results": [
+   {"status": {"name": "PASSED"}, "defects": [], "test": {"issueId": "10001"}},
+   {"status": {"name": "FAILED"}, "defects": [], "test": {"issueId": "10002"}}
+  ]}}}}}
+]

@@ -1,0 +1,52 @@
+[
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key in (\"DS-1\", \"DS-2\")", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key in (\"DS-50\")", "fields": ["summary", "status", "issuetype"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key = \"DS-10\"", "fields": ["issuetype", "summary"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "project = \"DS\" AND labels = \"qa-batch-batch_20260928_02\"", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/authenticate", "auth": null, "content_type": "application/json",
+  "body": {"client_id": "<DS_XRAY_CLIENT_ID>", "client_secret": "<DS_XRAY_CLIENT_SECRET>"}},
+ {"method": "GET", "url": "https://demo-shop.atlassian.net/rest/api/3/project/DS", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "GET", "url": "https://demo-shop.atlassian.net/rest/api/3/issue/createmeta/DS/issuetypes/10002?startAt=0&maxResults=200", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "GET", "url": "https://demo-shop.atlassian.net/rest/api/3/issue/DS-50/transitions", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/issue", "auth": "Basic", "content_type": "application/json",
+  "body": {"fields": {
+   "project": {"key": "DS"},
+   "issuetype": {"name": "Bug"},
+   "summary": "Expired coupon accepted",
+   "description": {"type": "doc", "version": 1, "content": [
+    {"type": "paragraph", "content": [
+     {"type": "text", "text": "Environment: test · Build: 2.4.1"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Platform: web"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Expected: The coupon is refused"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Observed: The expired coupon is accepted"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Linked cases: DS-1"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "Steps:"}]},
+    {"type": "bulletList", "content": [
+     {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Open the cart"}]}]},
+     {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Apply EXPIRED10"}]}]}]}]},
+   "priority": {"name": "High"},
+   "labels": ["qa-batch-batch_20260928_02", "qa-case-DS-1", "platform-web"]}}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/import/execution/multipart", "auth": "Bearer", "content_type": "multipart/form-data",
+  "body": {"multipart": {
+   "results": {"tests": [
+    {"testKey": "DS-1", "status": "FAILED", "comment": "The expired coupon is accepted", "start": "2026-09-28T11:00:00+01:00", "finish": "2026-09-28T11:00:00+01:00", "defects": ["DS-101"]},
+    {"testKey": "DS-2", "status": "PASSED", "comment": "The error is shown", "start": "2026-09-28T11:10:00+01:00", "finish": "2026-09-28T11:10:00+01:00", "defects": ["DS-50"]}
+   ]},
+   "info": {"fields": {"project": {"key": "DS"}, "summary": "batch_20260928_02 · test · 2.4.1", "issuetype": {"name": "Test Execution"}, "labels": ["qa-batch-batch_20260928_02"]},
+            "xrayFields": {"environments": ["test"], "testPlanKey": "DS-10"}}
+  }}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/issue/DS-50/comment", "auth": "Basic", "content_type": "application/json",
+  "body": {"body": {"type": "doc", "version": 1, "content": [
+   {"type": "paragraph", "content": [
+    {"type": "text", "text": "qa-batch-batch_20260928_02 · DS-2: Pass · environment test · build 2.4.1"}, {"type": "hardBreak"},
+    {"type": "text", "text": "The error is shown"}]}]}}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/issue/DS-50/transitions", "auth": "Basic", "content_type": "application/json",
+  "body": {"transition": {"id": "31"}}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/graphql", "auth": "Bearer", "content_type": "application/json",
+  "body": {"query": "query($issueId: String, $limit: Int!, $start: Int) { getTestExecution(issueId: $issueId) { issueId testRuns(limit: $limit, start: $start) { total start limit results { status { name } defects test { issueId } } } } }",
+           "variables": {"issueId": "10102", "limit": 100, "start": 0}}}
+]

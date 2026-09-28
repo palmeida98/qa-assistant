@@ -1,0 +1,9 @@
+{
+ "description": "Results only: a Pass, a Fail and an N/A mapped to skip (not sent). One Test Execution through the multipart import, then the read back.",
+ "command": ["apply", "runs/batch_20260928_01.json"],
+ "dry_run_exit": 1,
+ "runs": [
+  {"responses": "responses.json", "expected": "expected_requests.json", "exit": 0}
+ ],
+ "record": ["execution"]
+}

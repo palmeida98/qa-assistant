@@ -1,0 +1,11 @@
+{
+ "run": {"environment": "test", "build": "2.4.1"},
+ "results": [
+  {"tc": "DS-1", "status": "Fail", "actual_result": "The expired coupon is accepted", "ts": "2026-09-28T11:00:00+01:00",
+   "new_defect": {"title": "Expired coupon accepted", "expected": "The coupon is refused",
+                  "observed": "The expired coupon is accepted", "steps": ["Open the cart", "Apply EXPIRED10"],
+                  "platform": "web", "priority": "High"}},
+  {"tc": "DS-2", "status": "Pass", "actual_result": "The error is shown", "ts": "2026-09-28T11:10:00+01:00",
+   "bug": "DS-50", "bug_status": "Done"}
+ ]
+}

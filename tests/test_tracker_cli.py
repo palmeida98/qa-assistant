@@ -165,8 +165,9 @@ class Cli(unittest.TestCase):
         self.assertIn("jira.site", self.out)
 
     def test_the_stub_back_ends_say_which_task_builds_them(self):
-        self.assertEqual(self.run_cli("check", backend=None), 4)
-        self.assertIn("not implemented yet (plan 10.2)", self.out)
+        # jira is built (plan 10.2): its back-end is the real one and makes requests; azure-devops is still a stub
+        from adapters.jira import JiraAdapter
+        self.assertIs(cli.backend_class("jira"), JiraAdapter)
         self.ws.project({**{k: v for k, v in PROJECT.items() if k != "jira"}, "tracker": "azure-devops",
                          "azure_devops": AZURE})
         self.assertEqual(self.run_cli("apply", self.ws.batch("b", BATCH), backend=None), 4)

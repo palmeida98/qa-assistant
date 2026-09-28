@@ -29,7 +29,7 @@ from common import read_project, read_workspace_env
 SECTIONS = {"jira": "jira", "azure-devops": "azure_devops"}
 # trackers whose back-end is done (plan 10.2 jira, 10.3 azure-devops): until then validate_project.py warns that
 # the tracker has no adapter yet, and a missing section is a warning instead of a problem
-IMPLEMENTED: set[str] = set()
+IMPLEMENTED: set[str] = {"jira"}
 TASKS = {"jira": "10.2", "azure-devops": "10.3"}
 
 SKIP = "skip"

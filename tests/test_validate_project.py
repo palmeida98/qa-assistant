@@ -38,7 +38,7 @@ def tearDownModule():
     restore_git()
 
 BASE = {"project": "demo-shop", "company": "demo", "environments": {"test": "https://shop.demo"},
-        "tracker": "jira", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
+        "tracker": "azure-devops", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
         "modules": ["functional-web"]}
 MOBILE = {"platform": "android", "flows": "flows", "app_id": "com.demoshop.app"}
 
@@ -67,16 +67,25 @@ class Validate(unittest.TestCase):
         self.assertEqual(self.without_tracker_warning(), ([], []))
 
     def without_tracker_warning(self, **changes):
-        """validate() without the warning of a tracker with no adapter (the base uses jira, no workbook)."""
+        """validate() without the warning of a tracker with no adapter (the base uses azure-devops, whose back-end
+        is plan 10.3: no section needed yet, no workbook)."""
         problems, warnings = self.with_(**changes)
         return problems, [w for w in warnings if "has no adapter" not in w]
 
     def test_a_tracker_without_an_adapter_is_a_warning(self):
-        for tracker in ("jira", "azure-devops"):
-            with self.subTest(tracker=tracker):
-                problems, warnings = self.with_(tracker=tracker)
-                self.assertEqual(problems, [])
-                self.assertTrue(any(f"tracker '{tracker}' has no adapter" in w for w in warnings), warnings)
+        problems, warnings = self.with_(tracker="azure-devops")
+        self.assertEqual(problems, [])
+        self.assertTrue(any("tracker 'azure-devops' has no adapter" in w for w in warnings), warnings)
+
+    def test_jira_has_its_adapter_and_needs_its_section(self):
+        # plan 10.2: the Jira back-end is done, so the section is required and there is no "no adapter" warning
+        from tracker_kit import JIRA
+        problems, warnings = self.with_(tracker="jira")
+        self.assertTrue(any("without the jira: section" in p for p in problems), problems)
+        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
+        problems, warnings = self.with_(tracker="jira", jira=JIRA)
+        self.assertEqual(problems, [])
+        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
 
     def test_the_tracker_section_is_checked(self):
         # plan 10.1: the jira: / azure_devops: section, through adapters/tracker/config.py (fictional Demo Shop)
@@ -84,11 +93,11 @@ class Validate(unittest.TestCase):
         not_a_variable_name = "not a name"
         jira = {**JIRA, "site": "http://demo-shop.atlassian.net", "token_var": not_a_variable_name,
                 "results": {"statuses": {"Pass": "PASSED", "Question": "TODO", "Blocked": "skip"}}}
-        problems, warnings = self.with_(jira=jira)
+        problems, warnings = self.with_(tracker="jira", jira=jira)
         text = " | ".join(problems)
         for part in ("jira.site", "jira.token_var", "Question"):
             self.assertIn(part, text)
-        self.assertTrue(any("has no adapter yet" in w and "10.2" in w for w in warnings), warnings)
+        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
         self.assertTrue(any("not sent" in w and "Blocked" in w for w in warnings), warnings)
         azure = {"organization_url": "https://dev.azure.com/demo-shop", "project": "Demo Shop",
                  "pat_var": "DS_ADO_PAT", "cases": {"plan_id": 12},

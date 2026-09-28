@@ -114,9 +114,9 @@ class Section(unittest.TestCase):
     def test_a_missing_section_is_not_reported_while_the_back_end_is_a_stub(self):
         p = copy.deepcopy(PROJECT)
         p.pop("jira")
-        self.assertEqual(tc.validate_section(p), ([], []))
-        with mock.patch.object(tc, "IMPLEMENTED", {"jira"}):
-            self.assertTrue(tc.validate_section(p)[0])
+        self.assertTrue(tc.validate_section(p)[0])            # jira is built (plan 10.2): the section is required
+        with mock.patch.object(tc, "IMPLEMENTED", set()):
+            self.assertEqual(tc.validate_section(p), ([], []))
 
     def test_other_trackers_are_not_checked_here(self):
         self.assertEqual(tc.validate_section({"tracker": "excel"}), ([], []))

@@ -3,7 +3,7 @@ company: ""
 environments:
   test: ""
 roles: []
-tracker: ""          # excel | jira (with Xray) | azure-devops (adapters being built, plan phase 10: until then manual logging, methodology 4.2)
+tracker: ""          # excel | jira (with Xray) | azure-devops (its adapter is being built, plan 10.3: until then manual logging, methodology 4.2)
 bug_format: ""
 resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"
@@ -125,7 +125,7 @@ excel:
 
 # ---------------------------------------------------------------------------
 # jira: Jira Cloud + Xray Cloud, read by the tracker adapter (docs/technique-jira-xray.md;
-# being built in plan phase 10). Uncomment ONLY when tracker: "jira". Only NAMES of .env
+# built in plan 10.2). Uncomment ONLY when tracker: "jira". Only NAMES of .env
 # variables, never values. /project-onboarding fills it in with the user and runs
 # `python -m adapters.tracker <workspace> check`. Fictional values: the Demo Shop.
 # ---------------------------------------------------------------------------

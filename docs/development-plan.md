@@ -35,7 +35,7 @@
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
-| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Planned: 10.0 (specification) done (28.09.2026) |
+| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | In progress: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -955,15 +955,69 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
   others; `--record` writes `tracker/recordings/<instant>-<command>/NNNN.json`; `--now` also on `export-cases`; the
   command line is in `CLAUDE.md`'s Scripts section already (the 10.0 note said 10.2/10.3), marked as base only.
 
-### 10.2 Jira + Xray adapter (`adapters/jira/`)
-- [ ] Endpoints confirmed against the current documentation (technique §0); the technique fixed first if one changed.
-- [ ] `check`; `import-cases` (JQL with `nextPageToken`, steps and preconditions through GraphQL, latest status in
+### 10.2 Jira + Xray adapter (`adapters/jira/`) — done 28.09.2026
+- [x] Endpoints confirmed against the current documentation (technique §0); the technique fixed first (v1.2) where
+  the documentation differed.
+- [x] `check`; `import-cases` (JQL with `nextPageToken`, steps and preconditions through GraphQL, latest status in
   the test plan, `tracker/cases.json` and `ids.yaml`, flags); `export-cases` (GraphQL `createTest`, folder, test
   plan); `apply` (new bugs, one Test Execution per batch through the Xray JSON import in chunks of 100, defects,
   comments, `bug_status` transitions, read back); `bug-search` (JQL with relaxed passes).
-- [ ] Field formatting from the field schema (option, component, priority, labels with prefix, ADF ↔ text).
-- [ ] Golden `tests/golden/jira/` (scenarios of technique §10.1) and the round trip (§10.2), both in the unit tests.
-- [ ] `CLAUDE.md` Scripts section: the `adapters.tracker` commands and their exit codes.
+- [x] Field formatting from the field schema (option, component, priority, labels with prefix, ADF ↔ text).
+- [x] Golden `tests/golden/jira/` (scenarios of technique §10.1) and the round trip (§10.2), both in the unit tests.
+- [x] `CLAUDE.md` Scripts section: the `adapters.tracker` commands and their exit codes.
+- Note — endpoints confirmed (28.09.2026) and where:
+  - Jira Cloud REST v3, from its OpenAPI description
+    (https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json; reference
+    https://developer.atlassian.com/cloud/jira/platform/rest/v3/): `GET /rest/api/3/myself`, `GET
+    /rest/api/3/project/{key}` (with `issueTypes`), `GET /rest/api/3/project/{key}/statuses`, `GET /rest/api/3/field`,
+    `GET /rest/api/3/issue/createmeta/{project}/issuetypes/{issueTypeId}` (the old `GET /rest/api/3/issue/createmeta`
+    is deprecated), `POST /rest/api/3/search/jql` (enhanced search: `jql`, `fields`, `maxResults`, `nextPageToken`;
+    answer `issues`, `nextPageToken`, `isLast`; the old `/rest/api/3/search` is "currently being removed"), `POST
+    /rest/api/3/issue`, `PUT /rest/api/3/issue/{key}`, `GET`/`POST /rest/api/3/issue/{key}/comment`, `GET`/`POST
+    /rest/api/3/issue/{key}/transitions`, `GET /rest/api/3/issueLinkType`, `POST /rest/api/3/issueLink`;
+  - Xray Cloud REST v2: `POST /api/v2/authenticate` (the token as a JSON string;
+    https://docs.getxray.app/display/XRAYCLOUD/Authentication+-+REST+v2), `POST /api/v2/import/execution` and `POST
+    /api/v2/import/execution/multipart` (parts `results` and `info`; in the multipart one the results' `info` is
+    ignored; https://docs.getxray.app/display/XRAYCLOUD/Import+Execution+Results+-+REST+v2), the Xray JSON format
+    (`testExecutionKey`, `info.testPlanKey`/`testEnvironments`, per test `testKey`, `status`, `comment`,
+    `start`/`finish`, `defects`, `evidence` with `data`/`filename`/`contentType`;
+    https://docs.getxray.app/display/XRAYCLOUD/Using+Xray+JSON+format+to+import+execution+results);
+  - Xray Cloud GraphQL (https://us.xray.cloud.getxray.app/doc/graphql/): `getStatuses(projectId)`, `getTests(issueIds,
+    limit ≤ 100, start)` (with a `jql` matching more than 100 issues it errors), the Test fields `testType`, `steps`
+    (`action`, `data`, `result`), `preconditions`, `status(testPlan:)`, `getTestExecution(issueId)` → `testRuns(limit,
+    start)` (`status`, `defects` as issue ids, `test`), `createTest(testType, steps, folderPath, jira)`,
+    `addTestsToTestPlan(issueId, testIssueIds)`.
+- Note — what the documentation changed in the technique (v1.2, first): the first chunk of results goes through the
+  **multipart** import, whose `info` part takes Jira fields — the plain import's `info` cannot take the execution's
+  `qa-batch-` label, and without it an execution created by a request that timed out could not be found; the build
+  goes in the execution's summary (and the bugs' description), not in `version`/`revision`; steps are read with
+  `getTests(issueIds)` 100 at a time (not `getTests(jql)`), and the status in the test plan through the Test field
+  `status(testPlan:)` in the same query (not `getTestPlan`); the read back pages `testRuns` and compares defects by
+  key or issue id.
+- Note (choices where the spec was open): modules `api.py` (the calls, both clients, the Xray token, GraphQL with
+  variables, never values in the query), `fields.py`, `adf.py`, `adapter.py`; Xray's `authenticate` is sent as a read
+  (it changes nothing, so it is retried and a dry run has no writing request); the rich text fields of a new test go
+  through `PUT /rest/api/3/issue/{key}` in ADF after `createTest` (the format `createTest`'s `jira` object expects for
+  them is not documented); `ids.yaml` keeps the final ID of an exported case (`DS-140`), not the provisional
+  `NEW-1`, which the next cases file reuses — the record keeps `NEW-1 → DS-140` and the command prints it; the bug's
+  description is the environment and build, role, platform, preconditions, expected, observed and the linked case,
+  then the steps as a list (the project's `description` of the draft, when given, first); a resumed run looks for its
+  marker in the comments of an existing bug before commenting again; the existing bugs' comment carries the marker
+  `qa-batch-<id> · <case>`; `bug_status` already reached is not transitioned again; the transition is chosen by its
+  target status; evidence is attached to the test run only, not to the bug; the case ID resolution uses `key in
+  (...)` / `cf[N] ~ "..."` (exact match checked after) / `labels in (...)` in groups of 50, a JQL 400 there is a
+  conflict (exit 2), and an issue moved to another project is followed through the issue id of the cache; the
+  export's duplicate check is the same summary in the project (not only the folder: a folder needs one more query
+  per case); `bugs.defaults` keys that are model fields fill the draft, other keys are Jira field ids; a
+  `new_defect` on an item that is not sent is not created (listed as not sent). The golden is a runner
+  (`tests/test_jira_golden.py`) over the folders of `tests/golden/jira/` with a shared `project.yaml` (a scenario
+  may have its own) and the `.env` written by the test (never committed); `tests/jira_fake.py` is a stateful fake
+  Jira + Xray (with a small JQL evaluator) for the unit tests and the round trip, where the requests depend on the
+  state. No new dependency.
+- Only the pilot (10.5) can confirm: the Xray `info` part of the multipart import on a real site (label, environments,
+  test plan), the answer of `createTest` (`jira(fields: ["key"])`) and whether its `folderPath` must exist; the JQL
+  error of a key that does not exist (a 400 is assumed); `cf[N] ~` on the project's ID field; the text search of
+  `bug-search`; the Xray status names a real project has (`check` lists them); rate limits and the token's lifetime.
 
 ### 10.3 Azure DevOps adapter (`adapters/azure_devops/`)
 - [ ] Endpoints confirmed (api-version 7.1) against the current documentation; the technique fixed first if needed.
@@ -1011,6 +1065,7 @@ export new cases, and be continued on another computer; the unit tests and both 
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 10.2 done: the Jira Cloud + Xray Cloud back-end (`adapters/jira/`: `check`, `import-cases`, `export-cases`, `apply`, `bug-search`), the endpoints confirmed against the public documentation (list in the note of 10.2) and the technique fixed first (v1.2: multipart import for the first chunk, the build in the summary, `getTests` by issue ids, the plan status through `status(testPlan:)`, rich text of new tests through Jira, final IDs in `ids.yaml`); `jira` in `IMPLEMENTED` (`validate_project.py`: the section required, no "no adapter" warning); golden `tests/golden/jira/` (5 scenarios, hand-written requests) and `tests/test_jira_adapter.py` with a stateful fake Jira + Xray (round trip, exit codes 0–5, the uncertain write, pagination, re-authentication, relaxed passes); `CLAUDE.md`, the template. Tests 479 → 513. Choices and what only the pilot confirms in the note of 10.2. |
 | 2026-09-28 | 10.1 done: the decisions the user delegated (Blocked/N/A unmapped → not sent, `Question` still refused; `id_source` key/id by default; screenshots only with `text+screenshot`; Azure DevOps needs Agile or Scrum, platform → Test Configuration table; endpoints confirmed in 10.2/10.3) recorded in the techniques (v1.1), the template and Phase 10 first; then `adapters/tracker/` (configuration and its validation, credentials by name, stdlib HTTP client with retries, Retry-After, backoff, re-authentication, pagination, redaction and `--record`; the record of what was sent, the ID cache, `cases.json`; the batch validation with the `run` block and the status map; the command line with the dry run, `--yes`, `--now` and exit codes 0–5; the fake transport), stubs for `adapters/jira` and `adapters/azure_devops` (exit 4 until 10.2/10.3), `validate_project.py` checks the tracker's section, `docs/workspace/gitignore` ignores `tracker/recordings/`, `CLAUDE.md` documents the command. `tests/test_tracker_config.py`, `test_tracker_http.py` (with a local server on 127.0.0.1), `test_tracker_cli.py` and 1 new validation test (408 → 479). Choices in the note of 10.1. |
 | 2026-09-28 | Phase 10 planned by the user's decision (revises 7.7: `jira` and `azure-devops` get adapters, Jira with Xray and Azure DevOps Test Plans + Bugs, four directions, golden with recorded fictional responses, pilot on free instances). 10.0 done: `docs/technique-jira-xray.md` (with the common contract of the tracker adapters) and `docs/technique-azure-devops.md`; methodology v2.2 (§1.1, §2, §4 step 7, §4.2, §7.1, §9.4); `CLAUDE.md` references; the template's `jira:` and `azure_devops:` sections. Decisions in the note of 10.0. |
 | 2026-09-28 | 9.6 done: pilot from a fresh clone (private remote, device driver, adapter, push); `/checkpoint` now commits the workbook after applying; 6 anonymised heuristics. Phase 9 done. |

@@ -1,0 +1,25 @@
+[
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key in (\"DS-1\")", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key = \"DS-10\"", "fields": ["issuetype", "summary"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "project = \"DS\" AND labels = \"qa-batch-batch_20260928_04\"", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/authenticate", "auth": null, "content_type": "application/json",
+  "body": {"client_id": "<DS_XRAY_CLIENT_ID>", "client_secret": "<DS_XRAY_CLIENT_SECRET>"}},
+ {"method": "GET", "url": "https://demo-shop.atlassian.net/rest/api/3/project/DS", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "GET", "url": "https://demo-shop.atlassian.net/rest/api/3/issue/createmeta/DS/issuetypes/10002?startAt=0&maxResults=200", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/issue", "auth": "Basic", "content_type": "application/json",
+  "body": {"fields": {
+   "project": {"key": "DS"},
+   "issuetype": {"name": "Bug"},
+   "summary": "Expired coupon accepted",
+   "description": {"type": "doc", "version": 1, "content": [
+    {"type": "paragraph", "content": [
+     {"type": "text", "text": "Environment: test · Build: 2.4.1"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Platform: web"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Expected: The coupon is refused"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Observed: The expired coupon is accepted"}, {"type": "hardBreak"},
+     {"type": "text", "text": "Linked cases: DS-1"}]}]},
+   "labels": ["qa-batch-batch_20260928_04", "qa-case-DS-1", "platform-web"]}}}
+]

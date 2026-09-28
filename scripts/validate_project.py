@@ -63,8 +63,8 @@ MODULES = {
     "mobile": ("mobile", ("platform", "flows")),
 }
 TRACKERS = ("excel", "azure-devops", "jira")
-# excel, plus jira / azure-devops once their back-end is done (adapters/tracker/config.py IMPLEMENTED, plan 10.2 and
-# 10.3); until then they are manual logging (methodology 4.2)
+# excel here; jira (plan 10.2, done) and azure-devops (plan 10.3) through adapters/tracker/config.py IMPLEMENTED: a
+# tracker not in it yet is manual logging (methodology 4.2) and gets the "no adapter yet" warning
 WITH_ADAPTER = ("excel",)
 
 

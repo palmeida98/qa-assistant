@@ -1,13 +1,12 @@
 """
-Jira Cloud + Xray Cloud back-end of the tracker adapter (docs/technique-jira-xray.md).
+Jira Cloud + Xray Cloud back-end of the tracker adapter (docs/technique-jira-xray.md; plan 10.2).
 
-A stub until plan 10.2: the command line refuses it with exit 4 ("not implemented yet"). The common base, the
-command line and the rules shared with Azure DevOps are in adapters/tracker/.
+    python -m adapters.tracker <workspace> check|import-cases|export-cases|apply|bug-search ...
+
+The common base, the command line and the rules shared with Azure DevOps are in adapters/tracker/; this package has
+the API calls (api.py), the field mapping (fields.py), ADF <-> text (adf.py) and the four directions (adapter.py).
 """
 
-from adapters.tracker.base import TrackerAdapter
+from .adapter import JiraAdapter
 
-
-class JiraAdapter(TrackerAdapter):
-    tracker = "jira"
-    implemented = False   # plan 10.2
+__all__ = ["JiraAdapter"]

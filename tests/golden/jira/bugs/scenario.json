@@ -1,0 +1,9 @@
+{
+ "description": "A new bug (created first, its key in the test run's defects) and an existing bug with bug_status: a comment with the run's observation and the transition to Done. Then the read back.",
+ "command": ["apply", "runs/batch_20260928_02.json"],
+ "dry_run_exit": 1,
+ "runs": [
+  {"responses": "responses.json", "expected": "expected_requests.json", "exit": 0}
+ ],
+ "record": ["bug", "execution", "comment", "transition"]
+}

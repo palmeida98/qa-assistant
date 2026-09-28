@@ -1,0 +1,9 @@
+{
+ "description": "A Question still in the batch: refused before any request (exit 4, methodology 8.5).",
+ "command": ["apply", "runs/batch_20260928_05.json"],
+ "dry_run_exit": 4,
+ "runs": [
+  {"responses": "responses.json", "expected": "expected_requests.json", "exit": 4}
+ ],
+ "record": []
+}
