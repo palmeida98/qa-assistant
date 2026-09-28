@@ -808,13 +808,22 @@ on any computer and run its tests. All phases, in order.
   push, `.env.example` and 50 MB checks run only when the workspace is the top of its own repository; `.env` tracked
   is a problem in any repository.
 
-### 9.5 Resume on another computer
-- [ ] `docs/workspace/resume.md` (or a section of the methodology): install `qa-assistant` (clone, `pip install -e .`,
+### 9.5 Resume on another computer — done 28.09.2026
+- [x] `docs/workspace/resume.md` (or a section of the methodology): install `qa-assistant` (clone, `pip install -e .`,
   `sync_skills.py --apply`), clone the workspace, fill `.env` from `.env.example`, `setup_emulator.py`, then
   `/checkpoint`'s last point in `context.md`.
-- [ ] `validate_project.py --environment`: the tools the workspace's modules need are present (adb/emulator/Maestro
+- [x] `validate_project.py --environment`: the tools the workspace's modules need are present (adb/emulator/Maestro
   for `mobile`, LibreOffice for the Excel recalculation, the browsers for `qa-audit`), with what is missing and how to
   install it.
+- Note (where the spec was open): each tool is a line `[ok|missing] <tool>: <detail>` after the normal validation; a
+  missing tool is a warning (exit 0) unless `--strict` (exit 1; `--strict` without `--environment` is a usage error).
+  Always: git, the Python of `requires-python`, `.env` with every name of `.env.example` and of `project.yaml` (absent
+  and empty names listed, never a value) and the skills (`sync_skills.compare`, read only). Also `node` for
+  `functional-web`/`exploratory` (the Playwright MCP runs with `npx`; not in the plan's list); `excel-com` needs no
+  LibreOffice; `emulator` is not needed when `mobile.serial` is a real device; `ios` checks `xcrun`;
+  `mobile.build.source` only for an app (`android`/`ios`), not for `web`. The browsers are checked by the folders
+  `qa-audit doctor` looks in (nothing is started; the doctor starts them). Methodology §12.3 step 1 now also has
+  `pip install -r requirements.txt` (`pip install -e .` does not install openpyxl).
 
 ### 9.6 Pilot and heuristics
 - [ ] The real mobile workspace gets its private remote (with the user's approval) and one batch is re-run from a
@@ -835,6 +844,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.5 done: `docs/workspace/resume.md` (the steps of methodology §12.3, linked from §12.3 and `/project-onboarding` 8c) and `validate_project.py --environment [--strict]` (reuses `find_soffice`, `setup_emulator.find_tools`, `sync_skills.compare` and the doctor's browser folders, each behind a function the tests replace); 11 new tests in `tests/test_validate_project.py` (397 → 408). Decisions in the note of 9.5. |
 | 2026-09-28 | 9.4 done: `docs/workspace/gitignore` (template) and `scripts/workspace_git.py` (`init`, `status`, `remote --create/--set`, `push`; `gh` through one function the tests fake); `common.variable_names()` (the `*_var` keys and `variables` lists of `project.yaml`) for `.env.example`; `validate_project.py` warns (no remote, commits not pushed, `.env.example` missing a variable, files over 50 MB) and has problems for `.env` tracked and a public remote; `/project-onboarding` step 8c (init, the remote proposed and created only with a yes) and `/checkpoint` 6/6a (status after the commit, push only when the user says so). `tests/test_workspace_git.py` (22) and 3 new validation tests, all in temporary repositories with git's hook variables dropped and a temporary global configuration (372 → 397 tests). Decisions in the note of 9.4. |
 | 2026-09-28 | 9.3 (skills and validation): `/test-mobile` picks the mode per batch and writes it with the reason at the top of the run log (`"mode"`); conversational mode with `setup_emulator.py` and `device.py check` first, a `send --capture <case>_t<N>` per turn, the screenshot read whenever the dump may miss content, one note per turn, guardrail answers judged by the spec's text; assisted mode (the user taps, the driver only reads). `/project-onboarding` asks for the target (`mobile.serial`, or `mobile.avd` + `mobile.image` — the plan's `mobile.device`), `mobile.build`, `mobile.permissions` and, for conversational apps, `send_label`, `ignore_labels`, `browser`, and shows `setup_emulator.py --dry-run`. `validate_project.py` checks `serial`, `send_label`, `ignore_labels`, `evidence_batch` (a quoted folder name: an unquoted date is a YAML integer and is refused) and `browser` (371 → 372 tests); the template has them as comments. Global copy of the skills still to sync. |
 | 2026-09-28 | 9.2 done: `scripts/setup_emulator.py` (SDK, AVD, boot, build checked against `mobile.build.sha256`, ARM-only native libraries on an x86_64 image with root, permissions, Chrome's first run; `--dry-run`, production builds refused) and the new `mobile:` keys (`avd`, `image`, `build`, `permissions`) in `validate_project.py` and the template; `tests/test_setup_emulator.py` with a fake SDK and fixture APKs built in the test (26 tests, 345 → 371). Decisions where the spec was open: default AVD `qa-<project>`; a missing `build.sha256` installs with a `skip` line that prints the hash to record; the dry run still does the local checks (SDK folders, SHA-256, the APK's libraries); a device step that fails stops the run (exit 3). Not run against a real SDK or emulator. |

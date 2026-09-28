@@ -11,21 +11,37 @@ tracked or a public remote (with gh installed) are problems; no remote, commits
 not pushed, .env.example missing a variable of project.yaml and tracked files
 over 50 MB are warnings.
 
-    python scripts/validate_project.py <workspace>
+    python scripts/validate_project.py <workspace> [--environment [--strict]]
+
+--environment (methodology 12.3; plan 9.5) also checks this computer, one line
+per tool, `[ok|missing] <tool>: <detail or how to install it>`: always git, the
+Python version of pyproject.toml, .env with every name of .env.example and of
+project.yaml (names only, never a value) and the skills in sync with the global
+copy (sync_skills.py's comparison, read only); tracker excel: LibreOffice (as
+the recalculation finds it); functional-web/exploratory: Node.js (Playwright
+MCP); accessibility: qa-audit importable and its browser downloaded; mobile:
+maestro, and for android adb and emulator (as setup_emulator.py finds them),
+for ios xcrun, for an app mobile.build.source. Nothing is started nor
+installed. A missing tool is a warning (exit 0) unless --strict.
 
 Read only; never changes anything. Problems prevent calling the onboarding done;
 warnings are shown to the user.
 
-Exit codes: 0 no problems (there may be warnings) · 1 problems · 2 no project.yaml
+Exit codes: 0 no problems (there may be warnings) · 1 problems (or, with
+--strict, a missing tool) · 2 no project.yaml or usage
 """
 
 from __future__ import annotations
 
 import argparse
+import glob
+import importlib.util
 import json
 import os
 import re
+import shutil
 import sys
+import tomllib
 from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -325,10 +341,177 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+# --- the environment: the tools this computer needs for the workspace (methodology 12.3; plan 9.5) ------------
+# The doors to the machine: the tests replace them. Each one only looks; nothing is started nor installed.
+
+def which(name: str) -> str | None:
+    return shutil.which(name)
+
+
+def python_version() -> tuple[int, ...]:
+    return tuple(sys.version_info[:3])
+
+
+def soffice() -> str | None:
+    """LibreOffice, found the way the adapter's recalculation finds it."""
+    from adapters.excel.recalc import find_soffice
+    try:
+        return find_soffice()
+    except FileNotFoundError:
+        return None
+
+
+def android_tools() -> dict:
+    """adb and emulator, found the way scripts/setup_emulator.py finds them (the SDK folders, then the PATH)."""
+    import setup_emulator
+    return setup_emulator.find_tools()
+
+
+def qa_audit_installed() -> bool:
+    return importlib.util.find_spec("qa_audit") is not None
+
+
+def playwright_browsers() -> set[str] | None:
+    """The Playwright engines downloaded on this computer (the folders `qa-audit doctor` looks in; nothing is
+    started). None when qa-audit is not importable."""
+    try:
+        from qa_audit.doctor import _browser_dirs
+    except ImportError:
+        return None
+    found = set()
+    for d in _browser_dirs():
+        if d and os.path.isdir(d):
+            for engine in ("chromium", "firefox", "webkit"):
+                if glob.glob(os.path.join(d, f"{engine}-*")) or glob.glob(os.path.join(d, f"{engine}_*-*")):
+                    found.add(engine)
+    return found
+
+
+def skills_state() -> dict[str, str]:
+    """scripts/sync_skills.py's comparison (read only) of .claude/skills/ with the global copy."""
+    import sync_skills
+    return sync_skills.compare(sync_skills.SOURCE, sync_skills.TARGET)
+
+
+def required_python() -> tuple[int, ...]:
+    """The minimum of `requires-python` in pyproject.toml (3.12 when it cannot be read)."""
+    try:
+        with open(os.path.join(ROOT, "pyproject.toml"), "rb") as f:
+            spec = tomllib.load(f)["project"]["requires-python"]
+        return tuple(int(x) for x in re.search(r">=\s*(\d+(?:\.\d+)*)", spec).group(1).split("."))
+    except (OSError, KeyError, AttributeError, ValueError, tomllib.TOMLDecodeError):
+        return (3, 12)
+
+
+VALUES_FROM = "from your own secret store (never from a chat, a log or the repository)"
+
+
+def env_check(workspace: str, proj: dict) -> tuple[bool, str]:
+    """.env has every name of .env.example and of project.yaml. Only names are ever shown, never a value."""
+    from common import read_env, variable_names
+    needed = sorted(set(read_env(os.path.join(workspace, ".env.example"))) | set(variable_names(proj)))
+    if not needed:
+        return True, "no variable needed (.env.example and project.yaml name none)"
+    path = os.path.join(workspace, ".env")
+    if not os.path.isfile(path):
+        start = ("copy .env.example to .env" if os.path.isfile(os.path.join(workspace, ".env.example"))
+                 else "create .env")
+        return False, f"it does not exist: {start} and fill {', '.join(needed)} {VALUES_FROM}"
+    env = read_env(path)
+    absent = [n for n in needed if n not in env]
+    empty = [n for n in needed if n in env and not env[n]]
+    if not absent and not empty:
+        return True, f"the {len(needed)} variable(s) of .env.example and project.yaml are set (values not shown)"
+    parts = ([f"misses {', '.join(absent)}"] if absent else []) + \
+        ([f"without a value: {', '.join(empty)}"] if empty else [])
+    return False, f"{'; '.join(parts)} — fill them {VALUES_FROM}"
+
+
+def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
+    """(found, tool, detail or how to install it) for what this computer needs to work on the workspace: always
+    git, Python, .env and the skills; then per tracker and active module. Missing tools are warnings unless
+    --strict."""
+    out = []
+    add = out.append
+    exe = which("git")
+    add((bool(exe), "git", exe or "install git (https://git-scm.com/downloads); the workspace is a git repository"))
+    have, need = python_version(), required_python()
+    add((have >= need, "python", f"{'.'.join(map(str, have))} (qa-assistant needs >= {'.'.join(map(str, need))})"
+         + ("" if have >= need else ": install a newer Python, then `pip install -e .` again")))
+    ok, detail = env_check(workspace, proj)
+    add((ok, ".env", detail))
+    try:
+        state = skills_state()
+        pending = [n for n, st in state.items() if st != "same"]
+        add((not pending, "skills", f"{len(state)} skill(s) in sync with the global copy" if not pending else
+             f"{len(pending)} skill(s) differ from the global copy ({', '.join(pending)}): "
+             "python scripts/sync_skills.py --apply"))
+    except OSError as e:
+        add((False, "skills", f"cannot compare with the global copy ({e}): python scripts/sync_skills.py"))
+
+    modules = proj.get("modules") or []
+    if proj.get("tracker") == "excel":
+        mechanism = (((proj.get("excel") or {}).get("recalc") or {}).get("mechanism")) or "libreoffice"
+        if mechanism == "excel-com":
+            add((True, "recalculation", "excel-com (desktop Excel on Windows; LibreOffice not needed)"))
+        else:
+            exe = soffice()
+            add((bool(exe), "libreoffice", exe or "the workbook's recalculation needs it: install LibreOffice "
+                 "(e.g. `winget install TheDocumentFoundation.LibreOffice`, `apt install libreoffice-calc`, "
+                 "`brew install --cask libreoffice`)"))
+    if {"functional-web", "exploratory"} & set(modules):
+        exe = which("node")
+        add((bool(exe), "node", exe or "the Playwright MCP runs with npx: install Node.js 22+ (https://nodejs.org)"))
+    if "accessibility" in modules:
+        installed = qa_audit_installed()
+        add((installed, "qa-audit", "importable" if installed else
+             "pip install -e . (from the root of qa-assistant), then qa-audit doctor"))
+        engine = str((proj.get("accessibility") or {}).get("browser") or "chromium")
+        engines = playwright_browsers() if installed else None
+        if engines is None:
+            add((False, f"browser {engine}", ("unknown until qa-audit is installed; then "
+                                              f"python -m playwright install {engine} and qa-audit doctor")))
+        else:
+            add((engine in engines, f"browser {engine}",
+                 "downloaded (qa-audit doctor starts it and checks it)" if engine in engines else
+                 f"python -m playwright install {engine}, then qa-audit doctor"))
+    if "mobile" in modules:
+        m = proj.get("mobile") or {}
+        platform = str(m.get("platform") or "")
+        exe = which("maestro")
+        add((bool(exe), "maestro", exe or "install the Maestro CLI (https://maestro.mobile.dev; it needs Java 17+)"))
+        if platform == "android":
+            tools = android_tools()
+            sdk = ("install the Android SDK (Android Studio or the command-line tools) and set ANDROID_HOME; then "
+                   f"python scripts/setup_emulator.py {workspace} --dry-run")
+            add((bool(tools.get("adb")), "adb", tools.get("adb") or sdk))
+            serial = str(m.get("serial") or "")
+            if serial and not serial.startswith("emulator-"):
+                add((True, "emulator", f"not needed: the target is the device {serial}"))
+            else:
+                add((bool(tools.get("emulator")), "emulator", tools.get("emulator") or sdk))
+        elif platform == "ios":
+            exe = which("xcrun")
+            add((bool(exe), "xcrun", exe or "iOS needs macOS with Xcode (xcode-select --install)"))
+        if platform in ("android", "ios"):
+            build = m.get("build") if isinstance(m.get("build"), dict) else {}
+            source = str(build.get("source") or "").strip()
+            add((bool(source), "build", (f"not in git; get it from mobile.build.source ({source})"
+                                         + (", checked against mobile.build.sha256" if build.get("sha256") else "")
+                                         if source else "mobile.build.source is not set: write where the build "
+                                         "comes from (the build is never committed)")))
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Validates a workspace's project.yaml.")
     ap.add_argument("workspace")
+    ap.add_argument("--environment", action="store_true",
+                    help="also check the tools this computer needs for the workspace's modules (methodology 12.3)")
+    ap.add_argument("--strict", action="store_true", help="with --environment: a missing tool gives exit 1")
     a = ap.parse_args(argv)
+    if a.strict and not a.environment:
+        ap.error("--strict only applies with --environment")
     if not os.path.isfile(os.path.join(a.workspace, "project.yaml")):
         hint = (": the workspace is from before the translation, convert it with scripts/migrate_workspace.py"
                 if os.path.isfile(os.path.join(a.workspace, "projeto.yaml")) else "")
@@ -340,7 +523,16 @@ def main(argv=None) -> int:
     for w in warnings:
         print(f"warning: {w}")
     print(f"{len(problems)} problem(s), {len(warnings)} warning(s)")
-    return 1 if problems else 0
+    if not a.environment:
+        return 1 if problems else 0
+    from common import read_project
+    checks = environment(a.workspace, read_project(a.workspace))
+    for ok, tool, detail in checks:
+        print(f"[{'ok' if ok else 'missing'}] {tool}: {detail}")
+    missing = sum(1 for ok, _, _ in checks if not ok)
+    print(f"environment: {missing} missing" + ("" if not missing else
+          " (problems with --strict)" if a.strict else " (warnings; --strict makes them problems)"))
+    return 1 if problems or (a.strict and missing) else 0
 
 
 if __name__ == "__main__":

@@ -99,4 +99,5 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
     and, only if the user says yes, run it again with --yes (always --private; with no gh, the user creates a
     private repository and remote --set URL adds it). Do not push here: the push is the user's call (/checkpoint).
     Validate again (8a): "no remote" stays a warning if the user declined.
+    To continue the project on another computer: <qa>/docs/workspace/resume.md (methodology.md section 12.3).
 9. Never write this project's information into the universal layers (docs/ of qa-assistant).
