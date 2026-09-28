@@ -5,7 +5,11 @@ list, the section of each active module, module URLs inside the declared
 environments (never production), the device and emulator keys of mobile: (plan 9.2, 9.3),
 Excel (when tracker: excel), the dashboard: section and, in a workspace with
 git, the .gitignore of the files with secrets (warning) and the protection of
-history/ in .claude/settings.json (warning).
+history/ in .claude/settings.json (warning). In a workspace that is a git
+repository of its own (plan 9.4, through scripts/workspace_git.py): .env
+tracked or a public remote (with gh installed) are problems; no remote, commits
+not pushed, .env.example missing a variable of project.yaml and tracked files
+over 50 MB are warnings.
 
     python scripts/validate_project.py <workspace>
 
@@ -21,13 +25,13 @@ import argparse
 import json
 import os
 import re
-import shutil
-import subprocess
 import sys
 from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
+
+import workspace_git as wg
 
 # closed list (methodology 4.1): module -> (own section, required fields in it)
 MODULES = {
@@ -69,18 +73,51 @@ def module_urls(proj: dict, modules: list) -> list[tuple[str, str]]:
 def gitignore_warnings(workspace: str, proj: dict, modules: list) -> list[str]:
     """Files with secrets or project data that the workspace's git must ignore
     (methodology section 4, step 4). Only in a workspace inside a git repository."""
-    git = shutil.which("git")
-    if not git:
-        return []
-    inside = subprocess.run([git, "-C", workspace, "rev-parse", "--is-inside-work-tree"],
-                            capture_output=True, text=True, check=False)
-    if inside.returncode != 0:
+    if not wg.inside_repository(workspace):
         return []
     files = ([".env"] + ([".api-session.env"] if "api" in modules else [])
              + (["dashboard.html"] if proj.get("tracker") == "excel" else []))
-    missing = [f for f in files if subprocess.run([git, "-C", workspace, "check-ignore", "-q", f],
-                                                  capture_output=True, check=False).returncode != 0]
+    missing = [f for f in files if wg.git(workspace, "check-ignore", "-q", "--no-index", f).returncode != 0]
     return [f"{f} is not in the workspace's .gitignore (it has secrets or project data)" for f in missing]
+
+
+def portable_checks(workspace: str, proj: dict) -> tuple[list[str], list[str]]:
+    """The workspace as a repository of its own with a private remote (methodology 4, step 4, and 12.3; plan 9.4),
+    through scripts/workspace_git.py. .env tracked or a public remote: problems; the rest: warnings."""
+    problems, warnings = [], []
+    if not wg.inside_repository(workspace):
+        return problems, warnings
+    if wg.env_tracked(workspace):
+        problems.append(".env is tracked by git: `git rm --cached .env` (and change the credentials if it was "
+                        "ever pushed)")
+    if not wg.own_repository(workspace):
+        return problems, warnings
+    missing = wg.missing_example_variables(workspace, proj)
+    if missing:
+        where = ".env.example" if os.path.isfile(os.path.join(workspace, ".env.example")) else \
+            ".env.example (it does not exist)"
+        warnings.append(f"{where} misses variables of project.yaml: {', '.join(missing)} (scripts/workspace_git.py "
+                        "<workspace> init adds them)")
+    big = wg.large_files(workspace)
+    if big:
+        warnings.append("tracked files over 50 MB: " + ", ".join(f"{p} ({wg.size_mb(n)})" for p, n in big))
+    url = wg.remote_url(workspace)
+    if not url:
+        warnings.append("the workspace's git has no remote: it cannot be continued on another computer "
+                        "(workspace_git.py <workspace> remote --create OWNER/NAME, private)")
+        return problems, warnings
+    pending = wg.unpushed(workspace)
+    if pending:
+        warnings.append(f"{len(pending)} commit(s) not pushed to {url} (push only with the user's approval: "
+                        "workspace_git.py <workspace> push)")
+    vis, why = wg.visibility(url)
+    if vis == "PUBLIC":
+        problems.append(f"the workspace's remote {url} is PUBLIC: it holds the project's data; make it private")
+    elif vis == "INTERNAL":
+        warnings.append(f"the workspace's remote {url} is INTERNAL (visible to the whole organisation), not private")
+    elif vis is None and why != "gh is not installed" and why != "not a GitHub remote":
+        warnings.append(f"the visibility of the remote {url} could not be confirmed ({why})")
+    return problems, warnings
 
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
@@ -253,6 +290,12 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     problems += p
     warnings += w
     warnings += gitignore_warnings(workspace, proj, modules)
+    try:
+        p, w = portable_checks(workspace, proj)
+    except wg.Failed as e:
+        p, w = [], [f"the workspace's git could not be read: {e}"]
+    problems += p
+    warnings += w
     warnings += mcp_warnings(workspace)
     if not history_protected(workspace):
         warnings.append("history/ is not protected: Edit(/history/**) is missing from permissions.deny in the "

@@ -788,17 +788,25 @@ on any computer and run its tests. All phases, in order.
   `mobile.build`, `mobile.permissions`); `scripts/validate_project.py` checks the new keys.
 - [x] `sync_skills.py --apply` run and the global copy in sync (apply by the parent session).
 
-### 9.4 Portable workspace (git + private remote)
-- [ ] `/project-onboarding` runs `git init` in the workspace, writes a `.gitignore` from a template in
+### 9.4 Portable workspace (git + private remote) — done 28.09.2026
+- [x] `/project-onboarding` runs `git init` in the workspace, writes a `.gitignore` from a template in
   `docs/workspace/` (`.env`, `.api-session.env`, saved sessions, `dashboard.html`, app binaries, Office lock files) and
   a `.env.example` with the variable names from `project.yaml` (no values); it proposes the private remote
   (`gh repo create --private`) and creates it only with the user's approval.
-- [ ] `/checkpoint` keeps committing locally; it says how many commits are not pushed and pushes only when the user
+- [x] `/checkpoint` keeps committing locally; it says how many commits are not pushed and pushes only when the user
   says so. Never `--force`.
-- [ ] `validate_project.py`: warns when there is no remote, when commits are not pushed, when `.env.example` misses a
+- [x] `validate_project.py`: warns when there is no remote, when commits are not pushed, when `.env.example` misses a
   variable of `project.yaml`, and when a file over 50 MB is tracked; a problem (exit 1) when `.env` is tracked.
-- [ ] The privacy guard stays in `qa-assistant`; the workspace keeps client data by design, so its remote must be
+- [x] The privacy guard stays in `qa-assistant`; the workspace keeps client data by design, so its remote must be
   private — `validate_project.py` checks it with `gh repo view --json visibility` when `gh` is available.
+- Note (where the spec was open): one helper, `scripts/workspace_git.py` (`init`, `status`, `remote`, `push`), shared
+  by the skills and `validate_project.py`. `init` refuses a folder inside another repository (e.g. the demo inside
+  `qa-assistant`), `.env` tracked, a `.gitignore` line that un-ignores `.env`, and a file over 50 MB in the initial
+  commit; the template also ignores `.playwright-mcp/` and `.claude/settings.local.json`. `remote --create` without
+  `--yes` only prints the command (exit 0). `push --i-confirm-private` overrides only an unconfirmed visibility, never
+  a PUBLIC one; INTERNAL counts as not private (refused by `push`, a warning in `validate_project.py`). The remote,
+  push, `.env.example` and 50 MB checks run only when the workspace is the top of its own repository; `.env` tracked
+  is a problem in any repository.
 
 ### 9.5 Resume on another computer
 - [ ] `docs/workspace/resume.md` (or a section of the methodology): install `qa-assistant` (clone, `pip install -e .`,
@@ -827,6 +835,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.4 done: `docs/workspace/gitignore` (template) and `scripts/workspace_git.py` (`init`, `status`, `remote --create/--set`, `push`; `gh` through one function the tests fake); `common.variable_names()` (the `*_var` keys and `variables` lists of `project.yaml`) for `.env.example`; `validate_project.py` warns (no remote, commits not pushed, `.env.example` missing a variable, files over 50 MB) and has problems for `.env` tracked and a public remote; `/project-onboarding` step 8c (init, the remote proposed and created only with a yes) and `/checkpoint` 6/6a (status after the commit, push only when the user says so). `tests/test_workspace_git.py` (22) and 3 new validation tests, all in temporary repositories with git's hook variables dropped and a temporary global configuration (372 → 397 tests). Decisions in the note of 9.4. |
 | 2026-09-28 | 9.3 (skills and validation): `/test-mobile` picks the mode per batch and writes it with the reason at the top of the run log (`"mode"`); conversational mode with `setup_emulator.py` and `device.py check` first, a `send --capture <case>_t<N>` per turn, the screenshot read whenever the dump may miss content, one note per turn, guardrail answers judged by the spec's text; assisted mode (the user taps, the driver only reads). `/project-onboarding` asks for the target (`mobile.serial`, or `mobile.avd` + `mobile.image` — the plan's `mobile.device`), `mobile.build`, `mobile.permissions` and, for conversational apps, `send_label`, `ignore_labels`, `browser`, and shows `setup_emulator.py --dry-run`. `validate_project.py` checks `serial`, `send_label`, `ignore_labels`, `evidence_batch` (a quoted folder name: an unquoted date is a YAML integer and is refused) and `browser` (371 → 372 tests); the template has them as comments. Global copy of the skills still to sync. |
 | 2026-09-28 | 9.2 done: `scripts/setup_emulator.py` (SDK, AVD, boot, build checked against `mobile.build.sha256`, ARM-only native libraries on an x86_64 image with root, permissions, Chrome's first run; `--dry-run`, production builds refused) and the new `mobile:` keys (`avd`, `image`, `build`, `permissions`) in `validate_project.py` and the template; `tests/test_setup_emulator.py` with a fake SDK and fixture APKs built in the test (26 tests, 345 → 371). Decisions where the spec was open: default AVD `qa-<project>`; a missing `build.sha256` installs with a `skip` line that prints the hash to record; the dry run still does the local checks (SDK folders, SHA-256, the APK's libraries); a device step that fails stops the run (exit 3). Not run against a real SDK or emulator. |
 | 2026-09-28 | 9.1 done: `scripts/device.py` (check, dump, tap, type, send, shot, link) with the foreground guard, `.env` values refused in typed text and the link never printed; `tests/test_device.py` with a fake `adb` (29 tests, 316 → 345). Checked read-only on a real emulator: `check`, the guard refusing another app, and a real uiautomator dump parsed. Found on the way: committing from a linked git worktree, the `tests` hook failed in `test_validate_project` and `test_migrate_workspace` (git's hook variables, e.g. `GIT_DIR`, are absolute there and the `git -C <tmp>` of the scripts read this repository); both modules now drop them while they run. |

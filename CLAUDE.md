@@ -24,7 +24,8 @@ References:
 /test-api · /audit-accessibility · /test-mobile
 
 ## Scripts (from the root of qa-assistant)
-- `python scripts/validate_project.py <workspace>` — validates `project.yaml` (environments, modules, sections, URLs inside the environments, Excel, dashboard; warns if `.env` and the like are not in `.gitignore`); 0 ok · 1 problems
+- `python scripts/validate_project.py <workspace>` — validates `project.yaml` (environments, modules, sections, URLs inside the environments, Excel, dashboard; warns if `.env` and the like are not in `.gitignore`; in a workspace with its own git: no remote, commits not pushed, `.env.example` missing a variable, files over 50 MB are warnings, `.env` tracked or a public remote are problems); 0 ok · 1 problems
+- `python scripts/workspace_git.py <workspace> init|status|remote --create OWNER/NAME [--yes]|remote --set URL|push [--i-confirm-private]` — the workspace as a git repository of its own with a private remote: `init` (branch main, `.gitignore` from `docs/workspace/gitignore`, `.env.example` with the variable names, initial commit; idempotent), `status` (branch, remote, commits not pushed, untracked, files over 50 MB, visibility through `gh`), `remote --create` (prints the `gh repo create … --private` and runs it only with `--yes`), `push` (never `--force`; refused for a public or unconfirmed remote, `.env` tracked or a file over 50 MB); 0 ok · 1 refused · 2 usage/configuration · 3 git/gh failed
 - `python scripts/migrate_workspace.py <workspace> [--apply]` — converts a workspace from before the translation (plan 8.11) to the English names and keys; dry run without `--apply`; 0 converted or nothing to do · 1 changes to make · 2 refused
 - `python -m adapters.excel.inspect <copy.xlsx>` — proposes the `excel:` section (onboarding)
 - `python -m adapters.excel.apply <workspace> <batch.json>` — applies a batch to the workbook (0 ok · 2 cross-check · 3 recalculation · 4 invalid batch · 5 summary does not match)

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import yaml
 
@@ -19,19 +20,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "scripts")]
 
 import validate_project as vp
+import workspace_git as wg
 
-# git exports these to its hooks; committing from a linked worktree they are absolute paths, and the `git -C <tmp>`
-# of the script under test then reads this repository instead of the temporary workspace
-GIT_HOOK_VARIABLES = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_PREFIX", "GIT_COMMON_DIR")
-_hook_env = {}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from test_workspace_git import FakeGh, isolate_git, restore_git
 
 
 def setUpModule():
-    _hook_env.update({k: os.environ.pop(k) for k in GIT_HOOK_VARIABLES if k in os.environ})
+    # git exports its hook variables (GIT_DIR...); committing from a linked worktree they are absolute paths, and the
+    # `git -C <tmp>` of the script under test read this repository. They are dropped, and git gets a temporary home
+    # and global configuration (never the user's)
+    isolate_git()
 
 
 def tearDownModule():
-    os.environ.update(_hook_env)
+    restore_git()
 
 BASE = {"project": "demo-shop", "company": "demo", "environments": {"test": "https://shop.demo"},
         "tracker": "jira", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
@@ -45,6 +48,10 @@ class Validate(unittest.TestCase):
         # history/ protected, as the onboarding leaves it (docs/workspace/settings.json)
         os.makedirs(os.path.join(self.tmp.name, ".claude"))
         shutil.copy(os.path.join(ROOT, "docs", "workspace", "settings.json"), os.path.join(self.tmp.name, ".claude"))
+        self.gh = FakeGh()                                              # gh is never the real one
+        patcher = mock.patch.object(wg, "gh", self.gh)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -136,7 +143,80 @@ class Validate(unittest.TestCase):
         with open(os.path.join(self.tmp.name, ".gitignore"), "w", encoding="utf-8") as f:
             f.write("*.env\n")
         _, warnings = self.without_tracker_warning(modules=["api"], api={"base_url": "https://shop.demo/api"})
-        self.assertEqual(warnings, [])
+        self.assertEqual([w for w in warnings if "has no remote" not in w], [])
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", self.tmp.name, *args], capture_output=True, text=True, check=True).stdout
+
+    def committed_workspace(self, **changes):
+        """A workspace that is a repository of its own, with the template's .gitignore and one commit."""
+        self.with_(**changes)
+        shutil.copy(os.path.join(ROOT, "docs", "workspace", "gitignore"), os.path.join(self.tmp.name, ".gitignore"))
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "workspace: initial commit")
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_portable_workspace_warnings(self):
+        api = {"base_url": "https://shop.demo/api", "credentials": {"admin": {"user_var": "SHOP_ADMIN_USER",
+                                                                             "pass_var": "SHOP_ADMIN_PASSWORD"}}}
+        self.committed_workspace(modules=["api"], api=api)
+        problems, warnings = self.without_tracker_warning(modules=["api"], api=api)
+        self.assertEqual(problems, [])
+        text = " | ".join(warnings)
+        self.assertIn("has no remote", text)
+        self.assertIn(".env.example (it does not exist) misses variables of project.yaml: SHOP_ADMIN_PASSWORD, "
+                      "SHOP_ADMIN_USER", text)
+        with open(os.path.join(self.tmp.name, ".env.example"), "w", encoding="utf-8") as f:
+            f.write("SHOP_ADMIN_USER=\n")
+        bare = os.path.join(self.tmp.name, "..", os.path.basename(self.tmp.name) + "-remote.git")
+        subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
+        self.addCleanup(shutil.rmtree, bare, True)
+        self.git("remote", "add", "origin", bare)
+        _, warnings = self.without_tracker_warning(modules=["api"], api=api)
+        text = " | ".join(warnings)
+        self.assertNotIn("has no remote", text)
+        self.assertIn(".env.example misses variables of project.yaml: SHOP_ADMIN_PASSWORD (", text)
+        self.assertIn("1 commit(s) not pushed", text)
+        self.assertNotIn("visibility", text)                            # a local path: gh is not asked
+        self.git("push", "-q", "-u", "origin", "HEAD")
+        real = wg.file_size
+        with mock.patch.object(wg, "file_size", lambda p: wg.LIMIT + 1 if p.endswith("project.yaml") else real(p)):
+            _, warnings = self.without_tracker_warning(modules=["api"], api=api)
+        text = " | ".join(warnings)
+        self.assertNotIn("not pushed", text)
+        self.assertIn("tracked files over 50 MB: project.yaml", text)
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_env_tracked_or_a_public_remote_are_problems(self):
+        self.committed_workspace()
+        with open(os.path.join(self.tmp.name, ".env"), "w", encoding="utf-8") as f:
+            f.write("SHOP_ADMIN_USER=\n")
+        self.git("add", "-f", ".env")
+        problems, _ = self.with_()
+        self.assertTrue(any(p.startswith(".env is tracked by git") for p in problems), problems)
+        self.git("rm", "-q", "--cached", ".env")
+        self.git("remote", "add", "origin", "https://github.com/demo-user/demo-shop.git")
+        for visibility, problem, warning in [("PUBLIC", "is PUBLIC", None), ("PRIVATE", None, None),
+                                             ("INTERNAL", None, "is INTERNAL"), (None, None, None)]:
+            with self.subTest(visibility=visibility), mock.patch.object(wg, "gh", FakeGh(visibility)):
+                problems, warnings = self.with_()
+                self.assertEqual([p for p in problems if "PUBLIC" in p] != [], problem is not None, problems)
+                self.assertEqual(any("INTERNAL" in w for w in warnings), warning is not None, warnings)
+        with mock.patch.object(wg, "gh", FakeGh("PRIVATE", fail=True)):
+            _, warnings = self.with_()
+        self.assertTrue(any("could not be confirmed" in w for w in warnings), warnings)
+
+    @unittest.skipUnless(shutil.which("git"), "no git")
+    def test_a_folder_inside_another_repository_only_checks_env(self):
+        # e.g. qa-assistant's demo: not a repository of its own, so no remote or push warnings
+        self.git("init", "-q")
+        sub = os.path.join(self.tmp.name, "demo")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "project.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump({**BASE, "mobile": {"variables": ["SHOP_APP_USER"]}}, f)
+        _, warnings = vp.validate(sub)
+        self.assertFalse(any("remote" in w or ".env.example" in w for w in warnings), warnings)
 
     def test_history_without_protection_is_a_warning(self):
         settings = os.path.join(self.tmp.name, ".claude", "settings.json")
