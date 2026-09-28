@@ -34,7 +34,7 @@
 | 6 | Portfolio: README, demo, decision on the repository's visibility | Done (the repository stays private by the user's decision, 24.09.2026) |
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
-| 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Planned (28.09.2026) |
+| 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -825,14 +825,16 @@ on any computer and run its tests. All phases, in order.
   `qa-audit doctor` looks in (nothing is started; the doctor starts them). Methodology §12.3 step 1 now also has
   `pip install -r requirements.txt` (`pip install -e .` does not install openpyxl).
 
-### 9.6 Pilot and heuristics
-- [ ] The real mobile workspace gets its private remote (with the user's approval) and one batch is re-run from a
+### 9.6 Pilot and heuristics — done 28.09.2026
+- [x] The real mobile workspace gets its private remote (with the user's approval) and one batch is re-run from a
   **fresh clone in another folder** (simulating another computer): the environment check passes, the batch runs with
   `device.py`, `/checkpoint` applies it, the push is done with approval. Notes in that workspace's `context.md`, not
   here.
-- [ ] `docs/heuristics.md` gets the pilot's patterns, anonymised (methodology §17), e.g.: a chat app says a message
+- [x] `docs/heuristics.md` gets the pilot's patterns, anonymised (methodology §17), e.g.: a chat app says a message
   failed while it was delivered (it appears after reopening); a search shows raw highlight tags; a conversation list
   stops at N items without paging; the accessibility tree misses cards and multi-line bubbles.
+
+Notes (9.6): the real workspace got its private remote and 33 commits pushed (with the evidence, by the user's decision); a fresh clone in another folder passed `validate_project.py --environment`, `setup_emulator.py` ran for real (skips, reinstall without `aapt2`, native libraries copied again by itself), `device.py` ran one case end to end, the adapter applied it and the push was done; the original folder pulled it. Found by the pilot: `/checkpoint` committed the run log and `context.md` but not the workbook after applying — fixed (a second commit after `apply` exits 0). Without `aapt2` in the SDK the build is reinstalled every run (harmless, slower).
 
 Acceptance of the phase: a new mobile project can be onboarded, tested in conversational mode, checkpointed and pushed,
 then cloned and continued on another computer, with no helper outside the framework; the unit tests and the fictional
@@ -844,6 +846,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.6 done: pilot from a fresh clone (private remote, device driver, adapter, push); `/checkpoint` now commits the workbook after applying; 6 anonymised heuristics. Phase 9 done. |
 | 2026-09-28 | 9.5 done: `docs/workspace/resume.md` (the steps of methodology §12.3, linked from §12.3 and `/project-onboarding` 8c) and `validate_project.py --environment [--strict]` (reuses `find_soffice`, `setup_emulator.find_tools`, `sync_skills.compare` and the doctor's browser folders, each behind a function the tests replace); 11 new tests in `tests/test_validate_project.py` (397 → 408). Decisions in the note of 9.5. |
 | 2026-09-28 | 9.4 done: `docs/workspace/gitignore` (template) and `scripts/workspace_git.py` (`init`, `status`, `remote --create/--set`, `push`; `gh` through one function the tests fake); `common.variable_names()` (the `*_var` keys and `variables` lists of `project.yaml`) for `.env.example`; `validate_project.py` warns (no remote, commits not pushed, `.env.example` missing a variable, files over 50 MB) and has problems for `.env` tracked and a public remote; `/project-onboarding` step 8c (init, the remote proposed and created only with a yes) and `/checkpoint` 6/6a (status after the commit, push only when the user says so). `tests/test_workspace_git.py` (22) and 3 new validation tests, all in temporary repositories with git's hook variables dropped and a temporary global configuration (372 → 397 tests). Decisions in the note of 9.4. |
 | 2026-09-28 | 9.3 (skills and validation): `/test-mobile` picks the mode per batch and writes it with the reason at the top of the run log (`"mode"`); conversational mode with `setup_emulator.py` and `device.py check` first, a `send --capture <case>_t<N>` per turn, the screenshot read whenever the dump may miss content, one note per turn, guardrail answers judged by the spec's text; assisted mode (the user taps, the driver only reads). `/project-onboarding` asks for the target (`mobile.serial`, or `mobile.avd` + `mobile.image` — the plan's `mobile.device`), `mobile.build`, `mobile.permissions` and, for conversational apps, `send_label`, `ignore_labels`, `browser`, and shows `setup_emulator.py --dry-run`. `validate_project.py` checks `serial`, `send_label`, `ignore_labels`, `evidence_batch` (a quoted folder name: an unquoted date is a YAML integer and is refused) and `browser` (371 → 372 tests); the template has them as comments. Global copy of the skills still to sync. |

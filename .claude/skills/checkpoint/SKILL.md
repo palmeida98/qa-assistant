@@ -35,6 +35,8 @@ description: Saves the run log, updates the workspace's context.md in the format
      (summary): show the cells to the user; the summary's FORMULAS are fixed, never the numbers
      by hand. The totals of the dashboard and of the session summary come from the direct count.
    Applying the same batch again changes nothing (the adapter detects it).
+   After exit 0, commit the workbook too (a second local commit, "<batch>: applied"), so a clone on
+   another computer has the current workbook (methodology section 12.3); then workspace_git.py status again.
 7a. With the jira or azure-devops tracker (no adapter; methodology.md section 4.2), the run log is the
    source: show the user what goes to the tracker (approved results and bugs) and only send it with the
    tracker's tool available and explicit approval; otherwise, leave the list for them to pass by hand.
