@@ -780,13 +780,13 @@ on any computer and run its tests. All phases, in order.
   without root).
 - [x] Tests with a fake SDK/`adb`: each step skipped when already done; the ARM-only detection from a fixture APK.
 
-### 9.3 Skill `/test-mobile` with both modes
+### 9.3 Skill `/test-mobile` with both modes — done 28.09.2026
 - [x] The skill picks the mode per batch (flows or conversational) and says why; in conversational mode: one new
   conversation per theme when the case asks for it, a note per turn in the run log, screenshot when the dump misses
   content, the same classification (methodology §8, technique §6).
 - [x] `/project-onboarding` asks for the mobile target and records it in `project.yaml` (`mobile.device`,
   `mobile.build`, `mobile.permissions`); `scripts/validate_project.py` checks the new keys.
-- [ ] `sync_skills.py --apply` run and the global copy in sync (apply by the parent session).
+- [x] `sync_skills.py --apply` run and the global copy in sync (apply by the parent session).
 
 ### 9.4 Portable workspace (git + private remote)
 - [ ] `/project-onboarding` runs `git init` in the workspace, writes a `.gitignore` from a template in
