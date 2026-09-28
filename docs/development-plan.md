@@ -755,17 +755,17 @@ on any computer and run its tests. All phases, in order.
   artefact) — `project.yaml` records where the build comes from and its SHA-256; evidence (text and screenshots) is
   committed; `.env` and saved sessions never.
 
-### 9.1 `scripts/device.py` — the device driver
-- [ ] Subcommands: `check` (target, OS, model, app version, foreground app), `dump` (visible text with bounds, one
+### 9.1 `scripts/device.py` — the device driver — done 28.09.2026
+- [x] Subcommands: `check` (target, OS, model, app version, foreground app), `dump` (visible text with bounds, one
   line per node), `tap` (by exact text first, then contains; or by coordinates), `type` (Unicode, through Maestro's
   `inputText` or an ADB keyboard; plain `adb input text` refuses non-ASCII), `send` (type, tap send, wait until the
   screen is stable, print only what is new after the message), `shot` (screenshot to `evidence/<batch>/`), `link`
   (open a deep link or a login callback with `am start`).
-- [ ] Privacy: `dump` and `shot` refuse (exit 3) when the foreground app is not the workspace's `mobile.app_id`; no
+- [x] Privacy: `dump` and `shot` refuse (exit 3) when the foreground app is not the workspace's `mobile.app_id`; no
   credential ever on the command line; `link` never writes the URL (a one-time token) to a file or log.
-- [ ] Reads `project.yaml` (`mobile.app_id`, device serial) through `scripts/common.py`; exit codes documented
+- [x] Reads `project.yaml` (`mobile.app_id`, device serial) through `scripts/common.py`; exit codes documented
   (0 ok · 2 usage/configuration · 3 no target or app not in the foreground · 4 element not found).
-- [ ] Tests with a fake `adb` (no device): parsing of the uiautomator XML (entities, empty text with content-desc,
+- [x] Tests with a fake `adb` (no device): parsing of the uiautomator XML (entities, empty text with content-desc,
   zero-size nodes), exact-before-contains matching, the foreground guard, "stable screen" detection, `send` printing
   only the new text.
 
@@ -827,6 +827,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.1 done: `scripts/device.py` (check, dump, tap, type, send, shot, link) with the foreground guard, `.env` values refused in typed text and the link never printed; `tests/test_device.py` with a fake `adb` (29 tests, 316 → 345). Checked read-only on a real emulator: `check`, the guard refusing another app, and a real uiautomator dump parsed. Found on the way: committing from a linked git worktree, the `tests` hook failed in `test_validate_project` and `test_migrate_workspace` (git's hook variables, e.g. `GIT_DIR`, are absolute there and the `git -C <tmp>` of the scripts read this repository); both modules now drop them while they run. |
 | 2026-09-28 | Phase 9 planned by the user's decision, from a real mobile pilot run with helpers outside the framework: device driver and conversational mode, reproducible emulator, one git repository per workspace with a private remote, resume on another computer. |
 | 2026-09-23 | Initial version |
 | 2026-09-24 | General review (`994fa8b`): the denylist now reads Office files and file names (before, a client `.xlsx` got past the guard; history checked, clean); the adapter validates the whole batch before writing (`validate_batch`, code 4 in `apply`) and accepts an existing `bug`; a single run log format (methodology §7.1 = technique-excel §4); 27 `unittest` tests in CI and pre-commit (including the dashboard check of 5.1); ruff in pre-commit; skills aligned with the flow. |
