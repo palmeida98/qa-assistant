@@ -1,7 +1,7 @@
 # Azure DevOps technique
 
 > **Layer 2 — Technique for the Azure DevOps (Test Plans + Boards) tracker adapter**
-> Version 1.0 · 2026-09-28 · Plan, task 10.0 (specification first, methodology §15); built in 10.1 (common base) and 10.3 (this adapter).
+> Version 1.1 · 2026-09-28 · Plan, task 10.0 (specification first, methodology §15); decisions of 28.09.2026 recorded in 10.1 (§0, §3, §4.1); built in 10.1 (common base) and 10.3 (this adapter).
 >
 > Project agnostic: no organisation, project, area path, field or state of a real Azure DevOps lives here. The examples use the fictional **Demo Shop** (`https://dev.azure.com/demo-shop`, project `Demo Shop`). Subordinate to `methodology.md`.
 >
@@ -13,9 +13,10 @@
 
 - **Azure DevOps Services** (cloud): test cases are `Test Case` work items in a **test plan** and its suites; a case runs as a **test point** (test case × configuration in a suite); results go to a **test run** with one **outcome** per point; bugs are `Bug` work items linked to the test case and to the test result.
 - API (version 1): **Azure DevOps Services REST API**, `api-version=7.1` (fixed in the configuration, raised only through the validation of methodology §15), authentication with a **personal access token** (PAT, basic authentication with an empty user) with the scopes *Work Items (read & write)* and *Test Management (read & write)*. Areas used: `wit` (work items, WIQL, links), `testplan` (plans, suites, test cases, test points) and `test` (runs and results).
-- The endpoint names are those of the public documentation at the time of writing (09.2026); 10.3 confirms each one against the current documentation and the pilot (10.5), and fixes this document first if one changed.
+- The endpoint names are those of the public documentation at the time of writing (09.2026) and are **not yet confirmed**: 10.3 confirms each one against the current public documentation (and the pilot, 10.5), and fixes this document first if one changed.
+- **Process template** (decision of 28.09.2026): the project must use the **Agile** or **Scrum** process (or a process inherited from one of them). `Basic` has no `Bug` work item type, so `check` refuses it with a clear message ("the project uses the Basic process, which has no Bug work item type: the adapter needs Agile or Scrum") and exit 4; any other process (e.g. CMMI) is reported by `check` as not covered in version 1.
 - The four directions, as in Jira: send results (§4), bugs (§5), import cases (§6), export new cases (§7).
-- **Out of scope in version 1** (future, only when a real project needs them): Azure DevOps Server (on premises, other API versions and authentication); OAuth / Microsoft Entra ID service principals (the PAT is enough for one tester); shared steps and parameters written by the adapter (imported expanded to text and flagged, never created); results per step (only the point's outcome, with the actual result as the comment); creating test plans, suites or configurations (existing ones are read); the dashboard (`/dashboard` stays Excel only, as in `technique-jira-xray.md` §9); the process `Basic` (it has no `Bug` work item type: `check` says so).
+- **Out of scope in version 1** (future, only when a real project needs them): Azure DevOps Server (on premises, other API versions and authentication); OAuth / Microsoft Entra ID service principals (the PAT is enough for one tester); shared steps and parameters written by the adapter (imported expanded to text and flagged, never created); results per step (only the point's outcome, with the actual result as the comment); creating test plans, suites or configurations (existing ones are read); the dashboard (`/dashboard` stays Excel only, as in `technique-jira-xray.md` §9); the processes `Basic` (it has no `Bug` work item type: `check` refuses it) and CMMI.
 
 ---
 
@@ -57,7 +58,7 @@ azure_devops:
       "Blocked": "Blocked"
       "N/A": "NotApplicable"
       "Not run": "skip"
-    configurations: {}                 # (opt.) platform -> configuration name, when a case has several points
+    configurations: {}                 # (opt.) platform -> Test Configuration name, when a case has several points (§3)
     run_name: "{batch_id} · {environment} · {build}"   # (opt.)
     attach_evidence: false             # (opt.) as in technique-jira-xray.md §8
 
@@ -79,6 +80,7 @@ azure_devops:
     defaults: {}
     closed_states: ["Closed", "Removed"]   # (opt.) what does not count as open in the duplicate search (§5.1)
     states: []                         # (opt.) states bug_status may ask for (resolved_bugs rule, methodology §9.3)
+    priorities: []                     # (opt.) priorities a new_defect may have (technique-jira-xray.md §2.6)
 ```
 
 ### 1.1 Field mapping
@@ -115,6 +117,16 @@ cases:
   TC-SHOP-001: {id: 4711, points: {"Windows 11 - Chrome": 9001, "Android 15": 9002}}
 ```
 
+The default is `id` (decision of 28.09.2026): the work item id is stable and unique; `field` and `tag` stay for projects with their own IDs.
+
+**Platform → Test Configuration** (decision of 28.09.2026): the model's platform (the run log item's `platform`, or the case's) is translated to a Test Configuration through the table `results.configurations` of `project.yaml`, e.g.:
+
+```yaml
+    configurations:
+      web: "Windows 11 - Chrome"
+      android: "Android 15"
+```
+
 `apply` confirms each case (a WIQL query or `GET _apis/wit/workitemsbatch`) and each point (`GET _apis/testplan/Plans/<plan>/Suites/<suite>/TestPoint`). A case with several points needs the item's platform in `results.configurations`; a case in two suites of the plan with the same configuration is a conflict (exit 2), as is a case not in the plan.
 
 ---
@@ -135,6 +147,8 @@ Defaults proposed at the onboarding (the user confirms):
 | `N/A` | `NotApplicable` | |
 | `Not run` | `skip` | a run is not the place to reset a point; the point keeps its current outcome |
 | `Question` | never mapped: refused (exit 4) | methodology §8.5 |
+
+A status mapped to `skip` or left empty (unmapped) is **not sent**, as in `technique-jira-xray.md` §4.1: it stays in the run log and is listed in the dry run and the record, not an error; a status that is not a key of `results.outcomes` is refused (exit 4).
 
 ### 4.2 Flow
 

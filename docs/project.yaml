@@ -141,17 +141,19 @@ excel:
 #   cases:
 #     issue_type: "Test"         # (opt.)
 #     jql: ""                    # (opt.) tests import-cases reads (default: project + issue_type)
-#     id_source: "key"           # key (the issue key is the case ID) | field | label (technique section 3)
+#     id_source: "key"           # key (default: the issue key is the case ID) | field | label, for projects with own IDs
 #     id_field: ""               # with field: e.g. customfield_10050
 #     id_label_prefix: ""        # with label: e.g. "qa-id-"
 #     folder: ""                 # (opt.) Xray test repository folder of new tests
 #     fields: {}                 # model field -> Jira field; "labels:<prefix>" for labels (technique section 1.1)
 #   results:
-#     statuses: {}               # (req.) EVERY status of the project -> Xray status or "skip"; never Question
-#                                #   e.g. {"Pass": PASSED, "Fail": FAILED, "Not run": TODO, "Blocked": BLOCKED, "N/A": skip}
+#     statuses: {}               # (req.) EVERY status of the project -> Xray status, or "skip"/empty = not sent
+#                                #   (stays in the run log, not an error); never Question; a status missing here is refused.
+#                                #   Blocked and N/A have NO default: asked per project (a custom Xray status or ABORTED),
+#                                #   otherwise skip. e.g. {"Pass": PASSED, "Fail": FAILED, "Not run": TODO, "Blocked": skip, "N/A": skip}
 #     test_plan_key: ""          # (opt.) e.g. DS-10
 #     summary: "{batch_id} · {environment} · {build}"   # (opt.) summary of each Test Execution
-#     attach_evidence: false     # (opt.)
+#     attach_evidence: false     # (opt.) off by default; screenshots go only with evidence: "text+screenshot"
 #   bugs:
 #     issue_type: "Bug"          # (opt.)
 #     fields: {}                 # model field -> Jira field (title, description, area, feature, sub_area, platform, role, ...)
@@ -159,11 +161,13 @@ excel:
 #     open_jql: "statusCategory != Done"   # (opt.) open bugs in the duplicate search
 #     link_type: ""              # (opt.) issue link Bug -> Test
 #     statuses: []               # (opt.) statuses a retest may move a bug to (resolved_bugs rule)
+#     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)
 
 # ---------------------------------------------------------------------------
 # azure_devops: Azure DevOps Services (Test Plans + Boards), read by the tracker adapter
 # (docs/technique-azure-devops.md; being built in plan phase 10). Uncomment ONLY when
-# tracker: "azure-devops". Only NAMES of .env variables, never values.
+# tracker: "azure-devops". Only NAMES of .env variables, never values. The project must use the
+# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it).
 # ---------------------------------------------------------------------------
 # azure_devops:
 #   organization_url: ""         # (req.) e.g. https://dev.azure.com/demo-shop
@@ -176,16 +180,17 @@ excel:
 #     suite_ids: []              # (opt.) default: every suite of the plan
 #     new_cases_suite_id: 0      # (req. for export-cases) static suite of new cases
 #     area_path: ""              # (opt.) e.g. "Demo Shop\\Checkout"
-#     id_source: "id"            # id (the work item id is the case ID) | field | tag (technique section 3)
+#     id_source: "id"            # id (default: the work item id is the case ID) | field | tag, for projects with own IDs
 #     id_field: ""               # with field: e.g. Custom.QaId
 #     id_tag_prefix: ""          # with tag: e.g. "qa-id-"
 #     fields: {}                 # model field -> work item field; "tag:<prefix>" for tags (technique section 1.1)
 #   results:
-#     outcomes: {}               # (req.) EVERY status of the project -> outcome or "skip"; never Question
+#     outcomes: {}               # (req.) EVERY status of the project -> outcome, or "skip"/empty = not sent; never Question
 #                                #   e.g. {"Pass": Passed, "Fail": Failed, "Blocked": Blocked, "N/A": NotApplicable, "Not run": skip}
-#     configurations: {}         # (opt.) platform -> configuration, when a case has several test points
+#     configurations: {}         # (opt.) platform -> Test Configuration, when a case has several test points
+#                                #   e.g. {web: "Windows 11 - Chrome", android: "Android 15"}
 #     run_name: "{batch_id} · {environment} · {build}"   # (opt.)
-#     attach_evidence: false     # (opt.)
+#     attach_evidence: false     # (opt.) off by default; screenshots go only with evidence: "text+screenshot"
 #   bugs:
 #     work_item_type: "Bug"      # (opt.)
 #     area_path: ""              # (opt.) default: the test case's area
@@ -194,3 +199,4 @@ excel:
 #     defaults: {}               # (opt.)
 #     closed_states: ["Closed", "Removed"]   # (opt.) not open in the duplicate search
 #     states: []                 # (opt.) states a retest may move a bug to (resolved_bugs rule)
+#     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)

@@ -3,7 +3,10 @@ Validates a workspace's project.yaml (methodology.md sections 4 and 4.1; plan,
 task 3.4): base fields, the URL of each environment, modules from the closed
 list, the section of each active module, module URLs inside the declared
 environments (never production), the device and emulator keys of mobile: (plan 9.2, 9.3),
-Excel (when tracker: excel), the dashboard: section and, in a workspace with
+Excel (when tracker: excel), the jira: / azure_devops: section (when tracker: jira
+/ azure-devops; plan 10.1: required keys, https URLs, .env variable names, every
+status mapped or skip, Question never mapped, the closed list of Azure DevOps
+outcomes), the dashboard: section and, in a workspace with
 git, the .gitignore of the files with secrets (warning) and the protection of
 history/ in .claude/settings.json (warning). In a workspace that is a git
 repository of its own (plan 9.4, through scripts/workspace_git.py): .env
@@ -49,6 +52,8 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import workspace_git as wg
 
+from adapters.tracker import config as tracker_config
+
 # closed list (methodology 4.1): module -> (own section, required fields in it)
 MODULES = {
     "functional-web": (None, ()),
@@ -58,7 +63,9 @@ MODULES = {
     "mobile": ("mobile", ("platform", "flows")),
 }
 TRACKERS = ("excel", "azure-devops", "jira")
-WITH_ADAPTER = ("excel",)  # the others are manual logging (methodology 4.2)
+# excel, plus jira / azure-devops once their back-end is done (adapters/tracker/config.py IMPLEMENTED, plan 10.2 and
+# 10.3); until then they are manual logging (methodology 4.2)
+WITH_ADAPTER = ("excel",)
 
 
 def environment_of(url: str, environments: dict) -> str | None:
@@ -268,9 +275,16 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
             problems.append(f"environment '{name}': {url!r} is not an http(s):// URL")
     if proj.get("tracker") and proj["tracker"] not in TRACKERS:
         problems.append(f"tracker {proj['tracker']!r} outside {list(TRACKERS)}")
-    elif proj.get("tracker") in TRACKERS and proj["tracker"] not in WITH_ADAPTER:
-        warnings.append(f"tracker {proj['tracker']!r} has no adapter: results and bugs go to the tracker by hand, "
-                        "from the run log, and there is no dashboard (methodology 4.2)")
+    elif proj.get("tracker") in tracker_config.SECTIONS:
+        tracker = proj["tracker"]
+        if tracker not in WITH_ADAPTER and tracker not in tracker_config.IMPLEMENTED:
+            warnings.append(f"tracker {tracker!r} has no adapter yet: its back-end is being built (plan "
+                            f"{tracker_config.TASKS[tracker]}); until then results and bugs go to the tracker by "
+                            "hand, from the run log, and there is no dashboard (methodology 4.2). The "
+                            f"{tracker_config.SECTIONS[tracker]}: section, when filled in, is already checked")
+        p, w = tracker_config.validate_section(proj)
+        problems += p
+        warnings += w
     if proj.get("resolved_bugs") not in (None, "remove", "archive"):
         problems.append("resolved_bugs must be 'remove' or 'archive'")
     if proj.get("evidence") not in (None, "text", "text+screenshot"):

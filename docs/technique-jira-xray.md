@@ -1,7 +1,7 @@
 # Jira (Xray) technique
 
 > **Layer 2 — Technique for the Jira + Xray tracker adapter**
-> Version 1.0 · 2026-09-28 · Plan, task 10.0 (specification first, methodology §15); built in 10.1 (common base) and 10.2 (this adapter).
+> Version 1.1 · 2026-09-28 · Plan, task 10.0 (specification first, methodology §15); decisions of 28.09.2026 recorded in 10.1 (§3, §4.1, §8); built in 10.1 (common base) and 10.2 (this adapter).
 >
 > Project agnostic: no site, project key, field id or status of a real Jira lives here. The examples use the fictional **Demo Shop** (`https://demo-shop.atlassian.net`, project `DS`, keys like `DS-123`). Subordinate to `methodology.md`: the decision, recording, bug and checkpoint rules are there and are not repeated here.
 >
@@ -15,7 +15,7 @@
 - APIs (version 1, target **cloud first**):
   - **Jira Cloud REST API v3** (`https://<site>/rest/api/3/…`), basic authentication with the account's e-mail and an **API token**;
   - **Xray Cloud API v2** (`https://xray.cloud.getxray.app/api/v2/…`, or the host of the Xray region the site uses): `POST /authenticate` with a **client id and client secret** (an Xray API key) returns a token used as `Authorization: Bearer`; results through the **import of an execution in Xray JSON** (`POST /import/execution`); **GraphQL** (`POST /graphql`) where REST has no equivalent (reading steps, creating a test with its steps, reading back the statuses of a test execution).
-  - The endpoint names are those of the public documentation at the time of writing (09.2026); 10.2 confirms each one against the current documentation and the pilot (10.5) before relying on it, and fixes this document first if one changed.
+  - The endpoint names are those of the public documentation at the time of writing (09.2026) and are **not yet confirmed**: 10.2 confirms each one against the current public documentation (and the pilot, 10.5) before relying on it, and fixes this document first if one changed. The common base (10.1) calls no endpoint.
 - The four directions of version 1: **send results** (§4), **bugs** — search duplicates, create, update (§5), **import cases** (§6), **export new cases** (§7).
 - **Out of scope in version 1** (future, only when a real project needs them): Jira Server / Data Center and Xray Server / Data Center (other APIs: REST v2 and the Xray `raven` API, personal access tokens); OAuth 2.0 (3LO) apps; test types other than `Manual` (`Cucumber`, `Generic` are imported read only, flagged, never exported); creating `Precondition`, `Test Set` or `Test Plan` issues (existing ones are read and linked); results per step (only the test's status, with the actual result as the comment); the dashboard (`/dashboard` stays Excel only: §9); webhooks or any sync that runs without the assistant.
 
@@ -59,8 +59,8 @@ jira:
       "Pass": "PASSED"
       "Fail": "FAILED"
       "Not run": "TODO"
-      "Blocked": "BLOCKED"             # a custom Xray status: it must exist in the Xray settings
-      "N/A": "skip"                    # not sent (§4.1)
+      "Blocked": "BLOCKED"             # asked at the onboarding: a custom Xray status (it must exist in the Xray settings) or ABORTED
+      "N/A": "skip"                    # asked; skip (or empty) = not sent, stays in the run log (§4.1)
     test_plan_key: ""                  # (opt.) e.g. DS-10: every execution is linked to this test plan
     summary: "{batch_id} · {environment} · {build}"   # (opt.) summary of the Test Execution
     attach_evidence: false             # (opt.) true: the batch's files under evidence/ go as Xray evidence (§8)
@@ -82,6 +82,7 @@ jira:
     open_jql: "statusCategory != Done" # (opt.) what counts as open in the duplicate search (§5.1)
     link_type: ""                      # (opt.) issue link Bug -> Test (e.g. "Relates"); the test run's defect link always exists
     statuses: []                       # (opt.) statuses bug_status may ask for (resolved_bugs rule, methodology §9.3)
+    priorities: []                     # (opt.) priorities a new_defect may have (§2.6); empty: not checked before the tracker
 ```
 
 ### 1.1 Field mapping
@@ -138,11 +139,11 @@ The same meaning as `adapters.excel.apply` where one exists, and the dry-run cod
 
 | Code | Meaning | Anything written? |
 |---|---|---|
-| 0 | Sent and read back; or nothing to send (batch already sent with the same content; every item `skip`) | yes / no |
+| 0 | Sent and read back; or nothing to send (batch already sent with the same content; every item not sent: `skip` or unmapped, §4.1) | yes / no |
 | 1 | Dry run with something to send: **not approved yet**, repeat with `--yes` after the user approves | no |
 | 2 | Cross-check / conflict with the tracker: a case, bug, test plan or test point not found; a case mapped to two issues; an ID in `ids.yaml` that now points elsewhere | no |
 | 3 | Network, authentication or rate limit (after the retries of §2.7), or a server error. With `--yes` the send may be **partial**: the record (§2.5) has exactly what was confirmed, and running the same command again continues from there | maybe (partial) |
-| 4 | Invalid batch, input or configuration: nothing resolved nor sent (see the list of problems); includes a `Question` or unmapped status and a batch already sent with **another content** | no |
+| 4 | Invalid batch, input or configuration: nothing resolved nor sent (see the list of problems); includes a `Question`, a status that is not a key of the status map (a typo is never dropped silently) and a batch already sent with **another content**; also a back-end not built yet (plan 10.2/10.3) | no |
 | 5 | Sent, but the read back does not match what was sent (e.g. an Xray status changed by an automation rule, a result not recorded): show the differences; never "fix" by sending again blindly | yes |
 
 `import-cases` and `bug-search` use 0, 2, 3 and 4. `check` uses 0, 3 and 4.
@@ -164,7 +165,7 @@ The records are committed with the workspace's checkpoint (methodology §12.1), 
 
 ### 2.6 Validation of the input
 
-Before any request, the whole batch is refused (exit 4, a list of problems) if: it is empty; an item has no `tc` or `status`; a case appears twice; a status is not a key of the status map (so a `Question` still in the log is refused: methodology §8.5 — the map never has `Question`); a `new_defect` misses a field the bug format requires, or has a priority outside the allowed ones; `bug_status` is not in `bugs.statuses`; `run.environment` is missing or is not a key of `environments` in `project.yaml`, or `run.build` is missing (methodology §7.1, §9.2). Unknown keys are ignored, as in the Excel adapter.
+Before any request, the whole batch is refused (exit 4, a list of problems) if: it is empty; an item has no `tc` or `status`; a case appears twice; a status is not a key of the status map (so a `Question` still in the log is refused: methodology §8.5 — the map never has `Question`); a `new_defect` is not an object, misses `title`, `expected` or `observed` (the minimum of methodology §9.2; the project's bug format may ask for more, which the back-end checks against the tracker's required fields), or has a `priority` outside `bugs.priorities` when the project lists them; `bug_status` is not in `bugs.statuses` (`bugs.states` in Azure DevOps), or comes without a `bug`; an `evidence` path is outside the workspace's `evidence/` or does not exist; `run.environment` is missing or is not a key of `environments` in `project.yaml`, or `run.build` is missing (methodology §7.1, §9.2). Unknown keys are ignored, as in the Excel adapter.
 
 ### 2.7 HTTP client
 
@@ -192,6 +193,8 @@ The case ID is **stable** (methodology §2). `cases.id_source` says where the in
 | `field` | the value of a custom field (`id_field`) | `TC-SHOP-001` in `customfield_10050` |
 | `label` | a label with a prefix (`id_label_prefix`) | `TC-SHOP-001` from `qa-id-TC-SHOP-001` |
 
+The default is `key` (decision of 28.09.2026): most Jira projects have no IDs of their own, and the key is already stable and unique; `field` and `label` stay for projects that keep their own IDs (e.g. cases migrated from a workbook).
+
 `<workspace>/tracker/ids.yaml` is a **cache** written by `import-cases` and `export-cases`:
 
 ```yaml
@@ -217,11 +220,11 @@ Defaults proposed at the onboarding, for the methodology's statuses (the user co
 | `Pass` | `PASSED` | built in |
 | `Fail` | `FAILED` | built in |
 | `Not run` | `TODO` | built in; the test stays in the execution, not run |
-| `Blocked` | no default: a custom `BLOCKED`, or `ABORTED`, or `skip` — **asked** | `ABORTED` means something else in many teams |
-| `N/A` | no default: a custom status, or `skip` — **asked** | there is no built-in N/A |
+| `Blocked` | no default: a custom Xray status (e.g. `BLOCKED`) or `ABORTED` — **asked**; otherwise unmapped (not sent) | `ABORTED` means something else in many teams |
+| `N/A` | no default: a custom Xray status (e.g. `NA`) — **asked**; otherwise unmapped (not sent) | there is no built-in N/A |
 | `Question` | never mapped: refused (exit 4) | methodology §8.5 |
 
-`skip`: the item is not sent (it stays in the run log and in the record as not sent); the dry run and the summary count them. `check` confirms that every mapped status exists in Xray.
+**Not sent** (decision of 28.09.2026, plan Phase 10): a status whose value is `skip` or empty (`""` / `null`: *unmapped*) is part of the vocabulary but **is not sent** — the item stays only in the run log, is listed in the dry-run plan, in the summary and in the record (§2.5) as not sent, and it is **not an error**. `/project-onboarding` asks per project for `Blocked` and `N/A` (a custom Xray status or `ABORTED`); when the user chooses none, it writes the key with `skip`, so every status of the vocabulary stays a key of the map. A status that is **not a key** of the map is refused (exit 4, §2.6): only the map decides what is left out, a typo is never dropped silently. `Question` is refused even if someone writes it in the map (`validate_project.py` flags it). `check` confirms that every mapped status exists in Xray.
 
 ### 4.2 Flow
 
@@ -290,6 +293,7 @@ Flags, never silent fixes (methodology §11): a test without steps, a non-`Manua
 
 - Comments, bug descriptions and the record are redacted (§2.7). A redaction that changed something is reported in the dry run (the user sees what the tracker will get).
 - With `attach_evidence: true`, the files an item lists under `evidence` (only inside the workspace's `evidence/`) go as Xray evidence (base64 in the import) or as a bug attachment (`POST /rest/api/3/issue/<key>/attachments`, header `X-Atlassian-Token: no-check`). Text files are redacted; images and videos cannot be, so they go only with `evidence: "text+screenshot"` in `project.yaml` and are listed one by one in the dry run. A file over the size limit (default 10 MB) is refused (exit 4).
+- **Screenshots** (decision of 28.09.2026): uploading them is **off by default** (`attach_evidence: false`); it is on only when the project's evidence policy is `text+screenshot` **and** `attach_evidence: true`. With `evidence: "text"`, an image or video an item lists is not uploaded (listed as not sent in the dry run), and `validate_project.py` warns that `attach_evidence: true` only sends text files.
 
 ---
 

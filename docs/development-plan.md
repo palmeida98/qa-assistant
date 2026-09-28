@@ -867,6 +867,26 @@ Decisions of the user (28.09.2026), which **revise decision 7.7** (manual loggin
   workspace outside the repository;
 - the repository stays private.
 
+Decisions delegated by the user to the assistant's recommendation (28.09.2026, recorded in 10.1 in the techniques and
+the template `docs/project.yaml` first, methodology §15):
+1. **Blocked / N/A in Xray**: no default mapping; `/project-onboarding` asks per project (a custom Xray status, or
+   `ABORTED`); when none is chosen the status is written with `skip`. A status mapped to `skip` or left empty
+   (unmapped) is **not sent** — it stays only in the run log, is listed in the dry-run plan, the report and the record
+   — and it is not an error. A status that is not a key of the map is refused (exit 4: a typo is never dropped
+   silently), and `Question` stays refused (exit 4). Same rule for Azure DevOps outcomes (technique-jira-xray.md §4.1,
+   technique-azure-devops.md §4.1).
+2. **Case ID**: default `id_source: key` (Jira) / `id` (Azure DevOps); the `field` / `label` / `tag` modes stay for
+   projects with their own IDs (technique-jira-xray.md §3, technique-azure-devops.md §3).
+3. **Screenshots uploaded as evidence**: off by default (`attach_evidence: false`); on only when the project's evidence
+   policy is `text+screenshot` (and `attach_evidence: true`); `validate_project.py` warns when `attach_evidence` is on
+   with `evidence: "text"` (technique-jira-xray.md §8).
+4. **Azure DevOps process**: the project must use the Agile or Scrum process (or one inherited from them); `Basic` has
+   no `Bug` type and `check` refuses it with a clear message; platform → Test Configuration through the table
+   `results.configurations` of `project.yaml` (technique-azure-devops.md §0, §3).
+5. The endpoint names in both techniques are those of the public documentation at the time of writing: 10.2 and 10.3
+   confirm each one against the current public documentation before relying on it (the techniques first if one
+   changed); the common base (10.1) calls no endpoint.
+
 Specification: `docs/technique-jira-xray.md` (with the common contract of the tracker adapters, §2) and
 `docs/technique-azure-devops.md`, written first (methodology §15). Order: 10.1 → 10.2 → 10.3 → 10.4 → 10.5; 10.2 and
 10.3 can go in parallel once 10.1 is done.
@@ -897,27 +917,43 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
   (no new dependency) and the `Redactor` of `scripts/common.py`; `/dashboard` stays Excel only (building it from what
   the assistant sent would miss everyone else's results: not cheap to do right).
 
-### 10.1 Common tracker base (`adapters/tracker/`)
-- [ ] Configuration: `jira:` / `azure_devops:` read from `project.yaml`, credentials only by variable name (`*_var`,
+### 10.1 Common tracker base (`adapters/tracker/`) — done 28.09.2026
+- [x] Configuration: `jira:` / `azure_devops:` read from `project.yaml`, credentials only by variable name (`*_var`,
   so `workspace_git.py init` puts them in `.env.example`); a `TrackerAdapter` base with the four directions as methods
   and the input validation of technique-jira-xray.md §2.6 (the Excel adapter's `validate_batch` rules, reused where
   they are the same).
-- [ ] HTTP client (standard library): timeouts, retries only for `429`/`5xx` on reads and idempotent writes,
+- [x] HTTP client (standard library): timeouts, retries only for `429`/`5xx` on reads and idempotent writes,
   `Retry-After`, backoff with jitter, re-authentication on one `401`, pagination helpers, a create never retried
   blindly; the `Redactor` of `scripts/common.py` on every output, the record and the recordings; one transport
   function the tests replace.
-- [ ] ID mapping cache (`tracker/ids.yaml`), the record of what was sent (`tracker/sent/<batch_id>.json`, written
+- [x] ID mapping cache (`tracker/ids.yaml`), the record of what was sent (`tracker/sent/<batch_id>.json`, written
   after each confirmed write; same hash → no request; same id, other content → 4; incomplete → continue) and the
   marker search; never under `history/`.
-- [ ] CLI `python -m adapters.tracker <workspace> <command>` with the dry run by default, `--yes`, `--now`,
+- [x] CLI `python -m adapters.tracker <workspace> <command>` with the dry run by default, `--yes`, `--now`,
   `--record`, and the exit codes of technique-jira-xray.md §2.4.
-- [ ] `validate_project.py`: the tracker's section (required keys, `https` URLs, `*_var` names, every status of the
+- [x] `validate_project.py`: the tracker's section (required keys, `https` URLs, `*_var` names, every status of the
   vocabulary mapped, `Question` never mapped, Azure DevOps outcomes from the closed list, `skip` counted), the
   variables in `.env` with `--environment`; the warning "no adapter" only for a tracker whose task is not done.
   `docs/workspace/gitignore` gets `tracker/recordings/`.
-- [ ] Test kit: a fake tracker transport (responses in order, each with the request it answers; the requests made
+- [x] Test kit: a fake tracker transport (responses in order, each with the request it answers; the requests made
   kept for comparison; a fault injected at request *n*) and a local `http.server` on 127.0.0.1 only for the client's
   own timeout and retry tests. Unit tests for the client, the record, the validation and the CLI.
+- Note (choices where the spec was open): modules `errors`, `config`, `http`, `record`, `base`, `cli` and `testing`
+  (the fake transport ships in the package, so the goldens of 10.2/10.3 reuse it); the back-ends `adapters/jira` and
+  `adapters/azure_devops` are stubs with `implemented = False` (exit 4 "not implemented yet (plan 10.2/10.3)", after
+  the configuration is checked), and `config.IMPLEMENTED` is the one switch for `validate_project.py` (the "no adapter
+  yet" warning, and a missing section as a problem instead of silence); "unmapped" means a key with `skip` or an empty
+  value, a status that is not a key is exit 4; a `new_defect` needs `title`, `expected` and `observed` (methodology
+  §9.2), and the new optional `bugs.priorities` checks its priority before any request; `bug_status` needs a `bug`;
+  `apply`/`export-cases` read the credentials only after the input and the record were checked (an invalid or already
+  sent batch needs no `.env`); the record is marked complete right after the sends, before the read back, so a run
+  after exit 5 makes no request; with `--yes`, a batch where nothing is sent still gets a complete record; retries on
+  GET/HEAD/PUT/DELETE/OPTIONS and on requests marked `read`/`idempotent` (a JQL, GraphQL or WIQL query sent with
+  POST), 500 never retried, a write's 429 is exit 3 without a retry and its 502/503/504 or timeout an "uncertain
+  write" (exit 3, the marker search decides next time); the renewal after a 401 is not an attempt; backoff 1 s × 2ⁿ,
+  capped at 60 s, jitter 50–100 %; a 4xx the back-end does not handle is exit 2 for 404/409/412 and exit 4 for the
+  others; `--record` writes `tracker/recordings/<instant>-<command>/NNNN.json`; `--now` also on `export-cases`; the
+  command line is in `CLAUDE.md`'s Scripts section already (the 10.0 note said 10.2/10.3), marked as base only.
 
 ### 10.2 Jira + Xray adapter (`adapters/jira/`)
 - [ ] Endpoints confirmed against the current documentation (technique §0); the technique fixed first if one changed.
@@ -975,6 +1011,7 @@ export new cases, and be continued on another computer; the unit tests and both 
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 10.1 done: the decisions the user delegated (Blocked/N/A unmapped → not sent, `Question` still refused; `id_source` key/id by default; screenshots only with `text+screenshot`; Azure DevOps needs Agile or Scrum, platform → Test Configuration table; endpoints confirmed in 10.2/10.3) recorded in the techniques (v1.1), the template and Phase 10 first; then `adapters/tracker/` (configuration and its validation, credentials by name, stdlib HTTP client with retries, Retry-After, backoff, re-authentication, pagination, redaction and `--record`; the record of what was sent, the ID cache, `cases.json`; the batch validation with the `run` block and the status map; the command line with the dry run, `--yes`, `--now` and exit codes 0–5; the fake transport), stubs for `adapters/jira` and `adapters/azure_devops` (exit 4 until 10.2/10.3), `validate_project.py` checks the tracker's section, `docs/workspace/gitignore` ignores `tracker/recordings/`, `CLAUDE.md` documents the command. `tests/test_tracker_config.py`, `test_tracker_http.py` (with a local server on 127.0.0.1), `test_tracker_cli.py` and 1 new validation test (408 → 479). Choices in the note of 10.1. |
 | 2026-09-28 | Phase 10 planned by the user's decision (revises 7.7: `jira` and `azure-devops` get adapters, Jira with Xray and Azure DevOps Test Plans + Bugs, four directions, golden with recorded fictional responses, pilot on free instances). 10.0 done: `docs/technique-jira-xray.md` (with the common contract of the tracker adapters) and `docs/technique-azure-devops.md`; methodology v2.2 (§1.1, §2, §4 step 7, §4.2, §7.1, §9.4); `CLAUDE.md` references; the template's `jira:` and `azure_devops:` sections. Decisions in the note of 10.0. |
 | 2026-09-28 | 9.6 done: pilot from a fresh clone (private remote, device driver, adapter, push); `/checkpoint` now commits the workbook after applying; 6 anonymised heuristics. Phase 9 done. |
 | 2026-09-28 | 9.5 done: `docs/workspace/resume.md` (the steps of methodology §12.3, linked from §12.3 and `/project-onboarding` 8c) and `validate_project.py --environment [--strict]` (reuses `find_soffice`, `setup_emulator.find_tools`, `sync_skills.compare` and the doctor's browser folders, each behind a function the tests replace); 11 new tests in `tests/test_validate_project.py` (397 → 408). Decisions in the note of 9.5. |

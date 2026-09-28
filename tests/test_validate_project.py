@@ -78,6 +78,26 @@ class Validate(unittest.TestCase):
                 self.assertEqual(problems, [])
                 self.assertTrue(any(f"tracker '{tracker}' has no adapter" in w for w in warnings), warnings)
 
+    def test_the_tracker_section_is_checked(self):
+        # plan 10.1: the jira: / azure_devops: section, through adapters/tracker/config.py (fictional Demo Shop)
+        from tracker_kit import JIRA
+        not_a_variable_name = "not a name"
+        jira = {**JIRA, "site": "http://demo-shop.atlassian.net", "token_var": not_a_variable_name,
+                "results": {"statuses": {"Pass": "PASSED", "Question": "TODO", "Blocked": "skip"}}}
+        problems, warnings = self.with_(jira=jira)
+        text = " | ".join(problems)
+        for part in ("jira.site", "jira.token_var", "Question"):
+            self.assertIn(part, text)
+        self.assertTrue(any("has no adapter yet" in w and "10.2" in w for w in warnings), warnings)
+        self.assertTrue(any("not sent" in w and "Blocked" in w for w in warnings), warnings)
+        azure = {"organization_url": "https://dev.azure.com/demo-shop", "project": "Demo Shop",
+                 "pat_var": "DS_ADO_PAT", "cases": {"plan_id": 12},
+                 "results": {"outcomes": {"Pass": "Passed", "Fail": "Timeout"}}}
+        problems, warnings = self.with_(tracker="azure-devops", azure_devops=azure)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("Timeout", problems[0])
+        self.assertTrue(any("10.3" in w for w in warnings), warnings)
+
     def test_a_module_outside_the_list(self):
         problems, _ = self.with_(modules=["functional-web", "smoke"])
         self.assertTrue(any("outside the closed list" in p and "smoke" in p for p in problems), problems)
