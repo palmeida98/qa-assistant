@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.1 · 2026-09-26 · Plan, task 3.3; in English since plan 8.11.
+> Version 1.2 · 2026-09-28 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0.
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -11,7 +11,7 @@
 
 ## 0. Scope
 
-- Native and hybrid apps on **Android** and **iOS**, driven by **Maestro flows** (YAML).
+- Native and hybrid apps on **Android** and **iOS**, driven by **Maestro flows** (YAML), or on Android by the **device driver** (`scripts/device.py`) in **conversational mode** when the app's content is generated (§4.1).
 - The web in a mobile context, through **Maestro Web** (beta) when there is no device; the result is valid for the web flow, **not** for the native app.
 - Gestures, permissions, deep links, offline and background states, differences between platforms.
 - It does **not** cover performance, battery nor active security tests of the app.
@@ -26,6 +26,14 @@
 | **Real device** | Fine gestures, camera, biometrics, push, real network, specific manufacturers | Less repeatable; needs device management |
 | **Maestro Web (beta)** | Flows of the web version when there is no device | Does not test the native app; the support is beta |
 
+### 1.1 Preparing an Android emulator
+
+`scripts/setup_emulator.py` makes the target reproducible (AVD, boot, the build checked against its SHA-256 in `project.yaml`, the permissions listed there). Known cases it handles:
+
+- **ARM-only build on an x86_64 image**: Google APIs x86_64 images from Android 11 on translate ARM code (`ro.dalvik.vm.native.bridge`). If the APK also has `extractNativeLibs=false` (native libraries stored uncompressed), Android does not extract them and a loader that looks for the device's ABI inside the APK fails at start (e.g. React Native's `SoLoaderDSONotFoundError`). On an image with root, the script copies the APK's `lib/arm64-v8a/*.so` into the app's native library folder; it must be repeated after each reinstall. The APK is never changed.
+- **Login by e-mail link (magic link)**: the user asks for the link in the app and hands it over; `device.py link` opens it inside the target with `am start` (the web callback redirects to the app's scheme). The link is a one-time credential: it is never written to a file or log, and it must not be opened anywhere else first (that spends it). The browser's first run is turned off beforehand so it does not swallow the link.
+- **No microphone** on the computer: dictation cases are **Blocked** (environment), unless a real device with a microphone is used.
+
 Rule: the run log and the bug **always** say where it ran (platform, OS version, model or emulator, app version). A Pass on the emulator does not count for "real device" nor the other way round, if the case distinguishes them.
 
 ---
@@ -36,6 +44,7 @@ Rule: the run log and the bug **always** say where it ran (platform, OS version,
 |---|---|---|
 | **N1 · Agent** | Maestro Studio / commands by the agent | Exploring, writing and tuning flows |
 | **N1 · Flows** | `scripts/run_mobile.py` (runs `maestro test`) | Batches of cases, each case a flow |
+| **N1 · Device driver** | `scripts/device.py` (`adb`; Maestro only to type Unicode) | Conversational mode (§4.1); assisted runs on a device that refuses input injection (the user taps, the driver only reads) |
 | **N2 · Regression** | The same flows in CI or Maestro Cloud | Smoke and regression |
 
 The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except the demo).
@@ -61,6 +70,16 @@ The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except 
 - Test data with the prefix `QA-AUTO-<date>-` (`technique-browser.md` §7).
 
 ---
+
+### 4.1 Conversational mode (generated content)
+
+When the expected result cannot be asserted by a flow — the app's content is generated, e.g. an AI assistant's answers — the agent drives the app and classifies each answer:
+
+- **Which mode**: deterministic UI → a flow per case (§4); generated content → conversational mode. The skill says which mode and why, per batch.
+- **One turn per step**: `device.py send "<message>" <capture>` types, sends, waits until the screen is stable and returns only what is new after the message. A new conversation per theme when the case asks for it (so earlier turns do not contaminate the answer).
+- **Reading**: text from the accessibility tree; a **screenshot** whenever the tree may miss content (cards, multi-line bubbles, bottom sheets). A result is never classified from the tree alone when something it shows is incomplete.
+- **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path.
+- **Classification**: the same rules (§6 and methodology §8). An answer judged against the specification's guardrails is Pass/Fail by the specification's text, never by taste; a doubt is `Question`.
 
 ## 5. What to test on mobile (beyond the functional)
 
@@ -93,7 +112,7 @@ The rules of methodology §8. Particulars:
 
 - Pass: Maestro's report (JUnit) is enough.
 - Fail: flow, step that failed and Maestro's message, platform/OS/device/app version, expected → observed. Screenshot only by the project's policy or if the problem is visual (Maestro keeps them in `~/.maestro/tests/`).
-- No credentials nor personal data in the evidence.
+- No credentials nor personal data in the evidence. `device.py` captures (screenshot or dump) **only with the target app in the foreground**; with any other app on screen it refuses, so nothing of the user's own apps is recorded.
 
 ---
 
@@ -125,3 +144,5 @@ The rules of methodology §8. Particulars:
 - [ ] One flow per case, with the ID in the name
 - [ ] JUnit report kept in the workspace
 - [ ] Cases without a target marked Blocked, not Pass
+- [ ] Mode chosen per batch (flows or conversational) and said why
+- [ ] Captures only with the app in the foreground; screenshot when the tree misses content

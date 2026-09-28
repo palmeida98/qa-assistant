@@ -741,17 +741,17 @@ Decisions of the user (28.09.2026): one git repository per project workspace, wi
 checkpoint commits locally and a push happens only with the user's approval; it must be possible to clone a workspace
 on any computer and run its tests. All phases, in order.
 
-### 9.0 Specification first (methodology §15)
-- [ ] Methodology: §4 (onboarding) — the workspace is a git repository with a private remote, created at onboarding;
+### 9.0 Specification first (methodology §15) — done 28.09.2026
+- [x] Methodology: §4 (onboarding) — the workspace is a git repository with a private remote, created at onboarding;
   §12 (continuity) — resuming on another computer: clone, `.env` from the user's own secret store, environment check,
   then read `context.md`; §13 unchanged (`history/` still protected by the workspace's settings, which are versioned).
-- [ ] `technique-mobile.md`: a new execution level **N1 · Device driver** (`scripts/device.py`) next to Maestro flows,
+- [x] `technique-mobile.md`: a new execution level **N1 · Device driver** (`scripts/device.py`) next to Maestro flows,
   and when to use each (deterministic UI → flow; generated content, e.g. an AI assistant's answers → conversational
   mode, the agent classifies); the conversational mode (one turn per step, wait for the reply to settle, text from the
   accessibility tree and a screenshot when the tree misses content — cards, multi-line bubbles); the privacy rule
   (screenshots and dumps only with the target app in the foreground); emulator preparation (§1) for ARM-only apps on
   x86_64 images and deep-link / magic-link logins.
-- [ ] Decisions to write down: app binaries (APK/IPA) are **not** committed (size limits, and they are the client's
+- [x] Decisions to write down: app binaries (APK/IPA) are **not** committed (size limits, and they are the client's
   artefact) — `project.yaml` records where the build comes from and its SHA-256; evidence (text and screenshots) is
   committed; `.env` and saved sessions never.
 
