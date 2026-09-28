@@ -4,6 +4,8 @@ References:
 - @docs/methodology.md — universal methodology
 - docs/technique-browser.md — browser automation technique (read when running browser batches; `/run-batch`, `/project-onboarding`)
 - docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/log-bug`)
+- docs/technique-jira-xray.md — Jira + Xray tracker adapter technique, with the common contract of the tracker adapters in §2 (read when `tracker: jira`, or when touching `adapters/tracker/` or `adapters/jira/`; being built in plan phase 10)
+- docs/technique-azure-devops.md — Azure DevOps (Test Plans + Boards) tracker adapter technique (read when `tracker: azure-devops`, or when touching `adapters/azure_devops/`; being built in plan phase 10)
 - docs/technique-api.md — API testing technique (read when the `api` module is active; `/test-api`)
 - docs/technique-accessibility.md — WCAG 2.1 AA accessibility technique (read when the `accessibility` module is active; `/audit-accessibility`)
 - docs/technique-mobile.md — mobile technique with Maestro (read when the `mobile` module is active; `/test-mobile`)

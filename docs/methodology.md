@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.1 · 2026-09-26 · Replaces the version used in Claude.ai Projects; in English since plan 8.11.
+> Version 2.2 · 2026-09-28 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -26,7 +26,7 @@
 | **Engine** | Skills (`.claude/skills/`), adapters, scripts (`scripts/`, `tools/`), tests and guards; and the automated audit engine `qa-audit` (`src/qa_audit`, specified in `docs/qa-audit.md`), which lives next to this layer and does not replace it (decision of 25.09.2026, which revises the one of 24.09.2026 about a separate core) | Personal repository `qa-assistant` |
 | **1. Methodology** | This document | `qa-assistant/docs/` |
 | **2. Test modules** | Techniques per type of test (`technique-browser.md`, `technique-api.md`, `technique-accessibility.md`, `technique-mobile.md`; list in §4.1) | `qa-assistant/docs/` |
-| **3. Adapters** | Conversion between the internal model and each company's tools. Today only Excel (`adapters/excel/`); the other trackers are manual logging (§4.2) | `qa-assistant/adapters/` |
+| **3. Adapters** | Conversion between the internal model and each company's tools: Excel (`adapters/excel/`, technique `technique-excel.md`), Jira with Xray and Azure DevOps Test Plans (`adapters/jira/`, `adapters/azure_devops/`, on the common base `adapters/tracker/`; techniques `technique-jira-xray.md` and `technique-azure-devops.md`; being built in phase 10 of the plan, manual logging until then — §4.2) | `qa-assistant/adapters/` |
 | **4. Workspace** | Project context, environments, roles, workbook, runs, history, credentials | `qa-workspaces/<company>/<project>/` |
 
 ### 1.2 Privacy boundary
@@ -69,7 +69,7 @@ Always tell a **framework capability** apart from a **project's implementation d
 
 ## 2. Data model
 
-The internal model is independent of any company's format: it is the common vocabulary of the skills, the run logs and the adapters, not a separate database. Excel workbooks, Azure DevOps and Jira are input and output formats; those with an adapter are handled by it, the others by hand (§4.2).
+The internal model is independent of any company's format: it is the common vocabulary of the skills, the run logs and the adapters, not a separate database. Excel workbooks, Azure DevOps and Jira are input and output formats, each handled by its adapter (§4.2).
 
 | Entity | Minimum fields |
 |---|---|
@@ -84,7 +84,7 @@ The internal model is independent of any company's format: it is the common voca
 
 Possible statuses of a **Result**: `Pass`, `Fail`, `N/A`, `Blocked`, `Not run`. The provisional status `Question` can exist during the session, but can never reach a final report (see §8.5).
 
-A case's ID is **stable**: it does not change when the case is edited, moved or exported. The adapters keep the mapping between the internal ID and each external tool's ID.
+A case's ID is **stable**: it does not change when the case is edited, moved or exported. The adapters keep the mapping between the internal ID and each external tool's ID. With an external tracker, the mapping lives **in the tracker** (its own key, a field or a label, chosen per project), so it is the same for everyone; the workspace keeps only a cache of it (`tracker/ids.yaml`).
 
 ---
 
@@ -130,7 +130,7 @@ Each stage has a corresponding skill in Claude Code:
    The workspace is a **git repository of its own**, with a **private remote** (one repository per project, never one for several clients): `git init`, the `.gitignore` of `docs/workspace/` (`.env`, saved sessions, `dashboard.html`, app binaries) and a `.env.example` with the variable names only. The remote is created only with the user's approval, and every push too (§12.3). App binaries (APK/IPA) are not committed: `project.yaml` records where the build comes from and its SHA-256.
 5. Check that no project information was written into the universal layers.
 6. Create the initial `context.md` (see §12.2).
-7. Import the existing cases with the project's adapter and validate the round-trip (import → export → compare). With the Excel adapter, which reads and writes the workbook itself (there is no import into a separate model), this is `ExcelAdapter.from_project(...).load()` without errors and `cross_check()` showing only problems that were already in the workbook; `python scripts/validate_project.py <workspace>` does both.
+7. Import the existing cases with the project's adapter and validate the round-trip (import → export → compare). With the Excel adapter, which reads and writes the workbook itself (there is no import into a separate model), this is `ExcelAdapter.from_project(...).load()` without errors and `cross_check()` showing only problems that were already in the workbook; `python scripts/validate_project.py <workspace>` does both. With Jira or Azure DevOps, `python -m adapters.tracker <workspace> check` (configuration against the real tracker, read only) and then `import-cases` (read only, into `tracker/cases.json`), with the flags it raises shown to the user; the round trip is covered by the adapter's golden (§15), so nothing is written to the tracker at the onboarding.
 
 A workspace created before the translation (plan 8.11) is converted once with `python scripts/migrate_workspace.py <workspace>` (dry run by default, `--apply` to write).
 
@@ -150,14 +150,16 @@ Other variants mentioned in the techniques (smoke, role matrix, visual, cross-br
 
 ### 4.2 Trackers
 
-`tracker:` in `project.yaml` accepts `excel`, `jira` and `azure-devops`, but only Excel has an adapter:
+`tracker:` in `project.yaml` accepts `excel`, `jira` (with Xray) and `azure-devops` (Test Plans + Boards). Each has an adapter with the same four directions — results, bugs, importing cases, exporting new cases — and the same rules: everything validated and resolved before the first write, nothing sent without the user's approval (§9.4), a batch never sent twice without being detected:
 
-| Tracker | Results | Bugs | Dashboard |
-|---|---|---|---|
-| `excel` | applied by the adapter at `/checkpoint` (`python -m adapters.excel.apply`) | `new_defect` / `bug` in the run log, applied with the results | `/dashboard` |
-| `jira`, `azure-devops` | **manual logging**: the run log in `runs/` is the source; the user (or the assistant, with the tracker's tool available and approval) passes them to the tracker | prepared in the project's format and sent only once approved (§9.4) | none |
+| Tracker | Results | Bugs | Cases | Dashboard |
+|---|---|---|---|---|
+| `excel` | applied by the adapter at `/checkpoint` (`python -m adapters.excel.apply`) | `new_defect` / `bug` in the run log, applied with the results | the workbook itself | `/dashboard` |
+| `jira`, `azure-devops` | sent by the adapter at `/checkpoint` (`python -m adapters.tracker <workspace> apply`): a dry run first, `--yes` only after the user approves what it showed; one Test Execution (Xray) / test run (Azure DevOps) per batch | the same `new_defect` / `bug` in the run log, created or updated with the results; duplicates searched with `bug-search` (§9.1) | `import-cases` (read only) and `export-cases` (the new cases approved in `/generate-cases`) | none (the tracker's own reports) |
 
-An adapter for another tracker is only written when a real project needs it, with the golden and the tests of the Excel adapter as a model (§15). `scripts/validate_project.py` warns when the tracker has no adapter.
+The configuration is the tracker's section of `project.yaml` (`excel:`, `jira:`, `azure_devops:`), with credentials only as names of `.env` variables; the technique of each adapter (`technique-excel.md`, `technique-jira-xray.md`, `technique-azure-devops.md`) has the details. Version 1 of the Jira and Azure DevOps adapters targets the **cloud** services (Jira Cloud + Xray Cloud, Azure DevOps Services); Server / Data Center stays out until a real project needs it.
+
+The Jira and Azure DevOps adapters are built in phase 10 of the plan. Until the task of a tracker is done, that tracker works as **manual logging**: the run log in `runs/` is the source, the user (or the assistant, with the tracker's tool available and approval) passes the results and bugs to the tracker, and `scripts/validate_project.py` warns that the tracker has no adapter yet. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
 
 Information already in the workspace **is not asked for nor researched again**, unless there is evidence that it is out of date or inconsistent. If information needed to continue is missing, identify exactly what is missing and ask.
 
@@ -226,6 +228,7 @@ During the session, the results are written to a run log in `runs/` (one file pe
 ```
 
 - `status` uses the project's vocabulary; `actual_result` is what was observed (not the expected result copied); `bug` is an **existing** bug linked to the case.
+- The run's context goes at the top level, `"run": {"environment": "<key of environments>", "build": "<version>"}` (the **Run** of §2); the Jira and Azure DevOps adapters require it, the Excel adapter ignores it.
 - A **new** bug goes as `new_defect` (fields in the tracker's technique, e.g. `technique-excel.md` §4), only after the user approves it (§9).
 - Cases in `Question` can stay in the log during the session, but are reclassified before the batch goes to the workbook or tracker (§8.5): the adapter refuses a batch with statuses outside the project's vocabulary.
 
@@ -339,7 +342,7 @@ The bug's structure always follows the project's format. It is not changed witho
 
 ### 9.4 Sending to the tracker
 
-The assistant prepares the bug. Sending it to the external tracker only happens **after the user approves it**.
+The assistant prepares the bug. Sending it to the external tracker only happens **after the user approves it**. The tracker adapters make this explicit: without `--yes` they only show what they would send (a dry run); the `--yes` run happens only after the user approved that list.
 
 ---
 
@@ -534,6 +537,12 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.1 → v2.2 (plan phase 10, 28.09.2026)
+
+- **Changed:** Jira (with Xray) and Azure DevOps (Test Plans + Boards) get adapters (§1.1, §4.2), with the four directions of the Excel one plus importing and exporting cases; this revises the 24.09.2026 decision (plan 7.7) that kept them as manual logging. Manual logging stays until each adapter is done.
+- **New:** the case ID mapping lives in the external tracker, with a cache in the workspace (§2); the run log's optional `run` block (environment and build, §7.1); the dry run before sending to a tracker (§9.4).
+- **Kept:** the run log as the source during the session, checkpoints, `Question` refused before sending, approval before any bug reaches a tracker.
 
 ### v2.0 → v2.1 (plan 8.11, 26.09.2026)
 

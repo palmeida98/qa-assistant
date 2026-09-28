@@ -88,7 +88,7 @@ The generated cases are proposals until the user approves them; a bug is only cr
 
 ### Trackers
 
-Only Excel has an adapter: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. With `jira` or `azure-devops`, the run log in `runs/` is the source and passing it to the tracker is manual, always with approval (methodology §4.2). A new adapter is only written when a real project needs it.
+Excel has an adapter: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. Adapters for Jira with Xray and for Azure DevOps Test Plans (results, bugs, importing and exporting cases, always with approval) are specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md` and being built (plan phase 10); until then, with `jira` or `azure-devops`, the run log in `runs/` is the source and passing it to the tracker is manual, always with approval (methodology §4.2).
 
 ## Demo
 
@@ -122,4 +122,4 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
 
-Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stay as manual logging.
+Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stayed as manual logging until the user's decision of 28.09.2026 to build their adapters (plan phase 10).
