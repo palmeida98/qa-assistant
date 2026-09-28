@@ -1,0 +1,33 @@
+# .gitignore of a project workspace (methodology section 4, step 4; plan 9.4).
+# Copied by `python scripts/workspace_git.py <workspace> init`, which adds the missing lines to an existing one.
+# The workspace keeps the project's data by design (its remote is private); what is here never goes in it.
+
+# credentials: the values live only in .env; .env.example has the names (committed)
+.env
+.env.*
+!.env.example
+.api-session.env
+
+# saved login sessions (qa-audit login, Playwright storage state)
+.qa-audit/
+*storage-state*.json
+.playwright-mcp/
+
+# generated from the workbook (scripts/build_dashboard.py)
+dashboard.html
+
+# app binaries: project.yaml records where the build comes from and its SHA-256 (mobile.build)
+*.apk
+*.aab
+*.ipa
+app/
+
+# Office lock files
+~$*
+.~lock.*#
+
+# personal Claude Code settings (the shared ones, .claude/settings.json, are committed)
+.claude/settings.local.json
+
+__pycache__/
+.DS_Store

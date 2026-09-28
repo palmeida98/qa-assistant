@@ -26,6 +26,19 @@ import migrate_workspace as mw
 
 from adapters.excel import batch_hash
 
+# git exports these to its hooks; committing from a linked worktree they are absolute paths, and the `git -C <tmp>`
+# of the script under test then reads this repository instead of the temporary workspace
+GIT_HOOK_VARIABLES = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_PREFIX", "GIT_COMMON_DIR")
+_hook_env = {}
+
+
+def setUpModule():
+    _hook_env.update({k: os.environ.pop(k) for k in GIT_HOOK_VARIABLES if k in os.environ})
+
+
+def tearDownModule():
+    os.environ.update(_hook_env)
+
 OLD_PROJECT = """projeto: "loja-demo"
 empresa: "demo"
 ambientes:

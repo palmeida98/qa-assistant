@@ -127,6 +127,7 @@ Each stage has a corresponding skill in Claude Code:
    - active test modules;
    - the project's exceptions and own rules.
 4. Confirm that `.env` is in `.gitignore` and that `history/` is protected: the workspace's `.claude/settings.json` (copied from `qa-assistant/docs/workspace/settings.json`) forbids editing `history/**` (§13).
+   The workspace is a **git repository of its own**, with a **private remote** (one repository per project, never one for several clients): `git init`, the `.gitignore` of `docs/workspace/` (`.env`, saved sessions, `dashboard.html`, app binaries) and a `.env.example` with the variable names only. The remote is created only with the user's approval, and every push too (§12.3). App binaries (APK/IPA) are not committed: `project.yaml` records where the build comes from and its SHA-256.
 5. Check that no project information was written into the universal layers.
 6. Create the initial `context.md` (see §12.2).
 7. Import the existing cases with the project's adapter and validate the round-trip (import → export → compare). With the Excel adapter, which reads and writes the workbook itself (there is no import into a separate model), this is `ExcelAdapter.from_project(...).load()` without errors and `cross_check()` showing only problems that were already in the workbook; `python scripts/validate_project.py <workspace>` does both.
@@ -376,7 +377,7 @@ Check especially: case IDs, feature names, statuses, results, bugs, descriptions
 - The execution must survive interruptions.
 - When resuming: read `context.md` and the latest run log in `runs/` first, identify what was already run and continue from the last valid point.
 - Do not repeat work without need. Do not rebuild the progress from scratch.
-- The workspace's git (when there is one) serves as a restore point: one commit per checkpoint.
+- The workspace's git serves as a restore point: one commit per checkpoint. The checkpoint says how many commits are not pushed; the push to the private remote happens only when the user says so, never with `--force`.
 
 ### 12.2 Structure of `context.md`
 
@@ -395,6 +396,20 @@ Updated: <date and time>
 ```
 
 `context.md` is the session's **temporary** state. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
+
+### 12.3 Resuming on another computer
+
+A project must be continuable from any computer with access to its private remote:
+
+1. Install `qa-assistant` (clone, `pip install -r requirements.txt` and `pip install -e .`, `python scripts/sync_skills.py --apply`).
+2. Clone the workspace into `qa-workspaces/<company>/<project>/`.
+3. Create `.env` from `.env.example`, with the values from the user's own secret store (never from the repository, a chat or a log).
+4. `python scripts/validate_project.py <workspace> --environment`: the tools the active modules need are present; what is missing is installed before testing (e.g. `scripts/setup_emulator.py` for `mobile`).
+5. Read `context.md` and continue from the last checkpoint (§12.1).
+
+Anything a run needs and that is not in the repository (a build, a device, a login link) is written in `context.md` or `project.yaml`, with where to get it.
+
+Step by step, with what each module needs: [`docs/workspace/resume.md`](workspace/resume.md).
 
 ---
 

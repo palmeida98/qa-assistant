@@ -13,7 +13,13 @@ description: Saves the run log, updates the workspace's context.md in the format
    blockers, pending work and validation state. Update the date and time.
 5. Do not rebuild the progress from scratch: add to what is already recorded (section 12.1).
 6. If the workspace is a git repository, make one local commit per checkpoint (section 12.1),
-   only with the run log files and context.md. Never push.
+   only with the run log files and context.md (and the evidence of the batch, if any). Then, from the root of
+   qa-assistant: python scripts/workspace_git.py <workspace> status
+   and tell the user how many commits are not pushed (and any untracked file or file over 50 MB).
+6a. Push ONLY when the user says so: python scripts/workspace_git.py <workspace> push
+   (never --force, never git push by hand). Exit 1 = refused (a public remote or one whose visibility gh cannot
+   confirm, .env tracked, a file over 50 MB): show the reason; --i-confirm-private only after the user checked
+   that the remote is private.
 7. Do not pass results to the main workbook/tracker without the user's confirmation. With the excel
    tracker and confirmation given, apply the batch through the adapter (technique-excel.md section 1), from
    the root of qa-assistant: python -m adapters.excel.apply <workspace> <run_log>/<batch>.json
@@ -29,6 +35,8 @@ description: Saves the run log, updates the workspace's context.md in the format
      (summary): show the cells to the user; the summary's FORMULAS are fixed, never the numbers
      by hand. The totals of the dashboard and of the session summary come from the direct count.
    Applying the same batch again changes nothing (the adapter detects it).
+   After exit 0, commit the workbook too (a second local commit, "<batch>: applied"), so a clone on
+   another computer has the current workbook (methodology section 12.3); then workspace_git.py status again.
 7a. With the jira or azure-devops tracker (no adapter; methodology.md section 4.2), the run log is the
    source: show the user what goes to the tracker (approved results and bugs) and only send it with the
    tracker's tool available and explicit approval; otherwise, leave the list for them to pass by hand.

@@ -34,6 +34,7 @@
 | 6 | Portfolio: README, demo, decision on the repository's visibility | Done (the repository stays private by the user's decision, 24.09.2026) |
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
+| 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -725,10 +726,133 @@ scroll back where they were: the note of `qa-audit check` now says so, and its t
 
 ---
 
+## Phase 9 — Conversational apps on a device and portable workspaces
+
+Why: a real mobile pilot (an LLM chat app, 27–28.09.2026) was run with helpers written in the session's scratchpad,
+outside the framework: reading the screen through `adb`, tapping by text, typing accented text, sending a message and
+waiting for the reply to settle, screenshots only with the app in the foreground. Maestro flows (§4 of the mobile
+technique) did not fit: the app's answers are not deterministic, so a flow cannot assert them; the agent reads each
+answer and classifies it. The emulator needed manual work (an ARM-only APK on an x86_64 image, a magic-link login, the
+browser's first run). And the workspace was a local git repository with no remote: the project could not be continued
+on another computer. This phase brings all of that into the framework. Everything stays universal: no app, account or
+text of the pilot enters this repository (methodology §1.2); the examples use the Demo Shop.
+
+Decisions of the user (28.09.2026): one git repository per project workspace, with a **private remote**; the
+checkpoint commits locally and a push happens only with the user's approval; it must be possible to clone a workspace
+on any computer and run its tests. All phases, in order.
+
+### 9.0 Specification first (methodology §15) — done 28.09.2026
+- [x] Methodology: §4 (onboarding) — the workspace is a git repository with a private remote, created at onboarding;
+  §12 (continuity) — resuming on another computer: clone, `.env` from the user's own secret store, environment check,
+  then read `context.md`; §13 unchanged (`history/` still protected by the workspace's settings, which are versioned).
+- [x] `technique-mobile.md`: a new execution level **N1 · Device driver** (`scripts/device.py`) next to Maestro flows,
+  and when to use each (deterministic UI → flow; generated content, e.g. an AI assistant's answers → conversational
+  mode, the agent classifies); the conversational mode (one turn per step, wait for the reply to settle, text from the
+  accessibility tree and a screenshot when the tree misses content — cards, multi-line bubbles); the privacy rule
+  (screenshots and dumps only with the target app in the foreground); emulator preparation (§1) for ARM-only apps on
+  x86_64 images and deep-link / magic-link logins.
+- [x] Decisions to write down: app binaries (APK/IPA) are **not** committed (size limits, and they are the client's
+  artefact) — `project.yaml` records where the build comes from and its SHA-256; evidence (text and screenshots) is
+  committed; `.env` and saved sessions never.
+
+### 9.1 `scripts/device.py` — the device driver — done 28.09.2026
+- [x] Subcommands: `check` (target, OS, model, app version, foreground app), `dump` (visible text with bounds, one
+  line per node), `tap` (by exact text first, then contains; or by coordinates), `type` (Unicode, through Maestro's
+  `inputText` or an ADB keyboard; plain `adb input text` refuses non-ASCII), `send` (type, tap send, wait until the
+  screen is stable, print only what is new after the message), `shot` (screenshot to `evidence/<batch>/`), `link`
+  (open a deep link or a login callback with `am start`).
+- [x] Privacy: `dump` and `shot` refuse (exit 3) when the foreground app is not the workspace's `mobile.app_id`; no
+  credential ever on the command line; `link` never writes the URL (a one-time token) to a file or log.
+- [x] Reads `project.yaml` (`mobile.app_id`, device serial) through `scripts/common.py`; exit codes documented
+  (0 ok · 2 usage/configuration · 3 no target or app not in the foreground · 4 element not found).
+- [x] Tests with a fake `adb` (no device): parsing of the uiautomator XML (entities, empty text with content-desc,
+  zero-size nodes), exact-before-contains matching, the foreground guard, "stable screen" detection, `send` printing
+  only the new text.
+
+### 9.2 `scripts/setup_emulator.py` — a reproducible Android target — done 28.09.2026
+- [x] Idempotent steps: check the SDK (`emulator`, `adb`), create the AVD if missing, boot and wait for
+  `sys.boot_completed`, install the build given by path (checked against the SHA-256 in `project.yaml`), grant or
+  revoke permissions listed in `project.yaml`, turn off the browser's first run.
+- [x] Detects an ARM-only APK on an x86_64 image with native translation, and `extractNativeLibs=false`: places the
+  APK's `lib/arm64-v8a/*.so` in the app's native library folder (root image), says so, and tells that it must be
+  repeated after each reinstall. It never changes the APK.
+- [x] Refuses production builds (the rule of §3 of the technique) and says what it cannot do (e.g. a Play Store image
+  without root).
+- [x] Tests with a fake SDK/`adb`: each step skipped when already done; the ARM-only detection from a fixture APK.
+
+### 9.3 Skill `/test-mobile` with both modes — done 28.09.2026
+- [x] The skill picks the mode per batch (flows or conversational) and says why; in conversational mode: one new
+  conversation per theme when the case asks for it, a note per turn in the run log, screenshot when the dump misses
+  content, the same classification (methodology §8, technique §6).
+- [x] `/project-onboarding` asks for the mobile target and records it in `project.yaml` (`mobile.device`,
+  `mobile.build`, `mobile.permissions`); `scripts/validate_project.py` checks the new keys.
+- [x] `sync_skills.py --apply` run and the global copy in sync (apply by the parent session).
+
+### 9.4 Portable workspace (git + private remote) — done 28.09.2026
+- [x] `/project-onboarding` runs `git init` in the workspace, writes a `.gitignore` from a template in
+  `docs/workspace/` (`.env`, `.api-session.env`, saved sessions, `dashboard.html`, app binaries, Office lock files) and
+  a `.env.example` with the variable names from `project.yaml` (no values); it proposes the private remote
+  (`gh repo create --private`) and creates it only with the user's approval.
+- [x] `/checkpoint` keeps committing locally; it says how many commits are not pushed and pushes only when the user
+  says so. Never `--force`.
+- [x] `validate_project.py`: warns when there is no remote, when commits are not pushed, when `.env.example` misses a
+  variable of `project.yaml`, and when a file over 50 MB is tracked; a problem (exit 1) when `.env` is tracked.
+- [x] The privacy guard stays in `qa-assistant`; the workspace keeps client data by design, so its remote must be
+  private — `validate_project.py` checks it with `gh repo view --json visibility` when `gh` is available.
+- Note (where the spec was open): one helper, `scripts/workspace_git.py` (`init`, `status`, `remote`, `push`), shared
+  by the skills and `validate_project.py`. `init` refuses a folder inside another repository (e.g. the demo inside
+  `qa-assistant`), `.env` tracked, a `.gitignore` line that un-ignores `.env`, and a file over 50 MB in the initial
+  commit; the template also ignores `.playwright-mcp/` and `.claude/settings.local.json`. `remote --create` without
+  `--yes` only prints the command (exit 0). `push --i-confirm-private` overrides only an unconfirmed visibility, never
+  a PUBLIC one; INTERNAL counts as not private (refused by `push`, a warning in `validate_project.py`). The remote,
+  push, `.env.example` and 50 MB checks run only when the workspace is the top of its own repository; `.env` tracked
+  is a problem in any repository.
+
+### 9.5 Resume on another computer — done 28.09.2026
+- [x] `docs/workspace/resume.md` (or a section of the methodology): install `qa-assistant` (clone, `pip install -e .`,
+  `sync_skills.py --apply`), clone the workspace, fill `.env` from `.env.example`, `setup_emulator.py`, then
+  `/checkpoint`'s last point in `context.md`.
+- [x] `validate_project.py --environment`: the tools the workspace's modules need are present (adb/emulator/Maestro
+  for `mobile`, LibreOffice for the Excel recalculation, the browsers for `qa-audit`), with what is missing and how to
+  install it.
+- Note (where the spec was open): each tool is a line `[ok|missing] <tool>: <detail>` after the normal validation; a
+  missing tool is a warning (exit 0) unless `--strict` (exit 1; `--strict` without `--environment` is a usage error).
+  Always: git, the Python of `requires-python`, `.env` with every name of `.env.example` and of `project.yaml` (absent
+  and empty names listed, never a value) and the skills (`sync_skills.compare`, read only). Also `node` for
+  `functional-web`/`exploratory` (the Playwright MCP runs with `npx`; not in the plan's list); `excel-com` needs no
+  LibreOffice; `emulator` is not needed when `mobile.serial` is a real device; `ios` checks `xcrun`;
+  `mobile.build.source` only for an app (`android`/`ios`), not for `web`. The browsers are checked by the folders
+  `qa-audit doctor` looks in (nothing is started; the doctor starts them). Methodology §12.3 step 1 now also has
+  `pip install -r requirements.txt` (`pip install -e .` does not install openpyxl).
+
+### 9.6 Pilot and heuristics — done 28.09.2026
+- [x] The real mobile workspace gets its private remote (with the user's approval) and one batch is re-run from a
+  **fresh clone in another folder** (simulating another computer): the environment check passes, the batch runs with
+  `device.py`, `/checkpoint` applies it, the push is done with approval. Notes in that workspace's `context.md`, not
+  here.
+- [x] `docs/heuristics.md` gets the pilot's patterns, anonymised (methodology §17), e.g.: a chat app says a message
+  failed while it was delivered (it appears after reopening); a search shows raw highlight tags; a conversation list
+  stops at N items without paging; the accessibility tree misses cards and multi-line bubbles.
+
+Notes (9.6): the real workspace got its private remote and 33 commits pushed (with the evidence, by the user's decision); a fresh clone in another folder passed `validate_project.py --environment`, `setup_emulator.py` ran for real (skips, reinstall without `aapt2`, native libraries copied again by itself), `device.py` ran one case end to end, the adapter applied it and the push was done; the original folder pulled it. Found by the pilot: `/checkpoint` committed the run log and `context.md` but not the workbook after applying — fixed (a second commit after `apply` exits 0). Without `aapt2` in the SDK the build is reinstalled every run (harmless, slower).
+
+Acceptance of the phase: a new mobile project can be onboarded, tested in conversational mode, checkpointed and pushed,
+then cloned and continued on another computer, with no helper outside the framework; the unit tests and the fictional
+golden pass (methodology §15).
+
+---
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.6 done: pilot from a fresh clone (private remote, device driver, adapter, push); `/checkpoint` now commits the workbook after applying; 6 anonymised heuristics. Phase 9 done. |
+| 2026-09-28 | 9.5 done: `docs/workspace/resume.md` (the steps of methodology §12.3, linked from §12.3 and `/project-onboarding` 8c) and `validate_project.py --environment [--strict]` (reuses `find_soffice`, `setup_emulator.find_tools`, `sync_skills.compare` and the doctor's browser folders, each behind a function the tests replace); 11 new tests in `tests/test_validate_project.py` (397 → 408). Decisions in the note of 9.5. |
+| 2026-09-28 | 9.4 done: `docs/workspace/gitignore` (template) and `scripts/workspace_git.py` (`init`, `status`, `remote --create/--set`, `push`; `gh` through one function the tests fake); `common.variable_names()` (the `*_var` keys and `variables` lists of `project.yaml`) for `.env.example`; `validate_project.py` warns (no remote, commits not pushed, `.env.example` missing a variable, files over 50 MB) and has problems for `.env` tracked and a public remote; `/project-onboarding` step 8c (init, the remote proposed and created only with a yes) and `/checkpoint` 6/6a (status after the commit, push only when the user says so). `tests/test_workspace_git.py` (22) and 3 new validation tests, all in temporary repositories with git's hook variables dropped and a temporary global configuration (372 → 397 tests). Decisions in the note of 9.4. |
+| 2026-09-28 | 9.3 (skills and validation): `/test-mobile` picks the mode per batch and writes it with the reason at the top of the run log (`"mode"`); conversational mode with `setup_emulator.py` and `device.py check` first, a `send --capture <case>_t<N>` per turn, the screenshot read whenever the dump may miss content, one note per turn, guardrail answers judged by the spec's text; assisted mode (the user taps, the driver only reads). `/project-onboarding` asks for the target (`mobile.serial`, or `mobile.avd` + `mobile.image` — the plan's `mobile.device`), `mobile.build`, `mobile.permissions` and, for conversational apps, `send_label`, `ignore_labels`, `browser`, and shows `setup_emulator.py --dry-run`. `validate_project.py` checks `serial`, `send_label`, `ignore_labels`, `evidence_batch` (a quoted folder name: an unquoted date is a YAML integer and is refused) and `browser` (371 → 372 tests); the template has them as comments. Global copy of the skills still to sync. |
+| 2026-09-28 | 9.2 done: `scripts/setup_emulator.py` (SDK, AVD, boot, build checked against `mobile.build.sha256`, ARM-only native libraries on an x86_64 image with root, permissions, Chrome's first run; `--dry-run`, production builds refused) and the new `mobile:` keys (`avd`, `image`, `build`, `permissions`) in `validate_project.py` and the template; `tests/test_setup_emulator.py` with a fake SDK and fixture APKs built in the test (26 tests, 345 → 371). Decisions where the spec was open: default AVD `qa-<project>`; a missing `build.sha256` installs with a `skip` line that prints the hash to record; the dry run still does the local checks (SDK folders, SHA-256, the APK's libraries); a device step that fails stops the run (exit 3). Not run against a real SDK or emulator. |
+| 2026-09-28 | 9.1 done: `scripts/device.py` (check, dump, tap, type, send, shot, link) with the foreground guard, `.env` values refused in typed text and the link never printed; `tests/test_device.py` with a fake `adb` (29 tests, 316 → 345). Checked read-only on a real emulator: `check`, the guard refusing another app, and a real uiautomator dump parsed. Found on the way: committing from a linked git worktree, the `tests` hook failed in `test_validate_project` and `test_migrate_workspace` (git's hook variables, e.g. `GIT_DIR`, are absolute there and the `git -C <tmp>` of the scripts read this repository); both modules now drop them while they run. |
+| 2026-09-28 | Phase 9 planned by the user's decision, from a real mobile pilot run with helpers outside the framework: device driver and conversational mode, reproducible emulator, one git repository per workspace with a private remote, resume on another computer. |
 | 2026-09-23 | Initial version |
 | 2026-09-24 | General review (`994fa8b`): the denylist now reads Office files and file names (before, a client `.xlsx` got past the guard; history checked, clean); the adapter validates the whole batch before writing (`validate_batch`, code 4 in `apply`) and accepts an existing `bug`; a single run log format (methodology §7.1 = technique-excel §4); 27 `unittest` tests in CI and pre-commit (including the dashboard check of 5.1); ruff in pre-commit; skills aligned with the flow. |
 | 2026-09-24 | A batch edited after being applied: before, it was applied again (different hash) and duplicated notes and defects; now the control sheet keeps the `batch_id` (file name) and the adapter refuses it (code 4). Checked: `main` cannot be protected (private repository, Free plan: API 403); the CI is a warning after the push, not a barrier — to decide in 6.2. |

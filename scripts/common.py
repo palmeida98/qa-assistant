@@ -1,10 +1,11 @@
 """
 Code shared by a workspace's scripts (plan 7.8): reading project.yaml and .env,
-and redacting secrets in the evidence. Read only; nothing here writes to the
-workspace.
+the names of the .env variables project.yaml refers to, and redacting secrets in
+the evidence. Read only; nothing here writes to the workspace.
 
-Used by api_request.py, audit_a11y.py, run_mobile.py, build_dashboard.py and
-validate_project.py (from the scripts/ folder, which is on their sys.path).
+Used by api_request.py, audit_a11y.py, run_mobile.py, build_dashboard.py,
+device.py, workspace_git.py and validate_project.py (from the scripts/ folder,
+which is on their sys.path).
 """
 
 from __future__ import annotations
@@ -31,6 +32,32 @@ def read_project(workspace: str) -> dict:
         raise FileNotFoundError(f"{path} does not exist{hint}")
     with open(path, encoding="utf-8-sig") as f:
         return yaml.safe_load(f) or {}
+
+
+VARIABLE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def variable_names(proj) -> list[str]:
+    """Names of the .env variables project.yaml refers to, sorted: the values of the keys ending in `_var`
+    (e.g. api.credentials.<role>.user_var, accessibility.login.pass_var) and the items of the `variables` lists
+    (e.g. mobile.variables), at any depth. Only names: project.yaml never has values."""
+    found = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, str) and str(k).endswith("_var") and VARIABLE_NAME.fullmatch(v):
+                    found.add(v)
+                elif str(k) == "variables" and isinstance(v, list):
+                    found.update(x for x in v if isinstance(x, str) and VARIABLE_NAME.fullmatch(x))
+                else:
+                    walk(v)
+        elif isinstance(node, list):
+            for x in node:
+                walk(x)
+
+    walk(proj)
+    return sorted(found)
 
 
 def read_env(path: str) -> dict[str, str]:

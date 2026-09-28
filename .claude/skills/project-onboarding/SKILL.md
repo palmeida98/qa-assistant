@@ -69,7 +69,7 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
       the server (project servers ask for confirmation) and check with /mcp that "playwright"
       shows as connected. This session does not see the tools of the MCP registered now.
 6. Create .env with the credential variables identified, WITHOUT values.
-7. Confirm that .env, dashboard.html and .playwright-mcp/ are in the workspace's .gitignore. Protect history/
+7. The .gitignore comes in step 8c (from <qa>/docs/workspace/gitignore). Protect history/
    (methodology.md section 13): copy <qa>/docs/workspace/settings.json to <workspace>/.claude/settings.json; if it
    already exists, add "Edit(/history/**)" to permissions.deny without deleting the rest, and show the change.
 8. Create the initial context.md, in the format of methodology.md section 12.2.
@@ -78,4 +78,26 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
     of .env variables). At the end validate, from the root of qa-assistant:
     python scripts/validate_project.py <workspace>
     and only call the onboarding done with 0 problems (the warnings are shown to the user).
+8b. With mobile active (technique-mobile.md sections 1.1 and 4.1), ASK and record in mobile: of project.yaml:
+    - app_id and the target: mobile.serial (a real device or a running emulator) OR mobile.avd + mobile.image
+      (an emulator setup_emulator.py creates);
+    - mobile.build: source (where the TEST build comes from) and sha256 of the file. The APK/IPA is never
+      committed nor copied into the workspace's git;
+    - mobile.permissions (grant / revoke);
+    - for a conversational app (generated content): mobile.send_label, mobile.ignore_labels (the app's
+      chrome) and mobile.browser (if the login is by e-mail link).
+    With an emulator, show the plan without touching anything: python scripts/setup_emulator.py <workspace>
+    --dry-run [--apk <path of the build>]
+    (from the root of qa-assistant), then validate again (8a).
+8c. With the files created, make the workspace a git repository of its own (methodology.md sections 4, step 4,
+    and 12.3), from the root of qa-assistant:
+    python scripts/workspace_git.py <workspace> init
+    (git init on branch main, the .gitignore of the template, .env.example with the variable NAMES of project.yaml,
+    the initial commit; exit 1 = refused, e.g. .env tracked: show why and fix it with the user). Then PROPOSE the
+    private remote: show the command without running it
+    python scripts/workspace_git.py <workspace> remote --create <owner>/<company>-<project>
+    and, only if the user says yes, run it again with --yes (always --private; with no gh, the user creates a
+    private repository and remote --set URL adds it). Do not push here: the push is the user's call (/checkpoint).
+    Validate again (8a): "no remote" stays a warning if the user declined.
+    To continue the project on another computer: <qa>/docs/workspace/resume.md (methodology.md section 12.3).
 9. Never write this project's information into the universal layers (docs/ of qa-assistant).
