@@ -1,6 +1,6 @@
 # Resuming a project on another computer
 
-The steps of methodology §12.3, in order. The examples use the fictional Demo Shop (`demo/demo-shop`); `<qa>` is the
+The steps of methodology §12.3, in order. On a computer that has never run `qa-assistant`, install the tools first with [`setup.md`](setup.md). The examples use the fictional Demo Shop (`demo/demo-shop`); `<qa>` is the
 folder of `qa-assistant`, `<ws>` the workspace's folder.
 
 1. **Prerequisites.** git; Python 3.12 or newer (`requires-python` in `pyproject.toml`); the GitHub CLI logged in
@@ -34,7 +34,7 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
      `python scripts/setup_emulator.py <ws> --dry-run`, and without `--dry-run` once the plan is right;
    - `api`: nothing beyond Python.
 6. **Get the build** (mobile apps): it is not in git. `mobile.build.source` in `project.yaml` says where it comes
-   from; `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
+   from (often a release of the workspace's private repository: `gh release download <tag> -D app`); `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
 7. **Continue**: open Claude Code in the workspace, read `context.md` and the latest run log in `runs/`, and go on
    from the last checkpoint (methodology §12.1). Whatever a run needs that is not in the repository (a device, a login
    link) is written in `context.md` or `project.yaml`.

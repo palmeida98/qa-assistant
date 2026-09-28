@@ -401,7 +401,7 @@ Updated: <date and time>
 
 A project must be continuable from any computer with access to its private remote:
 
-1. Install `qa-assistant` (clone, `pip install -r requirements.txt` and `pip install -e .`, `python scripts/sync_skills.py --apply`).
+1. Install the tools and `qa-assistant` ([`workspace/setup.md`](workspace/setup.md); clone, `pip install -r requirements.txt` and `pip install -e .`, `python scripts/sync_skills.py --apply`).
 2. Clone the workspace into `qa-workspaces/<company>/<project>/`.
 3. Create `.env` from `.env.example`, with the values from the user's own secret store (never from the repository, a chat or a log).
 4. `python scripts/validate_project.py <workspace> --environment`: the tools the active modules need are present; what is missing is installed before testing (e.g. `scripts/setup_emulator.py` for `mobile`).
