@@ -32,6 +32,12 @@ mobile:
   platform: ""                 # android | ios | web (Maestro Web, beta)
   flows: "flows"               # folder of the Maestro flows in the workspace; one per case: TC-MOB-<n>_<name>.yaml
   variables: []                # .env variables the flows use as ${MAESTRO_<VAR>}
+  # (opt.) Android target, read by scripts/device.py and scripts/setup_emulator.py (technique-mobile.md §1.1):
+  # app_id: ""                 # the app under test, e.g. com.demoshop.app
+  # avd: ""                    # AVD name (default: qa-<project>)
+  # image: "system-images;android-35;google_apis;x86_64"   # Google APIs (has root); a Play Store image has none
+  # build: {source: "", sha256: ""}   # where the build comes from (APKs are never committed) and its SHA-256
+  # permissions: {grant: [], revoke: []}   # e.g. grant: [android.permission.POST_NOTIFICATIONS]
 
 # dashboard: meaning of each case status in the dashboard (scripts/build_dashboard.py, plan 5.1).
 # (opt.) Types: pending | ok | fail | blocked | na. "Run" = cases outside pending.

@@ -2,9 +2,10 @@
 Validates a workspace's project.yaml (methodology.md sections 4 and 4.1; plan,
 task 3.4): base fields, the URL of each environment, modules from the closed
 list, the section of each active module, module URLs inside the declared
-environments (never production), Excel (when tracker: excel), the dashboard:
-section and, in a workspace with git, the .gitignore of the files with secrets
-(warning) and the protection of history/ in .claude/settings.json (warning).
+environments (never production), the emulator keys of mobile: (plan 9.2),
+Excel (when tracker: excel), the dashboard: section and, in a workspace with
+git, the .gitignore of the files with secrets (warning) and the protection of
+history/ in .claude/settings.json (warning).
 
     python scripts/validate_project.py <workspace>
 
@@ -80,6 +81,46 @@ def gitignore_warnings(workspace: str, proj: dict, modules: list) -> list[str]:
     missing = [f for f in files if subprocess.run([git, "-C", workspace, "check-ignore", "-q", f],
                                                   capture_output=True, check=False).returncode != 0]
     return [f"{f} is not in the workspace's .gitignore (it has secrets or project data)" for f in missing]
+
+
+def mobile_target(proj: dict) -> tuple[list[str], list[str]]:
+    """The keys of mobile: that scripts/setup_emulator.py reads (plan 9.2): avd, image, build, permissions."""
+    m = proj.get("mobile")
+    if not isinstance(m, dict):
+        return [], []
+    problems, warnings = [], []
+    if m.get("avd") is not None and not (isinstance(m["avd"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", m["avd"])):
+        problems.append(f"mobile.avd {m['avd']!r}: an AVD name (letters, digits, '.', '_', '-')")
+    if m.get("image") is not None and not (isinstance(m["image"], str) and m["image"].startswith("system-images;")
+                                           and m["image"].count(";") == 3):
+        problems.append(f"mobile.image {m['image']!r}: expected system-images;android-<n>;<tag>;<abi>")
+    build = m.get("build")
+    if build is not None:
+        if not isinstance(build, dict):
+            problems.append("mobile.build must be a map {source, sha256}")
+        else:
+            if not isinstance(build.get("source") or "", str):
+                problems.append("mobile.build.source must be a text (where the build comes from)")
+            sha = build.get("sha256")
+            if sha in (None, ""):
+                warnings.append("mobile.build.sha256 is missing: setup_emulator.py cannot check the build it "
+                                "installs")
+            elif not (isinstance(sha, str) and re.fullmatch(r"[0-9a-fA-F]{64}", sha)):
+                problems.append("mobile.build.sha256 must be 64 hexadecimal characters")
+    perms = m.get("permissions")
+    if perms is not None:
+        if not isinstance(perms, dict) or set(perms) - {"grant", "revoke"}:
+            problems.append("mobile.permissions must be a map with 'grant' and/or 'revoke' (lists)")
+        else:
+            lists = {k: perms.get(k) or [] for k in ("grant", "revoke")}
+            for k, v in lists.items():
+                if not isinstance(v, list) or not all(isinstance(x, str) and x for x in v):
+                    problems.append(f"mobile.permissions.{k} must be a list of permission names")
+            if all(isinstance(v, list) for v in lists.values()):
+                both = sorted(set(lists["grant"]) & set(lists["revoke"]))
+                if both:
+                    problems.append(f"mobile.permissions: {both} both granted and revoked")
+    return problems, warnings
 
 
 HISTORY_RULE = re.compile(r"^Edit\((/|\./)?history/\*\*\)$")
@@ -186,6 +227,9 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
         elif "prod" in str(env).lower():
             problems.append(f"{url_field} ({url}) points to the environment '{env}' (production?)")
 
+    p, w = mobile_target(proj)
+    problems += p
+    warnings += w
     warnings += gitignore_warnings(workspace, proj, modules)
     warnings += mcp_warnings(workspace)
     if not history_protected(workspace):

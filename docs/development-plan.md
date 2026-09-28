@@ -769,16 +769,16 @@ on any computer and run its tests. All phases, in order.
   zero-size nodes), exact-before-contains matching, the foreground guard, "stable screen" detection, `send` printing
   only the new text.
 
-### 9.2 `scripts/setup_emulator.py` — a reproducible Android target
-- [ ] Idempotent steps: check the SDK (`emulator`, `adb`), create the AVD if missing, boot and wait for
+### 9.2 `scripts/setup_emulator.py` — a reproducible Android target — done 28.09.2026
+- [x] Idempotent steps: check the SDK (`emulator`, `adb`), create the AVD if missing, boot and wait for
   `sys.boot_completed`, install the build given by path (checked against the SHA-256 in `project.yaml`), grant or
   revoke permissions listed in `project.yaml`, turn off the browser's first run.
-- [ ] Detects an ARM-only APK on an x86_64 image with native translation, and `extractNativeLibs=false`: places the
+- [x] Detects an ARM-only APK on an x86_64 image with native translation, and `extractNativeLibs=false`: places the
   APK's `lib/arm64-v8a/*.so` in the app's native library folder (root image), says so, and tells that it must be
   repeated after each reinstall. It never changes the APK.
-- [ ] Refuses production builds (the rule of §3 of the technique) and says what it cannot do (e.g. a Play Store image
+- [x] Refuses production builds (the rule of §3 of the technique) and says what it cannot do (e.g. a Play Store image
   without root).
-- [ ] Tests with a fake SDK/`adb`: each step skipped when already done; the ARM-only detection from a fixture APK.
+- [x] Tests with a fake SDK/`adb`: each step skipped when already done; the ARM-only detection from a fixture APK.
 
 ### 9.3 Skill `/test-mobile` with both modes
 - [ ] The skill picks the mode per batch (flows or conversational) and says why; in conversational mode: one new
@@ -827,6 +827,7 @@ golden pass (methodology §15).
 
 | Date | Change |
 |---|---|
+| 2026-09-28 | 9.2 done: `scripts/setup_emulator.py` (SDK, AVD, boot, build checked against `mobile.build.sha256`, ARM-only native libraries on an x86_64 image with root, permissions, Chrome's first run; `--dry-run`, production builds refused) and the new `mobile:` keys (`avd`, `image`, `build`, `permissions`) in `validate_project.py` and the template; `tests/test_setup_emulator.py` with a fake SDK and fixture APKs built in the test (26 tests, 345 → 371). Decisions where the spec was open: default AVD `qa-<project>`; a missing `build.sha256` installs with a `skip` line that prints the hash to record; the dry run still does the local checks (SDK folders, SHA-256, the APK's libraries); a device step that fails stops the run (exit 3). Not run against a real SDK or emulator. |
 | 2026-09-28 | 9.1 done: `scripts/device.py` (check, dump, tap, type, send, shot, link) with the foreground guard, `.env` values refused in typed text and the link never printed; `tests/test_device.py` with a fake `adb` (29 tests, 316 → 345). Checked read-only on a real emulator: `check`, the guard refusing another app, and a real uiautomator dump parsed. Found on the way: committing from a linked git worktree, the `tests` hook failed in `test_validate_project` and `test_migrate_workspace` (git's hook variables, e.g. `GIT_DIR`, are absolute there and the `git -C <tmp>` of the scripts read this repository); both modules now drop them while they run. |
 | 2026-09-28 | Phase 9 planned by the user's decision, from a real mobile pilot run with helpers outside the framework: device driver and conversational mode, reproducible emulator, one git repository per workspace with a private remote, resume on another computer. |
 | 2026-09-23 | Initial version |
