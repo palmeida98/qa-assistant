@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases) and 11.2 (driver, helper flows, run log) done (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases), 11.2 (driver, helper flows, run log) and 11.3 (login through an issue) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1281,15 +1281,27 @@ Constraints written down now:
   sentence of methodology §9.3 (method, not only the skill); `/test-mobile` points to `send --file`, the helper flow
   and `run_log.py`.
 
-### 11.3 Manual login through an issue (`scripts/remote_login.py`)
-- [ ] `request`: runs the workspace's helper flow that asks for the link (`ci.login.flow`), then opens or reuses an
+### 11.3 Manual login through an issue (`scripts/remote_login.py`) — done 29.09.2026
+- [x] `request`: runs the workspace's helper flow that asks for the link (`ci.login.flow`), then opens or reuses an
   issue "Login needed — <run id>" in the workspace's repository, mentioning the owner, with what to paste and the time
   limit. `wait`: polls the issue's comments (every 15 s, up to `login.timeout_minutes`) for a comment **from the
   repository owner** with a URL of a host of `project.yaml`; masks it (`::add-mask::`), opens it with `device.py link`,
   deletes the comment, closes the issue, and checks that the app left the login screen. Timeout → exit 3 and the batch
   is `Blocked` (login), not failed.
-- [ ] The URL never reaches a file, a log line or the PR; a comment from anyone else is ignored and reported.
-- [ ] Tests with a fake GitHub API (owner vs other author, wrong host, timeout, deletion).
+- [x] The URL never reaches a file, a log line or the PR; a comment from anyone else is ignored and reported.
+- [x] Tests with a fake GitHub API (owner vs other author, wrong host, timeout, deletion).
+- Note (where the spec was open): the GitHub API through `gh api` (one function, `gh_api`, which the tests replace
+  with a stateful fake GitHub); the run id is `$GITHUB_RUN_ID` (or `--run-id`, or `local-<date>` off a runner). The
+  allowed user is `ci.login.user`, default the repository's owner (the first part of the slug). A host is allowed
+  when it is a host of `environments` or `ci.login.hosts`, or a subdomain of one (`login.shop.demo` for
+  `shop.demo`; `shop.demo.evil.example` and `evilshop.demo` are not); an e-mail client's redirect wrapper counts by
+  its target (`device.unwrap`). Bots' comments (the runner's own) are skipped silently; another user's comment is
+  reported once per user, never with its text, and left in place; the owner's comment without an allowed link is
+  reported and left. The comment with the link is deleted even when opening it fails (then the issue is closed
+  saying so, exit 3). `::add-mask::` is printed only on a runner (`GITHUB_ACTIONS=true`), before anything else can
+  print the URL; off a runner the URL is never printed at all. The login screen check needs `ci.login.screen_text`
+  (without it: "not checked"), polls the dump for 60 s and tolerates the browser in front while it hands the link
+  to the app. The issue's body names the hosts and the time limit and says "as text" and "do not open it first".
 
 ### 11.4 The workflow (`docs/workspace/ci/mobile.yml`)
 - [ ] `workflow_dispatch` inputs: `batch` (a planned batch name or a list of case IDs), `build` (release tag; default
@@ -1343,6 +1355,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.3 done: `scripts/remote_login.py` — `request` (the helper flow, then the issue "Login needed — <run id>" mentioning the allowed user) and `wait` (every 15 s up to `ci.login.timeout_minutes`; only that user's comment with a link of the project's hosts; masked, opened in-process, the comment deleted, the issue closed, the login screen checked; other comments reported without their text; timeout → exit 3, Blocked (login)). `tests/test_remote_login.py` with a fake GitHub, the fake device and a fake clock (10 tests, 599 → 609). Choices in the note of 11.3. |
 | 2026-09-29 | 11.2 done: `device.py` — `type`/`send --file <utf8.txt>`, text in chunks of 300 characters (adb calls and Maestro steps), the text inside the UTF-8 flow file instead of Maestro's command line, "IME is not active" retried once then ASCII through adb, `type --via`, `open_link()`; `run_mobile.py --helper flows/_<name>.yaml` (no result recorded, redacted); `scripts/run_log.py add` (one item per case, the vocabulary, the run block, a batch already applied refused with the name for the correction); `/log-bug` retest rule (and methodology §9.3), `/test-mobile` and the technique point to them. 15 new tests (`test_device.py`, `test_run_mobile.py`, `test_run_log.py`, `test_skills.py`; 584 → 599). Choices in the note of 11.2. |
 | 2026-09-29 | 11.1 done: `scripts/apk_manifest.py` (the APK's binary manifest in pure Python), `scripts/workspace_build.py` (`publish` — dry run, `--yes`, the release `build-<versionName>-<versionCode>` with the SHA-256 in its notes, `mobile.build` rewritten keeping the comments, a local commit; refusals: package, production build, public/internal repository, same tag with another hash — and `fetch` with the SHA-256 check and `$GITHUB_OUTPUT`); `setup_emulator.py` reads the versionCode without `aapt2` (no reinstall, no lost login) and boots cold when the snapshot is older than the build (`--cold`, `--gpu`, `--headless`); `tests/apk_kit.py` builds fixture APKs with a real binary manifest. 21 new tests (`tests/test_workspace_build.py` and `tests/test_setup_emulator.py`, 563 → 584). Choices in the note of 11.1. |
 | 2026-09-29 | 11.0 done: methodology v2.3 (§9.4 the approval of a remote run in the pull request and `"proposed": true`, §12.1 and the new §12.4 "Resuming on a runner", §14.2 the runner as an environment); `technique-mobile.md` v1.3 §11 Remote execution; `docs/workspace/ci/README.md` (settings, secrets, the no-cost rules); the `ci:` section in the template and in `validate_project.py` (standard runner only, limits, `ci.secrets` names, login mode and helper flow; plus `ci.login.hosts`, `user`, `screen_text`) and `mobile.build.version`. 4 new tests in `tests/test_validate_project.py` (559 → 563). Choices in the note of 11.0. |
