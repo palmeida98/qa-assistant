@@ -30,12 +30,13 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abs
 import workspace_ci as wc
 import workspace_git as wg
 from test_workspace_git import isolate_git, restore_git
+from tracker_kit import JIRA
 
 SLUG = "demo-shop/demo-shop-qa"
 CI_DIR = os.path.join(ROOT, "docs", "workspace", "ci")
 PROJECT = {"project": "demo-shop", "tracker": "jira", "environments": {"test": "https://shop.demo"},
            "modules": ["mobile"],
-           "jira": {"results": {"statuses": {"Pass": "PASSED", "Fail": "FAILED", "Blocked": "skip"}}},
+           "jira": JIRA,
            "mobile": {"platform": "android", "flows": "flows", "app_id": "com.demoshop.app",
                       "variables": ["SHOP_APP_USER"],
                       "build": {"source": "release build-1.4.0-140", "sha256": "a" * 64, "version": "1.4.0 (140)"}},
@@ -284,6 +285,65 @@ class WorkflowSteps(Base):
         self.assertIn("flow TC-MOB-001_login.yaml on android: emulator-5554", results["TC-MOB-001"]["actual_result"])
         self.assertEqual(results["TC-MOB-002"]["status"], "Blocked")
         self.assertEqual(self.run_(FakeGh(), "import-flows", "--run-log", "batch_adhoc_r9", "--report", "none")[0], 2)
+
+
+class Agent(Base):
+    """plan 11.5: the prompt and the checks after the agent."""
+
+    def test_the_prompt_is_the_installed_template_filled_in(self):
+        self.assertEqual(self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001")[0], 2)
+        self.assertEqual(self.run_(FakeGh(), "install", "--yes")[0], 0)
+        code, out = self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001", "TC-MOB-002")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("/test-mobile\n"))                     # the skill, expanded by claude -p
+        self.assertNotRegex(out, r"\{\{[a-z_]+\}\}")
+        for needle in ("Cases, in this order: TC-MOB-001 TC-MOB-002", "runs/batch_adhoc_r9.json",
+                       "--batch batch_adhoc_r9", f"python {ROOT}/scripts/run_log.py {self.ws} add batch_adhoc_r9",
+                       "Limits: 80 turns", '"proposed": true', "Never apply", "runs/batch_adhoc_r9.summary.md"):
+            self.assertIn(needle, out)
+
+    def post(self, results, evidence=b"screen text"):
+        with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
+            f.write(f"SHOP_APP_USER={USER_EMAIL}\nSHORT=ab\n")
+        os.makedirs(os.path.join(self.ws, "runs"), exist_ok=True)
+        os.makedirs(os.path.join(self.ws, "evidence", "batch_adhoc_r9"), exist_ok=True)
+        with open(os.path.join(self.ws, "runs", "batch_adhoc_r9.json"), "w", encoding="utf-8") as f:
+            json.dump({"run": {"environment": "test", "build": "1.4.0 (140)"}, "results": results}, f)
+        with open(os.path.join(self.ws, "evidence", "batch_adhoc_r9", "TC-MOB-002_t1.png"), "wb") as f:
+            f.write(evidence)
+        report = os.path.join(self.tmp.name, "post.json")
+        code, out = self.run_(FakeGh(), "post-check", "--run-log", "adhoc_r9", "--report", report)
+        with open(report, encoding="utf-8") as f:
+            return code, out, json.load(f)
+
+    def test_a_value_of_env_in_a_file_to_commit_stops_everything(self):
+        for evidence in (USER_EMAIL.encode("utf-8"), b"\x89PNG" + USER_EMAIL.encode("utf-16-le")):
+            with self.subTest(evidence=evidence[:6]):
+                code, out, report = self.post([{"tc": "TC-MOB-001", "status": "Pass", "actual_result": "ok"}],
+                                              evidence)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["safe"])
+                self.assertEqual(report["leaks"], ["evidence/batch_adhoc_r9/TC-MOB-002_t1.png: SHOP_APP_USER"])
+                self.assertIn("safe=false", out)
+                self.assertNotIn(USER_EMAIL, out + json.dumps(report))
+
+    def test_new_defects_are_proposals_and_the_run_log_is_validated_without_applying(self):
+        results = [{"tc": "DS-1", "status": "Pass", "actual_result": "ok"},
+                   {"tc": "DS-2", "status": "Fail", "actual_result": "wrong answer",
+                    "new_defect": {"title": "Wrong total", "expected": "12", "observed": "21"}},
+                   {"tc": "DS-3", "status": "Question", "actual_result": "is 2 the limit?"},
+                   {"tc": "DS-4", "status": "Passed", "actual_result": "?"}]
+        code, out, report = self.post(results)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(report["safe"])
+        self.assertEqual(report["proposed_added"], ["DS-2"])
+        with open(os.path.join(self.ws, "runs", "batch_adhoc_r9.json"), encoding="utf-8") as f:
+            self.assertIs(json.load(f)["results"][1]["new_defect"]["proposed"], True)
+        self.assertEqual(len(report["problems"]), 1, report["problems"])     # Question is not a problem here
+        self.assertIn("'Passed'", report["problems"][0])
+        self.assertEqual(report["files"], ["evidence/batch_adhoc_r9/TC-MOB-002_t1.png", "runs/batch_adhoc_r9.json"])
+        self.assertIn("safe=true", out)
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "tracker", "sent")))   # nothing sent
 
 
 class Templates(unittest.TestCase):

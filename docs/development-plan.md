@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases), 11.2 (driver, helper flows, run log), 11.3 (login through an issue) and 11.4 (the workflow, `workspace_ci.py`) done (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases), 11.2 (driver, helper flows, run log), 11.3 (login through an issue), 11.4 (the workflow, `workspace_ci.py`) and 11.5 (the agent on the runner) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1341,15 +1341,41 @@ Constraints written down now:
   check it by hand). Not run on GitHub here: the workflow is checked by its tests (shape, standard runners only, only
   the two workflow secrets, nothing of a project, every script and subcommand it calls exists).
 
-### 11.5 The agent on the runner
-- [ ] Claude Code headless (`claude -p` with the prompt template; tools limited to Bash for the framework's scripts,
+### 11.5 The agent on the runner — done 29.09.2026
+- [x] Claude Code headless (`claude -p` with the prompt template; tools limited to Bash for the framework's scripts,
   Read, and Write/Edit only inside `runs/`, `evidence/` and `context.md`; no web tools), with `ci.max_turns` and the
   workflow's timeout. The prompt: read the workspace's `CLAUDE.md` and `context.md`, run the batch with `/test-mobile`
   in conversational mode, write the run log, **never apply** it (no `adapters.excel.apply`, no tracker `--yes`), put
   every new bug as `new_defect` with `"proposed": true`, and finish with a summary file for the PR.
-- [ ] Checks after the agent: the run log is valid (`validate_batch` without applying), no `.env` value appears in any
+- [x] Checks after the agent: the run log is valid (`validate_batch` without applying), no `.env` value appears in any
   file to be committed (the redaction of `common.py`), evidence only from the app in the foreground (already the
   driver's rule).
+- Note (where the spec was open): confirmed against the official documentation (code.claude.com, 29.09.2026) before
+  writing the step: `claude -p` runs headless and exits non-zero on failure; `--max-turns` (print mode) ends the run
+  with an error at the limit; `--allowedTools` takes permission rules (`Bash(python <path> *)`, a trailing ` *` for
+  a prefix; `Write(runs/**)` relative to the working folder); `--disallowedTools "WebFetch,WebSearch"` removes the
+  web tools; `--permission-mode dontAsk` denies anything not allowed (nobody can answer a prompt); `--add-dir` gives
+  file access to `qa-assistant`; `--output-format json` gives `num_turns`, `duration_ms` and `result`; a `/skill`
+  at the start of the prompt is expanded in `-p`; SIGTERM leaves the turn unfinished, so the time limit sends
+  SIGINT (`timeout -s INT`, `-k 60`); `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, valid one year, needs a
+  Pro/Max/Team/Enterprise plan) authenticates with the subscription — and `--bare` does NOT read it, so the runner
+  does not use `--bare` (the skills and the workspace's `CLAUDE.md` load as in a local session, from
+  `sync_skills.py --apply`). The step runs the CLI (native installer, `curl -fsSL https://claude.ai/install.sh |
+  bash`) rather than `anthropics/claude-code-action@v1`: its inputs `claude_code_oauth_token`, `prompt` and
+  `claude_args` (where `--max-turns` / `--allowedTools` go) were confirmed too, but the action is built around the
+  Claude GitHub App and comments on issues/PRs, and this step only needs the CLI in a known folder with a hard
+  time limit; switching is one step if the pilot prefers it. The agent's time is what is left of
+  `ci.timeout_minutes` minus 5 minutes for the checks and the pull request. The prompt is a template installed with
+  the workflows (`.github/qa/agent-prompt.md`, placeholders `{{workspace}}`, `{{qa}}`, `{{run_log}}`, `{{cases}}`,
+  `{{max_turns}}`; an unknown one left is refused) and starts with `/test-mobile`. Results are written case by case
+  with `run_log.py` (a timeout keeps them); a new bug is added by editing the item (the agent can write only
+  `runs/`, `evidence/` and `context.md`); the summary for the pull request is `runs/<run log>.summary.md`.
+  `post-check` scans every file the workflow would commit (runs/, evidence/, context.md) for each `.env` value of
+  4+ characters as UTF-8, UTF-16 and JSON-escaped bytes (a PNG can hold text), reports the variable's name, never
+  the value, and sets `safe=false` so the pull request step does not run; it adds a missing `"proposed": true`
+  (the rule is enforced, not only asked for); the adapter's validation (Excel `validate_batch`, the tracker's
+  `validate_batch`) runs with `Question` items and the `"proposed"` key aside, and its problems go to the pull
+  request, not blocking it.
 
 ### 11.6 Review and apply
 - [ ] The PR body (template): the build, the batch, Pass/Fail/N/A/Blocked, the proposed bugs (title, case, expected →
@@ -1379,6 +1405,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.5 done: `docs/workspace/ci/agent-prompt.md` (installed as `.github/qa/agent-prompt.md`: `/test-mobile` in conversational mode, results case by case with `run_log.py`, `Question` for a doubt, new bugs only as `"proposed": true`, never apply/send/git, the summary for the PR); the agent step of `mobile.yml` (Claude Code headless with the subscription token, `--max-turns`, `--permission-mode dontAsk`, tools limited to the framework's scripts, Read and writes in `runs/`, `evidence/`, `context.md`, no web tools, SIGINT at the time left); `workspace_ci.py prompt` and `post-check` (no `.env` value in the files to commit, `"proposed": true` enforced, the adapter's validation without applying). The CLI flags confirmed against the official docs (note of 11.5). 3 new tests (625 → 628). Choices in the note of 11.5. |
 | 2026-09-29 | 11.4 done: `docs/workspace/ci/mobile.yml` (`workflow_dispatch` with `batch`/`build`/`mode`; a `plan` job that reads `ci:` and refuses any runner but a standard one; checkout of the workspace and of `qa-assistant` with the read-only token; Python, Java, Maestro, the Android SDK's emulator and image, cached; KVM; the `.env` of the names in `ci.secrets` written from the Actions secrets and checked by `validate_project.py --environment --strict --ci`; `workspace_build.py fetch`; `setup_emulator.py` cold, headless, `swiftshader_indirect`; the login through the issue, Blocked when it fails; the flows; a branch `run/<batch>-<run id>` and the pull request) and `scripts/workspace_ci.py` (`install` — private repository, dry run, secrets typed by the user — `check`, and the workflow's steps `batch`, `write-env`, `blocked`, `import-flows`); `validate_project.py --ci`; `/plan-batch` saves `batches/<name>.yaml`. `tests/test_workspace_ci.py` (15) and 1 validation test (609 → 625). Choices in the note of 11.4. |
 | 2026-09-29 | 11.3 done: `scripts/remote_login.py` — `request` (the helper flow, then the issue "Login needed — <run id>" mentioning the allowed user) and `wait` (every 15 s up to `ci.login.timeout_minutes`; only that user's comment with a link of the project's hosts; masked, opened in-process, the comment deleted, the issue closed, the login screen checked; other comments reported without their text; timeout → exit 3, Blocked (login)). `tests/test_remote_login.py` with a fake GitHub, the fake device and a fake clock (10 tests, 599 → 609). Choices in the note of 11.3. |
 | 2026-09-29 | 11.2 done: `device.py` — `type`/`send --file <utf8.txt>`, text in chunks of 300 characters (adb calls and Maestro steps), the text inside the UTF-8 flow file instead of Maestro's command line, "IME is not active" retried once then ASCII through adb, `type --via`, `open_link()`; `run_mobile.py --helper flows/_<name>.yaml` (no result recorded, redacted); `scripts/run_log.py add` (one item per case, the vocabulary, the run block, a batch already applied refused with the name for the correction); `/log-bug` retest rule (and methodology §9.3), `/test-mobile` and the technique point to them. 15 new tests (`test_device.py`, `test_run_mobile.py`, `test_run_log.py`, `test_skills.py`; 584 → 599). Choices in the note of 11.2. |

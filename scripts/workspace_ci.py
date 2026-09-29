@@ -11,6 +11,8 @@ them — they read project.yaml.
     write-env                               .env from $QA_SECRETS_JSON, only the names of ci.secrets
     blocked --run-log R --cases ... --reason T      every case Blocked (e.g. no login)
     import-flows --run-log R --report F     run_mobile.py's report into the run log
+    prompt --run-log R --cases ...          the agent's prompt (.github/qa/agent-prompt.md filled in; plan 11.5)
+    post-check --run-log R [--report F]     the checks after the agent, before anything is committed (plan 11.5)
 
 - install: copies the templates into the workspace (.github/workflows/qa-mobile.yml, ...), lists the secrets and
   the variable the workflows need and which exist (`gh secret list`), and checks that the repository is private
@@ -23,6 +25,13 @@ them — they read project.yaml.
   login's helper flow and the flows folder exist, mobile.build is a release, --batch resolves; and the account's
   Actions spending (a warning when it can be read and is not 0; the minutes used this month when GitHub's billing
   API gives them). A dry run of the workflow without running it (no `act`).
+- post-check: every file to be committed (runs/, evidence/, context.md: the only paths the workflow commits) is
+  scanned for any value of .env (text and binary; the variable's NAME is reported, never the value) -- one found and
+  nothing is committed (safe=false, exit 1); every new_defect gets "proposed": true if the agent left it out (the
+  approval is the user's, in the pull request: methodology 9.4); the run log is validated by the project's adapter
+  WITHOUT applying it (Excel: validate_batch; Jira / Azure DevOps: the tracker's validate_batch), Question items and
+  the "proposed" marks aside (both are resolved in the pull request). Its problems are listed in the report and the
+  pull request, not blocking. Evidence only from the app in the foreground is the device driver's own rule.
 - A planned batch is batches/<name>.yaml ({cases: [ID, ...]}, written by /plan-batch); otherwise the input is a list
   of case IDs (name "adhoc"). The run log is runs/batch_<name>_r<run id>.json, the branch run/<name>-<run id>.
 
@@ -47,11 +56,13 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import run_log
 import workspace_git as wg
-from common import read_project
+from common import read_project, read_workspace_env
 
 TEMPLATE_DIR = os.path.join(ROOT, "docs", "workspace", "ci")
 # template -> where install copies it in the workspace
-TEMPLATES = {"mobile.yml": ".github/workflows/qa-mobile.yml"}
+TEMPLATES = {"mobile.yml": ".github/workflows/qa-mobile.yml", "agent-prompt.md": ".github/qa/agent-prompt.md"}
+COMMITTED = ("runs", "evidence", "context.md")     # the only paths the workflow commits
+MIN_SECRET_LEN = 4
 WORKFLOW_SECRETS = ("CLAUDE_CODE_OAUTH_TOKEN", "QA_ASSISTANT_TOKEN")
 VARIABLES = ("QA_ASSISTANT_REPOSITORY",)
 CASE = re.compile(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+")
@@ -423,6 +434,115 @@ def cmd_check(workspace: str, a) -> int:
     return 1 if problems else 0
 
 
+# --- the agent (plan 11.5) --------------------------------------------------------------------------------------
+
+def cmd_prompt(workspace: str, a) -> int:
+    """The installed prompt with its placeholders filled in (printed: the workflow passes it to `claude -p`)."""
+    path = os.path.join(workspace, *TEMPLATES["agent-prompt.md"].split("/"))
+    if not os.path.isfile(path):
+        raise UsageError(f"{TEMPLATES['agent-prompt.md']} is not installed (workspace_ci.py <workspace> install)")
+    ci = ci_of(project(workspace))
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    values = {"workspace": workspace, "qa": ROOT, "run_log": run_log.batch_id(a.run_log), "cases": " ".join(a.cases),
+              "max_turns": str(int(ci.get("max_turns") or 150))}
+    for key, value in values.items():
+        text = text.replace("{{" + key + "}}", value)
+    left = sorted(set(re.findall(r"\{\{[a-z_]+\}\}", text)))
+    if left:
+        raise UsageError(f"the prompt has unknown placeholders {left}: install the templates again")
+    sys.stdout.write(text)
+    return 0
+
+
+def files_to_commit(workspace: str) -> list[str]:
+    """The files under runs/, evidence/ and context.md (relative paths), as the pull request step would add them."""
+    out = []
+    for top in COMMITTED:
+        full = os.path.join(workspace, top)
+        if os.path.isfile(full):
+            out.append(top)
+        for folder, _, files in os.walk(full):
+            out += [os.path.relpath(os.path.join(folder, f), workspace).replace(os.sep, "/") for f in files]
+    return sorted(out)
+
+
+def leaks(workspace: str, files: list[str]) -> list[str]:
+    """'<file>: <VARIABLE>' for every .env value found in a file (text or binary). Never the value."""
+    values = [(k, v) for k, v in read_workspace_env(workspace).items() if v and len(v) >= MIN_SECRET_LEN]
+    found = []
+    for rel in files:
+        with open(os.path.join(workspace, rel), "rb") as f:
+            data = f.read()
+        for name, value in values:
+            forms = {value.encode("utf-8"), value.encode("utf-16-le"), json.dumps(value)[1:-1].encode("utf-8")}
+            if any(form in data for form in forms):
+                found.append(f"{rel}: {name}")
+    return found
+
+
+def adapter_problems(workspace: str, proj: dict, doc: dict) -> list[str]:
+    """The adapter's own validation of the run log, without applying it; Question items and "proposed" aside."""
+    items = [dict(x) for x in doc.get("results") or [] if isinstance(x, dict)
+             and not str(x.get("status") or "").lower().startswith("question")]
+    for x in items:
+        if isinstance(x.get("new_defect"), dict):
+            x["new_defect"] = {k: v for k, v in x["new_defect"].items() if k != "proposed"}
+    if not items:
+        return []
+    tracker = proj.get("tracker")
+    if tracker == "excel":
+        from adapters.excel import ConfigError, ExcelAdapter
+        try:
+            ad = ExcelAdapter.from_project(workspace)
+            ad.load()
+        except (ConfigError, FileNotFoundError, KeyError, OSError) as e:
+            return [f"the workbook could not be read to validate the run log: {e}"]
+        return ad.validate_batch(items)
+    if tracker in ("jira", "azure-devops"):
+        from adapters.tracker import base, config, errors
+        try:
+            return base.validate_batch({**doc, "results": items}, config.load(workspace))
+        except errors.TrackerError as e:   # a configuration problem is reported in the pull request, never hidden
+            return [f"the run log could not be validated: {e}"] + list(getattr(e, "problems", None) or [])
+    return [f"tracker {tracker!r}: no adapter to validate the run log"]
+
+
+def cmd_post_check(workspace: str, a) -> int:
+    proj = project(workspace)
+    name = run_log.batch_id(a.run_log)
+    path = os.path.join(workspace, "runs", f"{name}.json")
+    try:
+        doc = run_log.read_log(path)
+    except run_log.UsageError as e:
+        raise UsageError(str(e)) from None
+    report = {"run_log": f"runs/{name}.json", "files": files_to_commit(workspace), "proposed_added": [],
+              "leaks": [], "problems": []}
+    report["leaks"] = leaks(workspace, report["files"])
+    for item in doc["results"]:
+        new = item.get("new_defect") if isinstance(item, dict) else None
+        if isinstance(new, dict) and new and new.get("proposed") is not True:
+            new["proposed"] = True
+            report["proposed_added"].append(str(item.get("tc")))
+    if report["proposed_added"] and os.path.isfile(path):
+        run_log.write_log(path, doc)
+    report["problems"] = adapter_problems(workspace, proj, doc)
+    report["safe"] = not report["leaks"]
+    if a.report:
+        with open(a.report, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=1)
+    print(f"files to commit: {len(report['files'])}")
+    for x in report["leaks"]:
+        print(f"LEAK: a value of .env in {x} -- nothing is committed; remove it from the file")
+    if report["proposed_added"]:
+        print(f'"proposed": true added to the new_defect of {", ".join(report["proposed_added"])} (approval in the '
+              "pull request)")
+    for p in report["problems"]:
+        print(f"run log: {p}")
+    output(safe="true" if report["safe"] else "false")
+    return 0 if report["safe"] else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="The workspace's CI (remote execution, technique-mobile.md §11).")
     ap.add_argument("workspace")
@@ -444,10 +564,17 @@ def main(argv=None) -> int:
     p = sub.add_parser("import-flows", help="(workflow) run_mobile.py's report into the run log")
     p.add_argument("--run-log", required=True)
     p.add_argument("--report", required=True)
+    p = sub.add_parser("prompt", help="(workflow) the agent's prompt, filled in")
+    p.add_argument("--run-log", required=True)
+    p.add_argument("--cases", nargs="+", required=True)
+    p = sub.add_parser("post-check", help="(workflow) the checks after the agent, before the commit")
+    p.add_argument("--run-log", required=True)
+    p.add_argument("--report", help="JSON report for the pull request's body")
     a = ap.parse_args(argv)
     workspace = os.path.abspath(a.workspace)
     commands = {"install": cmd_install, "check": cmd_check, "batch": cmd_batch, "write-env": cmd_write_env,
-                "blocked": cmd_blocked, "import-flows": cmd_import_flows}
+                "blocked": cmd_blocked, "import-flows": cmd_import_flows, "prompt": cmd_prompt,
+                "post-check": cmd_post_check}
     try:
         if not os.path.isdir(workspace):
             raise UsageError(f"{workspace} is not a folder")

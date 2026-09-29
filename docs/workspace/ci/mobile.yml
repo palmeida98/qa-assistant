@@ -195,8 +195,42 @@ jobs:
           python "$QA/scripts/run_mobile.py" "$WS" $FLOW_CASES --output "$RUNNER_TEMP/flows.json" || true
           python "$QA/scripts/workspace_ci.py" "$WS" import-flows --run-log "$RUN_LOG" --report "$RUNNER_TEMP/flows.json"
 
-      - name: Pull request (run/<batch>-<run id>; never main)
+      - name: Claude Code headless (conversational mode)
+        id: agent
+        if: steps.login.outcome != 'failure' && steps.batch.outputs.agent_cases != ''
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          AGENT_CASES: ${{ steps.batch.outputs.agent_cases }}
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+          MAX_TURNS: ${{ steps.batch.outputs.max_turns }}
+          START: ${{ steps.start.outputs.at }}
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          export PATH="$HOME/.local/bin:$PATH"
+          python "$QA/scripts/workspace_ci.py" "$WS" prompt --run-log "$RUN_LOG" --cases $AGENT_CASES > "$RUNNER_TEMP/prompt.md"
+          # what is left of the job's time, minus 5 minutes for the checks and the pull request
+          left=$(( START + TIMEOUT_MINUTES * 60 - 300 - $(date +%s) ))
+          if (( left < 60 )); then echo "::error::no time left for the agent (ci.timeout_minutes)"; exit 1; fi
+          cd "$WS"
+          set +e
+          timeout -k 60 -s INT "$left" claude -p "$(cat "$RUNNER_TEMP/prompt.md")" \
+            --max-turns "$MAX_TURNS" --permission-mode dontAsk --output-format json \
+            --add-dir "$QA" --disallowedTools "WebFetch,WebSearch" \
+            --allowedTools "Read,Glob,Grep,Skill,Bash(python $QA/scripts/device.py *),Bash(python $QA/scripts/run_log.py *),Bash(python $QA/scripts/run_mobile.py *),Write(runs/**),Edit(runs/**),Write(evidence/**),Write(context.md),Edit(context.md)" \
+            > "$RUNNER_TEMP/claude.json"
+          code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          echo "agent: exit $code (124 = the time left ran out; the results written so far are kept)"
+
+      - name: Checks before anything is committed
+        id: post
         if: always() && steps.batch.outcome == 'success'
+        env:
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" post-check --run-log "$RUN_LOG" --report "$RUNNER_TEMP/post-check.json"
+
+      - name: Pull request (run/<batch>-<run id>; never main)
+        if: always() && steps.post.outputs.safe == 'true'
         env:
           RUN_LOG: ${{ steps.batch.outputs.run_log }}
           BRANCH: ${{ steps.batch.outputs.branch }}

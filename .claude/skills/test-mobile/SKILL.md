@@ -54,6 +54,9 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
     Question (asked at the checkpoint). Run log in the format of methodology section 7.1, with the platform
     and the target in the actual_result.
 11. New Fail -> evidence (flow and step with Maestro's message, or the turn with its quote and capture;
-    target) and /log-bug, only with approval.
+    target) and /log-bug, only with approval. On a runner (remote execution, technique-mobile.md section 11;
+    the prompt of .github/qa/agent-prompt.md) nobody approves during the run: the bug goes as a new_defect with
+    "proposed": true, a doubt stays Question, nothing is applied, and the run ends with context.md and
+    runs/<batch>.summary.md updated for the pull request.
 12. Never send the app, the flows nor the captures to third-party services (e.g. Maestro Cloud) without the
     project's authorisation. Continue to /checkpoint.
