@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | Planned (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1191,21 +1191,33 @@ Constraints written down now:
 - Deterministic Maestro flows (N2) can run in the same workflow without the agent; the agent is only for the
   conversational mode.
 
-### 11.0 Specification first (methodology §15)
-- [ ] Methodology: §12 (continuity) — a run can happen in the workspace's CI; §12.3 gets "resume on a runner" next to
+### 11.0 Specification first (methodology §15) — done 29.09.2026
+- [x] Methodology: §12 (continuity) — a run can happen in the workspace's CI; §12.3 gets "resume on a runner" next to
   "resume on another computer"; §9.4 — in a remote run the approval of new bugs happens in the pull request (an edit of
   the run log before the merge), and a run log sent by the runner never has a `new_defect` applied before that;
   §14.2 — the runner is an environment of its own (tools, limits, what it cannot do).
-- [ ] `technique-mobile.md`: a section **Remote execution** — the workflow's steps, the manual login through an issue
+- [x] `technique-mobile.md`: a section **Remote execution** — the workflow's steps, the manual login through an issue
   comment, what changes in conversational mode on a runner (no screen for the user; the evidence is the only view), the
   known limits of emulators on runners (ARM translation, `extractNativeLibs=false` handled by `setup_emulator.py`, GPU
   mode `swiftshader_indirect`, cold boot), and how long a batch may take.
-- [ ] `docs/workspace/ci/` holds the templates (workflow, the agent's prompt, the PR body) and a `README` with the
+- [x] `docs/workspace/ci/` holds the templates (workflow, the agent's prompt, the PR body) and a `README` with the
   repository settings: secrets, Actions permissions (`contents: write`, `pull-requests: write`, `issues: write`), the
   token to clone `qa-assistant`, the Claude OAuth token (`claude setup-token`), the spending limit at 0 and the free minutes.
-- [ ] `project.yaml`: a `ci:` section (optional) — `runner` (default `ubuntu-24.04`), `timeout_minutes`, `max_turns`,
+- [x] `project.yaml`: a `ci:` section (optional) — `runner` (default `ubuntu-24.04`), `timeout_minutes`, `max_turns`,
   `secrets` (names of the `.env` variables the runner needs), `login.mode` (`manual-issue` or `none`), `login.flow`,
   `login.timeout_minutes`; `validate_project.py` checks it; the template gets it commented.
+- Note (where the spec was open): methodology v2.3 — §9.4 (the approval in the pull request, `"proposed": true`
+  refused by every adapter), §12.1 (a run can happen in the CI), a new §12.4 "Resuming on a runner" next to §12.3,
+  §14.2 (the runner as an environment) and a migration note; `technique-mobile.md` v1.3 §11 (steps, login through an
+  issue, conversational mode on a runner, review and apply, the `ci:` keys, limits and times). `docs/workspace/ci/README.md`
+  holds the settings and the no-cost rules; the templates it lists arrive with 11.4–11.6. Keys added to the plan's
+  list, all optional: `ci.login.hosts` (a login link's host may be an auth provider's, not an environment's),
+  `ci.login.user` (who may paste it; default the repository's owner, which is an organisation for an organisation's
+  repository) and `ci.login.screen_text` (to check the app left the login screen). `validate_project.py`: the runner
+  only `ubuntu-latest` or `ubuntu-NN.04` (any other label is a larger — paid — or self-hosted runner), 1–360 minutes,
+  `ci.secrets` names of variables of `project.yaml` (a warning otherwise; a problem for the workflow's own secrets,
+  e.g. `CLAUDE_CODE_OAUTH_TOKEN`), the helper flow's name starting with `_`, the login's wait shorter than the job;
+  `mobile.build.version` (written by 11.1) a text.
 
 ### 11.1 Builds as releases (`scripts/workspace_build.py`)
 - [ ] `publish <apk> [--yes]`: reads the package, `versionName` and `versionCode` from the APK's binary manifest in
@@ -1299,6 +1311,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.0 done: methodology v2.3 (§9.4 the approval of a remote run in the pull request and `"proposed": true`, §12.1 and the new §12.4 "Resuming on a runner", §14.2 the runner as an environment); `technique-mobile.md` v1.3 §11 Remote execution; `docs/workspace/ci/README.md` (settings, secrets, the no-cost rules); the `ci:` section in the template and in `validate_project.py` (standard runner only, limits, `ci.secrets` names, login mode and helper flow; plus `ci.login.hosts`, `user`, `screen_text`) and `mobile.build.version`. 4 new tests in `tests/test_validate_project.py` (559 → 563). Choices in the note of 11.0. |
 | 2026-09-29 | Phase 11 planned by the user's decision, from the first real mobile project run with the framework: remote execution on GitHub Actions (emulator on the runner, Claude Code headless for the conversational mode, builds as releases of the workspace's repository, manual login through an issue comment, results reviewed in a pull request and applied on merge); plus the lessons of that run for the driver (`type --file`, chunked `adb` text, helper flows), the run log helper, the retest rule of `/log-bug` and the stale-snapshot / reinstall trap of `setup_emulator.py`. |
 | 2026-09-29 | 10.5 postponed by the user's decision: no pilot on free instances; the adapters stay available, validated only against fakes and fictional goldens; the first real project runs the checklist of 10.5 before its first `--yes`. |
 | 2026-09-29 | 10.4 done: the skills use the tracker adapters — `/project-onboarding` (the `jira:` / `azure_devops:` section with the user: variable names only, the status/outcome map with `Blocked`/`N/A` asked, `id_source`, evidence, the Azure DevOps process and Test Configurations; then `check` and `import-cases`), `/checkpoint` (7a: `apply` dry run, the plan shown, `--yes` after approval, exit codes 0–5, the `run` block, `tracker/` committed), `/log-bug` (`bug-search` first, the user decides, `new_defect` / `bug` / `bug_status` in the run log), `/generate-cases` (cases file, `export-cases` dry run, `--yes`, final IDs), `/plan-batch` and `/run-batch` (`tracker/cases.json`, the tracker's IDs and map), `/end-session` (the records of what was sent against the run logs), `/dashboard` (Excel only, said clearly), `/test-api`; README. 7 new tests in `tests/test_skills.py` (552 → 559). The global copy of the skills is synced after the merge. Choices in the note of 10.4. |

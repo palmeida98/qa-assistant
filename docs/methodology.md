@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.2 · 2026-09-28 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10.
+> Version 2.3 · 2026-09-29 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -344,6 +344,8 @@ The bug's structure always follows the project's format. It is not changed witho
 
 The assistant prepares the bug. Sending it to the external tracker only happens **after the user approves it**. The tracker adapters make this explicit: without `--yes` they only show what they would send (a dry run); the `--yes` run happens only after the user approved that list.
 
+In a **remote run** (§12.4) nobody is there to approve during the session, so the approval moves to the **pull request**: the agent writes every new bug as a `new_defect` with `"proposed": true`; the user reviews the run log in the pull request and edits it before the merge (removes a proposed bug, changes it, links an existing bug instead, or drops `"proposed"` to approve it) and answers each `Question`. The merge is the approval: only then is the run log applied (by the workspace's apply workflow, with `--yes` for Jira / Azure DevOps). A run log sent by the runner never has a `new_defect` applied before that, and every adapter refuses a `new_defect` that still has `"proposed"`.
+
 ---
 
 ## 10. Duplicate cases
@@ -381,6 +383,7 @@ Check especially: case IDs, feature names, statuses, results, bugs, descriptions
 - When resuming: read `context.md` and the latest run log in `runs/` first, identify what was already run and continue from the last valid point.
 - Do not repeat work without need. Do not rebuild the progress from scratch.
 - The workspace's git serves as a restore point: one commit per checkpoint. The checkpoint says how many commits are not pushed; the push to the private remote happens only when the user says so, never with `--force`.
+- A run can also happen in the **workspace's CI** (§12.4): it starts from the pushed state of the private remote and comes back as a pull request; its run log is applied only after the merge.
 
 ### 12.2 Structure of `context.md`
 
@@ -413,6 +416,18 @@ A project must be continuable from any computer with access to its private remot
 Anything a run needs and that is not in the repository (a build, a device, a login link) is written in `context.md` or `project.yaml`, with where to get it.
 
 Step by step, with what each module needs: [`docs/workspace/resume.md`](workspace/resume.md).
+
+### 12.4 Resuming on a runner (remote execution)
+
+A batch can also run on a **GitHub Actions runner** started from the workspace's own private repository (the `mobile` module; `technique-mobile.md` §11). It is "resuming on another computer" done by a workflow:
+
+1. The runner checks out the workspace (the **pushed** state: what is not pushed does not exist there) and `qa-assistant`, installs the tools, and writes `.env` from the repository's Actions secrets (the names in `ci.secrets` of `project.yaml`); `.env` is never committed.
+2. `validate_project.py --environment --strict`: a missing tool stops the run before anything is tested.
+3. The build comes from a release of the workspace's repository (checked against `mobile.build.sha256`); a login that needs a person (a magic link) is asked for in an issue and pasted there by the repository's owner (`ci.login`).
+4. The batch runs (Maestro flows, and/or Claude Code headless in conversational mode) within `ci.timeout_minutes` and `ci.max_turns`.
+5. The run log, the evidence and `context.md` go to a branch `run/<batch>-<run id>` and a **pull request**. Its review is the checkpoint's approval (§9.4): nothing reaches the workbook or the tracker before the merge.
+
+The runner starts clean every time (no app state, no login kept) and uses only free resources: GitHub-hosted standard runners within the plan's free minutes, with the spending limit at 0, and the user's Claude subscription (never a paid API key). Step by step: [`docs/workspace/ci/README.md`](workspace/ci/README.md).
 
 ---
 
@@ -452,6 +467,8 @@ At the start of each session, confirm and, if there are differences, record:
 - the environment's limitations.
 
 Do not assume that a tool available in one environment exists in another.
+
+A **CI runner** (§12.4) is an environment of its own: a clean Linux machine for each run, with only the tools the workflow installs; no screen (the evidence is the only view the user gets); no person during the run (questions and approvals wait for the pull request); a time limit and a turn limit from `project.yaml`; the secrets only as Actions secrets. What it cannot do is Blocked, never assumed: a hardware feature the emulator does not have, a login nobody pasted in time.
 
 ---
 
@@ -537,6 +554,11 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.2 → v2.3 (plan phase 11, 29.09.2026)
+
+- **New:** remote execution in the workspace's CI (§12.1, §12.4); the runner as an environment of its own (§14.2); in a remote run the approval of new bugs and the answers to `Question` happen in the pull request, and a `new_defect` with `"proposed": true` is never applied (§9.4).
+- **Kept:** the run log as the source, approval before any bug reaches the workbook or a tracker, push only with the user's approval (the runner pushes only its own `run/…` branch; the merge is the user's).
 
 ### v2.1 → v2.2 (plan phase 10, 28.09.2026)
 
