@@ -599,6 +599,8 @@ def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
             build = m.get("build") if isinstance(m.get("build"), dict) else {}
             source = str(build.get("source") or "").strip()
             add((bool(source), "build", (f"not in git; get it from mobile.build.source ({source})"
+                                         + (": python scripts/workspace_build.py <workspace> fetch"
+                                            if source.startswith("release ") else "")
                                          + (", checked against mobile.build.sha256" if build.get("sha256") else "")
                                          if source else "mobile.build.source is not set: write where the build "
                                          "comes from (the build is never committed)")))

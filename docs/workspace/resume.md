@@ -34,7 +34,8 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
      `python scripts/setup_emulator.py <ws> --dry-run`, and without `--dry-run` once the plan is right;
    - `api`: nothing beyond Python.
 6. **Get the build** (mobile apps): it is not in git. `mobile.build.source` in `project.yaml` says where it comes
-   from (often a release of the workspace's private repository: `gh release download <tag> -D app`); `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
+   from (usually a release of the workspace's private repository, `release <tag>`:
+   `python scripts/workspace_build.py <ws> fetch` downloads it to `app/<tag>.apk` and checks its SHA-256); `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
 7. **Continue**: open Claude Code in the workspace, read `context.md` and the latest run log in `runs/`, and go on
    from the last checkpoint (methodology §12.1). Whatever a run needs that is not in the repository (a device, a login
    link) is written in `context.md` or `project.yaml`.

@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification) done (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification) and 11.1 (builds as releases) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1219,20 +1219,37 @@ Constraints written down now:
   e.g. `CLAUDE_CODE_OAUTH_TOKEN`), the helper flow's name starting with `_`, the login's wait shorter than the job;
   `mobile.build.version` (written by 11.1) a text.
 
-### 11.1 Builds as releases (`scripts/workspace_build.py`)
-- [ ] `publish <apk> [--yes]`: reads the package, `versionName` and `versionCode` from the APK's binary manifest in
+### 11.1 Builds as releases (`scripts/workspace_build.py`) — done 29.09.2026
+- [x] `publish <apk> [--yes]`: reads the package, `versionName` and `versionCode` from the APK's binary manifest in
   pure Python (no `aapt2`), computes the SHA-256, and without `--yes` prints what it would do; with `--yes` creates the
   release `build-<versionName>-<versionCode>` in the workspace's repository (`gh release create`, the APK as asset),
   updates `mobile.build` (`source: release <tag>`, `sha256`, `version`) and commits. Refuses a package different from
   `mobile.app_id`, a production build (the rule of `setup_emulator.py`), a public repository, and a tag that exists
   with another hash.
-- [ ] `fetch [--tag T] [--dest D]`: downloads the release's asset and checks the SHA-256 against `project.yaml`
+- [x] `fetch [--tag T] [--dest D]`: downloads the release's asset and checks the SHA-256 against `project.yaml`
   (default: the tag of `mobile.build`); exit codes documented.
-- [ ] `setup_emulator.py` uses the same manifest reader: it no longer reinstalls when the installed `versionCode` is
+- [x] `setup_emulator.py` uses the same manifest reader: it no longer reinstalls when the installed `versionCode` is
   already the build's (today, without `aapt2`, it reinstalls every run and the login is lost); and it boots **cold**
   (`-no-snapshot-load`) when the saved snapshot is older than the installed build — the stale-snapshot trap of the
   pilot.
-- [ ] Tests: the manifest reader against APKs built in the test (as in 9.2), `publish` / `fetch` with a fake `gh`.
+- [x] Tests: the manifest reader against APKs built in the test (as in 9.2), `publish` / `fetch` with a fake `gh`.
+- Note (where the spec was open): the reader is its own module, `scripts/apk_manifest.py` (string pool UTF-8 and
+  UTF-16 with 1- and 2-unit lengths, the resource-id map for attribute names stripped from the pool, int as decimal or
+  hex, `uses-sdk` for min/target SDK); `setup_emulator.py` falls back to `aapt2` only when the manifest cannot be read.
+  The SHA-256 of a release lives in its notes (`sha256: <hex>`): that is how `publish` tells "the same build again"
+  (nothing created, `project.yaml` still brought up to date) from "another build under the same tag" (refused) without
+  downloading it, and how `fetch --tag <other>` checks a build that is not `mobile.build`. `mobile.build` is rewritten
+  as one line `{source: "release <tag>", sha256, version: "<name> (<code>)"}` by a text edit of that key only (the
+  file's comments stay), read back and restored if it does not parse to the same values; the commit touches only
+  `project.yaml` and is never pushed. An INTERNAL repository is refused like a public one; an unconfirmed visibility
+  needs `--i-confirm-private` (as `workspace_git.py push`). A production build is looked for in the file name and the
+  versionName. `fetch` renames the asset to `app/<tag>.apk` (in the template's `.gitignore`), keeps nothing when the
+  hash differs, and writes `apk=`/`tag=` to `$GITHUB_OUTPUT` on a runner; the repository is `$GITHUB_REPOSITORY`
+  there, the origin elsewhere. The cold-boot rule: the snapshot folder `snapshots/default_boot` of the AVD older than
+  the `--apk` file or than `qa-build.txt`, which the script writes in the AVD's folder after each install (the only
+  reliable "installed build" time it has); plus `--cold`, `--gpu MODE` and `--headless` (`-no-window`) for the runner.
+  Fixture APKs now have a real binary manifest (`tests/apk_kit.py`, shared by both test modules). Not run against a
+  real APK nor emulator here (the reader's format was confirmed on a real React Native APK in the pilot).
 
 ### 11.2 Device driver, helper flows and the run log (lessons of the pilot)
 - [ ] `device.py type --file <utf8.txt>` (text from a UTF-8 file: on Windows, an emoji passed as an argument arrives as
@@ -1311,6 +1328,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.1 done: `scripts/apk_manifest.py` (the APK's binary manifest in pure Python), `scripts/workspace_build.py` (`publish` — dry run, `--yes`, the release `build-<versionName>-<versionCode>` with the SHA-256 in its notes, `mobile.build` rewritten keeping the comments, a local commit; refusals: package, production build, public/internal repository, same tag with another hash — and `fetch` with the SHA-256 check and `$GITHUB_OUTPUT`); `setup_emulator.py` reads the versionCode without `aapt2` (no reinstall, no lost login) and boots cold when the snapshot is older than the build (`--cold`, `--gpu`, `--headless`); `tests/apk_kit.py` builds fixture APKs with a real binary manifest. 21 new tests (`tests/test_workspace_build.py` and `tests/test_setup_emulator.py`, 563 → 584). Choices in the note of 11.1. |
 | 2026-09-29 | 11.0 done: methodology v2.3 (§9.4 the approval of a remote run in the pull request and `"proposed": true`, §12.1 and the new §12.4 "Resuming on a runner", §14.2 the runner as an environment); `technique-mobile.md` v1.3 §11 Remote execution; `docs/workspace/ci/README.md` (settings, secrets, the no-cost rules); the `ci:` section in the template and in `validate_project.py` (standard runner only, limits, `ci.secrets` names, login mode and helper flow; plus `ci.login.hosts`, `user`, `screen_text`) and `mobile.build.version`. 4 new tests in `tests/test_validate_project.py` (559 → 563). Choices in the note of 11.0. |
 | 2026-09-29 | Phase 11 planned by the user's decision, from the first real mobile project run with the framework: remote execution on GitHub Actions (emulator on the runner, Claude Code headless for the conversational mode, builds as releases of the workspace's repository, manual login through an issue comment, results reviewed in a pull request and applied on merge); plus the lessons of that run for the driver (`type --file`, chunked `adb` text, helper flows), the run log helper, the retest rule of `/log-bug` and the stale-snapshot / reinstall trap of `setup_emulator.py`. |
 | 2026-09-29 | 10.5 postponed by the user's decision: no pilot on free instances; the adapters stay available, validated only against fakes and fictional goldens; the first real project runs the checklist of 10.5 before its first `--yes`. |

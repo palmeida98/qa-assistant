@@ -2,15 +2,21 @@
 Prepares a reproducible Android emulator for the workspace's app (technique-mobile.md §1.1 and §3; plan, task 9.2).
 
     python scripts/setup_emulator.py <workspace> [--avd NAME] [--image system-images;android-35;google_apis;x86_64]
-        [--apk PATH] [--no-boot] [--no-audio] [--boot-timeout 300] [--allow-prod] [--dry-run]
+        [--apk PATH] [--no-boot] [--no-audio] [--cold] [--gpu MODE] [--headless] [--boot-timeout 300]
+        [--allow-prod] [--dry-run]
 
 Idempotent steps, each printed as `[ok|done|skip|fail] <step>: <detail>` (`[dry-run]` with --dry-run):
   1. sdk          emulator and adb (ANDROID_HOME, ANDROID_SDK_ROOT, the default SDK folder, then the PATH); the
                   system image must already be installed (sdkmanager is never run: the command is printed)
   2. avd          `emulator -list-avds`; `avdmanager create avd -n NAME -k IMAGE -d pixel_7` only when missing
-  3. boot         starts the AVD detached (unless it is running or --no-boot) and waits for sys.boot_completed
+  3. boot         starts the AVD detached (unless it is running or --no-boot) and waits for sys.boot_completed;
+                  COLD (-no-snapshot-load) with --cold, or when the AVD's saved snapshot is older than the build
+                  (the --apk file, or the last install this script recorded in <avd>/qa-build.txt): a stale
+                  snapshot brought back an old build once (plan 11.1). --gpu (e.g. swiftshader_indirect on a runner
+                  without a GPU) and --headless (-no-window) are passed to the emulator
   4. build        --apk: SHA-256 checked against mobile.build.sha256 (a mismatch is never installed);
-                  `adb install -r` only when the app is missing or its versionCode differs (aapt2, when found)
+                  `adb install -r` only when the app is missing or its versionCode differs (read from the APK's
+                  binary manifest in pure Python, scripts/apk_manifest.py; aapt2 only if that fails)
   5. native-libs  ARM-only APK on an x86_64 image with native translation and uncompressed libraries
                   (extractNativeLibs=false): copies lib/arm64-v8a/*.so into the app's native library folder
                   (root image only); repeat after each reinstall. The APK is never changed.
@@ -49,6 +55,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
+from apk_manifest import ManifestError, read_manifest
 from common import read_project
 
 DEFAULT_IMAGE = "system-images;android-35;google_apis;x86_64"
@@ -140,6 +147,19 @@ def find_tools() -> dict:
     if not found["sdk"] and found["emulator"]:
         found["sdk"] = os.path.dirname(os.path.dirname(os.path.abspath(found["emulator"])))
     return found
+
+
+def avd_home() -> str:
+    """Where the AVDs live: ANDROID_AVD_HOME, else ANDROID_USER_HOME/avd, else ~/.android/avd."""
+    if os.environ.get("ANDROID_AVD_HOME"):
+        return os.environ["ANDROID_AVD_HOME"]
+    if os.environ.get("ANDROID_USER_HOME"):
+        return os.path.join(os.environ["ANDROID_USER_HOME"], "avd")
+    return os.path.expanduser(os.path.join("~", ".android", "avd"))
+
+
+def mtime(path: str) -> float | None:
+    return os.path.getmtime(path) if os.path.exists(path) else None
 
 
 def image_installed(sdk: str | None, image: str) -> bool:
@@ -303,9 +323,31 @@ class Setup:
     def booted(self) -> bool:
         return self.prop("sys.boot_completed") == "1"
 
+    def avd_dir(self) -> str:
+        return os.path.join(avd_home(), f"{self.avd}.avd")
+
+    def cold_reason(self) -> str | None:
+        """Why the boot must be cold, or None: --cold, or a saved snapshot older than the build (the --apk file or
+        the last install recorded by this script)."""
+        if self.a.cold:
+            return "--cold"
+        snapshot = mtime(os.path.join(self.avd_dir(), "snapshots", "default_boot"))
+        if snapshot is None:
+            return None
+        builds = [t for t in (mtime(self.a.apk) if self.a.apk else None,
+                              mtime(os.path.join(self.avd_dir(), "qa-build.txt"))) if t is not None]
+        if builds and snapshot < max(builds):
+            return "the saved snapshot is older than the build (it may bring back an old build)"
+        return None
+
+    def start_command(self, cold: bool) -> list[str]:
+        return [self.tools["emulator"], "-avd", self.avd, "-no-snapshot-save", "-no-boot-anim",
+                *(["-no-snapshot-load"] if cold else []), *(["-no-audio"] if self.a.no_audio else []),
+                *(["-gpu", self.a.gpu] if self.a.gpu else []), *(["-no-window"] if self.a.headless else [])]
+
     def step_boot(self) -> None:
-        start = [self.tools["emulator"], "-avd", self.avd, "-no-snapshot-save", "-no-boot-anim",
-                 *(["-no-audio"] if self.a.no_audio else [])]
+        cold = self.cold_reason()
+        start = self.start_command(bool(cold))
         if self.dry:
             if self.a.no_boot:
                 self.plan("boot", "--no-boot: only an emulator already running this AVD is used",
@@ -335,7 +377,8 @@ class Setup:
             if not self.serial:
                 self.serial, _ = self.running_serial()
             if self.serial and self.booted():
-                self.say("done", "boot", f"{self.avd} booted as {self.serial} in {now() - begin:.0f} s")
+                self.say("done", "boot", f"{self.avd} booted as {self.serial} in {now() - begin:.0f} s"
+                         + (f" (cold: {cold})" if cold and started else ""))
                 return
             pause(POLL_S)
         raise TargetError(f"{self.avd} did not finish booting in {self.a.boot_timeout} s "
@@ -343,9 +386,16 @@ class Setup:
 
     # 4. build
 
-    def apk_version(self) -> tuple[str | None, str | None]:
-        """(package, versionCode) from aapt2 dump badging; (None, None) without aapt2."""
-        if not self.tools.get("aapt2"):
+    def apk_version(self, use_aapt2: bool = True) -> tuple[str | None, str | None]:
+        """(package, versionCode) from the APK's binary manifest (pure Python); aapt2 dump badging only if that
+        fails; (None, None) when neither can tell."""
+        try:
+            m = read_manifest(self.a.apk)
+            if m["version_code"] is not None:
+                return m["package"], str(m["version_code"])
+        except ManifestError:
+            pass
+        if not use_aapt2 or not self.tools.get("aapt2"):
             return None, None
         rc, out = run([self.tools["aapt2"], "dump", "badging", self.a.apk])
         m = re.search(r"package: name='([^']+)' versionCode='(\d+)'", out)
@@ -371,8 +421,9 @@ class Setup:
             return
         install = [self.tools["adb"], "-s", self.serial or "<emulator>", "install", "-r", self.a.apk]
         if self.dry:
-            self.plan("build", "installed only when missing or with another versionCode",
-                      [self.tools["aapt2"] or "aapt2", "dump", "badging", self.a.apk], install)
+            package, code = self.apk_version(use_aapt2=False)
+            self.plan("build", f"{package or 'the app'} versionCode {code or 'unknown'}: installed only when missing "
+                      "or with another versionCode", install)
             return
         if not self.serial:
             self.say("skip", "build", "no running emulator")
@@ -386,11 +437,14 @@ class Setup:
             self.say("ok", "build", f"{self.app_id} versionCode {code} already installed")
             return
         why = ("not installed" if not have else f"versionCode {have} → {code}" if code else
-               "aapt2 not found, the APK's versionCode is unknown: reinstalled every time")
+               "the APK's versionCode is unknown (manifest unreadable, no aapt2): reinstalled every time")
         rc, out = run(install, timeout=600)
         if rc != 0 or "Success" not in out:
             raise TargetError(f"adb install failed: {out.strip()[-300:]}")
         self.say("done", "build", f"{os.path.basename(self.a.apk)} installed ({why})")
+        if os.path.isdir(self.avd_dir()):   # the cold-boot rule compares the snapshot with this record
+            with open(os.path.join(self.avd_dir(), "qa-build.txt"), "w", encoding="utf-8") as f:
+                f.write(f"{self.app_id} versionCode {code or 'unknown'} sha256 {sha256_of(self.a.apk)}\n")
 
     # root (native libraries and the browser)
 
@@ -556,6 +610,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--apk", help="the build to install (checked against mobile.build.sha256)")
     ap.add_argument("--no-boot", action="store_true", help="do not start the emulator")
     ap.add_argument("--no-audio", action="store_true", help="start the emulator without audio")
+    ap.add_argument("--cold", action="store_true", help="boot without loading a saved snapshot (-no-snapshot-load)")
+    ap.add_argument("--gpu", metavar="MODE", help="the emulator's GPU mode, e.g. swiftshader_indirect (a runner)")
+    ap.add_argument("--headless", action="store_true", help="no emulator window (-no-window; a runner)")
     ap.add_argument("--boot-timeout", type=int, default=BOOT_TIMEOUT_S, help="seconds (default 300)")
     ap.add_argument("--allow-prod", action="store_true",
                     help="accept a build that looks like production (only with the user's explicit approval)")
