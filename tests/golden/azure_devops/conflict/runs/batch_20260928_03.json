@@ -1,0 +1,20 @@
+{
+ "run": {
+  "environment": "test",
+  "build": "2.4.1"
+ },
+ "results": [
+  {
+   "tc": "4711",
+   "status": "Pass",
+   "actual_result": "ok",
+   "ts": "2026-09-28T12:00:00+01:00"
+  },
+  {
+   "tc": "4799",
+   "status": "Pass",
+   "actual_result": "ok",
+   "ts": "2026-09-28T12:01:00+01:00"
+  }
+ ]
+}

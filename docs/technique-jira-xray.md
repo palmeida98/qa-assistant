@@ -143,7 +143,7 @@ The same meaning as `adapters.excel.apply` where one exists, and the dry-run cod
 | 1 | Dry run with something to send: **not approved yet**, repeat with `--yes` after the user approves | no |
 | 2 | Cross-check / conflict with the tracker: a case, bug, test plan or test point not found; a case mapped to two issues; an ID in `ids.yaml` that now points elsewhere | no |
 | 3 | Network, authentication or rate limit (after the retries of §2.7), or a server error. With `--yes` the send may be **partial**: the record (§2.5) has exactly what was confirmed, and running the same command again continues from there | maybe (partial) |
-| 4 | Invalid batch, input or configuration: nothing resolved nor sent (see the list of problems); includes a `Question`, a status that is not a key of the status map (a typo is never dropped silently) and a batch already sent with **another content**; also a back-end not built yet (plan 10.2/10.3) | no |
+| 4 | Invalid batch, input or configuration: nothing resolved nor sent (see the list of problems); includes a `Question`, a status that is not a key of the status map (a typo is never dropped silently) and a batch already sent with **another content**; also a back-end marked as not built | no |
 | 5 | Sent, but the read back does not match what was sent (e.g. an Xray status changed by an automation rule, a result not recorded): show the differences; never "fix" by sending again blindly | yes |
 
 `import-cases` and `bug-search` use 0, 2, 3 and 4. `check` uses 0, 3 and 4.

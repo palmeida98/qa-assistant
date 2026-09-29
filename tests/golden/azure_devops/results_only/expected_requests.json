@@ -1,0 +1,11 @@
+[
+ {"method": "POST", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/wit/workitemsbatch?api-version=7.1", "auth": "Basic", "content_type": "application/json", "body": {"ids": [4711, 4712], "errorPolicy": "Omit", "fields": ["System.Id", "System.WorkItemType", "System.Title", "System.Tags", "System.AreaPath"]}},
+ {"method": "GET", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/testplan/Plans/12/suites?api-version=7.1", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "GET", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/testplan/Plans/12/Suites/13/TestPoint?testCaseId=4711,4712&api-version=7.1", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "POST", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/test/runs?api-version=7.1", "auth": "Basic", "content_type": "application/json", "body": {"name": "batch_20260928_01 · test · 2.4.1", "plan": {"id": "12"}, "pointIds": [9001, 9002], "automated": false, "comment": "qa-batch-batch_20260928_01 · environment test · build 2.4.1"}},
+ {"method": "GET", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/test/Runs/101/results?$skip=0&$top=1000&api-version=7.1", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "PATCH", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/test/Runs/101/results?api-version=7.1", "auth": "Basic", "content_type": "application/json", "body": [{"id": 100001, "outcome": "Passed", "state": "Completed", "comment": "The discount is shown"}, {"id": 100002, "outcome": "Failed", "state": "Completed", "comment": "The coupon field shows no error"}]},
+ {"method": "PATCH", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/test/runs/101?api-version=7.1", "auth": "Basic", "content_type": "application/json", "body": {"state": "Completed"}},
+ {"method": "GET", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/test/Runs/101/results?detailsToInclude=WorkItems&$skip=0&$top=200&api-version=7.1", "auth": "Basic", "content_type": null, "body": null},
+ {"method": "GET", "url": "https://dev.azure.com/demo-shop/Demo%20Shop/_apis/testplan/Plans/12/Suites/13/TestPoint?testCaseId=4711,4712&api-version=7.1", "auth": "Basic", "content_type": null, "body": null}
+]

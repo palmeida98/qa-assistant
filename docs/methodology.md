@@ -26,7 +26,7 @@
 | **Engine** | Skills (`.claude/skills/`), adapters, scripts (`scripts/`, `tools/`), tests and guards; and the automated audit engine `qa-audit` (`src/qa_audit`, specified in `docs/qa-audit.md`), which lives next to this layer and does not replace it (decision of 25.09.2026, which revises the one of 24.09.2026 about a separate core) | Personal repository `qa-assistant` |
 | **1. Methodology** | This document | `qa-assistant/docs/` |
 | **2. Test modules** | Techniques per type of test (`technique-browser.md`, `technique-api.md`, `technique-accessibility.md`, `technique-mobile.md`; list in §4.1) | `qa-assistant/docs/` |
-| **3. Adapters** | Conversion between the internal model and each company's tools: Excel (`adapters/excel/`, technique `technique-excel.md`), Jira with Xray and Azure DevOps Test Plans (`adapters/jira/`, `adapters/azure_devops/`, on the common base `adapters/tracker/`; techniques `technique-jira-xray.md` and `technique-azure-devops.md`; being built in phase 10 of the plan, manual logging until then — §4.2) | `qa-assistant/adapters/` |
+| **3. Adapters** | Conversion between the internal model and each company's tools: Excel (`adapters/excel/`, technique `technique-excel.md`), Jira with Xray and Azure DevOps Test Plans (`adapters/jira/`, `adapters/azure_devops/`, on the common base `adapters/tracker/`; techniques `technique-jira-xray.md` and `technique-azure-devops.md`; built in phase 10 of the plan — §4.2) | `qa-assistant/adapters/` |
 | **4. Workspace** | Project context, environments, roles, workbook, runs, history, credentials | `qa-workspaces/<company>/<project>/` |
 
 ### 1.2 Privacy boundary
@@ -159,7 +159,7 @@ Other variants mentioned in the techniques (smoke, role matrix, visual, cross-br
 
 The configuration is the tracker's section of `project.yaml` (`excel:`, `jira:`, `azure_devops:`), with credentials only as names of `.env` variables; the technique of each adapter (`technique-excel.md`, `technique-jira-xray.md`, `technique-azure-devops.md`) has the details. Version 1 of the Jira and Azure DevOps adapters targets the **cloud** services (Jira Cloud + Xray Cloud, Azure DevOps Services); Server / Data Center stays out until a real project needs it.
 
-The Jira and Azure DevOps adapters are built in phase 10 of the plan. Until the task of a tracker is done, that tracker works as **manual logging**: the run log in `runs/` is the source, the user (or the assistant, with the tracker's tool available and approval) passes the results and bugs to the tracker, and `scripts/validate_project.py` warns that the tracker has no adapter yet. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
+The Jira and Azure DevOps adapters were built in phase 10 of the plan (10.2 and 10.3); `scripts/validate_project.py` requires the tracker's section. When the adapter cannot be used (e.g. the tracker's API is out of reach), the run log in `runs/` stays the source and the user (or the assistant, with approval) passes the results and bugs to the tracker by hand. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
 
 Information already in the workspace **is not asked for nor researched again**, unless there is evidence that it is out of date or inconsistent. If information needed to continue is missing, identify exactly what is missing and ask.
 

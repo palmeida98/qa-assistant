@@ -1,0 +1,36 @@
+# Fictional Demo Shop workspace shared by the Azure DevOps goldens (technique-azure-devops.md section 8). Written by
+# hand. The credential's value is not here: the test writes a .env with the fictional value of tests/tracker_kit.py
+# (a .env is never committed, even a fictional one).
+project: demo-shop
+company: demo
+environments:
+  test: "https://shop.demo"
+tracker: azure-devops
+bug_format: "Bug {n}"
+resolved_bugs: remove
+evidence: text
+modules: [functional-web]
+azure_devops:
+  organization_url: "https://dev.azure.com/demo-shop"
+  project: "Demo Shop"
+  pat_var: DS_ADO_PAT
+  cases:
+    plan_id: 12
+    new_cases_suite_id: 13
+  results:
+    outcomes:
+      Pass: Passed
+      Fail: Failed
+      Blocked: Blocked
+      "N/A": NotApplicable
+      "Not run": skip
+    configurations:
+      web: "Windows 11 - Chrome"
+  bugs:
+    fields:
+      title: System.Title
+      description: Microsoft.VSTS.TCM.ReproSteps
+      platform: "tag:platform-"
+      priority: Microsoft.VSTS.Common.Priority
+    states: [Closed]
+    priorities: ["1", "2", "3", "4"]

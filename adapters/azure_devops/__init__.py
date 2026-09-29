@@ -1,13 +1,14 @@
 """
-Azure DevOps Services (Test Plans + Boards) back-end of the tracker adapter (docs/technique-azure-devops.md).
+Azure DevOps Services (Test Plans + Boards) back-end of the tracker adapter (docs/technique-azure-devops.md; plan
+10.3).
 
-A stub until plan 10.3: the command line refuses it with exit 4 ("not implemented yet"). The common base, the
-command line and the rules shared with Jira are in adapters/tracker/.
+    python -m adapters.tracker <workspace> check|import-cases|export-cases|apply|bug-search ...
+
+The common base, the command line and the rules shared with Jira are in adapters/tracker/; this package has the REST
+calls (api.py), the field mapping (fields.py), HTML <-> text (html.py), the steps XML (steps.py) and the four
+directions (adapter.py).
 """
 
-from adapters.tracker.base import TrackerAdapter
+from .adapter import AzureDevOpsAdapter
 
-
-class AzureDevOpsAdapter(TrackerAdapter):
-    tracker = "azure-devops"
-    implemented = False   # plan 10.3
+__all__ = ["AzureDevOpsAdapter"]

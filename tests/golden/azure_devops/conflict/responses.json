@@ -1,0 +1,3 @@
+[
+ {"request": {"method": "POST", "path": "/demo-shop/Demo%20Shop/_apis/wit/workitemsbatch"}, "status": 200, "json": {"count": 2, "value": [{"id": 4711, "rev": 3, "fields": {"System.Id": 4711, "System.WorkItemType": "Test Case", "System.Title": "Valid coupon gives the discount", "System.Tags": "platform-web", "System.AreaPath": "Demo Shop\\Checkout"}}, null]}}
+]

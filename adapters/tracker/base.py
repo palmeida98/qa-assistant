@@ -41,6 +41,30 @@ def case_marker(case_id: str) -> str:
     return f"qa-case-{_label(case_id)}"
 
 
+# words of 4+ letters that say nothing about a bug (shorter words are never used in the text criterion of bug-search)
+STOP_WORDS = {"been", "from", "have", "into", "that", "their", "then", "there", "these", "this", "those", "were",
+              "when", "where", "which", "while", "will", "with", "without", "after", "before", "could", "should",
+              "would", "does", "done", "than", "them", "they", "what", "about", "also", "only", "just", "more",
+              "most", "some", "such", "very"}
+
+
+def significant_words(*texts, limit: int = 6) -> list[str]:
+    """Up to `limit` significant words of the texts (4+ letters, no stop words, lower case, first seen first): the
+    text criterion of bug-search (technique-jira-xray.md 5.1)."""
+    out: list[str] = []
+    for text in texts:
+        for w in re.findall(r"[^\W\d_]{4,}", str(text or "")):
+            w = w.lower()
+            if w not in STOP_WORDS and w not in out:
+                out.append(w)
+    return out[:limit]
+
+
+def fill_template(template: str, **values) -> str:
+    """`{batch_id} · {environment} · {build}` filled; an unknown {name} stays as written."""
+    return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), template or "")
+
+
 # --- the batch (sections 2.6 and 2.8) --------------------------------------------------------------------------------
 
 @dataclass

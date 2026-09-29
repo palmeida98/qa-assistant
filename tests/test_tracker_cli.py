@@ -10,12 +10,12 @@ import json
 import os
 import sys
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abspath(__file__))]
 
 from tracker_kit import (
-    AZURE,
     ENV,
     PROJECT,
     FakeJira,
@@ -164,14 +164,19 @@ class Cli(unittest.TestCase):
         self.assertEqual(self.run_cli("check"), 4)
         self.assertIn("jira.site", self.out)
 
-    def test_the_stub_back_ends_say_which_task_builds_them(self):
-        # jira is built (plan 10.2): its back-end is the real one and makes requests; azure-devops is still a stub
+    def test_both_back_ends_are_built_and_a_stub_says_which_task_builds_it(self):
+        # jira (plan 10.2) and azure-devops (plan 10.3) are the real back-ends; a back-end marked not implemented is
+        # still refused with exit 4, after the configuration and the input were checked
+        from adapters.azure_devops import AzureDevOpsAdapter
         from adapters.jira import JiraAdapter
         self.assertIs(cli.backend_class("jira"), JiraAdapter)
-        self.ws.project({**{k: v for k, v in PROJECT.items() if k != "jira"}, "tracker": "azure-devops",
-                         "azure_devops": AZURE})
-        self.assertEqual(self.run_cli("apply", self.ws.batch("b", BATCH), backend=None), 4)
-        self.assertIn("not implemented yet (plan 10.3)", self.out)
+        self.assertIs(cli.backend_class("azure-devops"), AzureDevOpsAdapter)
+
+        class Stub(FakeJira):
+            implemented = False
+        with mock.patch.dict(cli.BACKENDS, {"jira": (__name__, "Stub")}),                 mock.patch.object(sys.modules[__name__], "Stub", Stub, create=True):
+            self.assertEqual(self.run_cli("apply", self.ws.batch("b", BATCH), backend=None), 4)
+        self.assertIn("not implemented yet (plan 10.2)", self.out)
         self.assertEqual(self.fake.requests, [])
 
     def test_a_direction_the_back_end_lacks_is_exit_4(self):

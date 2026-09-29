@@ -63,9 +63,7 @@ MODULES = {
     "mobile": ("mobile", ("platform", "flows")),
 }
 TRACKERS = ("excel", "azure-devops", "jira")
-# excel here; jira (plan 10.2, done) and azure-devops (plan 10.3) through adapters/tracker/config.py IMPLEMENTED: a
-# tracker not in it yet is manual logging (methodology 4.2) and gets the "no adapter yet" warning
-WITH_ADAPTER = ("excel",)
+# excel is checked here; jira (plan 10.2) and azure-devops (plan 10.3) through adapters/tracker/config.py
 
 
 def environment_of(url: str, environments: dict) -> str | None:
@@ -276,12 +274,6 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     if proj.get("tracker") and proj["tracker"] not in TRACKERS:
         problems.append(f"tracker {proj['tracker']!r} outside {list(TRACKERS)}")
     elif proj.get("tracker") in tracker_config.SECTIONS:
-        tracker = proj["tracker"]
-        if tracker not in WITH_ADAPTER and tracker not in tracker_config.IMPLEMENTED:
-            warnings.append(f"tracker {tracker!r} has no adapter yet: its back-end is being built (plan "
-                            f"{tracker_config.TASKS[tracker]}); until then results and bugs go to the tracker by "
-                            "hand, from the run log, and there is no dashboard (methodology 4.2). The "
-                            f"{tracker_config.SECTIONS[tracker]}: section, when filled in, is already checked")
         p, w = tracker_config.validate_section(proj)
         problems += p
         warnings += w

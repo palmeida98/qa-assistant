@@ -3,7 +3,7 @@ company: ""
 environments:
   test: ""
 roles: []
-tracker: ""          # excel | jira (with Xray) | azure-devops (its adapter is being built, plan 10.3: until then manual logging, methodology 4.2)
+tracker: ""          # excel | jira (with Xray) | azure-devops (Test Plans + Boards); each has its adapter (methodology 4.2)
 bug_format: ""
 resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"
@@ -165,9 +165,11 @@ excel:
 
 # ---------------------------------------------------------------------------
 # azure_devops: Azure DevOps Services (Test Plans + Boards), read by the tracker adapter
-# (docs/technique-azure-devops.md; being built in plan phase 10). Uncomment ONLY when
+# (docs/technique-azure-devops.md; built in plan 10.3). Uncomment ONLY when
 # tracker: "azure-devops". Only NAMES of .env variables, never values. The project must use the
-# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it).
+# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it). /project-onboarding
+# fills it in with the user and runs `python -m adapters.tracker <workspace> check`. Area and
+# iteration values are full paths of the project (e.g. "Demo Shop\\Checkout", as in YAML a quoted "\\" is one backslash).
 # ---------------------------------------------------------------------------
 # azure_devops:
 #   organization_url: ""         # (req.) e.g. https://dev.azure.com/demo-shop
@@ -197,6 +199,6 @@ excel:
 #     iteration_path: ""         # (opt.)
 #     fields: {}                 # model field -> work item field
 #     defaults: {}               # (opt.)
-#     closed_states: ["Closed", "Removed"]   # (opt.) not open in the duplicate search
+#     closed_states: ["Closed", "Removed"]   # (opt.) not open in the duplicate search (Scrum: ["Done", "Removed"])
 #     states: []                 # (opt.) states a retest may move a bug to (resolved_bugs rule)
 #     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)

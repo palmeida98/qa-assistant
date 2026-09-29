@@ -32,14 +32,21 @@ def setUpModule():
     # `git -C <tmp>` of the script under test read this repository. They are dropped, and git gets a temporary home
     # and global configuration (never the user's)
     isolate_git()
+    NO_SECTION.start()
 
 
 def tearDownModule():
+    NO_SECTION.stop()
     restore_git()
 
+
+# the base's tracker is azure-devops without its section: these tests are not about the tracker's section, so
+# config.IMPLEMENTED is emptied while they run (a missing section is then not reported); the tracker tests set it back
 BASE = {"project": "demo-shop", "company": "demo", "environments": {"test": "https://shop.demo"},
         "tracker": "azure-devops", "bug_format": "SHOP-{n}", "resolved_bugs": "remove", "evidence": "text",
         "modules": ["functional-web"]}
+REAL_IMPLEMENTED = set(vp.tracker_config.IMPLEMENTED)
+NO_SECTION = mock.patch.object(vp.tracker_config, "IMPLEMENTED", set())
 MOBILE = {"platform": "android", "flows": "flows", "app_id": "com.demoshop.app"}
 
 
@@ -64,28 +71,27 @@ class Validate(unittest.TestCase):
         return vp.validate(self.tmp.name)
 
     def test_base_is_valid(self):
-        self.assertEqual(self.without_tracker_warning(), ([], []))
+        self.assertEqual(self.with_(), ([], []))
 
-    def without_tracker_warning(self, **changes):
-        """validate() without the warning of a tracker with no adapter (the base uses azure-devops, whose back-end
-        is plan 10.3: no section needed yet, no workbook)."""
-        problems, warnings = self.with_(**changes)
-        return problems, [w for w in warnings if "has no adapter" not in w]
-
-    def test_a_tracker_without_an_adapter_is_a_warning(self):
-        problems, warnings = self.with_(tracker="azure-devops")
-        self.assertEqual(problems, [])
-        self.assertTrue(any("tracker 'azure-devops' has no adapter" in w for w in warnings), warnings)
-
-    def test_jira_has_its_adapter_and_needs_its_section(self):
-        # plan 10.2: the Jira back-end is done, so the section is required and there is no "no adapter" warning
-        from tracker_kit import JIRA
-        problems, warnings = self.with_(tracker="jira")
-        self.assertTrue(any("without the jira: section" in p for p in problems), problems)
-        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
-        problems, warnings = self.with_(tracker="jira", jira=JIRA)
-        self.assertEqual(problems, [])
-        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
+    def test_every_tracker_has_its_adapter_and_needs_its_section(self):
+        # plans 10.2 and 10.3: both back-ends are done, so the section is required and there is no "no adapter"
+        # warning for any tracker
+        from tracker_kit import AZURE, JIRA
+        self.assertEqual(REAL_IMPLEMENTED, {"jira", "azure-devops"})
+        patcher = mock.patch.object(vp.tracker_config, "IMPLEMENTED", REAL_IMPLEMENTED)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for tracker, section, value in (("jira", "jira", JIRA), ("azure-devops", "azure_devops", AZURE)):
+            with self.subTest(tracker=tracker):
+                proj = {k: v for k, v in BASE.items() if k != "azure_devops"}
+                with open(os.path.join(self.tmp.name, "project.yaml"), "w", encoding="utf-8") as f:
+                    yaml.safe_dump({**proj, "tracker": tracker}, f, allow_unicode=True)
+                problems, warnings = vp.validate(self.tmp.name)
+                self.assertTrue(any(f"without the {section}: section" in p for p in problems), problems)
+                self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
+                problems, warnings = self.with_(tracker=tracker, **{section: value})
+                self.assertEqual(problems, [])
+                self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
 
     def test_the_tracker_section_is_checked(self):
         # plan 10.1: the jira: / azure_devops: section, through adapters/tracker/config.py (fictional Demo Shop)
@@ -105,7 +111,7 @@ class Validate(unittest.TestCase):
         problems, warnings = self.with_(tracker="azure-devops", azure_devops=azure)
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("Timeout", problems[0])
-        self.assertTrue(any("10.3" in w for w in warnings), warnings)
+        self.assertFalse(any("has no adapter" in w for w in warnings), warnings)
 
     def test_a_module_outside_the_list(self):
         problems, _ = self.with_(modules=["functional-web", "smoke"])
@@ -172,7 +178,7 @@ class Validate(unittest.TestCase):
         self.assertTrue(any(".api-session.env" in w for w in warnings), warnings)
         with open(os.path.join(self.tmp.name, ".gitignore"), "w", encoding="utf-8") as f:
             f.write("*.env\n")
-        _, warnings = self.without_tracker_warning(modules=["api"], api={"base_url": "https://shop.demo/api"})
+        _, warnings = self.with_(modules=["api"], api={"base_url": "https://shop.demo/api"})
         self.assertEqual([w for w in warnings if "has no remote" not in w], [])
 
     def git(self, *args):
@@ -191,7 +197,7 @@ class Validate(unittest.TestCase):
         api = {"base_url": "https://shop.demo/api", "credentials": {"admin": {"user_var": "SHOP_ADMIN_USER",
                                                                              "pass_var": "SHOP_ADMIN_PASSWORD"}}}
         self.committed_workspace(modules=["api"], api=api)
-        problems, warnings = self.without_tracker_warning(modules=["api"], api=api)
+        problems, warnings = self.with_(modules=["api"], api=api)
         self.assertEqual(problems, [])
         text = " | ".join(warnings)
         self.assertIn("has no remote", text)
@@ -203,7 +209,7 @@ class Validate(unittest.TestCase):
         subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
         self.addCleanup(shutil.rmtree, bare, True)
         self.git("remote", "add", "origin", bare)
-        _, warnings = self.without_tracker_warning(modules=["api"], api=api)
+        _, warnings = self.with_(modules=["api"], api=api)
         text = " | ".join(warnings)
         self.assertNotIn("has no remote", text)
         self.assertIn(".env.example misses variables of project.yaml: SHOP_ADMIN_PASSWORD (", text)
@@ -212,7 +218,7 @@ class Validate(unittest.TestCase):
         self.git("push", "-q", "-u", "origin", "HEAD")
         real = wg.file_size
         with mock.patch.object(wg, "file_size", lambda p: wg.LIMIT + 1 if p.endswith("project.yaml") else real(p)):
-            _, warnings = self.without_tracker_warning(modules=["api"], api=api)
+            _, warnings = self.with_(modules=["api"], api=api)
         text = " | ".join(warnings)
         self.assertNotIn("not pushed", text)
         self.assertIn("tracked files over 50 MB: project.yaml", text)
@@ -285,13 +291,13 @@ class Validate(unittest.TestCase):
     def test_history_protected_with_other_rules(self):
         with open(os.path.join(self.tmp.name, ".claude", "settings.json"), "w", encoding="utf-8") as f:
             f.write('{"permissions": {"deny": ["Bash(git push *)", "Edit(history/**)"]}}')
-        self.assertEqual(self.without_tracker_warning(), ([], []))
+        self.assertEqual(self.with_(), ([], []))
 
     def test_the_device_keys_of_mobile(self):
         """The keys scripts/device.py reads (plan 9.3): accepted when well written, refused otherwise."""
         good = {"serial": "emulator-5554", "send_label": ["Send", "Send message"], "ignore_labels": ["New chat"],
                 "evidence_batch": "20260928", "browser": "com.android.chrome"}
-        self.assertEqual(self.without_tracker_warning(modules=["mobile"], mobile={**MOBILE, **good}), ([], []))
+        self.assertEqual(self.with_(modules=["mobile"], mobile={**MOBILE, **good}), ([], []))
         problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, "send_label": "Send"})
         self.assertEqual(problems, [])                                  # one label as a text is also valid
         for key, value in [("serial", 5554), ("serial", "emulator 5554"), ("send_label", []),

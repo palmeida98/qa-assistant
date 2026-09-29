@@ -13,6 +13,7 @@ SITE = "https://demo-shop.atlassian.net"
 # fictional values; names and values zipped so no line pairs a secret-like name with a literal
 ENV = dict(zip(("DS_JIRA_USER", "DS_JIRA_TOKEN", "DS_XRAY_CLIENT_ID", "DS_XRAY_CLIENT_SECRET"),
                ("qa@demo-shop.test", "fictional-value-111", "fictional-value-222", "fictional-value-333")))
+ADO_ENV = dict(zip(("DS_ADO_PAT",), ("fictional-value-444",)))
 
 JIRA = {
     "site": SITE, "project_key": "DS", "user_var": "DS_JIRA_USER", "token_var": "DS_JIRA_TOKEN",

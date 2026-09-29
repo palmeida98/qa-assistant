@@ -27,9 +27,9 @@ from common import read_project, read_workspace_env
 
 # tracker: value -> section of project.yaml (the key uses "_", as every key of project.yaml)
 SECTIONS = {"jira": "jira", "azure-devops": "azure_devops"}
-# trackers whose back-end is done (plan 10.2 jira, 10.3 azure-devops): until then validate_project.py warns that
-# the tracker has no adapter yet, and a missing section is a warning instead of a problem
-IMPLEMENTED: set[str] = {"jira"}
+# trackers whose back-end is done (plan 10.2 jira, 10.3 azure-devops): for them a missing section is a problem; a
+# tracker added later is not reported here until its back-end is done
+IMPLEMENTED: set[str] = {"jira", "azure-devops"}
 TASKS = {"jira": "10.2", "azure-devops": "10.3"}
 
 SKIP = "skip"
@@ -300,9 +300,8 @@ def _azure_devops(s: dict, proj: dict) -> _Check:
 
 def validate_section(proj: dict) -> tuple[list[str], list[str]]:
     """(problems, warnings) of the tracker's section, for tracker: jira / azure-devops ([], [] otherwise).
-    Read only. A missing section is a problem once the tracker's back-end is done (IMPLEMENTED); before, it is
-    not reported here (manual logging still works, methodology 4.2: validate_project.py's "no adapter yet" warning
-    says so)."""
+    Read only. A missing section is a problem once the tracker's back-end is done (IMPLEMENTED: both, since plan
+    10.3); a tracker whose back-end is not built yet is not reported here."""
     tracker = proj.get("tracker")
     if tracker not in SECTIONS:
         return [], []

@@ -12,7 +12,6 @@ from __future__ import annotations
 import base64
 import mimetypes
 import os
-import re
 from datetime import datetime
 
 from adapters.tracker.base import (
@@ -20,6 +19,8 @@ from adapters.tracker.base import (
     TrackerAdapter,
     batch_marker,
     case_marker,
+    fill_template,
+    significant_words,
     split_evidence,
 )
 from adapters.tracker.config import is_question
@@ -43,15 +44,6 @@ JQL_CHUNK = 50            # IDs per resolution query
 EXECUTION_TYPE = "Test Execution"
 PLAN_TYPE = "Test Plan"
 CASE_KEYS = ("area", "feature", "preconditions", "priority", "role", "platform", "technique", "origin")
-# words of 4+ letters that say nothing about a bug (shorter words are never used in the text criterion)
-STOP_WORDS = {"been", "from", "have", "into", "that", "their", "then", "there", "these", "this", "those", "were",
-              "when", "where", "which", "while", "will", "with", "without", "after", "before", "could", "should",
-              "would", "does", "done", "than", "them", "they", "what", "about", "also", "only", "just", "more",
-              "most", "some", "such", "very"}
-
-
-def _fmt_summary(template: str, **values) -> str:
-    return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), template or "")
 
 
 def _iso(ts) -> str | None:
@@ -66,16 +58,6 @@ def _iso(ts) -> str | None:
     if d.tzinfo is None:
         d = d.astimezone()
     return d.isoformat(timespec="seconds")
-
-
-def _words(*texts, limit: int = 6) -> list[str]:
-    out: list[str] = []
-    for text in texts:
-        for w in re.findall(r"[^\W\d_]{4,}", str(text or "")):
-            w = w.lower()
-            if w not in STOP_WORDS and w not in out:
-                out.append(w)
-    return out[:limit]
 
 
 class JiraAdapter(TrackerAdapter):
@@ -411,7 +393,7 @@ class JiraAdapter(TrackerAdapter):
             execution = {"key": exec_found[0]["key"], "id": str(exec_found[0]["id"]), "reused": True}
             plan.notes.append(f"Test Execution {execution['key']} found by its marker {marker} (an earlier run "
                               "created it with the first chunk): reused")
-        summary = _fmt_summary(self.results_cfg.get("summary"), batch_id=batch.batch_id,
+        summary = fill_template(self.results_cfg.get("summary"), batch_id=batch.batch_id,
                                environment=batch.run["environment"], build=batch.run["build"])
         done_chunks = {w.get("chunk") for w in record.find("results")} | ({1} if execution else set())
         groups = chunks(batch.to_send, CHUNK)
@@ -572,7 +554,7 @@ class JiraAdapter(TrackerAdapter):
                 criteria.append((model, f"labels = {jql_string(label)}", ("labels", label)))
             else:
                 criteria.append((model, f"{F.jql_field(target)} = {jql_string(value)}", (target, str(value))))
-        words = _words(draft.get("observed"), draft.get("title"))
+        words = significant_words(draft.get("observed"), draft.get("title"))
         if words:
             criteria.append(("text", f"text ~ {jql_string(' '.join(chr(34) + w + chr(34) for w in words))}",
                              ("text", words)))

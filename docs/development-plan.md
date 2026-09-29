@@ -35,7 +35,7 @@
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
-| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | In progress: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026) |
+| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | In progress: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1019,15 +1019,75 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
   error of a key that does not exist (a 400 is assumed); `cf[N] ~` on the project's ID field; the text search of
   `bug-search`; the Xray status names a real project has (`check` lists them); rate limits and the token's lifetime.
 
-### 10.3 Azure DevOps adapter (`adapters/azure_devops/`)
-- [ ] Endpoints confirmed (api-version 7.1) against the current documentation; the technique fixed first if needed.
-- [ ] `check`; `import-cases` (suites of the plan with `x-ms-continuationtoken`, `workitemsbatch` in groups of 200,
+### 10.3 Azure DevOps adapter (`adapters/azure_devops/`) — done 29.09.2026
+- [x] Endpoints confirmed (api-version 7.1) against the current documentation; the technique fixed first (v1.2).
+- [x] `check`; `import-cases` (suites of the plan with `x-ms-continuationtoken`, `workitemsbatch` in groups of 200,
   steps XML ↔ model, shared steps and parameters flagged, points and latest outcome); `export-cases` (`$Test Case`
   with steps, added to `new_cases_suite_id`); `apply` (new bugs with `TestedBy` and the result link, one test run
   per batch, results patched, run completed, `bug_status`, read back; a run left incomplete continued through the
   record); `bug-search` (WIQL + `workitemsbatch`).
-- [ ] JSON Patch with a `test` on `/rev` for existing work items (a concurrent edit is exit 2); HTML fields escaped.
-- [ ] Golden `tests/golden/azure_devops/` and the round trip, in the unit tests.
+- [x] JSON Patch with a `test` on `/rev` for existing work items (a concurrent edit is exit 2); HTML fields escaped.
+- [x] Golden `tests/golden/azure_devops/` and the round trip, in the unit tests.
+- Note — endpoints confirmed (29.09.2026), Azure DevOps Services REST API 7.1 on learn.microsoft.com (`https://learn.microsoft.com/en-us/rest/api/azure/devops/<area>/<page>?view=azure-devops-rest-7.1`):
+  - core / processes: `GET _apis/projects/{project}?includeCapabilities=true` (`capabilities.processTemplate`:
+    `templateName`, `templateTypeId`; https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/get?view=azure-devops-rest-7.1), `GET _apis/work/processes/{processTypeId}` (`name`,
+    `parentProcessTypeId` for an inherited process; https://learn.microsoft.com/en-us/rest/api/azure/devops/processes/processes/get?view=azure-devops-rest-7.1);
+  - wit: `GET {project}/_apis/wit/workitemtypes`, `GET …/wit/fields` (the field types; https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/fields/list?view=azure-devops-rest-7.1),
+    `GET …/wit/workitemtypes/{type}/fields?$expand=All` (`alwaysRequired`, `defaultValue`, `allowedValues`;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-item-types-field/list?view=azure-devops-rest-7.1), `POST …/wit/wiql?$top=` (`{query}` → `workItems[{id}]`, no paging;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1), `POST …/wit/workitemsbatch` (at most 200 ids, `fields`, `$expand`, `errorPolicy:
+    Omit`; https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1), `POST …/wit/workitems/${type}` and `PATCH
+    …/wit/workitems/{id}` (`application/json-patch+json`, ops `add`/`test`/…, `/relations/-`;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/create?view=azure-devops-rest-7.1, …/update), `GET`/`POST …/wit/workItems/{id}/comments` (**`7.1-preview.4`**,
+    `format=html`, body `{text}`, `continuationToken` in the body; https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/add-work-item-comment?view=azure-devops-rest-7.1,
+    …/get-comments);
+  - testplan: `GET …/testplan/plans/{planId}` (https://learn.microsoft.com/en-us/rest/api/azure/devops/testplan/test-plans/get?view=azure-devops-rest-7.1), `GET
+    …/testplan/Plans/{planId}/suites` (`suiteType`, `x-ms-continuationtoken`; https://learn.microsoft.com/en-us/rest/api/azure/devops/testplan/test-suites/get-test-suites-for-plan?view=azure-devops-rest-7.1),
+    `GET …/testplan/configurations` (https://learn.microsoft.com/en-us/rest/api/azure/devops/testplan/configurations/list?view=azure-devops-rest-7.1), `GET`/`POST
+    …/testplan/Plans/{planId}/Suites/{suiteId}/TestCase` (`testIds`; body `[{workItem: {id}}]`, answer with
+    `pointAssignments`; https://learn.microsoft.com/en-us/rest/api/azure/devops/testplan/suite-test-case/get-test-case-list?view=azure-devops-rest-7.1, …/add), `GET
+    …/Suites/{suiteId}/TestPoint?testCaseId=` (`configuration`, `testCaseReference`, `results.outcome`;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/testplan/test-point/get-points-list?view=azure-devops-rest-7.1);
+  - test: `POST …/test/runs` (`name`, `plan`, `pointIds`, `automated`, `comment`; https://learn.microsoft.com/en-us/rest/api/azure/devops/test/runs/create?view=azure-devops-rest-7.1), `GET
+    …/test/runs?planId=&automated=&includeRunDetails=&$skip=&$top=` (https://learn.microsoft.com/en-us/rest/api/azure/devops/test/runs/list?view=azure-devops-rest-7.1), `PATCH
+    …/test/runs/{runId}` (`state: Completed`; https://learn.microsoft.com/en-us/rest/api/azure/devops/test/runs/update?view=azure-devops-rest-7.1), `GET …/test/Runs/{runId}/results`
+    (`detailsToInclude=WorkItems` gives `associatedBugs`; `$top` at most 1000, 200 with details;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/test/results/list?view=azure-devops-rest-7.1), `PATCH …/test/Runs/{runId}/results` (`id`, `outcome`, `state`, `comment` ≤ 1000
+    characters, `associatedBugs: [{id}]`; https://learn.microsoft.com/en-us/rest/api/azure/devops/test/results/update?view=azure-devops-rest-7.1), `GET`/`POST
+    …/test/Runs/{runId}/Results/{resultId}/attachments` (`stream`, `fileName`, `attachmentType`;
+    https://learn.microsoft.com/en-us/rest/api/azure/devops/test/attachments/create-test-result-attachment?view=azure-devops-rest-7.1).
+- Note — what the documentation changed in the technique (v1.2, first): the comments API exists only as
+  `7.1-preview.4`; **a bug is linked to a test result through the result's `associatedBugs`** (the documented
+  field of `PATCH …/results`, read back with `detailsToInclude=WorkItems`), not an artifact link written on the bug;
+  **test points are resolved per suite** with `TestPoint?testCaseId=` (the configuration name decides between
+  points, through `results.configurations`); the build goes in the run's name and comment (`build`/`buildReference`
+  are pipeline builds); no dates are sent (a result's completed date must follow its started date; the tracker stamps
+  them, the run log keeps `ts`); a run's tags are 5 alphanumeric names under 30 characters, so the run's marker is its
+  comment; the `bug_status` state change goes right after the new bugs, before the results and comments add
+  revisions to the bug (its `test` on `/rev` uses the revision read at the resolution).
+- Note (choices where the spec was open; mirroring 10.2 unless Azure DevOps makes it wrong): modules `api.py`,
+  `fields.py`, `html.py`, `steps.py`, `adapter.py`; the shared `significant_words`/`fill_template` moved from the Jira
+  back-end to `adapters/tracker/base.py` (reuse, methodology §14.1); the PAT as basic authentication with an empty user
+  (the base64 also redacted); `check` refuses Basic (the technique's message) and reports CMMI (or any other base) as
+  not covered, both exit 4, and follows an inherited process to its parent; `check` also requires `bugs.states` and
+  `bugs.closed_states` to be states of the bug type (Scrum has no `Closed`: the default would silently count Done bugs
+  as open); the marker search of a test run happens only when a record exists without a run (one list of the plan's
+  runs), the marker search of bugs/cases always before a create (one WIQL); a `new_defect` area must be a full path
+  of the project (refused, never guessed); evidence on the test result only, text files redacted, a resumed send
+  lists the result's attachments first; comments carry the marker `qa-batch-<id> · <case>` and are looked up before
+  commenting again (as in Jira); `bug_status` already reached is not sent again, a state outside the type's states
+  is exit 2; `ids.yaml` keeps `{id, points: {configuration: point}}` with the final ID; results in chunks of 100,
+  recorded per chunk; `update_results`/`update_run` retried as idempotent writes, the work item PATCH and every POST
+  never retried blindly; `import-cases --query` flags cases with no test point; `export-cases` refuses a same-title
+  `Test Case` anywhere in the project and, when resumed, asks the suite which cases it already has. The golden runner
+  (`tests/test_azure_devops_golden.py`) and the stateful fake (`tests/ado_fake.py`, with a small WIQL evaluator and
+  continuation tokens) follow 10.2's. No new dependency. With both back-ends built, the "no adapter yet" warning left
+  `validate_project.py` (`config.IMPLEMENTED` has both; a missing section is a problem for both).
+- Only the pilot (10.5) can confirm: that `associatedBugs` in a results PATCH shows the link on the bug (and whether
+  it adds a revision); that `TestPoint?testCaseId=` takes a comma-separated list; the answer to a failed `test` on
+  `/rev` (412 assumed, exit 2) and to a JSON Patch on a field the type does not have; `CONTAINS WORDS` with several
+  words; the WIQL of `System.Tags CONTAINS` on a tag with `-`/`_`; whether a run created with `pointIds` needs a
+  state; the Test Plans licence of the pilot's user; the comments preview version still accepted; rate limits.
 
 ### 10.4 Skills
 - [ ] `/project-onboarding`: with `jira`/`azure-devops`, fill in the tracker's section with the user (IDs, fields,
@@ -1065,6 +1125,7 @@ export new cases, and be continued on another computer; the unit tests and both 
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 10.3 done: the Azure DevOps Services back-end (`adapters/azure_devops/`: `check`, `import-cases`, `export-cases`, `apply`, `bug-search`), the endpoints confirmed against the public documentation (list in the note of 10.3) and the technique fixed first (v1.2: comments preview `7.1-preview.4`, bugs linked through the result's `associatedBugs`, points per suite, build in the run's name and comment, no dates, the run's marker in its comment, the state change right after the new bugs, full area paths); `azure-devops` in `IMPLEMENTED` and the "no adapter yet" warning removed (`validate_project.py`, methodology §1.1/§4.2, template, README); golden `tests/golden/azure_devops/` (5 scenarios, hand-written requests) and `tests/test_azure_devops_adapter.py` with a stateful fake Azure DevOps (round trip, exit codes 0–5, uncertain writes, continuation tokens, relaxed passes, Basic refused); `CLAUDE.md`. Tests 513 → 552. Choices and what only the pilot confirms in the note of 10.3. |
 | 2026-09-28 | 10.2 done: the Jira Cloud + Xray Cloud back-end (`adapters/jira/`: `check`, `import-cases`, `export-cases`, `apply`, `bug-search`), the endpoints confirmed against the public documentation (list in the note of 10.2) and the technique fixed first (v1.2: multipart import for the first chunk, the build in the summary, `getTests` by issue ids, the plan status through `status(testPlan:)`, rich text of new tests through Jira, final IDs in `ids.yaml`); `jira` in `IMPLEMENTED` (`validate_project.py`: the section required, no "no adapter" warning); golden `tests/golden/jira/` (5 scenarios, hand-written requests) and `tests/test_jira_adapter.py` with a stateful fake Jira + Xray (round trip, exit codes 0–5, the uncertain write, pagination, re-authentication, relaxed passes); `CLAUDE.md`, the template. Tests 479 → 513. Choices and what only the pilot confirms in the note of 10.2. |
 | 2026-09-28 | 10.1 done: the decisions the user delegated (Blocked/N/A unmapped → not sent, `Question` still refused; `id_source` key/id by default; screenshots only with `text+screenshot`; Azure DevOps needs Agile or Scrum, platform → Test Configuration table; endpoints confirmed in 10.2/10.3) recorded in the techniques (v1.1), the template and Phase 10 first; then `adapters/tracker/` (configuration and its validation, credentials by name, stdlib HTTP client with retries, Retry-After, backoff, re-authentication, pagination, redaction and `--record`; the record of what was sent, the ID cache, `cases.json`; the batch validation with the `run` block and the status map; the command line with the dry run, `--yes`, `--now` and exit codes 0–5; the fake transport), stubs for `adapters/jira` and `adapters/azure_devops` (exit 4 until 10.2/10.3), `validate_project.py` checks the tracker's section, `docs/workspace/gitignore` ignores `tracker/recordings/`, `CLAUDE.md` documents the command. `tests/test_tracker_config.py`, `test_tracker_http.py` (with a local server on 127.0.0.1), `test_tracker_cli.py` and 1 new validation test (408 → 479). Choices in the note of 10.1. |
 | 2026-09-28 | Phase 10 planned by the user's decision (revises 7.7: `jira` and `azure-devops` get adapters, Jira with Xray and Azure DevOps Test Plans + Bugs, four directions, golden with recorded fictional responses, pilot on free instances). 10.0 done: `docs/technique-jira-xray.md` (with the common contract of the tracker adapters) and `docs/technique-azure-devops.md`; methodology v2.2 (§1.1, §2, §4 step 7, §4.2, §7.1, §9.4); `CLAUDE.md` references; the template's `jira:` and `azure_devops:` sections. Decisions in the note of 10.0. |
