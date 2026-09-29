@@ -56,6 +56,12 @@ class ValidateBatch(unittest.TestCase):
     def test_status_outside_the_vocabulary(self):
         self.refused([item(status="Passed")], "status 'Passed'")
 
+    def test_a_proposed_defect_is_never_applied(self):
+        # plan 11.6 (methodology 9.4): the user approves a remote run's bug by removing "proposed" in the PR
+        new = {"title": "Coupon accepted", "severity": "High", "priority": "P2"}
+        self.refused([item(status="Fail", new_defect={**new, "proposed": True})], 'still a proposal ("proposed")')
+        self.assertEqual(self.ad.validate_batch([item(status="Fail", new_defect={**new, "proposed": False})]), [])
+
     def test_a_question_must_be_resolved(self):
         self.refused([item(status="Question")], "resolve the Question")
 

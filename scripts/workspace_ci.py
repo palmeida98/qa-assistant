@@ -13,6 +13,9 @@ them — they read project.yaml.
     import-flows --run-log R --report F     run_mobile.py's report into the run log
     prompt --run-log R --cases ...          the agent's prompt (.github/qa/agent-prompt.md filled in; plan 11.5)
     post-check --run-log R [--report F]     the checks after the agent, before anything is committed (plan 11.5)
+    pr-body --run-log R ...                 the pull request's body from .github/qa/pr-body.md (plan 11.6)
+  and the apply workflow (docs/workspace/ci/apply.yml), after the merge:
+    apply-merged --before SHA --after SHA   apply each run log the push added or changed (plan 11.6)
 
 - install: copies the templates into the workspace (.github/workflows/qa-mobile.yml, ...), lists the secrets and
   the variable the workflows need and which exist (`gh secret list`), and checks that the repository is private
@@ -32,6 +35,15 @@ them — they read project.yaml.
   WITHOUT applying it (Excel: validate_batch; Jira / Azure DevOps: the tracker's validate_batch), Question items and
   the "proposed" marks aside (both are resolved in the pull request). Its problems are listed in the report and the
   pull request, not blocking. Evidence only from the app in the foreground is the device driver's own rule.
+- pr-body: the build, the batch, a count per status (and the cases not run), the proposed bugs (title, case,
+  expected -> observed, links to their evidence in the branch), the questions, the checks, the agent's summary, the
+  time and the turns used.
+- apply-merged: every runs/batch_*.json added or changed between --before and --after; one with a new_defect that
+  still has "proposed", or a Question, is refused and named (never applied); the others are applied with the
+  project's adapter, as /checkpoint does (Excel: `python -m adapters.excel.apply`; Jira / Azure DevOps:
+  `python -m adapters.tracker <ws> apply <log> --yes`: the merge was the approval). The workbook (only after exit 0
+  or 5) or tracker/ is committed and pushed to the branch that was pushed, and the result is commented on the pull
+  request of the merge. Exit 1 when a run log was refused or its application failed.
 - A planned batch is batches/<name>.yaml ({cases: [ID, ...]}, written by /plan-batch); otherwise the input is a list
   of case IDs (name "adhoc"). The run log is runs/batch_<name>_r<run id>.json, the branch run/<name>-<run id>.
 
@@ -60,7 +72,8 @@ from common import read_project, read_workspace_env
 
 TEMPLATE_DIR = os.path.join(ROOT, "docs", "workspace", "ci")
 # template -> where install copies it in the workspace
-TEMPLATES = {"mobile.yml": ".github/workflows/qa-mobile.yml", "agent-prompt.md": ".github/qa/agent-prompt.md"}
+TEMPLATES = {"mobile.yml": ".github/workflows/qa-mobile.yml", "apply.yml": ".github/workflows/qa-apply.yml",
+             "agent-prompt.md": ".github/qa/agent-prompt.md", "pr-body.md": ".github/qa/pr-body.md"}
 COMMITTED = ("runs", "evidence", "context.md")     # the only paths the workflow commits
 MIN_SECRET_LEN = 4
 WORKFLOW_SECRETS = ("CLAUDE_CODE_OAUTH_TOKEN", "QA_ASSISTANT_TOKEN")
@@ -543,6 +556,182 @@ def cmd_post_check(workspace: str, a) -> int:
     return 0 if report["safe"] else 1
 
 
+# --- review and apply (plan 11.6) -------------------------------------------------------------------------------
+
+def blob_url(slug: str, branch: str, path: str) -> str:
+    server = os.environ.get("GITHUB_SERVER_URL") or "https://github.com"
+    return f"{server}/{slug}/blob/{branch}/{path}"
+
+
+def evidence_of(item: dict) -> list[str]:
+    out = []
+    for value in (item.get("evidence"), (item.get("new_defect") or {}).get("evidence")):
+        out += [value] if isinstance(value, str) else [x for x in value or [] if isinstance(x, str)]
+    return list(dict.fromkeys(out))
+
+
+def read_json_file(path: str | None) -> dict:
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except ValueError:
+        return {}
+
+
+def cmd_pr_body(workspace: str, a) -> int:
+    proj = project(workspace)
+    ci = ci_of(proj)
+    path = os.path.join(workspace, *TEMPLATES["pr-body.md"].split("/"))
+    if not os.path.isfile(path):
+        raise UsageError(f"{TEMPLATES['pr-body.md']} is not installed (workspace_ci.py <workspace> install)")
+    name = run_log.batch_id(a.run_log)
+    try:
+        doc = run_log.read_log(os.path.join(workspace, "runs", f"{name}.json"))
+    except run_log.UsageError as e:
+        raise UsageError(str(e)) from None
+    remote = doc.get("remote") or {}
+    slug = slug_of(workspace)
+    branch = a.branch or f"run/{remote.get('batch', 'adhoc')}-{remote.get('run_id', '')}"
+    results = [x for x in doc["results"] if isinstance(x, dict)]
+    counts: dict[str, int] = {}
+    for x in results:
+        counts[str(x.get("status"))] = counts.get(str(x.get("status")), 0) + 1
+    done = {str(x.get("tc")) for x in results}
+    not_run = [c for c in remote.get("cases") or [] if c not in done]
+    totals = [f"| {k} | {v} |" for k, v in sorted(counts.items())]
+    totals.append(f"| Not run | {len(not_run)}" + (f" ({', '.join(not_run)})" if not_run else "") + " |")
+    proposed = []
+    for x in results:
+        new = x.get("new_defect")
+        if isinstance(new, dict) and new:
+            links = ", ".join(f"[{os.path.basename(e)}]({blob_url(slug, branch, e)})" for e in evidence_of(x))
+            proposed.append(f"- **{new.get('title') or '(no title)'}** — case {x.get('tc')}: expected "
+                            f"{new.get('expected') or '?'} → observed {new.get('observed') or '?'}"
+                            + (f" · evidence: {links}" if links else ""))
+    questions = [f"- **{x.get('tc')}**: {x.get('actual_result') or '(no question written)'}" for x in results
+                 if str(x.get("status") or "").lower().startswith("question")]
+    checks = read_json_file(a.checks)
+    check_lines = ([f"- {len(checks.get('files') or [])} file(s) committed; no value of .env in them"]
+                   if checks.get("safe") else [])
+    check_lines += [f'- "proposed": true added to the new_defect of {c}' for c in checks.get("proposed_added") or []]
+    check_lines += [f"- run log: {p}" for p in checks.get("problems") or []]
+    agent = read_json_file(a.agent)
+    turns = str(agent.get("num_turns", "—"))
+    if agent.get("subtype") and agent.get("subtype") != "success":
+        turns += f" ({agent['subtype']})"
+    minutes = "?"
+    if a.started:
+        minutes = str(max(0, round((now().timestamp() - float(a.started)) / 60)))
+    summary_path = os.path.join(workspace, "runs", f"{name}.summary.md")
+    summary = "(none: the agent did not run or wrote no summary)"
+    if os.path.isfile(summary_path):
+        with open(summary_path, encoding="utf-8") as f:
+            summary = f.read().strip() or summary
+    server, run = os.environ.get("GITHUB_SERVER_URL") or "https://github.com", os.environ.get("GITHUB_RUN_ID", "")
+    values = {"batch": str(remote.get("batch") or name), "run_id": str(remote.get("run_id") or run),
+              "build": a.build or str((doc.get("run") or {}).get("build") or "?"),
+              "environment": str((doc.get("run") or {}).get("environment") or "?"),
+              "mode": str(doc.get("mode") or "").split(":")[0] or "?", "minutes": minutes,
+              "timeout": str(int(ci.get("timeout_minutes") or 60)), "turns": turns,
+              "max_turns": str(int(ci.get("max_turns") or 150)),
+              "run_url": f"{server}/{slug}/actions/runs/{run}" if run else f"{server}/{slug}/actions",
+              "totals": "\n".join(totals), "proposed": "\n".join(proposed) or "None.",
+              "questions": "\n".join(questions) or "None.", "checks": "\n".join(check_lines) or "Not run.",
+              "summary": summary, "run_log": f"runs/{name}.json"}
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    for key, value in values.items():
+        text = text.replace("{{" + key + "}}", value)
+    sys.stdout.write(text)
+    return 0
+
+
+def refusals(doc: dict) -> list[str]:
+    """Why a merged run log cannot be applied: a proposal or a Question left."""
+    out = []
+    for x in doc.get("results") or []:
+        if not isinstance(x, dict):
+            continue
+        new = x.get("new_defect")
+        if isinstance(new, dict) and new.get("proposed", False) is not False:
+            out.append(f'{x.get("tc")}: the new_defect still has "proposed" (approve it by removing it, or drop it)')
+        if str(x.get("status") or "").lower().startswith("question"):
+            out.append(f"{x.get('tc')}: still Question (answer it with the final status)")
+    return out
+
+
+def run_adapter(workspace: str, tracker: str, path: str) -> tuple[int, str]:
+    """The project's adapter, the same command as /checkpoint (the tests replace it)."""
+    cmd = ([sys.executable, "-m", "adapters.excel.apply", workspace, path] if tracker == "excel" else
+           [sys.executable, "-m", "adapters.tracker", workspace, "apply", path, "--yes"])
+    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       check=False, timeout=1800)
+    return r.returncode, (r.stdout + r.stderr).strip()
+
+
+def merged_run_logs(workspace: str, before: str, after: str) -> list[str]:
+    if not before or set(before) == {"0"}:
+        out = wg.git_ok(workspace, "diff-tree", "--no-commit-id", "--name-only", "-r", "--diff-filter=AM", after,
+                        "--", "runs/")
+    else:
+        out = wg.git_ok(workspace, "diff", "--name-only", "--diff-filter=AM", before, after, "--", "runs/")
+    return sorted(n for n in out.splitlines() if re.fullmatch(r"runs/batch_[^/]+\.json", n.strip()))
+
+
+def cmd_apply_merged(workspace: str, a) -> int:
+    proj = project(workspace)
+    tracker = proj.get("tracker")
+    if tracker not in ("excel", "jira", "azure-devops"):
+        raise UsageError(f"tracker {tracker!r}: no adapter to apply the run logs")
+    logs = merged_run_logs(workspace, a.before, a.after)
+    if not logs:
+        print("no run log added or changed: nothing to apply")
+        return 0
+    lines, failed = [], False
+    for rel in logs:
+        try:
+            doc = run_log.read_log(os.path.join(workspace, rel))
+        except run_log.UsageError as e:
+            lines.append(f"- `{rel}`: NOT APPLIED -- {e}")
+            failed = True
+            continue
+        why = refusals(doc)
+        if why:
+            lines.append(f"- `{rel}`: NOT APPLIED -- " + "; ".join(why))
+            failed = True
+            continue
+        code, out = run_adapter(workspace, tracker, os.path.join(workspace, rel))
+        tail = out.splitlines()[-1] if out else ""
+        lines.append(f"- `{rel}`: {'applied' if code == 0 else f'adapter exit {code}'}" + (f" -- {tail}" if tail else ""))
+        failed = failed or code not in (0, 5)
+    paths = ["tracker"] if tracker != "excel" else [str((proj.get("excel") or {}).get("file") or "")]
+    for p in paths:
+        if p and os.path.exists(os.path.join(workspace, p)):
+            wg.git_ok(workspace, "add", "--", p)
+    if wg.git(workspace, "diff", "--cached", "--quiet").returncode != 0:
+        wg.git_ok(workspace, "commit", "-q", "-m", "QA apply: " + ", ".join(os.path.basename(x) for x in logs))
+        wg.git_ok(workspace, "push", "origin", "HEAD")
+        lines.append("- committed and pushed: " + ", ".join(p for p in paths if p))
+    body = "QA apply (the merge was the approval, methodology 9.4):\n\n" + "\n".join(lines)
+    print(body)
+    slug = slug_of(workspace)
+    r = gh("api", f"repos/{slug}/commits/{a.after}/pulls")
+    numbers = []
+    if r is not None and r.returncode == 0:
+        try:
+            numbers = [int(x["number"]) for x in json.loads(r.stdout or "[]")]
+        except (ValueError, KeyError, TypeError):
+            numbers = []
+    for n in numbers:
+        c = gh("pr", "comment", str(n), "--repo", slug, "--body", body)
+        if c is None or c.returncode != 0:
+            print(f"warning: the result could not be commented on #{n}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="The workspace's CI (remote execution, technique-mobile.md §11).")
     ap.add_argument("workspace")
@@ -570,11 +759,21 @@ def main(argv=None) -> int:
     p = sub.add_parser("post-check", help="(workflow) the checks after the agent, before the commit")
     p.add_argument("--run-log", required=True)
     p.add_argument("--report", help="JSON report for the pull request's body")
+    p = sub.add_parser("pr-body", help="(workflow) the pull request's body")
+    p.add_argument("--run-log", required=True)
+    p.add_argument("--build", default="")
+    p.add_argument("--branch", default="")
+    p.add_argument("--started", default="", help="epoch seconds of the job's start")
+    p.add_argument("--agent", help="claude -p --output-format json")
+    p.add_argument("--checks", help="post-check's report")
+    p = sub.add_parser("apply-merged", help="(apply workflow) apply the run logs of a merge")
+    p.add_argument("--before", required=True)
+    p.add_argument("--after", required=True)
     a = ap.parse_args(argv)
     workspace = os.path.abspath(a.workspace)
     commands = {"install": cmd_install, "check": cmd_check, "batch": cmd_batch, "write-env": cmd_write_env,
                 "blocked": cmd_blocked, "import-flows": cmd_import_flows, "prompt": cmd_prompt,
-                "post-check": cmd_post_check}
+                "post-check": cmd_post_check, "pr-body": cmd_pr_body, "apply-merged": cmd_apply_merged}
     try:
         if not os.path.isdir(workspace):
             raise UsageError(f"{workspace} is not a folder")

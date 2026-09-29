@@ -66,3 +66,6 @@ description: Saves the run log, updates the workspace's context.md in the format
 8. Tell the user the exact point where the run stopped. With the excel tracker, the dashboard can be built:
    python scripts/build_dashboard.py <workspace> (from the root of qa-assistant). With jira or azure-devops the
    progress view is the tracker's own reports (methodology.md section 4.2).
+9. A run log from a REMOTE run (runs/batch_<name>_r<run id>.json, from a pull request of the workspace's CI;
+   technique-mobile.md section 11) is never applied here: its pull request is the review (proposed bugs approved
+   by removing "proposed", each Question answered), and after the merge qa-apply.yml applies it. Pull main first.

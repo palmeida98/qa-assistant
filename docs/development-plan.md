@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases), 11.2 (driver, helper flows, run log), 11.3 (login through an issue), 11.4 (the workflow, `workspace_ci.py`) and 11.5 (the agent on the runner) done (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (pilot on the real mobile workspace, and the optional AVD cache of 11.6) waits for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1377,16 +1377,33 @@ Constraints written down now:
   `validate_batch`) runs with `Question` items and the `"proposed"` key aside, and its problems go to the pull
   request, not blocking it.
 
-### 11.6 Review and apply
-- [ ] The PR body (template): the build, the batch, Pass/Fail/N/A/Blocked, the proposed bugs (title, case, expected →
+### 11.6 Review and apply — done 29.09.2026 (the optional cache left to the pilot)
+- [x] The PR body (template): the build, the batch, Pass/Fail/N/A/Blocked, the proposed bugs (title, case, expected →
   observed, evidence links), the questions (`Question` cases), the time and turns used.
-- [ ] Approval: the user edits the run log in the PR (removes or changes a proposed bug, drops `"proposed"`, answers a
+- [x] Approval: the user edits the run log in the PR (removes or changes a proposed bug, drops `"proposed"`, answers a
   `Question`), then merges. A second workflow (`apply.yml`, on push to `main` touching `runs/`) applies each new run
   log with the project's adapter (Excel: LibreOffice installed in the runner for the recalculation; Jira/Azure DevOps:
   `apply --yes`, since the merge was the approval), commits the workbook / `tracker/` and comments the result on the
   PR. A run log with `"proposed"` or `Question` left is never applied (the workflow fails and says which).
 - [ ] Optional, measured in the pilot: cache the AVD with the app logged in between runs (`actions/cache`), to skip
   the login; kept only if a restored emulator keeps the session and the build.
+- Note (where the spec was open): the adapter-side check is in both adapters' `validate_batch` (Excel and the tracker
+  base): a `new_defect` whose `"proposed"` is anything but `false` refuses the whole batch (exit 4) before anything
+  is written or sent, so a proposal can never be applied locally either; `"proposed": false` counts as approved;
+  `technique-excel.md` §4 and `technique-jira-xray.md` §2.6 say so. The PR body is a template installed with the
+  workflows (`.github/qa/pr-body.md`), filled by `workspace_ci.py pr-body`: a count per status as the run log has
+  them (no assumption about the project's vocabulary) plus the cases not run, the proposed bugs with links to their
+  evidence in the run's branch, the questions, the checks of 11.5, the agent's summary file, the time used against
+  `ci.timeout_minutes` and the turns against `ci.max_turns` (with Claude's `subtype`, e.g. `error_max_turns`).
+  `apply.yml` runs on a push to `main` touching `runs/**`, one at a time (`concurrency`); `apply-merged` takes the
+  run logs added or changed between the push's `before` and `after` (the commit itself on a first push), refuses
+  and names those with `"proposed"` or `Question` left, applies the others with the same command as `/checkpoint`
+  (the Jira / Azure DevOps credentials come from `ci.secrets` through `write-env`), commits the workbook only after
+  exit 0 or 5 (a cross-check or recalculation failure leaves `main` untouched) and `tracker/` always (the record lets
+  a partial send continue), pushes to `main` with the workflow's token (a push by that token starts no workflow: no
+  loop), comments on the pull request of the merge commit, and fails when anything was refused or failed.
+  `/checkpoint` step 9: a remote run's log is never applied locally. The optional box (cache the AVD with the app
+  logged in) is left open: it can only be measured on a real run (11.7).
 
 ### 11.7 Pilot and heuristics
 - [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
@@ -1405,6 +1422,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.6 done: `docs/workspace/ci/pr-body.md` and `workspace_ci.py pr-body` (build, batch, a count per status and the cases not run, the proposed bugs with evidence links, the questions, the checks, the agent's summary, time and turns); `docs/workspace/ci/apply.yml` and `workspace_ci.py apply-merged` (on the push to `main` touching `runs/`: each run log applied with the project's adapter — LibreOffice on the runner for Excel, `apply --yes` for Jira / Azure DevOps —, the workbook or `tracker/` committed and pushed, the result commented on the pull request; a run log with `"proposed"` or `Question` left refused and named); the adapter-side check in both `validate_batch` (a `new_defect` with `"proposed"` is never applied nor sent), in `technique-excel.md` §4 and `technique-jira-xray.md` §2.6; `/checkpoint` step 9. Fictional golden OK. 6 new tests (628 → 634). The optional AVD cache stays for the pilot. Choices in the note of 11.6. |
 | 2026-09-29 | 11.5 done: `docs/workspace/ci/agent-prompt.md` (installed as `.github/qa/agent-prompt.md`: `/test-mobile` in conversational mode, results case by case with `run_log.py`, `Question` for a doubt, new bugs only as `"proposed": true`, never apply/send/git, the summary for the PR); the agent step of `mobile.yml` (Claude Code headless with the subscription token, `--max-turns`, `--permission-mode dontAsk`, tools limited to the framework's scripts, Read and writes in `runs/`, `evidence/`, `context.md`, no web tools, SIGINT at the time left); `workspace_ci.py prompt` and `post-check` (no `.env` value in the files to commit, `"proposed": true` enforced, the adapter's validation without applying). The CLI flags confirmed against the official docs (note of 11.5). 3 new tests (625 → 628). Choices in the note of 11.5. |
 | 2026-09-29 | 11.4 done: `docs/workspace/ci/mobile.yml` (`workflow_dispatch` with `batch`/`build`/`mode`; a `plan` job that reads `ci:` and refuses any runner but a standard one; checkout of the workspace and of `qa-assistant` with the read-only token; Python, Java, Maestro, the Android SDK's emulator and image, cached; KVM; the `.env` of the names in `ci.secrets` written from the Actions secrets and checked by `validate_project.py --environment --strict --ci`; `workspace_build.py fetch`; `setup_emulator.py` cold, headless, `swiftshader_indirect`; the login through the issue, Blocked when it fails; the flows; a branch `run/<batch>-<run id>` and the pull request) and `scripts/workspace_ci.py` (`install` — private repository, dry run, secrets typed by the user — `check`, and the workflow's steps `batch`, `write-env`, `blocked`, `import-flows`); `validate_project.py --ci`; `/plan-batch` saves `batches/<name>.yaml`. `tests/test_workspace_ci.py` (15) and 1 validation test (609 → 625). Choices in the note of 11.4. |
 | 2026-09-29 | 11.3 done: `scripts/remote_login.py` — `request` (the helper flow, then the issue "Login needed — <run id>" mentioning the allowed user) and `wait` (every 15 s up to `ci.login.timeout_minutes`; only that user's comment with a link of the project's hosts; masked, opened in-process, the comment deleted, the issue closed, the login screen checked; other comments reported without their text; timeout → exit 3, Blocked (login)). `tests/test_remote_login.py` with a fake GitHub, the fake device and a fake clock (10 tests, 599 → 609). Choices in the note of 11.3. |

@@ -346,6 +346,133 @@ class Agent(Base):
         self.assertFalse(os.path.exists(os.path.join(self.ws, "tracker", "sent")))   # nothing sent
 
 
+class Review(Base):
+    """plan 11.6: the pull request's body."""
+
+    def test_the_body_has_the_totals_the_proposed_bugs_the_questions_and_the_limits(self):
+        self.assertEqual(self.run_(FakeGh(), "install", "--yes")[0], 0)
+        os.makedirs(os.path.join(self.ws, "runs"))
+        log = {"mode": "both: remote run 4242 (technique-mobile.md §11)",
+               "run": {"environment": "test", "build": "1.4.0 (140)"},
+               "remote": {"run_id": "4242", "batch": "chat", "cases": ["TC-MOB-001", "TC-MOB-002", "TC-MOB-003",
+                                                                       "TC-MOB-004"]},
+               "results": [{"tc": "TC-MOB-001", "status": "Pass", "actual_result": "ok"},
+                           {"tc": "TC-MOB-002", "status": "Fail", "actual_result": "wrong total",
+                            "evidence": ["evidence/batch_chat_r4242/TC-MOB-002_t1.png"],
+                            "new_defect": {"title": "Wrong total in the cart", "expected": "12", "observed": "21",
+                                           "proposed": True}},
+                           {"tc": "TC-MOB-003", "status": "Question", "actual_result": "Is 2 the limit?"}]}
+        with open(os.path.join(self.ws, "runs", "batch_chat_r4242.json"), "w", encoding="utf-8") as f:
+            json.dump(log, f)
+        with open(os.path.join(self.ws, "runs", "batch_chat_r4242.summary.md"), "w", encoding="utf-8") as f:
+            f.write("TC-MOB-004 not run: out of turns.\n")
+        agent, checks = os.path.join(self.tmp.name, "claude.json"), os.path.join(self.tmp.name, "checks.json")
+        with open(agent, "w", encoding="utf-8") as f:
+            json.dump({"num_turns": 80, "subtype": "error_max_turns", "result": "..."}, f)
+        with open(checks, "w", encoding="utf-8") as f:
+            json.dump({"safe": True, "files": ["a", "b"], "proposed_added": ["TC-MOB-002"],
+                       "problems": ["item 9: x"]}, f)
+        os.environ["GITHUB_RUN_ID"] = "4242"
+        started = str(datetime(2026, 9, 29, 11, 25).timestamp())
+        code, out = self.run_(FakeGh(), "pr-body", "--run-log", "chat_r4242", "--build", "build-1.4.0-140",
+                              "--branch", "run/chat-4242", "--started", started, "--agent", agent, "--checks", checks)
+        self.assertEqual(code, 0, out)
+        self.assertNotRegex(out, r"\{\{[a-z_]+\}\}")
+        for needle in ("## QA run: chat (4242)", "Build **build-1.4.0-140** · environment `test` · both",
+                       "Time: 35 of 60 minutes · agent turns: 80 (error_max_turns) of 80",
+                       f"https://github.com/{SLUG}/actions/runs/4242", "| Fail | 1 |", "| Question | 1 |",
+                       "| Not run | 1 (TC-MOB-004) |",
+                       ("- **Wrong total in the cart** — case TC-MOB-002: expected 12 → observed 21 · evidence: "
+                        f"[TC-MOB-002_t1.png](https://github.com/{SLUG}/blob/run/chat-4242/evidence/batch_chat_r4242/"
+                        "TC-MOB-002_t1.png)"), "- **TC-MOB-003**: Is 2 the limit?",
+                       "- 2 file(s) committed; no value of .env in them", "- run log: item 9: x",
+                       "TC-MOB-004 not run: out of turns.", "`runs/batch_chat_r4242.json`"):
+            self.assertIn(needle, out)
+
+
+@unittest.skipUnless(shutil.which("git"), "no git")
+class ApplyMerged(Base):
+    """plan 11.6: after the merge, each run log added or changed is applied, or refused and named."""
+
+    def setUp(self):
+        super().setUp()
+        self.project(tracker="excel", excel={"file": "demo.xlsx"})
+        with open(os.path.join(self.ws, "demo.xlsx"), "w", encoding="utf-8") as f:
+            f.write("workbook v1")
+        self.remote = os.path.join(self.tmp.name, "remote.git")
+        git(self.tmp.name, "init", "-q", "--bare", "--initial-branch=main", self.remote)
+        git(self.ws, "init", "-q", "--initial-branch=main")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-q", "-m", "base")
+        git(self.ws, "remote", "add", "origin", self.remote)
+        git(self.ws, "push", "-q", "-u", "origin", "main")
+        self.before = git(self.ws, "rev-parse", "HEAD").strip()
+        os.makedirs(os.path.join(self.ws, "runs"))
+        new = {"title": "Wrong total", "expected": "12", "observed": "21"}
+        for name, items in [("batch_a_r1", [{"tc": "TC-MOB-001", "status": "Pass", "actual_result": "ok"}]),
+                            ("batch_b_r1", [{"tc": "TC-MOB-002", "status": "Fail", "actual_result": "x",
+                                             "new_defect": {**new, "proposed": True}}]),
+                            ("batch_c_r1", [{"tc": "TC-MOB-003", "status": "Question", "actual_result": "?"}])]:
+            with open(os.path.join(self.ws, "runs", f"{name}.json"), "w", encoding="utf-8") as f:
+                json.dump({"results": items}, f)
+        with open(os.path.join(self.ws, "runs", "batch_a_r1.summary.md"), "w", encoding="utf-8") as f:
+            f.write("summary\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-q", "-m", "merge run/a-1")
+        git(self.ws, "push", "-q", "origin", "main")
+        self.after = git(self.ws, "rev-parse", "HEAD").strip()
+        self.applied = []
+
+    def adapter(self, workspace, tracker, path):
+        self.applied.append((tracker, os.path.basename(path)))
+        with open(os.path.join(workspace, "demo.xlsx"), "w", encoding="utf-8") as f:
+            f.write("workbook v2")
+        return 0, "Cross-check: 0 problems. Saved."
+
+    def gh(self):
+        comments = []
+
+        def fake(*args, interactive=False):
+            if args[0] == "api" and args[1].endswith("/pulls"):
+                return SimpleNamespace(returncode=0, stdout=json.dumps([{"number": 7}]), stderr="")
+            if args[:2] == ("pr", "comment"):
+                comments.append(args)
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            raise AssertionError(args)
+        return fake, comments
+
+    def test_only_the_clean_run_log_is_applied_the_others_are_named(self):
+        fake, comments = self.gh()
+        with mock.patch.object(wc, "run_adapter", self.adapter):
+            code, out = self.run_(fake, "apply-merged", "--before", self.before, "--after", self.after)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.applied, [("excel", "batch_a_r1.json")])
+        self.assertIn('`runs/batch_b_r1.json`: NOT APPLIED -- TC-MOB-002: the new_defect still has "proposed"', out)
+        self.assertIn("`runs/batch_c_r1.json`: NOT APPLIED -- TC-MOB-003: still Question", out)
+        self.assertEqual(git(self.remote, "log", "-1", "--format=%s", "main").strip(),
+                         "QA apply: batch_a_r1.json, batch_b_r1.json, batch_c_r1.json")
+        self.assertEqual(git(self.remote, "show", "main:demo.xlsx"), "workbook v2")
+        self.assertEqual(comments[0][2], "7")
+        self.assertIn("applied -- Cross-check: 0 problems. Saved.", comments[0][comments[0].index("--body") + 1])
+
+    def test_an_adapter_failure_is_not_committed_as_success_and_nothing_merged_is_nothing_to_do(self):
+        fake, _ = self.gh()
+        with mock.patch.object(wc, "run_adapter", lambda *a: (4, "NOTHING APPLIED -- invalid batch")):
+            code, out = self.run_(fake, "apply-merged", "--before", self.before, "--after", self.after)
+        self.assertEqual(code, 1)
+        self.assertIn("adapter exit 4 -- NOTHING APPLIED -- invalid batch", out)
+        with mock.patch.object(wc, "run_adapter", self.adapter):
+            code, out = self.run_(fake, "apply-merged", "--before", self.after, "--after", self.after)
+        self.assertEqual((code, self.applied), (0, []))
+        self.assertIn("nothing to apply", out)
+
+    def test_a_first_push_reads_the_commit_itself(self):
+        fake, _ = self.gh()
+        with mock.patch.object(wc, "run_adapter", self.adapter):
+            self.run_(fake, "apply-merged", "--before", "0" * 40, "--after", self.after)
+        self.assertEqual(self.applied, [("excel", "batch_a_r1.json")])
+
+
 class Templates(unittest.TestCase):
     """The templates hold nothing of a project and only use what is free."""
 

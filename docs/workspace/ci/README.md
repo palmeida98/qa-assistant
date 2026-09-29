@@ -43,6 +43,8 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 4. **Variables** (same page, tab Variables): `QA_ASSISTANT_REPOSITORY` = `<owner>/qa-assistant` and, optionally,
    `QA_ASSISTANT_REF` (default `main`).
 5. **Spending limit at 0** (above).
+6. **`main` accepts the apply workflow's commit**: `qa-apply.yml` commits the updated workbook (or `tracker/`) to
+   `main` with the workflow's token after each merge. A branch rule on `main` would have to let GitHub Actions push.
 
 ## Running a batch
 

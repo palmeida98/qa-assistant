@@ -236,6 +236,8 @@ jobs:
           BRANCH: ${{ steps.batch.outputs.branch }}
           BATCH_NAME: ${{ steps.batch.outputs.name }}
           BASE: ${{ github.ref_name }}
+          START: ${{ steps.start.outputs.at }}
+          BUILD_TAG: ${{ steps.build.outputs.tag }}
         run: |
           cd "$WS"
           git config user.name "github-actions[bot]"
@@ -245,5 +247,8 @@ jobs:
           if git diff --cached --quiet; then echo "nothing to commit: no pull request"; exit 0; fi
           git commit -q -m "QA run: $BATCH_NAME ($GITHUB_RUN_ID)"
           git push -q origin "$BRANCH"
+          python "$QA/scripts/workspace_ci.py" "$WS" pr-body --run-log "$RUN_LOG" --build "$BUILD_TAG" \
+            --branch "$BRANCH" --started "$START" --agent "$RUNNER_TEMP/claude.json" \
+            --checks "$RUNNER_TEMP/post-check.json" > "$RUNNER_TEMP/pr-body.md"
           gh pr create --base "$BASE" --head "$BRANCH" --title "QA run: $BATCH_NAME ($GITHUB_RUN_ID)" \
-            --body "Run log: runs/$RUN_LOG.json. Review it before the merge (methodology 9.4)."
+            --body-file "$RUNNER_TEMP/pr-body.md"
