@@ -1104,8 +1104,8 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
 - [x] `/end-session`: totals from the run logs and the read back, not from memory. `/dashboard`: unchanged (Excel
   only), its message points to the tracker's own reports.
 - [x] README (trackers) aligned.
-- [ ] `sync_skills.py --apply` and the global copy in sync: after the branch is merged (the global copy is what every
-  workspace loads, so it is not synced from an unmerged branch).
+- [x] `sync_skills.py --apply` and the global copy in sync: after the branch is merged (the global copy is what every
+  workspace loads, so it is not synced from an unmerged branch). Done 29.09.2026 after the merge (9 skills applied).
 - Note (choices where the plan was open): the skills never branch on the tracker's name beyond "with jira or
   azure-devops" (one command line, the tracker from `project.yaml`), and they point to the techniques instead of
   repeating them; `/project-onboarding` gets a step 4t (the section, filled from the template's comments, the
