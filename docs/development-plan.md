@@ -1165,8 +1165,13 @@ Decisions of the user (29.09.2026):
 - **Device:** an Android emulator on a GitHub-hosted Linux runner (KVM), started by a workflow in the **workspace's**
   repository. No third-party device farm (the build would leave the client's control).
 - **Who drives the conversational tests:** Claude Code **headless** in that runner (the same skills and
-  `scripts/device.py` as a local session), with an Anthropic API key stored as a repository secret. It opens a **pull
+  `scripts/device.py` as a local session), authenticated with the user's **Claude subscription** (an OAuth token from
+  `claude setup-token`, stored as the secret `CLAUDE_CODE_OAUTH_TOKEN`), never a paid API key. It opens a **pull
   request** with the run log and the evidence; bugs are proposals until the user approves them (methodology §9.4).
+- **No cost (user, 29.09.2026):** only what is free is used — GitHub Actions within the free minutes of the plan, with
+  the spending limit at 0 so a job stops instead of being billed; releases, issues, pull requests and the Actions cache;
+  the Claude subscription the user already has (its usage limits apply; no extra billing). Nothing that needs a paid
+  service, a paid API key or a device farm.
 - **Builds:** each build is a **release of the workspace's repository** (tag and asset), recorded in `project.yaml`
   with its SHA-256; the workflow downloads it by tag.
 - **Login:** stays **manual** — the runner asks for the link in the app and waits for the user to paste it as a comment
@@ -1175,11 +1180,14 @@ Decisions of the user (29.09.2026):
 Constraints written down now:
 - The runner starts clean every time: every run needs the build installed and a login. Nothing of the app's state is
   kept between runs unless 11.6 proves a cache works.
-- Secrets live only in the repository's **Actions secrets** (never in files, logs, inputs or the PR): the Anthropic
-  key, the credential variables of `project.yaml` (e.g. the test account's e-mail) and a read-only token to clone the
+- Secrets live only in the repository's **Actions secrets** (never in files, logs, inputs or the PR): the Claude OAuth
+  token, the credential variables of `project.yaml` (e.g. the test account's e-mail) and a read-only token to clone the
   private `qa-assistant`. The workflow writes `.env` from them inside the runner and it is never committed.
-- Costs are the user's: GitHub Actions minutes of the workspace's repository (private) and Anthropic API usage. Every
-  run has a time limit and a turn limit, both in `project.yaml`, and the PR says how long the run took.
+- Free minutes are limited (a private repository on the Free plan: 2 000 Linux minutes a month, shared by all the
+  user's private repositories). Every run has a time limit and a turn limit, both in `project.yaml`; the PR says how
+  long the run took; `workspace_ci.py check` warns when the account's Actions spending limit is not 0 (when `gh` can
+  read it) and says the minutes used this month when the API gives them. The workflow never uses a larger (paid)
+  runner.
 - Deterministic Maestro flows (N2) can run in the same workflow without the agent; the agent is only for the
   conversational mode.
 
@@ -1194,7 +1202,7 @@ Constraints written down now:
   mode `swiftshader_indirect`, cold boot), and how long a batch may take.
 - [ ] `docs/workspace/ci/` holds the templates (workflow, the agent's prompt, the PR body) and a `README` with the
   repository settings: secrets, Actions permissions (`contents: write`, `pull-requests: write`, `issues: write`), the
-  token to clone `qa-assistant`, and the costs.
+  token to clone `qa-assistant`, the Claude OAuth token (`claude setup-token`), the spending limit at 0 and the free minutes.
 - [ ] `project.yaml`: a `ci:` section (optional) — `runner` (default `ubuntu-24.04`), `timeout_minutes`, `max_turns`,
   `secrets` (names of the `.env` variables the runner needs), `login.mode` (`manual-issue` or `none`), `login.flow`,
   `login.timeout_minutes`; `validate_project.py` checks it; the template gets it commented.
@@ -1277,7 +1285,7 @@ Constraints written down now:
 ### 11.7 Pilot and heuristics
 - [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
   build, `workspace_ci.py install`, the secrets set by the user, one batch run from GitHub (not from this computer),
-  the login pasted in the issue, the PR reviewed and merged, the workbook updated by `apply.yml`. Time, turns and cost
+  the login pasted in the issue, the PR reviewed and merged, the workbook updated by `apply.yml`. Time, turns and minutes
   written in that workspace's `context.md`, not here.
 - [ ] `docs/heuristics.md` and the techniques get what the pilot teaches (anonymised).
 
