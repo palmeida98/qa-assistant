@@ -508,10 +508,14 @@ def required_python() -> tuple[int, ...]:
 VALUES_FROM = "from your own secret store (never from a chat, a log or the repository)"
 
 
-def env_check(workspace: str, proj: dict) -> tuple[bool, str]:
-    """.env has every name of .env.example and of project.yaml. Only names are ever shown, never a value."""
+def env_check(workspace: str, proj: dict, ci: bool = False) -> tuple[bool, str]:
+    """.env has every name of .env.example and of project.yaml (with ci: only those of ci.secrets, the ones a runner
+    gets). Only names are ever shown, never a value."""
     from common import read_env, variable_names
-    needed = sorted(set(read_env(os.path.join(workspace, ".env.example"))) | set(variable_names(proj)))
+    if ci:
+        needed = sorted(str(x) for x in ((proj.get("ci") or {}).get("secrets") or []))
+    else:
+        needed = sorted(set(read_env(os.path.join(workspace, ".env.example"))) | set(variable_names(proj)))
     if not needed:
         return True, "no variable needed (.env.example and project.yaml name none)"
     path = os.path.join(workspace, ".env")
@@ -529,10 +533,10 @@ def env_check(workspace: str, proj: dict) -> tuple[bool, str]:
     return False, f"{'; '.join(parts)} — fill them {VALUES_FROM}"
 
 
-def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
+def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool, str, str]]:
     """(found, tool, detail or how to install it) for what this computer needs to work on the workspace: always
     git, Python, .env and the skills; then per tracker and active module. Missing tools are warnings unless
-    --strict."""
+    --strict. ci: a runner of the workspace's CI (.env holds only ci.secrets)."""
     out = []
     add = out.append
     exe = which("git")
@@ -540,7 +544,7 @@ def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
     have, need = python_version(), required_python()
     add((have >= need, "python", f"{'.'.join(map(str, have))} (qa-assistant needs >= {'.'.join(map(str, need))})"
          + ("" if have >= need else ": install a newer Python, then `pip install -e .` again")))
-    ok, detail = env_check(workspace, proj)
+    ok, detail = env_check(workspace, proj, ci)
     add((ok, ".env", detail))
     try:
         state = skills_state()
@@ -613,9 +617,11 @@ def main(argv=None) -> int:
     ap.add_argument("--environment", action="store_true",
                     help="also check the tools this computer needs for the workspace's modules (methodology 12.3)")
     ap.add_argument("--strict", action="store_true", help="with --environment: a missing tool gives exit 1")
+    ap.add_argument("--ci", action="store_true", help="with --environment, on a runner of the workspace's CI: .env "
+                                                      "needs only the names of ci.secrets")
     a = ap.parse_args(argv)
-    if a.strict and not a.environment:
-        ap.error("--strict only applies with --environment")
+    if (a.strict or a.ci) and not a.environment:
+        ap.error("--strict and --ci only apply with --environment")
     if not os.path.isfile(os.path.join(a.workspace, "project.yaml")):
         hint = (": the workspace is from before the translation, convert it with scripts/migrate_workspace.py"
                 if os.path.isfile(os.path.join(a.workspace, "projeto.yaml")) else "")
@@ -630,7 +636,7 @@ def main(argv=None) -> int:
     if not a.environment:
         return 1 if problems else 0
     from common import read_project
-    checks = environment(a.workspace, read_project(a.workspace))
+    checks = environment(a.workspace, read_project(a.workspace), a.ci)
     for ok, tool, detail in checks:
         print(f"[{'ok' if ok else 'missing'}] {tool}: {detail}")
     missing = sum(1 for ok, _, _ in checks if not ok)

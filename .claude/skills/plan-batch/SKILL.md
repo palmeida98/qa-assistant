@@ -23,3 +23,6 @@ description: Groups and orders test cases into batches by area, feature, platfor
 8. The optimisation never reduces coverage nor changes a case's logic: confirm that the number of cases
    planned equals the number of cases selected.
 9. Present the plan (batches, order, role, cases, dependencies) and wait for confirmation before /run-batch.
+10. Once confirmed, save each batch as <workspace>/batches/<name>.yaml -- cases: [<case ID>, ...] in the planned
+    order (a name of letters, digits, '.', '_', '-') -- so it can also run remotely: the workspace's CI takes the
+    batch's name (python scripts/workspace_ci.py <workspace> check --batch <name>; technique-mobile.md section 11).

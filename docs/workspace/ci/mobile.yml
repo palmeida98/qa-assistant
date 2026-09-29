@@ -1,0 +1,215 @@
+# QA mobile — runs one batch of the workspace's mobile cases on an Android emulator of a GitHub-hosted runner and
+# opens a pull request with the run log and the evidence (methodology 12.4, technique-mobile.md section 11).
+#
+# Template of qa-assistant (docs/workspace/ci/mobile.yml), copied to .github/workflows/qa-mobile.yml by
+# `python scripts/workspace_ci.py <workspace> install`. Nothing of the project is written here: every value comes
+# from the workspace's project.yaml (ci:, mobile:) or from the repository's secrets and variables
+# (docs/workspace/ci/README.md). Do not edit the copy: change the template and install it again.
+#
+# No cost: a GitHub-hosted STANDARD runner only (the plan job refuses any other label), the job bounded by
+# ci.timeout_minutes, the agent by ci.max_turns, Claude through the user's subscription token (never an API key).
+
+name: QA mobile
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "Planned batch (batches/<name>.yaml) or case IDs separated by spaces"
+        required: true
+        type: string
+      build:
+        description: "Release tag of the build (empty: mobile.build of project.yaml)"
+        required: false
+        type: string
+        default: ""
+      mode:
+        description: "conversational (the agent) | flows (Maestro) | both"
+        required: true
+        type: choice
+        options: [conversational, flows, both]
+        default: conversational
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: qa-mobile            # one emulator run at a time per workspace
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      runner: ${{ steps.ci.outputs.runner }}
+      timeout: ${{ steps.ci.outputs.timeout }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: project.yaml
+          sparse-checkout-cone-mode: false
+      - id: ci
+        name: ci from project.yaml (a standard runner only)
+        run: |
+          runner=$(yq -r '.ci.runner // "ubuntu-24.04"' project.yaml)
+          timeout=$(yq -r '.ci.timeout_minutes // 60' project.yaml)
+          if ! [[ "$runner" =~ ^ubuntu-(latest|[0-9]{2}\.04)$ ]]; then
+            echo "::error::ci.runner '$runner' is not a GitHub-hosted standard runner (larger runners are paid)"
+            exit 1
+          fi
+          if ! [[ "$timeout" =~ ^[0-9]+$ ]] || (( timeout < 1 || timeout > 360 )); then
+            echo "::error::ci.timeout_minutes '$timeout': whole minutes from 1 to 360"
+            exit 1
+          fi
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "timeout=$timeout" >> "$GITHUB_OUTPUT"
+
+  run:
+    needs: plan
+    runs-on: ${{ needs.plan.outputs.runner }}
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    env:
+      WS: ${{ github.workspace }}/ws
+      QA: ${{ github.workspace }}/qa
+      GH_TOKEN: ${{ github.token }}
+      MODE: ${{ inputs.mode }}
+      TIMEOUT_MINUTES: ${{ needs.plan.outputs.timeout }}
+    steps:
+      - name: Start
+        id: start
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the workspace
+        uses: actions/checkout@v5
+        with:
+          path: ws
+
+      - name: Checkout qa-assistant (read-only token)
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ vars.QA_ASSISTANT_REPOSITORY }}
+          ref: ${{ vars.QA_ASSISTANT_REF || 'main' }}
+          token: ${{ secrets.QA_ASSISTANT_TOKEN }}
+          path: qa
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: qa/requirements.txt
+
+      - name: Python requirements and the skills
+        run: |
+          pip install -r "$QA/requirements.txt"
+          python "$QA/scripts/sync_skills.py" --apply
+
+      - name: Resolve the batch
+        id: batch
+        env:
+          BATCH_INPUT: ${{ inputs.batch }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" batch --input "$BATCH_INPUT" --mode "$MODE" --run-id "$GITHUB_RUN_ID"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android system image of mobile.image
+        id: android
+        run: |
+          image=$(yq -r '.mobile.image // "system-images;android-35;google_apis;x86_64"' "$WS/project.yaml")
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "key=$(echo "$image" | tr ';' '-')" >> "$GITHUB_OUTPUT"
+          echo "dir=$ANDROID_HOME/$(echo "$image" | tr ';' '/')" >> "$GITHUB_OUTPUT"
+          echo "sdk=$ANDROID_HOME" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the emulator, the system image and Maestro
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.android.outputs.dir }}
+            ${{ steps.android.outputs.sdk }}/emulator
+            ~/.maestro
+          key: qa-mobile-${{ runner.os }}-${{ steps.android.outputs.key }}-${{ vars.MAESTRO_VERSION || 'latest' }}-v1
+
+      - name: Android SDK, Maestro and KVM
+        env:
+          IMAGE: ${{ steps.android.outputs.image }}
+          MAESTRO_VERSION: ${{ vars.MAESTRO_VERSION }}
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "emulator" "platform-tools" "$IMAGE" > /dev/null
+          [ -x "$HOME/.maestro/bin/maestro" ] || curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: .env from the Actions secrets named in ci.secrets (never printed, never committed)
+        env:
+          QA_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" write-env
+
+      - name: The environment (a missing tool stops the run)
+        run: python "$QA/scripts/validate_project.py" "$WS" --environment --strict --ci
+
+      - name: The build (release asset, SHA-256 checked)
+        id: build
+        env:
+          BUILD_TAG: ${{ inputs.build }}
+        run: python "$QA/scripts/workspace_build.py" "$WS" fetch ${BUILD_TAG:+--tag "$BUILD_TAG"}
+
+      - name: The emulator (cold boot, no GPU)
+        run: >
+          python "$QA/scripts/setup_emulator.py" "$WS" --apk "${{ steps.build.outputs.apk }}"
+          --cold --headless --gpu swiftshader_indirect --no-audio --boot-timeout 600
+
+      - name: Login through an issue (the owner pastes the link)
+        id: login
+        if: steps.batch.outputs.login == 'manual-issue'
+        continue-on-error: true
+        run: |
+          python "$QA/scripts/remote_login.py" "$WS" request
+          python "$QA/scripts/remote_login.py" "$WS" wait
+
+      - name: No login, the batch is Blocked (login)
+        if: steps.login.outcome == 'failure'
+        env:
+          CASES: ${{ steps.batch.outputs.cases }}
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+        run: >
+          python "$QA/scripts/workspace_ci.py" "$WS" blocked --run-log "$RUN_LOG" --cases $CASES
+          --reason "login: no link was pasted in the issue in time (remote_login.py)"
+
+      - name: Maestro flows
+        if: steps.login.outcome != 'failure' && steps.batch.outputs.flow_cases != ''
+        env:
+          FLOW_CASES: ${{ steps.batch.outputs.flow_cases }}
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+        run: |
+          python "$QA/scripts/run_mobile.py" "$WS" $FLOW_CASES --output "$RUNNER_TEMP/flows.json" || true
+          python "$QA/scripts/workspace_ci.py" "$WS" import-flows --run-log "$RUN_LOG" --report "$RUNNER_TEMP/flows.json"
+
+      - name: Pull request (run/<batch>-<run id>; never main)
+        if: always() && steps.batch.outcome == 'success'
+        env:
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+          BRANCH: ${{ steps.batch.outputs.branch }}
+          BATCH_NAME: ${{ steps.batch.outputs.name }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          cd "$WS"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          for p in runs evidence context.md; do [ -e "$p" ] && git add -- "$p"; done
+          if git diff --cached --quiet; then echo "nothing to commit: no pull request"; exit 0; fi
+          git commit -q -m "QA run: $BATCH_NAME ($GITHUB_RUN_ID)"
+          git push -q origin "$BRANCH"
+          gh pr create --base "$BASE" --head "$BRANCH" --title "QA run: $BATCH_NAME ($GITHUB_RUN_ID)" \
+            --body "Run log: runs/$RUN_LOG.json. Review it before the merge (methodology 9.4)."

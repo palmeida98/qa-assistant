@@ -361,7 +361,7 @@ class Validate(unittest.TestCase):
         self.assertTrue(any("mobile.build.version" in p for p in problems), problems)
 
 
-REAL ={"skills_state": vp.skills_state, "playwright_browsers": vp.playwright_browsers}
+REAL = {"skills_state": vp.skills_state, "playwright_browsers": vp.playwright_browsers}
 
 
 class Environment(unittest.TestCase):
@@ -408,6 +408,19 @@ class Environment(unittest.TestCase):
             ok, detail = self.checks()["python"]
         self.assertFalse(ok)
         self.assertIn(">= 3.12", detail)
+
+    def test_on_a_runner_env_needs_only_ci_secrets(self):
+        # plan 11.4: the runner's .env is written from the Actions secrets of ci.secrets only
+        proj = self.project(modules=["mobile"], mobile={**MOBILE, "variables": ["SHOP_APP_USER", "SHOP_OTHER"]},
+                            ci={"secrets": ["SHOP_APP_USER"]})
+        with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
+            f.write("SHOP_APP_USER=tester@demoshop.example\n")
+        self.assertFalse(vp.env_check(self.ws, proj)[0])                          # SHOP_OTHER missing here
+        ok, detail = vp.env_check(self.ws, proj, ci=True)
+        self.assertTrue(ok, detail)
+        self.assertNotIn("tester@demoshop.example", detail)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            vp.main([self.ws, "--ci"])                                             # only with --environment
 
     def test_env_missing_a_name_is_reported_without_any_value(self):
         creds = {"admin": {"user_var": "SHOP_ADMIN_USER", "pass_var": "SHOP_ADMIN_PASSWORD"}}
