@@ -23,8 +23,10 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
    - evidence policy (text or text+screenshot)
    - active test modules: only those of the closed list in methodology.md section 4.1 (functional-web,
      exploratory, api, accessibility, mobile); show the list and what each one implies
-3. Fill in CLAUDE.md and project.yaml with the answers. With the excel tracker, add to CLAUDE.md
-   the import of <qa>/docs/technique-excel.md, next to the other universal imports.
+3. Fill in CLAUDE.md and project.yaml with the answers. Add to CLAUDE.md, next to the other universal imports,
+   the tracker's technique: <qa>/docs/technique-excel.md (excel), <qa>/docs/technique-jira-xray.md (jira), or
+   both <qa>/docs/technique-jira-xray.md (the common contract, section 2) and <qa>/docs/technique-azure-devops.md
+   (azure-devops).
 4. If the tracker is "excel", fill in the excel: section of project.yaml by INSPECTING the real workbook
    (technique-excel.md section 1; never guess sheet, column or status names):
    a. Run, from the root of qa-assistant, on a local COPY of the workbook (never the official one
@@ -51,6 +53,28 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
    g. Fill in the dashboard: section of project.yaml (scripts/build_dashboard.py): for each status of
       excel.cases.statuses, ASK the type -- pending, ok, fail, blocked or na. Propose the types from
       the names, but the user confirms (the vocabulary is the project's).
+4t. If the tracker is "jira" or "azure-devops", fill in the jira: / azure_devops: section of project.yaml with the
+   user, from the template's commented section (technique-jira-xray.md section 1, technique-azure-devops.md
+   section 1). ASK every value; never guess a project key, field id, status, plan or suite:
+   a. Site / organisation URL and project; the credential variables ONLY as names in the *_var keys
+      (jira: user_var, token_var, xray.client_id_var, xray.client_secret_var; azure-devops: pat_var). The values
+      go to .env by the user (step 6), never here nor in the chat.
+   b. Azure DevOps: ASK which process the project uses. Agile or Scrum (or one inherited from them) only; Basic
+      has no Bug work item type and CMMI is not covered: stop and tell the user (technique-azure-devops.md
+      section 0). Then plan_id, suite_ids, new_cases_suite_id (a static suite), area paths (full paths).
+   c. Cases: id_source (default key in Jira / id in Azure DevOps; field or label/tag only when the project keeps
+      its own IDs, with id_field or the prefix), the JQL (Jira), the folder / test plan, and cases.fields.
+   d. Status map, the project's vocabulary for this tracker (jira: results.statuses; azure-devops:
+      results.outcomes, from the closed list of outcomes): EVERY status of the project is a key. Propose the
+      defaults of the technique's section 4.1 and ASK, per project, for Blocked and N/A (never assumed): in Xray
+      a custom status that exists in the Xray settings, or ABORTED, or skip; in Azure DevOps Blocked /
+      NotApplicable, or skip. skip (or empty) = not sent, it stays only in the run log. Question is never mapped.
+   e. Azure DevOps: platform -> Test Configuration (results.configurations), needed when a case has several test
+      points. Evidence: attach_evidence stays false unless the evidence policy is text+screenshot and the user
+      wants the files uploaded (technique-jira-xray.md section 8).
+   f. bugs: the fields from the project's bug format (bug_format), defaults, the statuses/states a retest may
+      move a bug to (resolved_bugs rule), priorities; open_jql (jira) or closed_states (azure-devops).
+   Validate with step 8a; check and import-cases come after .env has the values (step 8d).
 5. If a browser module is active (e.g. functional-web), register the Playwright MCP IN THE WORKSPACE
    (technique-browser.md section 1, level N1). The command runs from the workspace's folder, because
    --scope project writes .mcp.json in the current folder:
@@ -100,4 +124,15 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
     private repository and remote --set URL adds it). Do not push here: the push is the user's call (/checkpoint).
     Validate again (8a): "no remote" stays a warning if the user declined.
     To continue the project on another computer: <qa>/docs/workspace/resume.md (methodology.md section 12.3).
+8d. With the jira or azure-devops tracker (methodology.md section 4, step 7), once the USER has put the values
+    of the tracker's variables in .env (never read nor shown by the assistant), from the root of qa-assistant:
+    python -m adapters.tracker <workspace> check
+    (read only: authentication, project, process, issue/work item types, every mapped field, the mapped statuses
+    or outcomes, the test plan and suites). Exit 4 = the problems listed: fix project.yaml with the user and run
+    it again; 3 = network or authentication (a wrong or expired token: the user fixes .env). Then:
+    python -m adapters.tracker <workspace> import-cases
+    (read only, into tracker/cases.json and tracker/ids.yaml): tell the user how many cases came and show every
+    flag (no steps, several expected results, no internal ID...) -- they are recorded in context.md, not fixed
+    here; exit 2 = two tests with the same internal ID. Nothing is written to the tracker at the onboarding (the
+    round trip is the adapter's golden, methodology section 15). Commit tracker/ in the workspace.
 9. Never write this project's information into the universal layers (docs/ of qa-assistant).

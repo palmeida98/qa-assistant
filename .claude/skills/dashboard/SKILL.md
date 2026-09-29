@@ -5,8 +5,11 @@ description: Builds and opens the current workspace's progress dashboard (progre
 1. Find the root of qa-assistant (<qa>) from the current workspace: usually ../../../qa-assistant
    (workspace in qa-workspaces/<company>/<project>/); in the demo, inside the repository itself, it is ../..
    (examples/demo/). Confirm that <qa>/scripts/build_dashboard.py exists.
-2. Confirm that the current workspace has a project.yaml with tracker: excel. With another tracker, tell the
-   user the dashboard only supports excel for now and stop.
+2. Confirm that the current workspace has a project.yaml with tracker: excel. With jira or azure-devops, stop:
+   the dashboard is Excel only by decision (plan 10.0; technique-jira-xray.md section 9), because one built
+   from what this assistant sent would miss everyone else's results. Point the user to the tracker's own
+   reports (the Xray test plan and execution reports, the Azure DevOps test plan's progress report) and, for
+   this session's numbers, to /end-session's summary.
 3. Confirm that dashboard.html is in the workspace's .gitignore. If it is not, add it and tell the
    user (the dashboard has project data and does not go into git).
 4. From the root of qa-assistant, with the ABSOLUTE path of the workspace:

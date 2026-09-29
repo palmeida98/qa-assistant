@@ -35,7 +35,7 @@
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
-| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | In progress: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) done (29.09.2026) |
+| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done except 10.5 (the pilot on free instances, which needs the user): 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1089,21 +1089,42 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
   words; the WIQL of `System.Tags CONTAINS` on a tag with `-`/`_`; whether a run created with `pointIds` needs a
   state; the Test Plans licence of the pilot's user; the comments preview version still accepted; rate limits.
 
-### 10.4 Skills
-- [ ] `/project-onboarding`: with `jira`/`azure-devops`, fill in the tracker's section with the user (IDs, fields,
+### 10.4 Skills — done 29.09.2026
+- [x] `/project-onboarding`: with `jira`/`azure-devops`, fill in the tracker's section with the user (IDs, fields,
   status/outcome map — `Blocked` and `N/A` asked, never assumed), the credential variables in `.env`, then `check`
   and `import-cases` (methodology §4 step 7), and the technique imported in the workspace's `CLAUDE.md`.
-- [ ] `/checkpoint`: step 7a replaced by the adapter: `apply` without `--yes`, the plan shown, `--yes` only after the
+- [x] `/checkpoint`: step 7a replaced by the adapter: `apply` without `--yes`, the plan shown, `--yes` only after the
   user's approval, the exit codes explained as in step 7; commit the record after exit 0 (as the workbook).
-- [ ] `/log-bug`: `bug-search` before drafting; the draft goes in the run log as `new_defect` (or `bug` +
+- [x] `/log-bug`: `bug-search` before drafting; the draft goes in the run log as `new_defect` (or `bug` +
   `bug_status`), as with Excel.
-- [ ] `/generate-cases`: the approved cases written to a cases file and sent with `export-cases` (dry run, approval,
+- [x] `/generate-cases`: the approved cases written to a cases file and sent with `export-cases` (dry run, approval,
   `--yes`); the final IDs told to the user.
-- [ ] `/plan-batch` and `/run-batch`: cases from `tracker/cases.json` (refreshed with `import-cases` when older than
+- [x] `/plan-batch` and `/run-batch`: cases from `tracker/cases.json` (refreshed with `import-cases` when older than
   the session), statuses from the tracker's map, the `run` block written in the run log.
-- [ ] `/end-session`: totals from the run logs and the read back, not from memory. `/dashboard`: unchanged (Excel
+- [x] `/end-session`: totals from the run logs and the read back, not from memory. `/dashboard`: unchanged (Excel
   only), its message points to the tracker's own reports.
-- [ ] README (trackers) aligned; `sync_skills.py --apply` run and the global copy in sync.
+- [x] README (trackers) aligned.
+- [ ] `sync_skills.py --apply` and the global copy in sync: after the branch is merged (the global copy is what every
+  workspace loads, so it is not synced from an unmerged branch).
+- Note (choices where the plan was open): the skills never branch on the tracker's name beyond "with jira or
+  azure-devops" (one command line, the tracker from `project.yaml`), and they point to the techniques instead of
+  repeating them; `/project-onboarding` gets a step 4t (the section, filled from the template's comments, the
+  process asked first for Azure DevOps and Basic/CMMI stopped there) and a step 8d (`check`, then `import-cases`,
+  only after the user has put the values in `.env`; `tracker/` committed); `/checkpoint` 7a commits `tracker/`
+  after any `--yes` run that wrote (0, 3 or 5, not only 0: a partial record must reach another computer too), a
+  run after exit 3 repeats the same `--yes` command under the same approval (it continues from the record), and a
+  missing `run` block is asked (the build is never guessed); `/log-bug` writes the draft to
+  `tracker/drafts/<case>.json` and never skips the search silently when the tracker is out of reach;
+  `/generate-cases` writes the approved cases to `tracker/export/cases_<YYYYMMDD>_<nn>.json` (one file per export: its name is
+  the record's, so a file already exported is never edited); `/plan-batch` refreshes `tracker/cases.json` when its
+  `imported_at` is older than the session; `/end-session`'s cross-check runs `apply` without `--yes` on each batch
+  (a complete record answers "already sent" with no request and no credential); `/dashboard` stops with the reason
+  (decision of 10.0) and points to the tracker's reports and `/end-session`; `/test-api` reads its cases from
+  `tracker/cases.json` too, `/audit-accessibility` and `/test-mobile` needed no change (they only write the run log
+  and continue to `/checkpoint`). `tests/test_skills.py` checks that every `python -m adapters.tracker` line of the
+  skills parses with the real command line, that each direction is used by its skill, that the writing commands are
+  never written with `--yes` in the skill, that `/checkpoint` explains the exit codes 0–5, what the onboarding asks,
+  `/dashboard`'s message, and that every technique a skill names exists. `examples/demo/` unchanged (Excel).
 
 ### 10.5 Pilot on free instances (user) and heuristics
 - [ ] The user creates a free Jira Cloud site with an Xray trial and a free Azure DevOps organisation, each with a
@@ -1125,6 +1146,7 @@ export new cases, and be continued on another computer; the unit tests and both 
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 10.4 done: the skills use the tracker adapters — `/project-onboarding` (the `jira:` / `azure_devops:` section with the user: variable names only, the status/outcome map with `Blocked`/`N/A` asked, `id_source`, evidence, the Azure DevOps process and Test Configurations; then `check` and `import-cases`), `/checkpoint` (7a: `apply` dry run, the plan shown, `--yes` after approval, exit codes 0–5, the `run` block, `tracker/` committed), `/log-bug` (`bug-search` first, the user decides, `new_defect` / `bug` / `bug_status` in the run log), `/generate-cases` (cases file, `export-cases` dry run, `--yes`, final IDs), `/plan-batch` and `/run-batch` (`tracker/cases.json`, the tracker's IDs and map), `/end-session` (the records of what was sent against the run logs), `/dashboard` (Excel only, said clearly), `/test-api`; README. 7 new tests in `tests/test_skills.py` (552 → 559). The global copy of the skills is synced after the merge. Choices in the note of 10.4. |
 | 2026-09-29 | 10.3 done: the Azure DevOps Services back-end (`adapters/azure_devops/`: `check`, `import-cases`, `export-cases`, `apply`, `bug-search`), the endpoints confirmed against the public documentation (list in the note of 10.3) and the technique fixed first (v1.2: comments preview `7.1-preview.4`, bugs linked through the result's `associatedBugs`, points per suite, build in the run's name and comment, no dates, the run's marker in its comment, the state change right after the new bugs, full area paths); `azure-devops` in `IMPLEMENTED` and the "no adapter yet" warning removed (`validate_project.py`, methodology §1.1/§4.2, template, README); golden `tests/golden/azure_devops/` (5 scenarios, hand-written requests) and `tests/test_azure_devops_adapter.py` with a stateful fake Azure DevOps (round trip, exit codes 0–5, uncertain writes, continuation tokens, relaxed passes, Basic refused); `CLAUDE.md`. Tests 513 → 552. Choices and what only the pilot confirms in the note of 10.3. |
 | 2026-09-28 | 10.2 done: the Jira Cloud + Xray Cloud back-end (`adapters/jira/`: `check`, `import-cases`, `export-cases`, `apply`, `bug-search`), the endpoints confirmed against the public documentation (list in the note of 10.2) and the technique fixed first (v1.2: multipart import for the first chunk, the build in the summary, `getTests` by issue ids, the plan status through `status(testPlan:)`, rich text of new tests through Jira, final IDs in `ids.yaml`); `jira` in `IMPLEMENTED` (`validate_project.py`: the section required, no "no adapter" warning); golden `tests/golden/jira/` (5 scenarios, hand-written requests) and `tests/test_jira_adapter.py` with a stateful fake Jira + Xray (round trip, exit codes 0–5, the uncertain write, pagination, re-authentication, relaxed passes); `CLAUDE.md`, the template. Tests 479 → 513. Choices and what only the pilot confirms in the note of 10.2. |
 | 2026-09-28 | 10.1 done: the decisions the user delegated (Blocked/N/A unmapped → not sent, `Question` still refused; `id_source` key/id by default; screenshots only with `text+screenshot`; Azure DevOps needs Agile or Scrum, platform → Test Configuration table; endpoints confirmed in 10.2/10.3) recorded in the techniques (v1.1), the template and Phase 10 first; then `adapters/tracker/` (configuration and its validation, credentials by name, stdlib HTTP client with retries, Retry-After, backoff, re-authentication, pagination, redaction and `--record`; the record of what was sent, the ID cache, `cases.json`; the batch validation with the `run` block and the status map; the command line with the dry run, `--yes`, `--now` and exit codes 0–5; the fake transport), stubs for `adapters/jira` and `adapters/azure_devops` (exit 4 until 10.2/10.3), `validate_project.py` checks the tracker's section, `docs/workspace/gitignore` ignores `tracker/recordings/`, `CLAUDE.md` documents the command. `tests/test_tracker_config.py`, `test_tracker_http.py` (with a local server on 127.0.0.1), `test_tracker_cli.py` and 1 new validation test (408 → 479). Choices in the note of 10.1. |

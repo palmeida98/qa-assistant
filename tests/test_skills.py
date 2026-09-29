@@ -46,5 +46,82 @@ class Skills(unittest.TestCase):
                 self.assertIn(f"/{name}", commands)
 
 
+def skill_text(name: str) -> str:
+    with open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8-sig") as f:
+        return f.read().replace("\r\n", "\n")
+
+
+TRACKER_LINE = re.compile(r"python -m adapters\.tracker <workspace> (\S+)([^\n]*)")
+
+
+class TrackerSkills(unittest.TestCase):
+    """Plan 10.4: the skills drive `python -m adapters.tracker` the way its command line and the techniques say."""
+
+    def test_every_tracker_command_in_the_skills_parses(self):
+        from adapters.tracker.cli import parser
+        found = set()
+        for name in sorted(os.listdir(SKILLS)):
+            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
+                continue
+            for command, rest in TRACKER_LINE.findall(skill_text(name)):
+                found.add(command)
+                argv = ["ws", command] + (["input.json"] if command in ("apply", "export-cases", "bug-search") else [])
+                argv += re.findall(r"--[a-z][a-z-]*", rest)
+                with self.subTest(skill=name, command=command):
+                    try:
+                        parser().parse_args(argv)
+                    except SystemExit:
+                        self.fail(f"{name}: 'python -m adapters.tracker <workspace> {command}{rest}' does not parse")
+        self.assertEqual(found, {"check", "import-cases", "export-cases", "apply", "bug-search"})
+
+    def test_the_skills_that_use_each_direction(self):
+        expected = {"project-onboarding": ("> check", "> import-cases"), "checkpoint": ("> apply",),
+                    "log-bug": ("> bug-search",), "generate-cases": ("> export-cases",),
+                    "plan-batch": ("> import-cases", "tracker/cases.json"), "run-batch": ("tracker/cases.json",),
+                    "end-session": ("tracker/sent/",)}
+        for name, needles in expected.items():
+            for needle in needles:
+                with self.subTest(skill=name, needle=needle):
+                    self.assertIn(needle, skill_text(name))
+
+    def test_writing_commands_dry_run_first_then_yes_after_approval(self):
+        for name in ("checkpoint", "generate-cases"):
+            text = skill_text(name)
+            with self.subTest(skill=name):
+                self.assertIn("--yes", text)
+                self.assertRegex(text, r"(?i)dry run")
+                self.assertRegex(text, r"(?i)approv")
+                # the command as written in the skill never sends: --yes only after the approval
+                self.assertNotRegex(text, r"adapters\.tracker <workspace> (apply|export-cases) \S+ --yes")
+
+    def test_checkpoint_explains_every_exit_code_of_apply(self):
+        text = skill_text("checkpoint")
+        block = text[text.index("7a."):text.index("\n8.")]
+        for code in range(6):
+            with self.subTest(code=code):
+                self.assertRegex(block, rf"- {code} = ")
+        self.assertIn('"run"', text)
+
+    def test_onboarding_asks_for_blocked_and_na_and_the_process(self):
+        text = skill_text("project-onboarding")
+        for needle in ("Blocked and N/A", "skip", "Basic", "Agile or Scrum", "results.configurations", "*_var",
+                       "technique-jira-xray.md", "technique-azure-devops.md"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_dashboard_says_excel_only_for_the_other_trackers(self):
+        text = skill_text("dashboard")
+        self.assertIn("jira or azure-devops", text)
+        self.assertIn("Excel only", text)
+
+    def test_referenced_techniques_exist(self):
+        for name in sorted(os.listdir(SKILLS)):
+            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
+                continue
+            for doc in set(re.findall(r"technique-[a-z-]+\.md", skill_text(name))):
+                with self.subTest(skill=name, doc=doc):
+                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "docs", doc)))
+
+
 if __name__ == "__main__":
     unittest.main()
