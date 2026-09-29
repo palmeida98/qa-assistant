@@ -30,16 +30,24 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
    and app version. Exit 3 (no target, app not installed) -> the cases are Blocked (environment).
 7. Login by link: the user asks for it in the app and hands it over; open it with
    device.py <workspace> link "<url>". Never write the link anywhere (it is a one-time credential), never
-   open it elsewhere first.
+   open it elsewhere first. Typing a credential to ask for the link: a helper flow, never device.py type --
+   flows/_request_link.yaml with ${MAESTRO_<VAR>}, run with python scripts/run_mobile.py <workspace>
+   --helper flows/_request_link.yaml (no result recorded; not a case). No hideKeyboard step in it: it can
+   close the app's bottom sheet.
 8. Per case: a NEW conversation when the case asks for it (one per theme). One turn per step:
    device.py <workspace> send "<message>" --capture <case>_t<N>
-   It prints only what is new after the message and saves a screenshot. Whenever the dump may miss content
+   It prints only what is new after the message and saves a screenshot. A message with emoji or longer than
+   a few lines goes from a UTF-8 file: device.py <workspace> send --file <msg.txt> --capture <case>_t<N>
+   (on Windows an emoji passed as an argument arrives as ????; long texts are typed in chunks). Whenever the dump may miss content
    (cards, multi-line bubbles, bottom sheets) READ that screenshot before classifying -- after a scroll or an
    opened sheet, a new one with device.py <workspace> shot <case>_t<N>b; never classify from an incomplete
    dump. Exit 3 from send = the answer did not settle: read the screen again (dump) before deciding. Captures only with the app in the foreground (the driver
    refuses otherwise: bring the app back, never capture another app).
 9. Record one note per turn in actual_result: what was sent, the decisive quote of the answer and the
-   capture's path (evidence/<batch>/<case>_t<N>.png). Assisted mode, on a device that refuses input
+   capture's path (evidence/<batch>/<case>_t<N>.png), through
+   python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path>]
+   (one item per case, replaced when written again; a batch already applied is refused: use the new name
+   it suggests). Assisted mode, on a device that refuses input
    injection: the user taps and types; the driver only reads (dump, shot).
 10. Classify by methodology section 8 and technique-mobile.md section 6. An answer judged against the
     specification's guardrails is Pass/Fail by the specification's TEXT, never by taste; a doubt is

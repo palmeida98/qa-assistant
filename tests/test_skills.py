@@ -114,6 +114,22 @@ class TrackerSkills(unittest.TestCase):
         self.assertIn("jira or azure-devops", text)
         self.assertIn("Excel only", text)
 
+    def test_log_bug_retest_changes_a_case_only_when_its_own_expected_result_was_checked(self):
+        # plan 11.2: a real retest turned six Pass cases into Fail by linking maintained bugs to them
+        text = skill_text("log-bug")
+        for needle in ("changes a CASE only", "own expected result was checked again", '"proposed": true',
+                       "scripts/run_log.py"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_the_scripts_the_skills_run_exist(self):
+        for name in sorted(os.listdir(SKILLS)):
+            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
+                continue
+            for script in set(re.findall(r"scripts/([a-z_]+\.py)", skill_text(name))):
+                with self.subTest(skill=name, script=script):
+                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "scripts", script)))
+
     def test_referenced_techniques_exist(self):
         for name in sorted(os.listdir(SKILLS)):
             if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):

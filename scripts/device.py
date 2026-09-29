@@ -7,8 +7,9 @@ Drives an Android device or emulator through adb for the conversational mode
     check                                   target, OS, model, app version, foreground app
     dump [--capture NAME] [--batch B]       visible text, one line per node: [x1,y1][x2,y2] <text>
     tap TEXT [--index N] | tap --xy X Y     exact text first (case-insensitive), then contains
-    type TEXT [--field LABEL]               ASCII through `input text`; any other text through Maestro
-    send TEXT [--capture NAME] [--send-label L] [--field LABEL] [--timeout 200]
+    type TEXT|--file F [--field LABEL] [--via auto|adb|maestro]
+                                            ASCII through `input text`; any other text through Maestro
+    send TEXT|--file F [--capture NAME] [--send-label L] [--field LABEL] [--timeout 200]
                                             type, tap send, wait until the screen is stable, print what is new
     shot NAME [--batch B]                   screenshot to <workspace>/evidence/<batch>/<NAME>.png
     link URL [--package P]                  opens a deep link or a login callback with `am start`
@@ -25,6 +26,15 @@ Drives an Android device or emulator through adb for the conversational mode
 - --index counts from 0, among the matches of the same kind (exact or contains).
 - adb and Maestro get argument lists, never a local shell; the text of `input
   text` and the URL of `am start` are quoted for the device's shell.
+- Typing (plan 11.2, lessons of a real run): --file reads the text from a UTF-8
+  file (on Windows an emoji passed as an argument reached the device as ????);
+  `adb shell input text` goes in chunks of 300 characters (one call was cut at
+  ~430); Maestro gets the text inside a UTF-8 flow file (never on its command
+  line), one inputText step per 300 characters (5 000 in one step took minutes
+  and stopped at ~900). "Maestro IME is not active": the field is tapped again
+  (with --field) and Maestro retried once; if it fails again, ASCII text falls
+  back to chunked adb (said on stderr), other text is exit 3. --via adb|maestro
+  forces a route for ASCII (e.g. a field that ignores `input text`).
 
 Exit codes:
   0  ok
@@ -69,6 +79,8 @@ SHELL_SPECIAL = set("\\'\"()<>|;&*~$`!?[]{}#")
 XML_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 XML_REF = re.compile(r"&#(x[0-9a-fA-F]+|[0-9]+);")
 MIN_SECRET_LEN = 4  # a .env value shorter than this is only refused when it is the whole text
+CHUNK = 300         # characters per `adb shell input text` call and per Maestro inputText step
+IME_NOT_ACTIVE = "IME is not active"
 
 
 class UsageError(Exception):
@@ -118,9 +130,9 @@ def adb(serial: str | None, *args: str, binary: bool = False, timeout: int = 60)
     return r.stdout if binary else r.stdout.decode("utf-8", errors="replace").replace("\r\n", "\n")
 
 
-def run_maestro(cmd: list[str]) -> subprocess.CompletedProcess:
+def run_maestro(cmd: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          timeout=180, check=False)
+                          env={**os.environ, **(env or {})}, timeout=600, check=False)
 
 
 def hide_urls(s: str) -> str:
@@ -278,30 +290,97 @@ def refuse_secrets(workspace: str, text: str) -> None:
                              "line (use a Maestro flow with ${MAESTRO_<VAR>}, technique-mobile.md §4)")
 
 
-def type_text(cfg: dict, serial: str, text: str, field: str | None) -> str:
+def chunks(text: str, size: int = CHUNK) -> list[str]:
+    return [text[i:i + size] for i in range(0, len(text), size)] or [""]
+
+
+def type_adb(serial: str, text: str) -> int:
+    """`adb shell input text` in chunks (one long call was cut at ~430 characters); returns the number of calls."""
+    parts = chunks(text)
+    for part in parts:
+        adb(serial, "shell", "input", "text", input_text_arg(part))
+    return len(parts)
+
+
+def maestro_flow(app_id: str, text: str) -> tuple[str, dict]:
+    """(flow, extra environment): one inputText step per chunk, the text written in the UTF-8 flow as a quoted
+    scalar (an argument on Windows turned emoji into ????). A chunk with `${` (Maestro would evaluate it) goes
+    through an environment variable MAESTRO_QA_TEXT_<n> instead; never through the command line."""
+    steps, env = [], {}
+    for i, part in enumerate(chunks(text), 1):
+        if "${" in part:
+            env[f"MAESTRO_QA_TEXT_{i}"] = part
+            steps.append(f"- inputText: ${{MAESTRO_QA_TEXT_{i}}}\n")
+        else:
+            steps.append(f"- inputText: {json.dumps(part, ensure_ascii=False)}\n")
+    return f"appId: {json.dumps(app_id)}\n---\n" + "".join(steps), env
+
+
+def type_maestro(cfg: dict, serial: str, text: str) -> subprocess.CompletedProcess:
+    maestro = shutil.which("maestro")
+    if not maestro:
+        raise UsageError("maestro not found: text outside ASCII is typed through Maestro's inputText "
+                         "(adb input text refuses it) -- install the Maestro CLI")
+    flow_text, env = maestro_flow(cfg["app_id"], text)
+    with tempfile.TemporaryDirectory() as tmp:
+        flow = os.path.join(tmp, "type.yaml")
+        with open(flow, "w", encoding="utf-8") as f:
+            f.write(flow_text)
+        return run_maestro([maestro, "--device", serial, "test", flow], env)
+
+
+def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "auto") -> str:
     """Types the text (after tapping the field, if given); returns the route used."""
     refuse_secrets(cfg["workspace"], text)
     if field:
         tap_xy(serial, *find(read_screen(cfg, serial), field).centre)
     else:
         guard(cfg, serial, "type")
-    if all(" " <= ch <= "~" for ch in text):
-        adb(serial, "shell", "input", "text", input_text_arg(text))
-        return "adb input text"
-    maestro = shutil.which("maestro")
-    if not maestro:
-        raise UsageError("maestro not found: text outside ASCII is typed through Maestro's inputText "
-                         "(adb input text refuses it) -- install the Maestro CLI")
-    with tempfile.TemporaryDirectory() as tmp:
-        flow = os.path.join(tmp, "type.yaml")
-        with open(flow, "w", encoding="utf-8") as f:
-            # the text only as ${MSG}, passed with -e: never inside the flow nor a shell string
-            f.write(f"appId: {json.dumps(cfg['app_id'])}\n---\n- inputText: ${{MSG}}\n")
-        r = run_maestro([maestro, "--device", serial, "test", flow, "-e", f"MSG={text}"])
+    ascii_only = all(" " <= ch <= "~" for ch in text)
+    if via == "adb" and not ascii_only:
+        raise UsageError("--via adb: `adb shell input text` types only ASCII; this text needs Maestro")
+    if ascii_only and via != "maestro":
+        n = type_adb(serial, text)
+        return "adb input text" + (f", {n} chunks" if n > 1 else "")
+    r = type_maestro(cfg, serial, text)
+    if r.returncode != 0 and IME_NOT_ACTIVE in (r.stdout + r.stderr):
+        # intermittent: Maestro's keyboard lost the focus; the field again, then one retry
+        if field:
+            tap_xy(serial, *find(read_screen(cfg, serial), field).centre)
+        r = type_maestro(cfg, serial, text)
+        if r.returncode != 0 and IME_NOT_ACTIVE in (r.stdout + r.stderr) and ascii_only:
+            print("NOTE: Maestro's keyboard is not active (twice): the ASCII text was typed through adb instead",
+                  file=sys.stderr)
+            n = type_adb(serial, text)
+            return "adb input text (fallback: Maestro IME not active)" + (f", {n} chunks" if n > 1 else "")
     if r.returncode != 0:
         tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
         raise NoTarget("Maestro could not type the text: " + " | ".join(tail))
-    return "maestro inputText"
+    steps = len(chunks(text))
+    return "maestro inputText" + (f", {steps} steps" if steps > 1 else "")
+
+
+def text_of(a) -> str:
+    """The text of `type`/`send`: the argument, or the UTF-8 file of --file (one final line break dropped)."""
+    if a.file and a.text is not None:
+        raise UsageError("give the text or --file, not both")
+    if a.file:
+        try:
+            with open(a.file, encoding="utf-8-sig") as f:
+                text = f.read()
+        except OSError as e:
+            raise UsageError(f"--file {a.file}: {e.strerror}") from None
+        except UnicodeDecodeError:
+            raise UsageError(f"--file {a.file}: not UTF-8 text") from None
+        text = text.removesuffix("\n")
+        text = text.removesuffix("\r")
+    elif a.text is not None:
+        text = a.text
+    else:
+        raise UsageError("a text or --file is needed")
+    if not text:
+        raise UsageError("the text is empty")
+    return text
 
 
 def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
@@ -376,11 +455,12 @@ def cmd_tap(cfg, serial, a) -> int:
 
 
 def cmd_type(cfg, serial, a) -> int:
-    print(f"typed ({type_text(cfg, serial, a.text, a.field)})")
+    print(f"typed ({type_text(cfg, serial, text_of(a), a.field, a.via)})")
     return 0
 
 
 def cmd_send(cfg, serial, a) -> int:
+    a.text = text_of(a)
     guard(cfg, serial, "send")
     type_text(cfg, serial, a.text, a.field)
     labels = [a.send_label] if a.send_label else cfg["send_labels"]
@@ -415,18 +495,24 @@ def cmd_shot(cfg, serial, a) -> int:
     return 0
 
 
-def cmd_link(cfg, serial, a) -> int:
-    url = unwrap(a.url.strip())
+def open_link(cfg: dict, serial: str, url: str, package: str | None = None) -> str:
+    """Opens the URL on the device (am start); returns its host. Never writes the URL anywhere (scripts/
+    remote_login.py calls this in-process, so the URL is not on any command line of this computer either)."""
+    url = unwrap(url.strip())
     host = urlsplit(url).hostname or urlsplit(url).scheme
     if not host:
         raise UsageError("link needs a URL (scheme://...)")
-    package = a.package or cfg["browser"]
+    package = package or cfg["browser"]
     out = adb(serial, "shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", sh_quote(url),
               *([str(package)] if package else []))
     error = next((ln for ln in out.splitlines() if ln.startswith("Error")), None)
     if error:
         raise NoTarget(f"{host}: not opened ({hide_urls(error)})")
-    print(f"{host}: opened")   # never the URL: it is a one-time credential
+    return host
+
+
+def cmd_link(cfg, serial, a) -> int:
+    print(f"{open_link(cfg, serial, a.url, a.package)}: opened")   # never the URL: it is a one-time credential
     return 0
 
 
@@ -451,10 +537,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--index", type=int, default=0, help="which match, from 0")
     p.add_argument("--xy", nargs=2, type=int, metavar=("X", "Y"))
     p = sub.add_parser("type", parents=[common], help="type a text (Unicode through Maestro)")
-    p.add_argument("text")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--file", metavar="UTF8_FILE", help="the text from a UTF-8 file (emoji, long texts)")
     p.add_argument("--field", metavar="LABEL", help="tap this field first")
+    p.add_argument("--via", choices=("auto", "adb", "maestro"), default="auto",
+                   help="route for ASCII text (default auto: adb; maestro for a field that ignores `input text`)")
     p = sub.add_parser("send", parents=[common], help="type, send, wait for the screen to settle, print the new")
-    p.add_argument("text")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--file", metavar="UTF8_FILE", help="the text from a UTF-8 file (emoji, long texts)")
     p.add_argument("--capture", metavar="NAME")
     p.add_argument("--batch")
     p.add_argument("--send-label", help="label of the send control (default: mobile.send_label)")

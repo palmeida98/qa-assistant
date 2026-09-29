@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification) and 11.1 (builds as releases) done (29.09.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | In progress: 11.0 (specification), 11.1 (builds as releases) and 11.2 (driver, helper flows, run log) done (29.09.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1251,20 +1251,35 @@ Constraints written down now:
   Fixture APKs now have a real binary manifest (`tests/apk_kit.py`, shared by both test modules). Not run against a
   real APK nor emulator here (the reader's format was confirmed on a real React Native APK in the pilot).
 
-### 11.2 Device driver, helper flows and the run log (lessons of the pilot)
-- [ ] `device.py type --file <utf8.txt>` (text from a UTF-8 file: on Windows, an emoji passed as an argument arrives as
+### 11.2 Device driver, helper flows and the run log (lessons of the pilot) — done 29.09.2026
+- [x] `device.py type --file <utf8.txt>` (text from a UTF-8 file: on Windows, an emoji passed as an argument arrives as
   `????`), and ASCII text longer than ~400 characters typed through `adb` in chunks (a single `adb shell input text`
   was cut at ~430 characters); when Maestro's keyboard is not active ("Maestro IME is not active"), retry once, then
   fall back to chunked `adb` for ASCII and say so.
-- [ ] Helper flows: `run_mobile.py --helper flows/_<name>.yaml` runs a flow that is not a case (e.g. asking for the
+- [x] Helper flows: `run_mobile.py --helper flows/_<name>.yaml` runs a flow that is not a case (e.g. asking for the
   login link) with the `MAESTRO_<VAR>` values from `.env`, output redacted, no result recorded — instead of a script
   in the session's scratchpad.
-- [ ] `scripts/run_log.py add <batch> <case> <status> <actual> [--bug ID]` — appends or replaces a result in
+- [x] `scripts/run_log.py add <batch> <case> <status> <actual> [--bug ID]` — appends or replaces a result in
   `runs/batch_<batch>.json`; refuses to touch a batch already applied (the adapter's control sheet), pointing to a new
   batch name (a correction the pilot had to do by hand).
-- [ ] `/log-bug` (retest): a retest records the bug's state, and changes the linked case only when the case's own
+- [x] `/log-bug` (retest): a retest records the bug's state, and changes the linked case only when the case's own
   expected result was checked again (the pilot turned six Pass cases into Fail by linking maintained bugs to them).
-- [ ] Tests with the fake `adb`/Maestro of 9.1.
+- [x] Tests with the fake `adb`/Maestro of 9.1.
+- Note (where the spec was open): Maestro now gets the text inside its UTF-8 flow file (one `inputText` step per
+  300 characters, a JSON-quoted scalar) instead of `-e MSG=…` on its command line — the pilot's `????` came from a
+  command-line argument, and the file route is the one that worked; a chunk containing `${` (Maestro would evaluate
+  it) goes through an environment variable `MAESTRO_QA_TEXT_<n>` instead, never the command line. ASCII text never
+  goes through Maestro unless `type --via maestro` (for a field that ignores `input text`), so the "fall back to
+  chunked adb for ASCII" happens on that route; non-ASCII text after two "IME is not active" is exit 3. `--file`
+  drops one final line break and is also accepted by `send`; the `.env` values are still refused in it.
+  `device.open_link()` split out of `link` for 11.3 (in-process, the URL on no command line of this computer).
+  `run_mobile.py --helper`: the flow's name must start with `_` and must not start with a case ID (the other way
+  round, a `_` flow given as a case is refused with a hint), on `--serial` / `mobile.serial`; the same function
+  (`run_helper`) is what 11.3 calls. `run_log.py`: the status is checked against the project's vocabulary (or
+  `Question`), a correction's name is `<batch>_02`, `_03`… (the first one neither in `runs/` nor applied); for Excel
+  an unreadable workbook is a warning (the check cannot be made), never a silent pass. The retest rule is also one
+  sentence of methodology §9.3 (method, not only the skill); `/test-mobile` points to `send --file`, the helper flow
+  and `run_log.py`.
 
 ### 11.3 Manual login through an issue (`scripts/remote_login.py`)
 - [ ] `request`: runs the workspace's helper flow that asks for the link (`ci.login.flow`), then opens or reuses an
@@ -1328,6 +1343,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-09-29 | 11.2 done: `device.py` — `type`/`send --file <utf8.txt>`, text in chunks of 300 characters (adb calls and Maestro steps), the text inside the UTF-8 flow file instead of Maestro's command line, "IME is not active" retried once then ASCII through adb, `type --via`, `open_link()`; `run_mobile.py --helper flows/_<name>.yaml` (no result recorded, redacted); `scripts/run_log.py add` (one item per case, the vocabulary, the run block, a batch already applied refused with the name for the correction); `/log-bug` retest rule (and methodology §9.3), `/test-mobile` and the technique point to them. 15 new tests (`test_device.py`, `test_run_mobile.py`, `test_run_log.py`, `test_skills.py`; 584 → 599). Choices in the note of 11.2. |
 | 2026-09-29 | 11.1 done: `scripts/apk_manifest.py` (the APK's binary manifest in pure Python), `scripts/workspace_build.py` (`publish` — dry run, `--yes`, the release `build-<versionName>-<versionCode>` with the SHA-256 in its notes, `mobile.build` rewritten keeping the comments, a local commit; refusals: package, production build, public/internal repository, same tag with another hash — and `fetch` with the SHA-256 check and `$GITHUB_OUTPUT`); `setup_emulator.py` reads the versionCode without `aapt2` (no reinstall, no lost login) and boots cold when the snapshot is older than the build (`--cold`, `--gpu`, `--headless`); `tests/apk_kit.py` builds fixture APKs with a real binary manifest. 21 new tests (`tests/test_workspace_build.py` and `tests/test_setup_emulator.py`, 563 → 584). Choices in the note of 11.1. |
 | 2026-09-29 | 11.0 done: methodology v2.3 (§9.4 the approval of a remote run in the pull request and `"proposed": true`, §12.1 and the new §12.4 "Resuming on a runner", §14.2 the runner as an environment); `technique-mobile.md` v1.3 §11 Remote execution; `docs/workspace/ci/README.md` (settings, secrets, the no-cost rules); the `ci:` section in the template and in `validate_project.py` (standard runner only, limits, `ci.secrets` names, login mode and helper flow; plus `ci.login.hosts`, `user`, `screen_text`) and `mobile.build.version`. 4 new tests in `tests/test_validate_project.py` (559 → 563). Choices in the note of 11.0. |
 | 2026-09-29 | Phase 11 planned by the user's decision, from the first real mobile project run with the framework: remote execution on GitHub Actions (emulator on the runner, Claude Code headless for the conversational mode, builds as releases of the workspace's repository, manual login through an issue comment, results reviewed in a pull request and applied on merge); plus the lessons of that run for the driver (`type --file`, chunked `adb` text, helper flows), the run log helper, the retest rule of `/log-bug` and the stale-snapshot / reinstall trap of `setup_emulator.py`. |

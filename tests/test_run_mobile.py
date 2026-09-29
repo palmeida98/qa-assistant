@@ -169,6 +169,61 @@ class Workspace(unittest.TestCase):
         self.assertIn("TC-MOB-002: Fail", out)
         self.assertNotIn("fictional-password-9", out)
 
+    # --- helper flows (plan 11.2)
+
+    def helper(self, name="_request_link.yaml"):
+        with open(os.path.join(self.ws, "flows", name), "w", encoding="utf-8") as f:
+            f.write("appId: com.demoshop.app\n---\n- tapOn: E-mail\n- inputText: ${MAESTRO_SHOP_U}\n")
+        return f"flows/{name}"
+
+    def test_a_helper_flow_runs_with_the_variables_redacted_and_records_nothing(self):
+        flow = self.helper()
+        self.project("web")
+        seen = {}
+
+        def maestro(cmd, env, timeout):
+            seen.update(cmd=cmd, env=env)
+            return 1, "Tapping on E-mail\nInput text ana\nFAILED: fictional-password-9 not accepted\n"
+
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm, "run_maestro", side_effect=maestro):
+            rc, out, err = self.run_it("--helper", flow, "--serial", "emulator-5554")
+        self.assertEqual(rc, 3)
+        self.assertEqual(seen["cmd"][:4], ["maestro", "--device", "emulator-5554", "test"])
+        self.assertEqual(seen["env"]["MAESTRO_SHOP_U"], "ana")
+        self.assertNotIn("fictional-password-9", out + err)
+        self.assertIn("«SHOP_P»", err)
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs")))             # nothing recorded
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm, "run_maestro", return_value=(0, "ok")):
+            rc, out, _ = self.run_it("--helper", flow)
+        self.assertEqual(rc, 0)
+        self.assertIn("passed (helper flow, no result recorded)", out)
+
+    def test_a_helper_flow_is_not_a_case_and_a_case_is_not_a_helper(self):
+        self.helper("request_link.yaml")
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"):
+            self.assertEqual(self.run_it("--helper", "flows/request_link.yaml")[0], 2)      # no '_'
+            self.assertEqual(self.run_it("--helper", "flows/TC-MOB-001_login.yaml")[0], 2)  # a case
+            self.assertEqual(self.run_it("--helper", "flows/_missing.yaml")[0], 2)
+            rc, _, err = self.run_it(self.helper())                                         # as a case: refused
+        self.assertEqual(rc, 2)
+        self.assertIn("--helper", err)
+        with self.assertRaises(SystemExit):
+            self.run_it("--helper", "flows/_request_link.yaml", "TC-MOB-001")
+
+    def test_a_helper_flow_without_a_target_is_3(self):
+        flow = self.helper()
+
+        def which(name):
+            return None if name == "adb" else "maestro"
+        with mock.patch.object(rm.shutil, "which", side_effect=which), \
+                mock.patch.object(rm, "run_maestro") as maestro:
+            rc, _, err = self.run_it("--helper", flow)
+        self.assertEqual(rc, 3)
+        self.assertIn("no target", err)
+        maestro.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

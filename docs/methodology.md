@@ -340,6 +340,8 @@ The bug's structure always follows the project's format. It is not changed witho
 | Resolved | Apply the project's rule (`remove` from the active list or `archive`) |
 | Could not be validated | Keep the current status and record the reason |
 
+A retest changes the **bug**. It changes a **case** only when that case's own expected result was checked again: a case whose expected result passes stays `Pass` even when a bug linked to it is kept open.
+
 ### 9.4 Sending to the tracker
 
 The assistant prepares the bug. Sending it to the external tracker only happens **after the user approves it**. The tracker adapters make this explicit: without `--yes` they only show what they would send (a dry run); the `--yes` run happens only after the user approved that list.

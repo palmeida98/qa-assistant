@@ -70,6 +70,7 @@ The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except 
 - Waits for a condition (`extendedWaitUntil`), never for a fixed time.
 - **Credentials**: never written in the flow. The flow uses `${MAESTRO_<VAR>}`; the script puts the value in an environment variable `MAESTRO_<VAR>` from `.env` (Maestro makes the variables with that prefix available to the flows). Never `-e VAR=value` on the command line.
 - Test data with the prefix `QA-AUTO-<date>-` (`technique-browser.md` §7).
+- **Helper flows**: a flow that is not a case (e.g. asking the app for a login link with `${MAESTRO_<VAR>}`) is named `flows/_<name>.yaml` and run with `run_mobile.py --helper` (the same variables, output redacted, no result recorded). No `hideKeyboard` step unless needed: it can close the app's bottom sheet.
 
 ---
 
@@ -80,7 +81,8 @@ When the expected result cannot be asserted by a flow — the app's content is g
 - **Which mode**: deterministic UI → a flow per case (§4); generated content → conversational mode. The skill says which mode and why, per batch.
 - **One turn per step**: `device.py <workspace> send "<message>" --capture <name>` types, sends, waits until the screen is stable and returns only what is new after the message. A new conversation per theme when the case asks for it (so earlier turns do not contaminate the answer).
 - **Reading**: text from the accessibility tree; a **screenshot** whenever the tree may miss content (cards, multi-line bubbles, bottom sheets). A result is never classified from the tree alone when something it shows is incomplete.
-- **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path.
+- **Typing**: a message with emoji or several lines goes from a UTF-8 file (`send --file`); `adb shell input text` is cut at about 430 characters and Maestro's `inputText` slows down and stops on long texts, so the driver types in chunks of 300 characters. Maestro's keyboard sometimes is not active ("Maestro IME is not active"): the driver taps the field again and retries once, then types ASCII through `adb` and says so.
+- **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path, written with `scripts/run_log.py add` (it never touches a batch already applied).
 - **Classification**: the same rules (§6 and methodology §8). An answer judged against the specification's guardrails is Pass/Fail by the specification's text, never by taste; a doubt is `Question`.
 
 ## 5. What to test on mobile (beyond the functional)

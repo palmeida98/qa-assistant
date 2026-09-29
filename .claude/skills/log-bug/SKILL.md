@@ -34,3 +34,14 @@ description: Logs or updates a bug from a Fail case, looking for duplicates firs
      "bug" (resolved_bugs rule, section 9.3).
    It is sent at the next /checkpoint (apply: dry run, approval, --yes). A new_defect on an item whose status
    is not sent (skip or unmapped) is not created; the dry run lists it.
+8. Retest of an existing bug (section 9.3): record the BUG's state (still reproduces -> keep and update it;
+   resolved -> the resolved_bugs rule; not validated -> keep it, with the reason). A retest changes a CASE only
+   when that case's own expected result was checked again in this run: a case whose expected result passed stays
+   Pass even if a bug linked to it is maintained, and a case not re-run keeps its status. Never set Fail on a
+   case just because it is linked to a maintained bug (a real run turned six Pass cases into Fail that way).
+   The bug's update goes in the item of the case where it was retested ("bug" + a note, or "bug_status").
+9. On a runner (remote execution, methodology 9.4 and 12.4) nobody approves during the run: a new bug goes as
+   "new_defect" with "proposed": true, for the user to approve in the pull request; never applied before that.
+10. Writing the item: python scripts/run_log.py <workspace> add <batch> <case> <status> "<observed>"
+    [--bug ID] [--new-defect draft.json] (from the root of qa-assistant); it refuses a batch already applied
+    and names a new batch for the correction.
