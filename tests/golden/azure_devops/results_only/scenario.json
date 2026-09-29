@@ -1,0 +1,20 @@
+{
+ "description": "Results only: a Pass, a Fail and a Not run mapped to skip (not sent). One test run on the two points, the results patched, the run completed, then the read back.",
+ "command": [
+  "apply",
+  "runs/batch_20260928_01.json"
+ ],
+ "dry_run_exit": 1,
+ "runs": [
+  {
+   "responses": "responses.json",
+   "expected": "expected_requests.json",
+   "exit": 0
+  }
+ ],
+ "record": [
+  "run",
+  "results",
+  "run_completed"
+ ]
+}

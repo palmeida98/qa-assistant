@@ -1,0 +1,20 @@
+[
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10001", "key": "DS-1", "fields": {"summary": "Expired coupon is refused", "issuetype": {"name": "Test"}, "labels": []}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10010", "key": "DS-10", "fields": {"summary": "Release 2.4", "issuetype": {"name": "Test Plan"}}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [], "isLast": true}},
+ {"request": {"method": "POST", "path": "/api/v2/authenticate"},
+  "json": "fictional-xray-token"},
+ {"request": {"method": "GET", "path": "/rest/api/3/project/DS"},
+  "json": {"id": "10000", "key": "DS", "name": "Demo Shop", "issueTypes": [
+   {"id": "10001", "name": "Test"}, {"id": "10002", "name": "Bug"}, {"id": "10003", "name": "Test Execution"}, {"id": "10004", "name": "Test Plan"}]}},
+ {"request": {"method": "GET", "path": "/rest/api/3/issue/createmeta/DS/issuetypes/10002?startAt=0&maxResults=200"},
+  "json": {"fields": [
+   {"fieldId": "summary", "name": "Summary", "required": true, "schema": {"type": "string", "system": "summary"}},
+   {"fieldId": "description", "name": "Description", "required": false, "schema": {"type": "string", "system": "description"}},
+   {"fieldId": "labels", "name": "Labels", "required": false, "schema": {"type": "array", "items": "string", "system": "labels"}},
+   {"fieldId": "priority", "name": "Priority", "required": false, "hasDefaultValue": true, "schema": {"type": "priority", "system": "priority"}}
+  ], "startAt": 0, "maxResults": 200, "total": 4}}
+]

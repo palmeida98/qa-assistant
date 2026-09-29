@@ -1,0 +1,21 @@
+[
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key in (\"DS-1\")", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key = \"DS-10\"", "fields": ["issuetype", "summary"], "maxResults": 100}},
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "project = \"DS\" AND labels = \"qa-batch-batch_20260928_04\"", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/authenticate", "auth": null, "content_type": "application/json",
+  "body": {"client_id": "<DS_XRAY_CLIENT_ID>", "client_secret": "<DS_XRAY_CLIENT_SECRET>"}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/import/execution/multipart", "auth": "Bearer", "content_type": "multipart/form-data",
+  "body": {"multipart": {
+   "results": {"tests": [
+    {"testKey": "DS-1", "status": "FAILED", "comment": "The expired coupon is accepted", "start": "2026-09-28T13:00:00+01:00", "finish": "2026-09-28T13:00:00+01:00", "defects": ["DS-101"]}
+   ]},
+   "info": {"fields": {"project": {"key": "DS"}, "summary": "batch_20260928_04 · test · 2.4.1", "issuetype": {"name": "Test Execution"}, "labels": ["qa-batch-batch_20260928_04"]},
+            "xrayFields": {"environments": ["test"], "testPlanKey": "DS-10"}}
+  }}},
+ {"method": "POST", "url": "https://xray.cloud.getxray.app/api/v2/graphql", "auth": "Bearer", "content_type": "application/json",
+  "body": {"query": "query($issueId: String, $limit: Int!, $start: Int) { getTestExecution(issueId: $issueId) { issueId testRuns(limit: $limit, start: $start) { total start limit results { status { name } defects test { issueId } } } } }",
+           "variables": {"issueId": "10102", "limit": 100, "start": 0}}}
+]

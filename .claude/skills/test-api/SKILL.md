@@ -10,7 +10,8 @@ description: Tests an HTTP API of the current workspace (contract, status codes,
    stop.
 3. Confirm that .env and .api-session.env are in the workspace's .gitignore (add them if missing) and that
    the credential variables exist in .env (only that they exist; never show values).
-4. Cases: use the approved API cases in the workbook/tracker. If there are none, propose them with
+4. Cases: use the approved API cases in the workbook/tracker (with jira or azure-devops, tracker/cases.json,
+   refreshed with import-cases as in /plan-batch). If there are none, propose them with
    /generate-cases from the contract (sections 3 to 7: contract, negatives, role matrix,
    idempotency, persistence). The expected result comes from the contract; if the contract is silent,
    it only goes in with another objective source written in the case (e.g. RFC 9110 for 4xx vs 5xx) or

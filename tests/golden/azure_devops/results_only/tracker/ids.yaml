@@ -1,0 +1,3 @@
+tracker: azure-devops
+cases:
+  '4711': {id: 4711, points: {Windows 11 - Chrome: 9001}}

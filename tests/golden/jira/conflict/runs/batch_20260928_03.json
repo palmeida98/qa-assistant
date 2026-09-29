@@ -1,0 +1,7 @@
+{
+ "run": {"environment": "test", "build": "2.4.1"},
+ "results": [
+  {"tc": "DS-1", "status": "Pass", "actual_result": "The discount is shown", "ts": "2026-09-28T12:00:00+01:00"},
+  {"tc": "DS-99", "status": "Pass", "actual_result": "The total is updated", "ts": "2026-09-28T12:02:00+01:00"}
+ ]
+}

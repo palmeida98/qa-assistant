@@ -3,7 +3,7 @@ company: ""
 environments:
   test: ""
 roles: []
-tracker: ""          # excel (with an adapter) | jira | azure-devops (manual logging: methodology 4.2)
+tracker: ""          # excel | jira (with Xray) | azure-devops (Test Plans + Boards); each has its adapter (methodology 4.2)
 bug_format: ""
 resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"
@@ -122,3 +122,83 @@ excel:
   recalc:
     mechanism: "libreoffice"   # (opt.) "libreoffice" or "excel-com" (Windows with desktop Excel only)
     timeout: 60                # (opt.) seconds
+
+# ---------------------------------------------------------------------------
+# jira: Jira Cloud + Xray Cloud, read by the tracker adapter (docs/technique-jira-xray.md;
+# built in plan 10.2). Uncomment ONLY when tracker: "jira". Only NAMES of .env
+# variables, never values. /project-onboarding fills it in with the user and runs
+# `python -m adapters.tracker <workspace> check`. Fictional values: the Demo Shop.
+# ---------------------------------------------------------------------------
+# jira:
+#   site: ""                     # (req.) e.g. https://demo-shop.atlassian.net (no path)
+#   project_key: ""              # (req.) e.g. DS
+#   user_var: ""                 # (req.) variable with the account's e-mail
+#   token_var: ""                # (req.) variable with the Atlassian API token
+#   xray:
+#     base_url: "https://xray.cloud.getxray.app"   # (opt.) the Xray region's host
+#     client_id_var: ""          # (req.) variables of the Xray API key
+#     client_secret_var: ""      # (req.)
+#   cases:
+#     issue_type: "Test"         # (opt.)
+#     jql: ""                    # (opt.) tests import-cases reads (default: project + issue_type)
+#     id_source: "key"           # key (default: the issue key is the case ID) | field | label, for projects with own IDs
+#     id_field: ""               # with field: e.g. customfield_10050
+#     id_label_prefix: ""        # with label: e.g. "qa-id-"
+#     folder: ""                 # (opt.) Xray test repository folder of new tests
+#     fields: {}                 # model field -> Jira field; "labels:<prefix>" for labels (technique section 1.1)
+#   results:
+#     statuses: {}               # (req.) EVERY status of the project -> Xray status, or "skip"/empty = not sent
+#                                #   (stays in the run log, not an error); never Question; a status missing here is refused.
+#                                #   Blocked and N/A have NO default: asked per project (a custom Xray status or ABORTED),
+#                                #   otherwise skip. e.g. {"Pass": PASSED, "Fail": FAILED, "Not run": TODO, "Blocked": skip, "N/A": skip}
+#     test_plan_key: ""          # (opt.) e.g. DS-10
+#     summary: "{batch_id} · {environment} · {build}"   # (opt.) summary of each Test Execution
+#     attach_evidence: false     # (opt.) off by default; screenshots go only with evidence: "text+screenshot"
+#   bugs:
+#     issue_type: "Bug"          # (opt.)
+#     fields: {}                 # model field -> Jira field (title, description, area, feature, sub_area, platform, role, ...)
+#     defaults: {}               # (opt.)
+#     open_jql: "statusCategory != Done"   # (opt.) open bugs in the duplicate search
+#     link_type: ""              # (opt.) issue link Bug -> Test
+#     statuses: []               # (opt.) statuses a retest may move a bug to (resolved_bugs rule)
+#     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)
+
+# ---------------------------------------------------------------------------
+# azure_devops: Azure DevOps Services (Test Plans + Boards), read by the tracker adapter
+# (docs/technique-azure-devops.md; built in plan 10.3). Uncomment ONLY when
+# tracker: "azure-devops". Only NAMES of .env variables, never values. The project must use the
+# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it). /project-onboarding
+# fills it in with the user and runs `python -m adapters.tracker <workspace> check`. Area and
+# iteration values are full paths of the project (e.g. "Demo Shop\\Checkout", as in YAML a quoted "\\" is one backslash).
+# ---------------------------------------------------------------------------
+# azure_devops:
+#   organization_url: ""         # (req.) e.g. https://dev.azure.com/demo-shop
+#   project: ""                  # (req.) e.g. Demo Shop
+#   pat_var: ""                  # (req.) variable with the personal access token
+#   api_version: "7.1"           # (opt.)
+#   cases:
+#     work_item_type: "Test Case"   # (opt.)
+#     plan_id: 0                 # (req.) test plan of the cases and results
+#     suite_ids: []              # (opt.) default: every suite of the plan
+#     new_cases_suite_id: 0      # (req. for export-cases) static suite of new cases
+#     area_path: ""              # (opt.) e.g. "Demo Shop\\Checkout"
+#     id_source: "id"            # id (default: the work item id is the case ID) | field | tag, for projects with own IDs
+#     id_field: ""               # with field: e.g. Custom.QaId
+#     id_tag_prefix: ""          # with tag: e.g. "qa-id-"
+#     fields: {}                 # model field -> work item field; "tag:<prefix>" for tags (technique section 1.1)
+#   results:
+#     outcomes: {}               # (req.) EVERY status of the project -> outcome, or "skip"/empty = not sent; never Question
+#                                #   e.g. {"Pass": Passed, "Fail": Failed, "Blocked": Blocked, "N/A": NotApplicable, "Not run": skip}
+#     configurations: {}         # (opt.) platform -> Test Configuration, when a case has several test points
+#                                #   e.g. {web: "Windows 11 - Chrome", android: "Android 15"}
+#     run_name: "{batch_id} · {environment} · {build}"   # (opt.)
+#     attach_evidence: false     # (opt.) off by default; screenshots go only with evidence: "text+screenshot"
+#   bugs:
+#     work_item_type: "Bug"      # (opt.)
+#     area_path: ""              # (opt.) default: the test case's area
+#     iteration_path: ""         # (opt.)
+#     fields: {}                 # model field -> work item field
+#     defaults: {}               # (opt.)
+#     closed_states: ["Closed", "Removed"]   # (opt.) not open in the duplicate search (Scrum: ["Done", "Removed"])
+#     states: []                 # (opt.) states a retest may move a bug to (resolved_bugs rule)
+#     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)

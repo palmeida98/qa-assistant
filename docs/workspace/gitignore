@@ -16,6 +16,10 @@
 # generated from the workbook (scripts/build_dashboard.py)
 dashboard.html
 
+# exchanges with Jira / Azure DevOps saved by `python -m adapters.tracker ... --record` (redacted, but raw
+# tracker data: the base of a later real golden, kept locally; technique-jira-xray.md 10.3)
+tracker/recordings/
+
 # app binaries: project.yaml records where the build comes from and its SHA-256 (mobile.build)
 *.apk
 *.aab

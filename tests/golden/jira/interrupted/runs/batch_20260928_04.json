@@ -1,0 +1,8 @@
+{
+ "run": {"environment": "test", "build": "2.4.1"},
+ "results": [
+  {"tc": "DS-1", "status": "Fail", "actual_result": "The expired coupon is accepted", "ts": "2026-09-28T13:00:00+01:00",
+   "new_defect": {"title": "Expired coupon accepted", "expected": "The coupon is refused",
+                  "observed": "The expired coupon is accepted", "platform": "web"}}
+ ]
+}

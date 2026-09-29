@@ -6,7 +6,9 @@ description: Saves the run log, updates the workspace's context.md in the format
 1. Read the run log's path from project.yaml (run_log). If it is not defined, use runs/.
    Never write to history/: it is immutable (methodology.md section 13).
 2. Save to the run log every result of the session not saved yet: case, result, short note,
-   linked bug and timestamp (section 7.1). Use the project's format, if defined.
+   linked bug and timestamp (section 7.1). Use the project's format, if defined. With the jira or azure-devops
+   tracker the run log also needs the "run" block at the top level, {"environment": "<key of environments>",
+   "build": "<version>"}: if it is missing, ask the user for the build (never guess it).
 3. Cases in Question stay as Question, with the concrete question (section 8.5).
 4. Update context.md with the structure of section 12.2: current state, execution point
    (last batch, last case), work done, decisions (and who made them), open questions,
@@ -37,8 +39,30 @@ description: Saves the run log, updates the workspace's context.md in the format
    Applying the same batch again changes nothing (the adapter detects it).
    After exit 0, commit the workbook too (a second local commit, "<batch>: applied"), so a clone on
    another computer has the current workbook (methodology section 12.3); then workspace_git.py status again.
-7a. With the jira or azure-devops tracker (no adapter; methodology.md section 4.2), the run log is the
-   source: show the user what goes to the tracker (approved results and bugs) and only send it with the
-   tracker's tool available and explicit approval; otherwise, leave the list for them to pass by hand.
+7a. With the jira or azure-devops tracker, the tracker adapter sends the batch (technique-jira-xray.md section 2,
+   the common contract; methodology.md section 9.4). From the root of qa-assistant, first the DRY RUN (reads only):
+   python -m adapters.tracker <workspace> apply <run_log>/<batch>.json
+   - 1 = something to send, not approved yet: show the user the plan as printed (results, new bugs, updated
+     bugs, links, and what is NOT sent -- statuses mapped to skip or unmapped, which stay only in the run log).
+     Only after an explicit approval run the same command with --yes (it resolves again and sends);
+   - 0 = sent and read back, or nothing to send (a batch already sent with the same content makes no request);
+   - 4 = invalid (a Question, a status that is not a key of results.statuses / results.outcomes, no "run" block,
+     a new_defect without title/expected/observed, a batch already sent with ANOTHER content...): nothing sent;
+     fix the run log with the user. A batch already sent is never edited and sent again: the correction goes in
+     a new batch, with another name, with only the cases to correct ("bug" with the key from
+     tracker/sent/<batch>.json instead of "new_defect" for bugs already created);
+   - 2 = conflict with the tracker (a case, bug, test plan or test point not found, an ID in tracker/ids.yaml that
+     points elsewhere): nothing written; show the problems; refresh with import-cases or fix project.yaml or the
+     run log with the user;
+   - 3 = network, authentication, rate limit or server error: with --yes the send may be partial and
+     tracker/sent/<batch>.json has exactly what was confirmed. When the cause is gone, run the same --yes
+     command again (same batch, same approval): it continues from the record and never creates twice;
+   - 5 = sent, but the read back differs: show the differences to the user and record them in context.md; never
+     send again to "fix" it.
+   After a --yes run that wrote something (0, 3 or 5), commit the workspace's tracker/ (sent/, ids.yaml,
+   cases.json) in a second local commit ("<batch>: sent"), so another computer knows what was sent; then
+   workspace_git.py status again. Without the tracker's API (e.g. out of reach), the run log stays the source:
+   leave the user the list to pass by hand (methodology.md section 4.2).
 8. Tell the user the exact point where the run stopped. With the excel tracker, the dashboard can be built:
-   python scripts/build_dashboard.py <workspace> (from the root of qa-assistant).
+   python scripts/build_dashboard.py <workspace> (from the root of qa-assistant). With jira or azure-devops the
+   progress view is the tracker's own reports (methodology.md section 4.2).

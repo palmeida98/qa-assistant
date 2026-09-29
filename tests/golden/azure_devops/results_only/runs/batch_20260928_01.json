@@ -1,0 +1,26 @@
+{
+ "run": {
+  "environment": "test",
+  "build": "2.4.1"
+ },
+ "results": [
+  {
+   "tc": "4711",
+   "status": "Pass",
+   "actual_result": "The discount is shown",
+   "ts": "2026-09-28T10:00:00+01:00"
+  },
+  {
+   "tc": "4712",
+   "status": "Fail",
+   "actual_result": "The coupon field shows no error",
+   "ts": "2026-09-28T10:05:00+01:00"
+  },
+  {
+   "tc": "4713",
+   "status": "Not run",
+   "actual_result": "",
+   "ts": "2026-09-28T10:07:00+01:00"
+  }
+ ]
+}

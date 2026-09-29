@@ -1,0 +1,17 @@
+[
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10001", "key": "DS-1", "fields": {"summary": "Expired coupon is refused", "issuetype": {"name": "Test"}, "labels": []}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10010", "key": "DS-10", "fields": {"summary": "Release 2.4", "issuetype": {"name": "Test Plan"}}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"},
+  "json": {"issues": [{"id": "10101", "key": "DS-101", "fields": {"summary": "Expired coupon accepted", "issuetype": {"name": "Bug"},
+                                                                 "labels": ["qa-batch-batch_20260928_04", "qa-case-DS-1", "platform-web"]}}], "isLast": true}},
+ {"request": {"method": "POST", "path": "/api/v2/authenticate"},
+  "json": "fictional-xray-token"},
+ {"request": {"method": "POST", "path": "/api/v2/import/execution/multipart"},
+  "json": {"id": "10102", "key": "DS-102", "self": "https://demo-shop.atlassian.net/rest/api/2/issue/10102"}},
+ {"request": {"method": "POST", "path": "/api/v2/graphql"},
+  "json": {"data": {"getTestExecution": {"issueId": "10102", "testRuns": {"total": 1, "start": 0, "limit": 100, "results": [
+   {"status": {"name": "FAILED"}, "defects": ["10101"], "test": {"issueId": "10001"}}
+  ]}}}}}
+]

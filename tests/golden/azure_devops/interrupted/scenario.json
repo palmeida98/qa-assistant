@@ -1,0 +1,27 @@
+{
+ "description": "An interrupted send: the new bug's create gets no answer (a fault injected at request 7): exit 3, never retried blindly. Azure DevOps did create it, so the resumed run finds it by its tags (qa-batch-..., qa-case-4711), reuses it without creating it again, looks for a test run of this batch (none: the record had no run) and sends the results.",
+ "command": [
+  "apply",
+  "runs/batch_20260928_04.json"
+ ],
+ "dry_run_exit": 1,
+ "runs": [
+  {
+   "responses": "responses.json",
+   "expected": "expected_requests.json",
+   "exit": 3,
+   "fail_at": 7
+  },
+  {
+   "responses": "responses_resumed.json",
+   "expected": "expected_requests_resumed.json",
+   "exit": 0
+  }
+ ],
+ "record": [
+  "bug",
+  "run",
+  "results",
+  "run_completed"
+ ]
+}

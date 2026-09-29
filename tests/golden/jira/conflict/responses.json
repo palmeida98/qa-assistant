@@ -1,0 +1,4 @@
+[
+ {"request": {"method": "POST", "path": "/rest/api/3/search/jql"}, "status": 400,
+  "json": {"errorMessages": ["An issue with key 'DS-99' does not exist for field 'key'."], "errors": {}}}
+]

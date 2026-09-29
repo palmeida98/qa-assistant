@@ -1,0 +1,9 @@
+{
+ "description": "A case Jira does not have (DS-99): Jira refuses the key in the JQL; exit 2 before any write, no record.",
+ "command": ["apply", "runs/batch_20260928_03.json"],
+ "dry_run_exit": 2,
+ "runs": [
+  {"responses": "responses.json", "expected": "expected_requests.json", "exit": 2}
+ ],
+ "record": []
+}

@@ -1,0 +1,16 @@
+{
+ "description": "A case Azure DevOps does not have (4799): the batch read leaves it out (errorPolicy Omit); exit 2 before any write, no record.",
+ "command": [
+  "apply",
+  "runs/batch_20260928_03.json"
+ ],
+ "dry_run_exit": 2,
+ "runs": [
+  {
+   "responses": "responses.json",
+   "expected": "expected_requests.json",
+   "exit": 2
+  }
+ ],
+ "record": []
+}

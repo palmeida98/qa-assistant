@@ -1,0 +1,36 @@
+# Fictional Demo Shop workspace shared by the Jira goldens (technique-jira-xray.md section 10.1). Written by hand.
+# The credentials' values are not here: the test writes a .env with the fictional values of tests/tracker_kit.py
+# (a .env is never committed, even a fictional one), and adds jira.xray's variable names from tracker_kit.JIRA (a
+# secret-like key next to a literal is what detect-secrets blocks, even for a name).
+project: demo-shop
+company: demo
+environments:
+  test: "https://shop.demo"
+tracker: jira
+bug_format: "DS-{n}"
+resolved_bugs: remove
+evidence: text
+modules: [functional-web]
+jira:
+  site: "https://demo-shop.atlassian.net"
+  project_key: DS
+  user_var: DS_JIRA_USER
+  token_var: DS_JIRA_TOKEN
+  cases:
+    id_source: key
+  results:
+    statuses:
+      Pass: PASSED
+      Fail: FAILED
+      "Not run": TODO
+      Blocked: BLOCKED
+      "N/A": skip
+    test_plan_key: DS-10
+  bugs:
+    fields:
+      title: summary
+      description: description
+      platform: "labels:platform-"
+      priority: priority
+    statuses: [Done]
+    priorities: [High, Medium, Low]

@@ -74,7 +74,7 @@ The generated cases are proposals until the user approves them; a bug is only cr
 ### Starting a new project
 
 1. Create the folder `qa-workspaces/<company>/<project>/` (next to this repository).
-2. Open `claude` in that folder and run `/project-onboarding`: it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`), registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
+2. Open `claude` in that folder and run `/project-onboarding`: it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`) or, with Jira or Azure DevOps, fills in the tracker's section and runs `check` and `import-cases`, registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
 3. Fill in `.env` locally.
 
 ### Modules
@@ -88,7 +88,7 @@ The generated cases are proposals until the user approves them; a bug is only cr
 
 ### Trackers
 
-Only Excel has an adapter: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. With `jira` or `azure-devops`, the run log in `runs/` is the source and passing it to the tracker is manual, always with approval (methodology §4.2). A new adapter is only written when a real project needs it.
+Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-batch` and `/run-batch` read the imported cases, `/log-bug` searches duplicates, `/checkpoint` sends, `/generate-cases` exports); their progress view is the tracker's own reports (methodology §4.2).
 
 ## Demo
 
@@ -122,4 +122,4 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
 
-Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stay as manual logging.
+Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stayed as manual logging until the user's decision of 28.09.2026 to build their adapters (plan phase 10).

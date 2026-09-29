@@ -1,0 +1,4 @@
+tracker: jira
+cases:
+  DS-1: {key: DS-1, id: '10001'}
+  DS-2: {key: DS-2, id: '10002'}

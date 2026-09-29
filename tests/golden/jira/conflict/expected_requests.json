@@ -1,0 +1,4 @@
+[
+ {"method": "POST", "url": "https://demo-shop.atlassian.net/rest/api/3/search/jql", "auth": "Basic", "content_type": "application/json",
+  "body": {"jql": "key in (\"DS-1\", \"DS-99\")", "fields": ["summary", "issuetype", "labels"], "maxResults": 100}}
+]

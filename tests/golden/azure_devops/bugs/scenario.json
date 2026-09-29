@@ -1,0 +1,23 @@
+{
+ "description": "A new bug (created first, Tested By its case, tagged with the markers) and an existing bug with bug_status: its state changed right after, with a test on /rev; both bugs associated with the results; a comment on the existing bug with the run's observation. Then the read back.",
+ "command": [
+  "apply",
+  "runs/batch_20260928_02.json"
+ ],
+ "dry_run_exit": 1,
+ "runs": [
+  {
+   "responses": "responses.json",
+   "expected": "expected_requests.json",
+   "exit": 0
+  }
+ ],
+ "record": [
+  "bug",
+  "state",
+  "run",
+  "results",
+  "run_completed",
+  "comment"
+ ]
+}

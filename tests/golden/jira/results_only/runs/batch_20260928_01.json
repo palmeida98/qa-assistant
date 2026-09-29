@@ -1,0 +1,8 @@
+{
+ "run": {"environment": "test", "build": "2.4.1"},
+ "results": [
+  {"tc": "DS-1", "status": "Pass", "actual_result": "The discount is shown", "ts": "2026-09-28T10:00:00+01:00"},
+  {"tc": "DS-2", "status": "Fail", "actual_result": "The coupon field shows no error", "ts": "2026-09-28T10:05:00+01:00"},
+  {"tc": "DS-3", "status": "N/A", "actual_result": "Guest checkout is off in this environment", "ts": "2026-09-28T10:07:00+01:00"}
+ ]
+}
