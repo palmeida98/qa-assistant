@@ -36,7 +36,8 @@ mobile:
   # app_id: ""                 # the app under test, e.g. com.demoshop.app
   # avd: ""                    # AVD name (default: qa-<project>)
   # image: "system-images;android-35;google_apis;x86_64"   # Google APIs (has root); a Play Store image has none
-  # build: {source: "", sha256: ""}   # where the build comes from (APKs are never committed) and its SHA-256
+  # build: {source: "", sha256: "", version: ""}   # where the build comes from (APKs are never committed: e.g.
+  #                            #   "release build-1.4.0-140", written by scripts/workspace_build.py publish), its SHA-256 and version
   # permissions: {grant: [], revoke: []}   # e.g. grant: [android.permission.POST_NOTIFICATIONS]
   # serial: ""                 # a real device or a running emulator (default: the only device connected)
   # (opt.) conversational mode (scripts/device.py, technique-mobile.md §4.1):
@@ -44,6 +45,21 @@ mobile:
   # ignore_labels: []          # the app's chrome, dropped from what `send` prints
   # evidence_batch: ""         # folder under evidence/ (default: today, YYYYMMDD)
   # browser: ""                # package that opens login links, e.g. com.android.chrome
+
+# ci: (opt.) remote execution on a GitHub Actions runner of the workspace's private repository
+# (docs/technique-mobile.md §11, docs/workspace/ci/README.md). Only NAMES of .env variables, never values.
+# ci:
+#   runner: "ubuntu-24.04"       # a GitHub-hosted STANDARD runner (ubuntu-24.04, ubuntu-22.04, ubuntu-latest); larger runners are paid: refused
+#   timeout_minutes: 60          # the job's time limit (free minutes are limited; each job is rounded up to the minute)
+#   max_turns: 150               # the agent's turn limit (Claude Code headless, conversational mode)
+#   secrets: []                  # .env variables the runner needs, each an Actions secret with the same name, e.g. [SHOP_APP_USER]
+#   login:
+#     mode: "none"               # manual-issue (the owner pastes a login link in an issue) | none
+#     flow: ""                   # with manual-issue: the helper flow that asks for the link, e.g. flows/_request_link.yaml
+#     timeout_minutes: 30        # how long to wait for the comment; then the batch is Blocked (login)
+#     hosts: []                  # (opt.) hosts a link may have besides those of environments, e.g. [auth.demoshop.example]
+#     user: ""                   # (opt.) GitHub login allowed to paste it (default: the repository's owner)
+#     screen_text: ""            # (opt.) a text only the login screen shows, to check the app left it
 
 # dashboard: meaning of each case status in the dashboard (scripts/build_dashboard.py, plan 5.1).
 # (opt.) Types: pending | ok | fail | blocked | na. "Run" = cases outside pending.

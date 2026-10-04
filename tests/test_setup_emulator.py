@@ -13,7 +13,6 @@ import os
 import sys
 import tempfile
 import unittest
-import zipfile
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,19 +21,12 @@ sys.path[:0] = [os.path.join(ROOT, "scripts")]
 import setup_emulator as se
 import validate_project as vp
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from apk_kit import make_apk
+
 SERIAL = "emulator-5554"
 LIB_DIR = "/data/app/~~Qa1==/com.demoshop.app-Zx9==/lib"
 IMAGE = "system-images;android-35;google_apis;x86_64"
-
-
-def make_apk(path, libs=(("arm64-v8a", "libfoo.so"), ("arm64-v8a", "libbar.so")), stored=True):
-    """A fictional APK: a manifest and native libraries (stored = uncompressed, as with extractNativeLibs=false)."""
-    with zipfile.ZipFile(path, "w") as z:
-        z.writestr("AndroidManifest.xml", b"fictional manifest", compress_type=zipfile.ZIP_DEFLATED)
-        for abi, name in libs:
-            z.writestr(f"lib/{abi}/{name}", b"\x7fELF fictional " + name.encode() * 20,
-                       compress_type=zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED)
-    return path
 
 
 class Clock:
@@ -168,6 +160,7 @@ class Base(unittest.TestCase):
         with mock.patch.object(se, "run", fake), mock.patch.object(se, "spawn", fake.spawn), \
                 mock.patch.object(se, "now", clock.now), mock.patch.object(se, "pause", clock.pause), \
                 mock.patch.object(se, "find_tools", lambda: dict(tools or self.tools)), \
+                mock.patch.object(se, "avd_home", lambda: os.path.join(self.tmp.name, "avd")), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             rc = se.main([self.ws, *args])
         return rc, out.getvalue(), err.getvalue()
@@ -217,12 +210,34 @@ class AlreadyDone(Base):
         self.assertIn("versionCode 139 → 140", self.line(out, "build"))
         self.assertEqual(len(fake.of("install")), 1)
 
-    def test_without_aapt2_always_reinstalls_and_says_why(self):
+    def test_without_aapt2_the_manifest_gives_the_version_and_nothing_is_reinstalled(self):
+        # plan 11.1: before, without aapt2 the build was reinstalled on every run (and the app's login was lost)
         fake = FakeSDK()
         rc, out, _ = self.go(fake, "--apk", self.apk, tools={**self.tools, "aapt2": None})
         self.assertEqual(rc, 0)
-        self.assertIn("aapt2 not found", self.line(out, "build"))
+        self.assertIn("versionCode 140 already installed", self.line(out, "build"))
+        self.assertEqual(fake.of("install"), [])
+        self.assertEqual([c for c in fake.calls if c[0] == "aapt2"], [])     # never needed
+
+    def test_an_unreadable_manifest_falls_back_to_aapt2_then_reinstalls(self):
+        apk = make_apk(os.path.join(self.tmp.name, "odd.apk"), manifest=b"not binary xml")
+        self.project()
+        fake = FakeSDK(installed_code="140", apk_code="140")
+        rc, out, _ = self.go(fake, "--apk", apk)
+        self.assertEqual(rc, 0)
+        self.assertIn("already installed", self.line(out, "build"))           # aapt2 told
+        fake = FakeSDK()
+        rc, out, _ = self.go(fake, "--apk", apk, tools={**self.tools, "aapt2": None})
+        self.assertEqual(rc, 0)
+        self.assertIn("versionCode is unknown", self.line(out, "build"))
         self.assertEqual(len(fake.of("install")), 1)
+
+    def test_an_install_is_recorded_for_the_cold_boot_rule(self):
+        os.makedirs(os.path.join(self.tmp.name, "avd", "qa-demo.avd"))
+        fake = FakeSDK(installed_code="139")
+        self.go(fake, "--apk", self.apk)
+        with open(os.path.join(self.tmp.name, "avd", "qa-demo.avd", "qa-build.txt"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), f"com.demoshop.app versionCode 140 sha256 {self.sha}\n")
 
     def test_no_boot_with_the_emulator_stopped_skips_the_device_steps(self):
         fake = FakeSDK(running=False)
@@ -250,17 +265,13 @@ class Build(Base):
         self.assertIn(self.sha, self.line(out, "sha256"))
 
     def test_other_package_is_refused(self):
+        other = make_apk(os.path.join(self.tmp.name, "other.apk"), package="com.example.other")
+        self.project()
         fake = FakeSDK()
-        fake_aapt = fake.__call__
-
-        def other(cmd, timeout=120, stdin=None):
-            if cmd[0] == "aapt2":
-                return 0, "package: name='com.example.other' versionCode='1'\n"
-            return fake_aapt(cmd, timeout, stdin)
-        other.spawn = fake.spawn
-        rc, _, err = self.go(other, "--apk", self.apk)
+        rc, _, err = self.go(fake, "--apk", other)
         self.assertEqual(rc, 2)
         self.assertIn("com.example.other", err)
+        self.assertEqual(fake.of("install"), [])
 
     def test_production_builds_are_refused(self):
         prod_apk = make_apk(os.path.join(self.tmp.name, "demoshop-prod-1.4.0.apk"))
@@ -368,6 +379,48 @@ class DryRunAndBoot(Base):
         self.MOBILE = "mobile:\n  platform: android\n"
         self.project()
         self.assertEqual(self.go(FakeSDK(), "--apk", self.apk)[0], 2)
+
+
+class ColdBoot(Base):
+    def snapshot(self, age_s):
+        folder = os.path.join(self.tmp.name, "avd", "qa-demo.avd", "snapshots", "default_boot")
+        os.makedirs(folder, exist_ok=True)
+        t = os.path.getmtime(self.apk) + age_s
+        os.utime(folder, (t, t))
+
+    def test_a_snapshot_older_than_the_build_is_never_loaded(self):
+        self.snapshot(-3600)                                   # saved an hour before the APK arrived
+        fake = FakeSDK(running=False)
+        rc, out, _ = self.go(fake, "--apk", self.apk)
+        self.assertEqual(rc, 0)
+        self.assertIn("-no-snapshot-load", fake.spawned[0])
+        self.assertIn("cold: the saved snapshot is older than the build", self.line(out, "boot"))
+
+    def test_a_snapshot_older_than_the_last_install_is_never_loaded(self):
+        self.snapshot(-3600)
+        record = os.path.join(self.tmp.name, "avd", "qa-demo.avd", "qa-build.txt")
+        with open(record, "w", encoding="utf-8") as f:
+            f.write("com.demoshop.app versionCode 140\n")
+        fake = FakeSDK(running=False)
+        self.go(fake)                                          # no --apk: the record decides
+        self.assertIn("-no-snapshot-load", fake.spawned[0])
+
+    def test_a_newer_snapshot_is_loaded_and_cold_forces(self):
+        self.snapshot(+3600)
+        fake = FakeSDK(running=False)
+        self.go(fake, "--apk", self.apk)
+        self.assertNotIn("-no-snapshot-load", fake.spawned[0])
+        fake = FakeSDK(running=False)
+        self.go(fake, "--apk", self.apk, "--cold", "--gpu", "swiftshader_indirect", "--headless", "--no-audio")
+        self.assertEqual(fake.spawned[0], ["emulator", "-avd", "qa-demo", "-no-snapshot-save", "-no-boot-anim",
+                                           "-no-snapshot-load", "-no-audio", "-gpu", "swiftshader_indirect",
+                                           "-no-window"])
+
+    def test_a_running_emulator_is_not_restarted(self):
+        self.snapshot(-3600)
+        fake = FakeSDK(running=True)
+        self.go(fake, "--apk", self.apk)
+        self.assertEqual(fake.spawned, [])
 
 
 class FindTools(unittest.TestCase):

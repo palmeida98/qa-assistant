@@ -307,6 +307,59 @@ class Validate(unittest.TestCase):
             problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, key: value})
             self.assertTrue(any(f"mobile.{key}" in p for p in problems), (key, value, problems))
 
+    # --- the ci: section (plan 11.0, technique-mobile.md §11.5)
+
+    CI: typing.ClassVar[dict] = {"runner": "ubuntu-24.04", "timeout_minutes": 60, "max_turns": 150, "secrets": ["SHOP_APP_USER"],
+          "login": {"mode": "manual-issue", "flow": "flows/_request_link.yaml", "timeout_minutes": 30,
+                    "hosts": ["auth.demoshop.example"], "user": "demo-owner", "screen_text": "Send me a link"}}
+    MOBILE_CI: typing.ClassVar[dict] = {**MOBILE, "variables": ["SHOP_APP_USER"]}
+
+    def test_a_valid_ci_section(self):
+        os.makedirs(os.path.join(self.tmp.name, "flows"))
+        open(os.path.join(self.tmp.name, "flows", "_request_link.yaml"), "w").close()
+        self.assertEqual(self.with_(modules=["mobile"], mobile=self.MOBILE_CI, ci=self.CI), ([], []))
+        # every key is optional: an empty section is valid (defaults: ubuntu-24.04, 60 min, 150 turns, no login)
+        self.assertEqual(self.with_(modules=["mobile"], mobile=self.MOBILE_CI, ci={}), ([], []))
+
+    def test_ci_problems(self):
+        login = self.CI["login"]
+        for ci, fragment in [({"runner": "ubuntu-24.04-4core"}, "ci.runner"),       # a larger runner: paid
+                             ({"runner": "self-hosted"}, "ci.runner"),
+                             ({"runner": "macos-15"}, "ci.runner"),
+                             ({"timeout_minutes": 0}, "ci.timeout_minutes"),
+                             ({"timeout_minutes": 500}, "ci.timeout_minutes"),
+                             ({"max_turns": "many"}, "ci.max_turns"),
+                             ({"secrets": 5}, "ci.secrets"),
+                             ({"secrets": ["SHOP_APP_USER=me@demo"]}, "ci.secrets"),       # a value, never
+                             ({"secrets": ["CLAUDE_CODE_OAUTH_TOKEN"]}, "workflow's own secrets"),
+                             ({"login": {"mode": "magic"}}, "ci.login.mode"),
+                             ({"login": {"mode": "manual-issue"}}, "ci.login.flow is empty"),
+                             ({"login": {**login, "flow": "flows/request_link.yaml"}}, "starts with '_'"),
+                             ({"login": {**login, "timeout_minutes": 90}}, "shorter than ci.timeout_minutes"),
+                             ({"login": {**login, "hosts": ["https://auth.demoshop.example/x"]}}, "ci.login.hosts"),
+                             ({"login": {**login, "user": "not a login"}}, "ci.login.user"),
+                             ("ubuntu-24.04", "ci: must be a map")]:
+            with self.subTest(ci=ci):
+                problems, _ = self.with_(modules=["mobile"], mobile=self.MOBILE_CI, ci=ci)
+                self.assertTrue(any(fragment in p for p in problems), (ci, problems))
+
+    def test_ci_warnings(self):
+        _, warnings = self.with_(modules=["mobile"], mobile=self.MOBILE_CI, ci=self.CI)
+        self.assertTrue(any("does not exist in the workspace yet" in w for w in warnings), warnings)
+        _, warnings = self.with_(modules=["mobile"], mobile=MOBILE, ci={"secrets": ["SHOP_OTHER"]})
+        self.assertTrue(any("SHOP_OTHER" in w and "not variables" in w for w in warnings), warnings)
+        _, warnings = self.with_(ci={})
+        self.assertTrue(any("'mobile' is not in 'modules'" in w for w in warnings), warnings)
+        _, warnings = self.with_(modules=["mobile"], mobile=MOBILE, ci={"runners": "x"})
+        self.assertTrue(any("unknown key" in w for w in warnings), warnings)
+
+    def test_the_build_version_is_a_text(self):
+        build = {"source": "release build-1.4.0-140", "sha256": "a" * 64}
+        self.assertEqual(self.with_(modules=["mobile"], mobile={**MOBILE, "build": {**build, "version": "1.4.0 (140)"}})[0],
+                         [])
+        problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, "build": {**build, "version": 1.4}})
+        self.assertTrue(any("mobile.build.version" in p for p in problems), problems)
+
 
 REAL = {"skills_state": vp.skills_state, "playwright_browsers": vp.playwright_browsers}
 
@@ -355,6 +408,19 @@ class Environment(unittest.TestCase):
             ok, detail = self.checks()["python"]
         self.assertFalse(ok)
         self.assertIn(">= 3.12", detail)
+
+    def test_on_a_runner_env_needs_only_ci_secrets(self):
+        # plan 11.4: the runner's .env is written from the Actions secrets of ci.secrets only
+        proj = self.project(modules=["mobile"], mobile={**MOBILE, "variables": ["SHOP_APP_USER", "SHOP_OTHER"]},
+                            ci={"secrets": ["SHOP_APP_USER"]})
+        with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
+            f.write("SHOP_APP_USER=tester@demoshop.example\n")
+        self.assertFalse(vp.env_check(self.ws, proj)[0])                          # SHOP_OTHER missing here
+        ok, detail = vp.env_check(self.ws, proj, ci=True)
+        self.assertTrue(ok, detail)
+        self.assertNotIn("tester@demoshop.example", detail)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            vp.main([self.ws, "--ci"])                                             # only with --environment
 
     def test_env_missing_a_name_is_reported_without_any_value(self):
         creds = {"admin": {"user_var": "SHOP_ADMIN_USER", "pass_var": "SHOP_ADMIN_PASSWORD"}}

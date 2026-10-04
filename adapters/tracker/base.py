@@ -177,6 +177,9 @@ def validate_batch(doc: dict, config: TrackerConfig) -> list[str]:
             if not isinstance(new, dict):
                 problems.append(f"{where}: 'new_defect' must be an object or null")
             else:
+                if new.get("proposed", False) is not False:
+                    problems.append(f"{where}: the new_defect is still a proposal (\"proposed\") -- the user approves "
+                                    "it by removing \"proposed\" (or drops it) before it is sent (methodology 9.4)")
                 missing = [k for k in ("title", "expected", "observed") if new.get(k) in (None, "")]
                 if missing:
                     problems.append(f"{where}: the new_defect misses {missing} (methodology 9.2)")

@@ -1,0 +1,77 @@
+# QA apply — applies the run logs merged into main with the project's adapter (methodology 9.4 and 12.4,
+# technique-mobile.md section 11.4). The merge of the run's pull request is the user's approval: the Excel workbook
+# is updated (LibreOffice recalculates it), or the results and bugs are sent to Jira / Azure DevOps with --yes.
+# A run log with "proposed" or Question left is never applied: the job fails and names it.
+#
+# Template of qa-assistant (docs/workspace/ci/apply.yml), copied to .github/workflows/qa-apply.yml by
+# `python scripts/workspace_ci.py <workspace> install`. Nothing of the project is written here.
+
+name: QA apply
+
+on:
+  push:
+    branches: [main]
+    paths: ["runs/**"]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: qa-apply            # one application at a time: the workbook and tracker/ are written in order
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      WS: ${{ github.workspace }}/ws
+      QA: ${{ github.workspace }}/qa
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout the workspace
+        uses: actions/checkout@v5
+        with:
+          path: ws
+          fetch-depth: 0
+
+      - name: Checkout qa-assistant (read-only token)
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ vars.QA_ASSISTANT_REPOSITORY }}
+          ref: ${{ vars.QA_ASSISTANT_REF || 'main' }}
+          token: ${{ secrets.QA_ASSISTANT_TOKEN }}
+          path: qa
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: qa/requirements.txt
+
+      - name: Python requirements
+        run: pip install -r "$QA/requirements.txt"
+
+      - name: LibreOffice for the workbook's recalculation (tracker excel)
+        run: |
+          if [ "$(yq -r '.tracker' "$WS/project.yaml")" = "excel" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-calc > /dev/null
+          fi
+
+      - name: .env from the Actions secrets named in ci.secrets (the tracker's credentials; never printed)
+        env:
+          QA_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" write-env
+
+      - name: Apply the merged run logs, commit, comment on the pull request
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          cd "$WS"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python "$QA/scripts/workspace_ci.py" "$WS" apply-merged --before "$BEFORE" --after "$AFTER"

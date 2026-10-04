@@ -3,6 +3,13 @@ Runs a workspace's Maestro flows and links each result to its test case
 (technique-mobile.md; plan, task 3.3).
 
     python scripts/run_mobile.py <workspace> [flow ...] [--output runs/mobile_<date>.json]
+    python scripts/run_mobile.py <workspace> --helper flows/_<name>.yaml [--serial S]
+
+- --helper (plan 11.2): runs ONE flow that is not a case (its file name starts
+  with '_', e.g. flows/_request_link.yaml, which asks the app for a login link)
+  with the same MAESTRO_<VAR> values from .env, on --serial / mobile.serial when
+  given; its output is redacted and no result is recorded (it is not a test).
+  Exit 0 when the flow passed, 3 when it failed or there is no target.
 
 - The configuration comes from the mobile: section of project.yaml (platform, flows
   folder, variables). With no flows given, runs every flow of the folder whose name
@@ -141,6 +148,48 @@ def read_junit(xml_txt: str, red: Redactor) -> list[dict]:
     return res
 
 
+def run_maestro(cmd: list[str], env: dict, timeout: int) -> tuple[int, str]:
+    """Runs Maestro (the tests replace it): (exit code, stdout + stderr)."""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           env={**os.environ, **env}, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return 124, f"timeout of {timeout} s"
+    return r.returncode, r.stdout + r.stderr
+
+
+def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[int, str]:
+    """Runs a helper flow (not a case): (0 passed | 2 configuration | 3 failed or no target, redacted message).
+    Also used in-process by scripts/remote_login.py."""
+    try:
+        cfg = configuration(workspace)
+        path = next((c for c in (flow, os.path.join(workspace, flow), os.path.join(cfg["folder"], flow))
+                     if os.path.isfile(c)), None)
+        if path is None:
+            raise UsageError(f"helper flow not found: {flow} (in the current folder, the workspace nor "
+                             f"{cfg['folder']})")
+        if not os.path.basename(path).startswith("_") or case_of_flow(path):
+            raise UsageError(f"{os.path.basename(path)}: a helper flow's name starts with '_' (e.g. "
+                             "_request_link.yaml); a flow named after a case is a test: run it without --helper")
+        maestro = shutil.which("maestro")
+        if not maestro:
+            raise UsageError("maestro not found -- install the Maestro CLI")
+        extra, secrets = maestro_environment(workspace, cfg["variables"])
+        serial = serial or (read_project(workspace).get("mobile") or {}).get("serial")
+    except UsageError as e:
+        return 2, str(e)
+    ok, target = target_available(cfg["platform"])
+    if not ok:
+        return 3, f"no target: {target}"
+    code, output = run_maestro([maestro, *(["--device", str(serial)] if serial else []), "test",
+                                os.path.abspath(path)], extra, cfg["timeout"])
+    red = Redactor(secrets)
+    tail = " | ".join(red.text(ln.strip()) for ln in output.strip().splitlines()[-5:] if ln.strip())
+    if code != 0:
+        return 3, f"{os.path.basename(path)} failed (Maestro exit {code}): {tail}"
+    return 0, f"{os.path.basename(path)}: passed (helper flow, no result recorded)"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Runs Maestro flows and links the results to the cases "
                                              "(technique-mobile.md).")
@@ -148,7 +197,16 @@ def main(argv=None) -> int:
     ap.add_argument("flows", nargs="*", help="flows to run: path or case ID (default: every flow of the folder "
                                              "whose name starts with a case ID)")
     ap.add_argument("--output", help="JSON report (relative to the workspace, unless absolute)")
+    ap.add_argument("--helper", metavar="FLOW", help="run one helper flow (flows/_<name>.yaml), not a case: no "
+                                                     "result recorded")
+    ap.add_argument("--serial", help="with --helper: the device (default: mobile.serial)")
     a = ap.parse_args(argv)
+    if a.helper:
+        if a.flows or a.output:
+            ap.error("--helper runs one flow and records nothing: no other flows, no --output")
+        code, message = run_helper(a.workspace, a.helper, a.serial)
+        print(message, file=sys.stderr if code else sys.stdout)
+        return code
     try:
         cfg = configuration(a.workspace)
         flows = (resolve_flows(a.flows, a.workspace, cfg["folder"]) if a.flows
@@ -157,7 +215,7 @@ def main(argv=None) -> int:
             raise UsageError(f"no flow named after a case ID (e.g. TC-MOB-001_login.yaml) in {cfg['folder']}")
         no_case = [os.path.basename(f) for f in flows if not case_of_flow(f)]
         if no_case:
-            raise UsageError(f"flows without a case ID in the name: {no_case}")
+            raise UsageError(f"flows without a case ID in the name: {no_case} (a helper flow, not a case: --helper)")
         maestro = shutil.which("maestro")
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")

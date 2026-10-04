@@ -481,7 +481,12 @@ class ExcelAdapter:
             if new not in (None, {}):
                 if not isinstance(new, dict):
                     problems.append(f"{where}: 'new_defect' must be an object or null")
-                elif prios:
+                    continue
+                if new.get("proposed", False) is not False:
+                    problems.append(f"{where}: the new_defect is still a proposal (\"proposed\") -- the user approves "
+                                    "it by removing \"proposed\" (or drops it) before the batch is applied "
+                                    "(methodology 9.4)")
+                if prios:
                     pr = new.get("priority", new.get("severity"))
                     if pr not in prios:
                         problems.append(f"{where}: priority of the new defect {pr!r} outside {prios}")

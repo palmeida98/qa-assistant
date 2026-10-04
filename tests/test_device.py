@@ -308,29 +308,109 @@ class Commands(unittest.TestCase):
         self.assertEqual(fake.of("shell", "input", "text"),
                          [("shell", "input", "text", "Hi%s\\(all\\)%s\\&%s\\'you\\'%s\\$5\\?")])
 
-    def test_type_unicode_through_maestro_with_the_text_only_in_e_msg(self):
-        fake = FakeDevice()
-        seen = {}
+    def maestro(self, *answers):
+        """A fake Maestro: records each command, flow and extra environment; answers in turn (the last repeats)."""
+        seen = []
+        answers = list(answers) or [(0, "")]
 
-        def maestro(cmd):
-            seen["cmd"] = cmd
+        def run(cmd, env=None):
             with open(cmd[cmd.index("test") + 1], encoding="utf-8") as f:
-                seen["flow"] = f.read()
-            return mock.Mock(returncode=0, stdout="", stderr="")
+                seen.append({"cmd": cmd, "flow": f.read(), "env": env or {}})
+            code, out = answers.pop(0) if len(answers) > 1 else answers[0]
+            return mock.Mock(returncode=code, stdout=out, stderr="")
+        return seen, run
 
+    def test_type_unicode_through_maestro_with_the_text_in_the_utf8_flow_never_on_the_command_line(self):
+        fake = FakeDevice()
+        seen, run = self.maestro()
         with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
-                mock.patch.object(dv, "run_maestro", side_effect=maestro):
-            rc, out, _ = self.run_it(fake, "type", "Olá, café?", "--field", "Search")
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, out, _ = self.run_it(fake, "type", "Olá, café? 🙂", "--field", "Search")
         self.assertEqual(rc, 0)
         self.assertIn("maestro inputText", out)
-        cmd = seen["cmd"]
+        cmd = seen[0]["cmd"]
         self.assertIsInstance(cmd, list)                                   # an argument list, no shell
         self.assertEqual(cmd[:3], ["maestro", "--device", "emulator-5554"])
-        self.assertEqual(cmd[cmd.index("-e") + 1], "MSG=Olá, café?")
-        self.assertIn("inputText: ${MSG}", seen["flow"])
-        self.assertNotIn("café", seen["flow"])
+        self.assertNotIn("-e", cmd)
+        self.assertFalse(any("café" in c for c in cmd))                    # never on the command line
+        self.assertIn('- inputText: "Olá, café? 🙂"', seen[0]["flow"])     # written as UTF-8, not escaped
         self.assertEqual(fake.taps(), [("990", "60")])                     # the field focused first
         self.assertEqual(fake.of("shell", "input", "text"), [])
+
+    def test_a_long_text_goes_in_chunks(self):
+        fake = FakeDevice()
+        text = "Tell me about order QA-1 " * 40                            # 1 000 ASCII characters
+        rc, out, _ = self.run_it(fake, "type", text)
+        self.assertEqual(rc, 0)
+        self.assertIn("4 chunks", out)
+        calls = fake.of("shell", "input", "text")
+        self.assertEqual(len(calls), 4)
+        self.assertEqual("".join(c[3] for c in calls), dv.input_text_arg(text[:300]) + dv.input_text_arg(
+            text[300:600]) + dv.input_text_arg(text[600:900]) + dv.input_text_arg(text[900:]))
+        seen, run = self.maestro()
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, out, _ = self.run_it(FakeDevice(), "type", "é" * 650)
+        self.assertEqual(rc, 0)
+        self.assertIn("3 steps", out)
+        self.assertEqual(seen[0]["flow"].count("- inputText:"), 3)
+
+    def test_type_from_a_utf8_file(self):
+        path = os.path.join(self.ws, "message.txt")
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write("Olá 🙂 — obrigado\r\n")
+        seen, run = self.maestro()
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, _, _ = self.run_it(FakeDevice(), "type", "--file", path)
+        self.assertEqual(rc, 0)
+        self.assertIn('- inputText: "Olá 🙂 — obrigado"\n', seen[0]["flow"])   # the final line break dropped
+        self.assertEqual(self.run_it(FakeDevice(), "type", "hi", "--file", path)[0], 2)      # not both
+        self.assertEqual(self.run_it(FakeDevice(), "type")[0], 2)
+        self.assertEqual(self.run_it(FakeDevice(), "type", "--file", os.path.join(self.ws, "none.txt"))[0], 2)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("fictional-password-9")
+        rc, out, err = self.run_it(FakeDevice(), "type", "--file", path)                       # still refused
+        self.assertEqual(rc, 2)
+        self.assertNotIn("fictional-password-9", out + err)
+
+    def test_maestro_would_evaluate_a_dollar_brace_so_it_goes_by_environment(self):
+        seen, run = self.maestro()
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            self.run_it(FakeDevice(), "type", "preço ${total}")
+        self.assertIn("- inputText: ${MAESTRO_QA_TEXT_1}", seen[0]["flow"])
+        self.assertEqual(seen[0]["env"], {"MAESTRO_QA_TEXT_1": "preço ${total}"})
+
+    def test_ime_not_active_is_retried_once_then_ascii_falls_back_to_adb(self):
+        ime = (1, "java.io.IOException: Maestro IME is not active")
+        seen, run = self.maestro(ime, (0, ""))
+        fake = FakeDevice()
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, out, _ = self.run_it(fake, "type", "café", "--field", "Search")
+        self.assertEqual((rc, len(seen)), (0, 2))
+        self.assertEqual(fake.taps(), [("990", "60"), ("990", "60")])        # the field tapped again
+        # twice not active: ASCII typed through adb, and said so
+        seen, run = self.maestro(ime)
+        fake = FakeDevice()
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, out, err = self.run_it(fake, "type", "hello there", "--via", "maestro")
+        self.assertEqual((rc, len(seen)), (0, 2))
+        self.assertIn("fallback: Maestro IME not active", out)
+        self.assertIn("typed through adb instead", err)
+        self.assertEqual(fake.of("shell", "input", "text"), [("shell", "input", "text", "hello%sthere")])
+        # twice not active with non-ASCII text: no target
+        seen, run = self.maestro(ime)
+        with mock.patch.object(dv.shutil, "which", return_value="maestro"), \
+                mock.patch.object(dv, "run_maestro", side_effect=run):
+            rc, _, err = self.run_it(FakeDevice(), "type", "café")
+        self.assertEqual((rc, len(seen)), (3, 2))
+        self.assertIn("IME is not active", err)
+
+    def test_via_adb_refuses_non_ascii(self):
+        self.assertEqual(self.run_it(FakeDevice(), "type", "café", "--via", "adb")[0], 2)
 
     def test_type_refuses_a_value_of_the_env(self):
         for text in ("fictional-password-9", "my password is fictional-password-9 ok", "ana"):

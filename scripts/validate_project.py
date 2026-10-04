@@ -6,7 +6,8 @@ environments (never production), the device and emulator keys of mobile: (plan 9
 Excel (when tracker: excel), the jira: / azure_devops: section (when tracker: jira
 / azure-devops; plan 10.1: required keys, https URLs, .env variable names, every
 status mapped or skip, Question never mapped, the closed list of Azure DevOps
-outcomes), the dashboard: section and, in a workspace with
+outcomes), the optional ci: section (plan 11.0: a standard runner only, limits,
+ci.secrets as .env variable names, the login mode and its helper flow), the dashboard: section and, in a workspace with
 git, the .gitignore of the files with secrets (warning) and the protection of
 history/ in .claude/settings.json (warning). In a workspace that is a git
 repository of its own (plan 9.4, through scripts/workspace_git.py): .env
@@ -181,6 +182,8 @@ def mobile_target(proj: dict) -> tuple[list[str], list[str]]:
         else:
             if not isinstance(build.get("source") or "", str):
                 problems.append("mobile.build.source must be a text (where the build comes from)")
+            if not isinstance(build.get("version") or "", str):
+                problems.append("mobile.build.version must be a quoted text, e.g. \"1.4.0 (140)\"")
             sha = build.get("sha256")
             if sha in (None, ""):
                 warnings.append("mobile.build.sha256 is missing: setup_emulator.py cannot check the build it "
@@ -203,6 +206,96 @@ def mobile_target(proj: dict) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+# the GitHub-hosted STANDARD Linux runners (free minutes); any other label is a larger (paid) or self-hosted runner
+STANDARD_RUNNER = re.compile(r"ubuntu-(latest|\d{2}\.04)")
+# secrets the workflow itself needs: never .env variables, so never in ci.secrets
+WORKFLOW_SECRETS = ("CLAUDE_CODE_OAUTH_TOKEN", "QA_ASSISTANT_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY")
+LOGIN_MODES = ("manual-issue", "none")
+HOST = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+")
+GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+
+
+def positive_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v > 0
+
+
+def ci_section(workspace: str, proj: dict) -> tuple[list[str], list[str]]:
+    """The optional ci: section (remote execution on a GitHub Actions runner; plan 11.0, technique-mobile.md §11.5):
+    a standard runner only (no paid larger runner), limits as positive integers, ci.secrets as names of .env
+    variables of project.yaml (never a workflow secret), the login mode and its helper flow."""
+    ci = proj.get("ci")
+    if ci is None:
+        return [], []
+    if not isinstance(ci, dict):
+        return ["ci: must be a map (technique-mobile.md §11.5)"], []
+    problems, warnings = [], []
+    known = {"runner", "timeout_minutes", "max_turns", "secrets", "login"}
+    extra = sorted(set(ci) - known)
+    if extra:
+        warnings.append(f"ci: unknown key(s) {extra} (known: {sorted(known)})")
+    if "mobile" not in (proj.get("modules") or []):
+        warnings.append("ci: filled in, but the module 'mobile' is not in 'modules' (remote execution runs mobile "
+                        "batches)")
+    runner = ci.get("runner", "ubuntu-24.04")
+    if not (isinstance(runner, str) and STANDARD_RUNNER.fullmatch(runner)):
+        problems.append(f"ci.runner {runner!r}: only a GitHub-hosted standard runner (ubuntu-24.04, ubuntu-22.04, "
+                        "ubuntu-latest); larger runners are paid and self-hosted ones are not the workspace's CI")
+    timeout = ci.get("timeout_minutes", 60)
+    if not (positive_int(timeout) and timeout <= 360):
+        problems.append(f"ci.timeout_minutes {timeout!r}: whole minutes, from 1 to 360 (GitHub's job limit)")
+        timeout = 60
+    if not positive_int(ci.get("max_turns", 150)):
+        problems.append(f"ci.max_turns {ci.get('max_turns')!r}: a positive whole number")
+    secrets = ci.get("secrets") or []
+    if not (isinstance(secrets, list) and all(isinstance(x, str) and VARIABLE.fullmatch(x) for x in secrets)):
+        problems.append("ci.secrets must be a list of .env variable NAMES (never values), e.g. [SHOP_APP_USER]")
+    else:
+        from common import variable_names
+        reserved = sorted(set(secrets) & set(WORKFLOW_SECRETS))
+        if reserved:
+            problems.append(f"ci.secrets: {reserved} are the workflow's own secrets, not .env variables: take them "
+                            "out (docs/workspace/ci/README.md)")
+        unknown = sorted(set(secrets) - set(variable_names(proj)) - set(WORKFLOW_SECRETS))
+        if unknown:
+            warnings.append(f"ci.secrets: {unknown} are not variables project.yaml refers to (a *_var key or a "
+                            "'variables' list): the runner would write them to .env for nothing")
+    login = ci.get("login") or {}
+    if not isinstance(login, dict):
+        problems.append("ci.login must be a map {mode, flow, timeout_minutes}")
+        return problems, warnings
+    mode = login.get("mode", "none")
+    if mode not in LOGIN_MODES:
+        problems.append(f"ci.login.mode {mode!r}: one of {list(LOGIN_MODES)}")
+    login_timeout = login.get("timeout_minutes", 30)
+    if not positive_int(login_timeout):
+        problems.append(f"ci.login.timeout_minutes {login_timeout!r}: a positive whole number")
+    elif mode == "manual-issue" and login_timeout >= timeout:
+        problems.append(f"ci.login.timeout_minutes ({login_timeout}) must be shorter than ci.timeout_minutes "
+                        f"({timeout})")
+    hosts = login.get("hosts") or []
+    if not (isinstance(hosts, list) and all(isinstance(h, str) and HOST.fullmatch(h) for h in hosts)):
+        problems.append("ci.login.hosts must be a list of host names, e.g. [auth.demoshop.example] (no scheme, no "
+                        "path)")
+    user = login.get("user")
+    if user not in (None, "") and not (isinstance(user, str) and GITHUB_LOGIN.fullmatch(user)):
+        problems.append(f"ci.login.user {user!r}: a GitHub login")
+    if login.get("screen_text") is not None and not isinstance(login["screen_text"], str):
+        problems.append("ci.login.screen_text must be a text")
+    if mode == "manual-issue":
+        flow = login.get("flow")
+        if not (isinstance(flow, str) and flow.strip()):
+            problems.append("ci.login.mode is manual-issue but ci.login.flow is empty: the helper flow that asks for "
+                            "the link (e.g. flows/_request_link.yaml)")
+        else:
+            if not os.path.basename(flow).startswith("_"):
+                problems.append(f"ci.login.flow {flow!r}: a helper flow's name starts with '_' (e.g. "
+                                "flows/_request_link.yaml), so it is never taken for a case")
+            if not os.path.isfile(os.path.join(workspace, flow)):
+                warnings.append(f"ci.login.flow {flow} does not exist in the workspace yet")
+    return problems, warnings
+
+
+VARIABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 HISTORY_RULE = re.compile(r"^Edit\((/|\./)?history/\*\*\)$")
 
 
@@ -311,6 +404,9 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     p, w = mobile_target(proj)
     problems += p
     warnings += w
+    p, w = ci_section(workspace, proj)
+    problems += p
+    warnings += w
     warnings += gitignore_warnings(workspace, proj, modules)
     try:
         p, w = portable_checks(workspace, proj)
@@ -412,10 +508,14 @@ def required_python() -> tuple[int, ...]:
 VALUES_FROM = "from your own secret store (never from a chat, a log or the repository)"
 
 
-def env_check(workspace: str, proj: dict) -> tuple[bool, str]:
-    """.env has every name of .env.example and of project.yaml. Only names are ever shown, never a value."""
+def env_check(workspace: str, proj: dict, ci: bool = False) -> tuple[bool, str]:
+    """.env has every name of .env.example and of project.yaml (with ci: only those of ci.secrets, the ones a runner
+    gets). Only names are ever shown, never a value."""
     from common import read_env, variable_names
-    needed = sorted(set(read_env(os.path.join(workspace, ".env.example"))) | set(variable_names(proj)))
+    if ci:
+        needed = sorted(str(x) for x in ((proj.get("ci") or {}).get("secrets") or []))
+    else:
+        needed = sorted(set(read_env(os.path.join(workspace, ".env.example"))) | set(variable_names(proj)))
     if not needed:
         return True, "no variable needed (.env.example and project.yaml name none)"
     path = os.path.join(workspace, ".env")
@@ -433,10 +533,10 @@ def env_check(workspace: str, proj: dict) -> tuple[bool, str]:
     return False, f"{'; '.join(parts)} — fill them {VALUES_FROM}"
 
 
-def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
+def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool, str, str]]:
     """(found, tool, detail or how to install it) for what this computer needs to work on the workspace: always
     git, Python, .env and the skills; then per tracker and active module. Missing tools are warnings unless
-    --strict."""
+    --strict. ci: a runner of the workspace's CI (.env holds only ci.secrets)."""
     out = []
     add = out.append
     exe = which("git")
@@ -444,7 +544,7 @@ def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
     have, need = python_version(), required_python()
     add((have >= need, "python", f"{'.'.join(map(str, have))} (qa-assistant needs >= {'.'.join(map(str, need))})"
          + ("" if have >= need else ": install a newer Python, then `pip install -e .` again")))
-    ok, detail = env_check(workspace, proj)
+    ok, detail = env_check(workspace, proj, ci)
     add((ok, ".env", detail))
     try:
         state = skills_state()
@@ -503,6 +603,8 @@ def environment(workspace: str, proj: dict) -> list[tuple[bool, str, str]]:
             build = m.get("build") if isinstance(m.get("build"), dict) else {}
             source = str(build.get("source") or "").strip()
             add((bool(source), "build", (f"not in git; get it from mobile.build.source ({source})"
+                                         + (": python scripts/workspace_build.py <workspace> fetch"
+                                            if source.startswith("release ") else "")
                                          + (", checked against mobile.build.sha256" if build.get("sha256") else "")
                                          if source else "mobile.build.source is not set: write where the build "
                                          "comes from (the build is never committed)")))
@@ -515,9 +617,11 @@ def main(argv=None) -> int:
     ap.add_argument("--environment", action="store_true",
                     help="also check the tools this computer needs for the workspace's modules (methodology 12.3)")
     ap.add_argument("--strict", action="store_true", help="with --environment: a missing tool gives exit 1")
+    ap.add_argument("--ci", action="store_true", help="with --environment, on a runner of the workspace's CI: .env "
+                                                      "needs only the names of ci.secrets")
     a = ap.parse_args(argv)
-    if a.strict and not a.environment:
-        ap.error("--strict only applies with --environment")
+    if (a.strict or a.ci) and not a.environment:
+        ap.error("--strict and --ci only apply with --environment")
     if not os.path.isfile(os.path.join(a.workspace, "project.yaml")):
         hint = (": the workspace is from before the translation, convert it with scripts/migrate_workspace.py"
                 if os.path.isfile(os.path.join(a.workspace, "projeto.yaml")) else "")
@@ -532,7 +636,7 @@ def main(argv=None) -> int:
     if not a.environment:
         return 1 if problems else 0
     from common import read_project
-    checks = environment(a.workspace, read_project(a.workspace))
+    checks = environment(a.workspace, read_project(a.workspace), a.ci)
     for ok, tool, detail in checks:
         print(f"[{'ok' if ok else 'missing'}] {tool}: {detail}")
     missing = sum(1 for ok, _, _ in checks if not ok)

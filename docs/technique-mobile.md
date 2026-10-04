@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.2 · 2026-09-28 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0.
+> Version 1.3 · 2026-09-29 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11).
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -32,6 +32,8 @@
 
 - **ARM-only build on an x86_64 image**: Google APIs x86_64 images from Android 11 on translate ARM code (`ro.dalvik.vm.native.bridge`). If the APK also has `extractNativeLibs=false` (native libraries stored uncompressed), Android does not extract them and a loader that looks for the device's ABI inside the APK fails at start (e.g. React Native's `SoLoaderDSONotFoundError`). On an image with root, the script copies the APK's `lib/arm64-v8a/*.so` into the app's native library folder; it must be repeated after each reinstall. The APK is never changed.
 - **Login by e-mail link (magic link)**: the user asks for the link in the app and hands it over; `device.py link` opens it inside the target with `am start` (the web callback redirects to the app's scheme). The link is a one-time credential: it is never written to a file or log, and it must not be opened anywhere else first (that spends it). The browser's first run is turned off beforehand so it does not swallow the link.
+- **The build**: a release of the workspace's private repository (`scripts/workspace_build.py publish`, then `fetch`), recorded in `mobile.build` with its SHA-256. `setup_emulator.py` reads the APK's versionCode from its binary manifest (no `aapt2`) and reinstalls only when the installed one differs: a reinstall wipes the app's data, login included.
+- **A stale snapshot**: an emulator restarted from the AVD's saved snapshot comes back as it was then — with the old build installed, and without the native libraries copied later. `setup_emulator.py` boots **cold** (`-no-snapshot-load`) when the snapshot is older than the build, or with `--cold` (saving a snapshot can fail anyway with some apps, e.g. `UNSUPPORTED_VK_APP` for a Vulkan app).
 - **No microphone** on the computer: dictation cases are **Blocked** (environment), unless a real device with a microphone is used.
 
 Rule: the run log and the bug **always** say where it ran (platform, OS version, model or emulator, app version). A Pass on the emulator does not count for "real device" nor the other way round, if the case distinguishes them.
@@ -68,6 +70,7 @@ The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except 
 - Waits for a condition (`extendedWaitUntil`), never for a fixed time.
 - **Credentials**: never written in the flow. The flow uses `${MAESTRO_<VAR>}`; the script puts the value in an environment variable `MAESTRO_<VAR>` from `.env` (Maestro makes the variables with that prefix available to the flows). Never `-e VAR=value` on the command line.
 - Test data with the prefix `QA-AUTO-<date>-` (`technique-browser.md` §7).
+- **Helper flows**: a flow that is not a case (e.g. asking the app for a login link with `${MAESTRO_<VAR>}`) is named `flows/_<name>.yaml` and run with `run_mobile.py --helper` (the same variables, output redacted, no result recorded). No `hideKeyboard` step unless needed: it can close the app's bottom sheet.
 
 ---
 
@@ -78,7 +81,8 @@ When the expected result cannot be asserted by a flow — the app's content is g
 - **Which mode**: deterministic UI → a flow per case (§4); generated content → conversational mode. The skill says which mode and why, per batch.
 - **One turn per step**: `device.py <workspace> send "<message>" --capture <name>` types, sends, waits until the screen is stable and returns only what is new after the message. A new conversation per theme when the case asks for it (so earlier turns do not contaminate the answer).
 - **Reading**: text from the accessibility tree; a **screenshot** whenever the tree may miss content (cards, multi-line bubbles, bottom sheets). A result is never classified from the tree alone when something it shows is incomplete.
-- **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path.
+- **Typing**: a message with emoji or several lines goes from a UTF-8 file (`send --file`); `adb shell input text` is cut at about 430 characters and Maestro's `inputText` slows down and stops on long texts, so the driver types in chunks of 300 characters. Maestro's keyboard sometimes is not active ("Maestro IME is not active"): the driver taps the field again and retries once, then types ASCII through `adb` and says so.
+- **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path, written with `scripts/run_log.py add` (it never touches a batch already applied).
 - **Classification**: the same rules (§6 and methodology §8). An answer judged against the specification's guardrails is Pass/Fail by the specification's text, never by taste; a doubt is `Question`.
 
 ## 5. What to test on mobile (beyond the functional)
@@ -146,3 +150,67 @@ The rules of methodology §8. Particulars:
 - [ ] Cases without a target marked Blocked, not Pass
 - [ ] Mode chosen per batch (flows or conversational) and said why
 - [ ] Captures only with the app in the foreground; screenshot when the tree misses content
+- [ ] Remote run (§11): build from a release with its SHA-256, new bugs only as `"proposed": true`, no `Question` left at the merge
+
+---
+
+## 11. Remote execution (GitHub Actions)
+
+A batch can run on a **GitHub-hosted Linux runner** started from the workspace's own private repository (methodology §12.4), so that the user needs only a browser: publish a build, start a batch, paste the login, review the pull request. The workflow, the agent's prompt and the pull request's body are templates in `qa-assistant/docs/workspace/ci/`, copied into the workspace by `scripts/workspace_ci.py install`; nothing of the project is written in them, they read `project.yaml` (the `ci:` section, §11.5).
+
+### 11.1 The workflow's steps
+
+`workflow_dispatch` with three inputs: `batch` (a planned batch, `batches/<name>.yaml`, or a list of case IDs), `build` (a release tag; default: the tag of `mobile.build`) and `mode` (`conversational`, `flows` or `both`).
+
+1. **Plan** (a short job): reads `ci:` from `project.yaml` (runner, time limit) and refuses a runner label that is not a GitHub-hosted standard Ubuntu runner (larger runners are paid).
+2. **Checkout** of the workspace and of `qa-assistant` (a read-only token, secret `QA_ASSISTANT_TOKEN`).
+3. **Tools**: Python and the requirements, Java 17 and the Maestro CLI, the Android SDK's emulator and system image (`mobile.image`), cached between runs (`actions/cache`); Claude Code (native installer) only in conversational mode. KVM enabled for the emulator.
+4. **`.env`** from the Actions secrets named in `ci.secrets` (`workspace_ci.py write-env`), never printed nor committed.
+5. `validate_project.py --environment --strict`.
+6. **Build**: `workspace_build.py fetch` (the release's asset, SHA-256 checked against `mobile.build.sha256`).
+7. **Emulator**: `setup_emulator.py --apk … --cold --headless --gpu swiftshader_indirect --no-audio`.
+8. **Login** (`ci.login.mode: manual-issue`): `remote_login.py request` (the helper flow asks for the link; an issue asks the owner for it) and `wait` (§11.2).
+9. **Batch**: `run_mobile.py` for the flows (mode `flows` or `both`) and/or the agent (mode `conversational` or `both`, §11.3).
+10. **Checks** after the run (`workspace_ci.py post-check`): the run log is valid for the adapter (without applying), no `.env` value in any file to be committed, every new bug `"proposed": true`.
+11. **Pull request**: `runs/`, `evidence/` and `context.md` committed to a branch `run/<batch>-<run id>`, pushed, and a pull request opened with the body of `pr-body.md` (build, batch, totals, proposed bugs, questions, time and turns). The runner never pushes to `main`.
+
+After the merge, a second workflow (`apply.yml`) applies each new run log with the project's adapter (§11.4).
+
+### 11.2 Manual login through an issue
+
+A login that needs a person (a one-time magic link sent by e-mail) stays **manual**: the helper flow `ci.login.flow` (e.g. `flows/_request_link.yaml`: tap the e-mail field, `inputText: ${MAESTRO_<VAR>}`, tap send, wait until the sheet closes — no `hideKeyboard`, it can close the app's bottom sheet) asks for the link; `remote_login.py` opens an issue "Login needed — <run id>" that mentions the repository's owner (or `ci.login.user`) with what to paste and the time limit. The owner copies the link from the e-mail (as text: the e-mail may show it as plain text) and pastes it as a **comment** of that issue. The runner then:
+
+- accepts only a comment **from that user** with a URL whose host is one of `environments` or `ci.login.hosts`; any other comment is ignored and reported (its text never printed);
+- masks the URL in the log (`::add-mask::`), opens it on the emulator with the device driver's `link` (never printed), **deletes the comment**, closes the issue, and checks that the app left the login screen (`ci.login.screen_text`);
+- with no comment within `ci.login.timeout_minutes`, stops with exit 3: the batch is **Blocked (login)**, never failed.
+
+The URL never reaches a file, a log line nor the pull request. The link is spent once opened: it must not be opened in the user's own browser first.
+
+### 11.3 Conversational mode on a runner
+
+Claude Code **headless** (`claude -p`) runs the batch with `/test-mobile`, authenticated with the user's Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`, created with `claude setup-token`; never an API key), within `ci.max_turns` and the job's time limit. What changes from a local session:
+
+- **No screen for the user**: the screenshots in `evidence/` are the only view. A turn whose dump may miss content always gets its screenshot read before it is classified (§4.1).
+- **No one to ask**: a doubt is `Question` in the run log, answered in the pull request; a new bug is a `new_defect` with `"proposed": true` (methodology §9.4); the run log is **never applied** on the runner.
+- **Tools limited**: Bash only for the framework's scripts, Read, and Write/Edit only in `runs/`, `evidence/` and `context.md`; no web tools.
+- **A reply still streaming**: reopening a conversation while the answer streams may show only the user's message; the driver waits for the screen to settle (`send`), and a dump after reopening is read again before deciding.
+- **Long or non-ASCII text**: from a UTF-8 file (`device.py type --file`), typed in chunks (§4.1).
+
+### 11.4 Review and apply
+
+The pull request is the checkpoint's review: the user edits the run log there (drops or changes a proposed bug, removes `"proposed"` to approve it, answers each `Question` by setting the final status), then merges. `apply.yml` runs on the push to `main` that touches `runs/`: each run log added or changed is applied with the project's adapter (Excel: LibreOffice installed on the runner for the recalculation; Jira / Azure DevOps: `apply --yes`, the merge being the approval), the workbook or `tracker/` is committed, and the result is commented on the pull request. A run log with `"proposed"` or `Question` left is never applied: the workflow fails and names them.
+
+### 11.5 Configuration (`ci:` in `project.yaml`) and limits
+
+| Key | Meaning |
+|---|---|
+| `runner` | GitHub-hosted standard runner, default `ubuntu-24.04` (a larger runner is refused: it is paid) |
+| `timeout_minutes` | the job's time limit (default 60) |
+| `max_turns` | the agent's turn limit (default 150) |
+| `secrets` | names of the `.env` variables the runner needs, each an Actions secret of the same name |
+| `login.mode` | `manual-issue` or `none` |
+| `login.flow` | the helper flow that asks for the link (`flows/_<name>.yaml`) |
+| `login.timeout_minutes` | how long to wait for the comment (default 30) |
+| `login.hosts`, `login.user`, `login.screen_text` | (opt.) extra hosts a login link may have (e.g. the auth provider's), who may paste it (default: the repository's owner), a text only the login screen shows |
+
+Known limits of emulators on runners: an x86_64 image with ARM translation (an ARM-only build runs; `extractNativeLibs=false` handled by `setup_emulator.py`, §1.1); no GPU (`-gpu swiftshader_indirect`: slower rendering, animations may need longer waits); always a **cold boot** (a runner has no snapshot; locally, a snapshot older than the installed build is never loaded — it brought back an old build once); no camera, microphone, biometrics nor push. Time: the emulator's first boot takes 2–4 minutes (plus the SDK download without a cache), a conversational turn about 20–60 s, so a batch of 10 cases with 3 turns each takes about 20–40 minutes. The free minutes are shared by all the user's private repositories (2 000 Linux minutes a month on the Free plan) and each job is rounded up to the minute: `ci.timeout_minutes` bounds every run, the pull request says how long it took, and `workspace_ci.py check` warns about the spending limit and the minutes used when GitHub's API gives them.

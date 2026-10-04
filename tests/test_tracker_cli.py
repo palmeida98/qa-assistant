@@ -152,6 +152,19 @@ class Cli(unittest.TestCase):
                 self.assertEqual(self.fake.requests, [])
                 self.assertIn("nothing resolved nor sent", self.out)
 
+    def test_a_proposed_bug_is_never_sent(self):
+        # plan 11.6 (methodology 9.4): a remote run proposes; only the user's edit in the pull request approves
+        new = {"title": "Expired coupon accepted", "expected": "refused", "observed": "accepted"}
+        for proposed, code in ((True, 4), ("yes", 4), (False, 1)):
+            with self.subTest(proposed=proposed):
+                items = results(("DS-1", "Fail"))
+                items[0]["new_defect"] = {**new, "proposed": proposed}
+                got = self.run_cli("apply", self.ws.batch(f"p_{proposed}", items), responses=[resolve_response()])
+                self.assertEqual(got, code, self.out)
+                if code == 4:
+                    self.assertIn('still a proposal ("proposed")', self.out)
+                    self.assertEqual(self.fake.requests, [])
+
     def test_a_missing_credential_is_exit_4_after_the_input_is_checked(self):
         self.ws.env({k: v for k, v in ENV.items() if k != "DS_JIRA_TOKEN"})
         self.assertEqual(self.run_cli("apply", self.ws.batch("b", BATCH)), 4)
