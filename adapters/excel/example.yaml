@@ -17,6 +17,8 @@ cases:
     actual_result: "Actual Result"   # optional
     notes: "Notes"                   # optional
   statuses: ["To Do", "Pass", "Fail", "Blocked", "N/A"]
+  fields:                      # model field -> column, for add-cases (technique-excel.md 4.1)
+    title: "Title"
 
 defects:
   sheet: "Defects"

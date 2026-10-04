@@ -88,7 +88,7 @@ The generated cases are proposals until the user approves them; a bug is only cr
 
 ### Trackers
 
-Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-batch` and `/run-batch` read the imported cases, `/log-bug` searches duplicates, `/checkpoint` sends, `/generate-cases` exports); their progress view is the tracker's own reports (methodology §4.2).
+Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, the cases approved in `/generate-cases` are added by the adapter (`python -m adapters.excel.add_cases`, never by hand), and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-batch` and `/run-batch` read the imported cases, `/log-bug` searches duplicates, `/checkpoint` sends, `/generate-cases` exports); their progress view is the tracker's own reports (methodology §4.2).
 
 ## Demo
 

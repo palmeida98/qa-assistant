@@ -45,6 +45,7 @@ from collections import Counter
 from datetime import datetime
 
 import openpyxl
+from openpyxl.formula.translate import Translator
 
 from .recalc import recalc_safe
 
@@ -54,6 +55,9 @@ _CONTROL_HEADERS = ["hash", "applied_at", "label", "items", "new_defects", "batc
 _LEGACY_CONTROL_HEADERS = {"aplicado_em": "applied_at", "etiqueta": "label", "itens": "items",
                            "defeitos_novos": "new_defects", "lote_id": "batch_id"}
 REPORTED_BY_DEFAULT = "Automated QA"
+# fields of the case model (methodology section 2) that add-cases can write (technique-excel.md section 4.1)
+CASE_MODEL_FIELDS = ("title", "area", "feature", "preconditions", "steps", "expected", "role", "platform",
+                     "priority", "technique", "origin")
 
 
 class ConfigError(ValueError):
@@ -123,6 +127,8 @@ class ExcelAdapter:
           columns: {id, status, actual_result (opt.), notes (opt.)}
                    (the optional ones are used only in the sheets that have them)
           statuses: [valid case statuses]
+          fields: {model_field: column} (opt.; add-cases, title required there)
+          new_status: status of a case added by add-cases (opt., the 1st status)
         defects:
           sheet, header_row (opt., 1)
           id_format: e.g. "BUG-{n}"
@@ -184,6 +190,13 @@ class ExcelAdapter:
         _req(ccol, "status", "cases.columns.")
         _req(cases, "statuses", "cases.")
         cases.setdefault("header_row", 1)
+        cases["fields"] = cases.get("fields") or {}
+        unknown = [k for k in cases["fields"] if k not in CASE_MODEL_FIELDS]
+        if unknown:
+            raise ConfigError(f"configuration: cases.fields outside the case model {list(CASE_MODEL_FIELDS)}: {unknown}")
+        cases["new_status"] = cases.get("new_status") or cases["statuses"][0]
+        if cases["new_status"] not in cases["statuses"]:
+            raise ConfigError(f"configuration: cases.new_status {cases['new_status']!r} outside cases.statuses")
 
         d = _req(cfg, "defects", "")
         _req(d, "sheet", "defects.")
@@ -279,16 +292,21 @@ class ExcelAdapter:
         wb = self.wb
         problems = []
         cases, d = self.cfg["cases"], self.cfg["defects"]
+        field_cols = set(cases["fields"].values())
         for sheet in set(cases["sheets"].values()):
             if sheet not in wb.sheetnames:
                 problems.append(f"case sheet missing: '{sheet}'")
                 continue
             h = self._headers(wb[sheet], cases["header_row"])
+            field_cols -= set(h)
             # actual_result / notes are optional sheet by sheet
             for role in ("id", "status"):
                 col = cases["columns"][role]
                 if col not in h:
                     problems.append(f"'{sheet}': column '{col}' ({role}) missing")
+        # a field's column may be missing from some sheets, never from all (a typo)
+        if field_cols and all(sh in wb.sheetnames for sh in cases["sheets"].values()):
+            problems += [f"cases.fields: column '{c}' is in no case sheet" for c in sorted(field_cols)]
         if d["sheet"] not in wb.sheetnames:
             problems.append(f"defects sheet missing: '{d['sheet']}'")
         else:
@@ -600,6 +618,172 @@ class ExcelAdapter:
                   "batch_id": batch_id}
         ctl.append([record.get(name) for name in self._control_names(ctl)])
         return {"applied": True, "hash": h_batch, "new_defects": new_ids}
+
+    # ------------------------------------------------------------------
+    # Adding approved cases (technique-excel.md section 4.1)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _title_key(value) -> str:
+        return " ".join(str(value or "").split()).casefold()
+
+    @staticmethod
+    def case_cell_text(field: str, value):
+        """The text a model field gets in its cell: steps one per line, lists joined."""
+        if value in (None, "", []):
+            return None
+        if field == "steps" and isinstance(value, list):
+            lines = []
+            for n, step in enumerate(value, 1):
+                line = f"{n}. {str(step.get('action') or '').strip()}"
+                if step.get("data") not in (None, ""):
+                    line += f" [{step['data']}]"
+                if step.get("expected") not in (None, ""):
+                    line += f" -> {step['expected']}"
+                lines.append(line)
+            return "\n".join(lines)
+        if isinstance(value, list):
+            return ", ".join(str(v) for v in value)
+        return value
+
+    def validate_cases(self, cases: list) -> list[str]:
+        """Read only. Problems that prevent adding the cases (empty = they can
+        be added): technique-excel.md section 4.1."""
+        ccfg = self.cfg["cases"]
+        if "title" not in ccfg["fields"]:
+            return [("cases.fields has no 'title' column: add-cases needs it to find duplicates "
+                     "(technique-excel.md section 4.1)")]
+        if not isinstance(cases, list) or not cases:
+            return ["no cases"]
+        existing = {str(v).strip() for _, ws, h in self._case_sheets() for _, v in self._case_rows(ws, h)}
+        titles: dict[str, dict[str, str]] = {}  # sheet -> {title key: case id}
+        for sheet, ws, h in self._case_sheets():
+            tcol = h.get(ccfg["fields"]["title"])
+            titles[sheet] = {} if tcol is None else {
+                self._title_key(ws.cell(r, tcol).value): str(v).strip()
+                for r, v in self._case_rows(ws, h) if ws.cell(r, tcol).value not in (None, "")}
+        problems, seen = [], Counter()
+        for i, case in enumerate(cases, 1):
+            if not isinstance(case, dict):
+                problems.append(f"case {i}: not an object")
+                continue
+            cid = str(case.get("id") or "").strip()
+            where = f"case {i} ({cid or 'no id'})"
+            sheet = None
+            if not cid:
+                problems.append(f"{where}: 'id' is missing")
+            else:
+                seen[cid] += 1
+                try:
+                    sheet = self.sheet_for_case(cid)
+                except KeyError:
+                    problems.append(f"{where}: the id has no prefix of cases.sheets {list(ccfg['sheets'])}")
+                if cid in existing:
+                    problems.append(f"{where}: the case already exists in the workbook")
+            title = self._title_key(case.get("title"))
+            if not title:
+                problems.append(f"{where}: 'title' is missing")
+            elif sheet:
+                other = titles[sheet].get(title)
+                if other and other != cid:
+                    problems.append(f"{where}: candidate duplicate of {other} (same title in '{sheet}'): remove the "
+                                    "case from the file if it is the same case (methodology 10)")
+                else:
+                    titles[sheet][title] = cid
+            steps = case.get("steps")
+            if steps is not None and not (isinstance(steps, list) and all(isinstance(x, dict) for x in steps)):
+                problems.append(f"{where}: 'steps' must be a list of {{action, data, expected}}")
+        dup = sorted(c for c, n in seen.items() if n > 1)
+        if dup:
+            problems.append(f"case id repeated in the file: {dup}")
+        return problems
+
+    def plan_cases(self, cases: list) -> list[dict]:
+        """Read only, for valid cases: per case {"id", "sheet", "row", "cells":
+        {column: value}, "not_written": [fields]}, in the file's order."""
+        ccfg = self.cfg["cases"]
+        sheets = {sheet: (ws, h) for sheet, ws, h in self._case_sheets()}
+        last = {sheet: max([r for r, _ in self._case_rows(ws, h)] + [ccfg["header_row"]])
+                for sheet, (ws, h) in sheets.items()}
+        out = []
+        for case in cases:
+            cid = str(case["id"]).strip()
+            sheet = self.sheet_for_case(cid)
+            _, h = sheets[sheet]
+            last[sheet] += 1
+            cells = {ccfg["columns"]["id"]: cid, ccfg["columns"]["status"]: ccfg["new_status"]}
+            not_written = []
+            for field in CASE_MODEL_FIELDS:
+                value = self.case_cell_text(field, case.get(field))
+                if value is None:
+                    continue
+                col = ccfg["fields"].get(field)
+                if col and col in h:
+                    cells[col] = value
+                else:
+                    not_written.append(field)
+            out.append({"id": cid, "sheet": sheet, "row": last[sheet], "cells": cells, "not_written": not_written})
+        return out
+
+    @staticmethod
+    def _copy_row_format(ws, h: dict, src: int, dst: int, written: set) -> None:
+        """Style of row `src` on row `dst`; formulas of the columns not written translated; data
+        validations that covered `src` extended to `dst`. The row height is never set (section 3)."""
+        for col in h.values():
+            a, b = ws.cell(src, col), ws.cell(dst, col)
+            if a.has_style:
+                b.font, b.fill, b.border = copy.copy(a.font), copy.copy(a.fill), copy.copy(a.border)
+                b.alignment, b.protection = copy.copy(a.alignment), copy.copy(a.protection)
+                b.number_format = a.number_format
+            if col not in written and isinstance(a.value, str) and a.value.startswith("="):
+                b.value = Translator(a.value, origin=a.coordinate).translate_formula(b.coordinate)
+        for dv in ws.data_validations.dataValidation:
+            for col in h.values():
+                a, b = ws.cell(src, col).coordinate, ws.cell(dst, col).coordinate
+                if a in dv.sqref and b not in dv.sqref:
+                    dv.sqref.add(b)
+
+    def add_cases(self, cases: list, label: str | None = None, batch_id: str | None = None) -> dict:
+        """Adds approved cases (technique-excel.md section 4.1): each in the row
+        after the last case of its sheet, with the previous row's style, in the
+        status cases.new_status. Recorded in the control sheet like a batch: the
+        same cases again change nothing ({"added": False}); the same batch_id
+        with another content is refused. Everything is validated before
+        writing (InvalidBatch)."""
+        self._need_wb()
+        h_cases = batch_hash([{"add_cases": cases}])
+        previous = next((x for x in self.applied_batches() if x["hash"] == h_cases), None)
+        if previous:
+            return {"added": False, "hash": h_cases, "cases": [],
+                    "reason": f"cases already added at {previous['applied_at']}"}
+        if batch_id:
+            same_id = next((x for x in self.applied_batches() if x.get("batch_id") == batch_id), None)
+            if same_id:
+                raise InvalidBatch([(
+                    f"the cases file '{batch_id}' was already added at {same_id['applied_at']} with a DIFFERENT "
+                    "content (it was edited after being added). New cases go in a new file, with another name "
+                    "(technique-excel.md section 4.1)."
+                )])
+        problems = self.validate_cases(cases)
+        if problems:
+            raise InvalidBatch(problems)
+
+        plan = self.plan_cases(cases)
+        sheets = {sheet: (ws, h) for sheet, ws, h in self._case_sheets()}
+        for p in plan:
+            ws, h = sheets[p["sheet"]]
+            written = {h[c] for c in p["cells"]}
+            if p["row"] - 1 > self.cfg["cases"]["header_row"]:
+                self._copy_row_format(ws, h, p["row"] - 1, p["row"], written)
+            for col, value in p["cells"].items():
+                ws.cell(p["row"], h[col]).value = value
+
+        label = label or f"[{self._now().date().isoformat()}]"
+        ctl = self._control_ws(create=True)
+        record = {"hash": h_cases, "applied_at": self._now().isoformat(timespec="seconds"),
+                  "label": label, "items": len(cases), "new_defects": "", "batch_id": batch_id}
+        ctl.append([record.get(name) for name in self._control_names(ctl)])
+        return {"added": True, "hash": h_cases, "cases": plan}
 
     def update_defect_note(self, defect_id: str, note: str, column: str,
                            new_status: str | None = None) -> None:

@@ -73,6 +73,18 @@ class Validate(unittest.TestCase):
     def test_base_is_valid(self):
         self.assertEqual(self.with_(), ([], []))
 
+    def test_the_old_rebuild_rule_is_warned(self):
+        # plan 10.6: "rebuild the workbook with rebuild_workbook.py" only holds for the demo, which has its own script
+        ws = self.tmp.name
+        self.assertEqual(vp.rebuild_rule_warnings(ws), [])
+        with open(os.path.join(ws, "CLAUDE.md"), "w", encoding="utf-8") as f:
+            f.write("- Never edit the workbook by hand: rebuild it with rebuild_workbook.py.\n")
+        w = vp.rebuild_rule_warnings(ws)
+        self.assertEqual(len(w), 1)
+        self.assertIn("adapters.excel.add_cases", w[0])
+        open(os.path.join(ws, "rebuild_workbook.py"), "w").close()
+        self.assertEqual(vp.rebuild_rule_warnings(ws), [])
+
     def test_every_tracker_has_its_adapter_and_needs_its_section(self):
         # plans 10.2 and 10.3: both back-ends are done, so the section is required and there is no "no adapter"
         # warning for any tracker

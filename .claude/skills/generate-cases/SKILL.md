@@ -29,3 +29,15 @@ description: Generates test case proposals from the analysis of a feature, with 
    same --yes again (it continues); 4 = invalid file. Tell the user the final IDs it prints (NEW-1 -> DS-140)
    and use those from then on; commit tracker/ in the workspace. A file already exported is never edited: new
    cases go in a new file.
+10. With the excel tracker (technique-excel.md section 4.1), write the APPROVED cases to
+   <workspace>/cases/cases_<YYYYMMDD>_<nn>.json as {"cases": [...]} with the same fields of the model; the id is the
+   FINAL ID in the project's pattern (the next free number of the sheet its prefix chooses). From the root of
+   qa-assistant, the dry run first:
+   python -m adapters.excel.add_cases <workspace> cases/cases_<YYYYMMDD>_<nn>.json --dry-run
+   0 = show the user the rows and the fields not written (no column), then run it again without --dry-run;
+   4 = an ID that exists, a candidate duplicate (same title in the sheet) or an invalid file: the user decides
+   (remove the case or give another ID, never force it). After the write: 2 = cross-check problems (original
+   untouched); 3 = recalculation failed; 5 = the summary does not count the new rows: fix its formulas, never the
+   numbers. Never add a case by hand in the workbook. Commit the workbook and cases/ in the workspace. A file
+   already added is never edited: new cases go in a new file. If cases.fields has no title column, it is set up
+   with the user first (project.yaml, excel.cases.fields).
