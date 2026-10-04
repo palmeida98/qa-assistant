@@ -8,6 +8,7 @@ Claude Code show the first line of the body instead of the description.
 import os
 import re
 import unittest
+from unittest import mock
 
 import yaml
 
@@ -83,6 +84,19 @@ class TrackerSkills(unittest.TestCase):
             for needle in needles:
                 with self.subTest(skill=name, needle=needle):
                     self.assertIn(needle, skill_text(name))
+
+    def test_generate_cases_adds_excel_cases_through_the_adapter(self):
+        # plan 10.6 (technique-excel.md 4.1): the dry run first, never by hand
+        text = skill_text("generate-cases")
+        m = re.search(r"python -m adapters\.excel\.add_cases <workspace> (\S+)( --dry-run)", text)
+        self.assertIsNotNone(m)
+        from adapters.excel import add_cases
+        with mock.patch.object(add_cases, "add", return_value=0) as add:
+            self.assertEqual(add_cases.main(["ws", m.group(1), "--dry-run"]), 0)
+        self.assertTrue(add.call_args.args[2])
+        for code in ("0 =", "4 =", "2 =", "3 =", "5 ="):
+            self.assertIn(code, text[text.index("10. With the excel tracker"):])
+        self.assertIn("Never add a case by hand", text)
 
     def test_writing_commands_dry_run_first_then_yes_after_approval(self):
         for name in ("checkpoint", "generate-cases"):

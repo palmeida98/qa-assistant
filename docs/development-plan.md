@@ -35,7 +35,7 @@
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
-| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge |
+| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (pilot on the real mobile workspace, and the optional AVD cache of 11.6) postponed by the user (04.10.2026) until a real project needs it |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
@@ -1147,6 +1147,35 @@ Acceptance of the phase: a Jira + Xray project and an Azure DevOps project can b
 batches planned from imported cases, send results and bugs at `/checkpoint` with approval and without duplicates,
 export new cases, and be continued on another computer; the unit tests and both goldens pass (methodology §15).
 
+### 10.6 Adding approved cases to an Excel workbook — done 04.10.2026
+Found on the practice workspace: `/generate-cases` says approved cases "go into the workbook/tracker", and the Jira
+and Azure DevOps adapters have `export-cases`, but the Excel adapter has no way to add a case: `apply` only changes
+cases that already exist (it refuses an unknown case ID). The approved case (a keyboard-focus case, WCAG 2.4.7) was
+added by hand in a copy of the workbook, with the previous row's style, and only copied over the official one after
+recalculating, `cross_check()` with no problems and `check_summary()` matching; the workspace's `CLAUDE.md` records
+that procedure. A workspace's old rule "never edit the workbook by hand, rebuild it with the demo's
+`rebuild_workbook.py`" no longer holds since 8.11 (that script builds the demo's English workbook and applies the
+demo's batches), which is worth a check in `scripts/migrate_workspace.py` or `validate_project.py`.
+- [x] Specified first (methodology §15): `technique-excel.md` v1.3 §4.1, methodology v2.4 (§4.2 and §5.3: approved
+  cases enter through the adapter, never by hand), the template's `excel.cases.fields` / `new_status`.
+- [x] `python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run]` (`validate_cases()`, `plan_cases()`,
+  `add_cases()` in `adapters/excel/base.py`): `{"cases": [...]}` with the model's fields and the final IDs in the
+  project's pattern; the sheet by the ID prefix; refused whole for an ID that exists, an ID without a prefix, a
+  candidate duplicate (same title, ignoring case and spaces, in the sheet or the file), a missing title or bad
+  steps; each case after the last case of its sheet with the previous row's style, its formulas translated and its
+  data validations extended (no row height); recorded in the control sheet like a batch (the same file again
+  changes nothing, the same name with another content refused); then save-if-clean, recalculation and summary check
+  (exit codes as `apply`).
+- [x] `/generate-cases` step 10 for the excel tracker (dry run first, exit codes, never by hand).
+- [x] `validate_project.py` warns when a workspace's `CLAUDE.md` still mentions `rebuild_workbook.py` without a
+  script of its own (the demo has one).
+- [x] Tests: `tests/test_add_cases.py` (30), plus one in `tests/test_skills.py` and one in
+  `tests/test_validate_project.py` (634 → 666 with the earlier ones); the fictional golden unchanged; an end-to-end
+  run on the fixture with LibreOffice (recalculation OK, the summary matches, a second run changes nothing).
+- Note: `cases.fields.title` is required only for `add-cases` (the other commands load without `fields`), since it
+  is how duplicates are found. Conditional formatting is not extended (a range that does not reach the new row
+  keeps its range); revisit only if a real workbook needs it.
+
 ---
 
 ## Phase 11 — Remote execution (GitHub Actions)
@@ -1427,6 +1456,8 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-10-04 | 10.6 done: `adapters/excel/add_cases.py` and `ExcelAdapter.add_cases()` (technique-excel.md v1.3 §4.1, methodology v2.4), `/generate-cases` step 10, the `rebuild_workbook.py` warning in `validate_project.py`; 32 new tests. Choices in the note of 10.6. |
+| 2026-10-04 | 10.6 opened (not started): the Excel adapter cannot add approved cases; found while confirming the `focus-not-visible` finding by hand on the practice site (a real WCAG 2.4.7 failure, not a false positive of the engine). |
 | 2026-10-04 | 11.7 postponed by the user's decision, like 10.5: no pilot now; remote execution stays available, validated only against fakes and the fictional golden; the first real project runs the checklist of 11.7 (and measures the optional AVD cache of 11.6) before relying on it. |
 | 2026-09-29 | 11.6 done: `docs/workspace/ci/pr-body.md` and `workspace_ci.py pr-body` (build, batch, a count per status and the cases not run, the proposed bugs with evidence links, the questions, the checks, the agent's summary, time and turns); `docs/workspace/ci/apply.yml` and `workspace_ci.py apply-merged` (on the push to `main` touching `runs/`: each run log applied with the project's adapter — LibreOffice on the runner for Excel, `apply --yes` for Jira / Azure DevOps —, the workbook or `tracker/` committed and pushed, the result commented on the pull request; a run log with `"proposed"` or `Question` left refused and named); the adapter-side check in both `validate_batch` (a `new_defect` with `"proposed"` is never applied nor sent), in `technique-excel.md` §4 and `technique-jira-xray.md` §2.6; `/checkpoint` step 9. Fictional golden OK. 6 new tests (628 → 634). The optional AVD cache stays for the pilot. Choices in the note of 11.6. |
 | 2026-09-29 | 11.5 done: `docs/workspace/ci/agent-prompt.md` (installed as `.github/qa/agent-prompt.md`: `/test-mobile` in conversational mode, results case by case with `run_log.py`, `Question` for a doubt, new bugs only as `"proposed": true`, never apply/send/git, the summary for the PR); the agent step of `mobile.yml` (Claude Code headless with the subscription token, `--max-turns`, `--permission-mode dontAsk`, tools limited to the framework's scripts, Read and writes in `runs/`, `evidence/`, `context.md`, no web tools, SIGINT at the time left); `workspace_ci.py prompt` and `post-check` (no `.env` value in the files to commit, `"proposed": true` enforced, the adapter's validation without applying). The CLI flags confirmed against the official docs (note of 11.5). 3 new tests (625 → 628). Choices in the note of 11.5. |

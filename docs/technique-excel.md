@@ -1,7 +1,7 @@
 # Excel technique
 
 > **Layer 2 — Technique for automating Excel workbooks**
-> Version 1.2 · 2026-09-26 · Extracted from a real `qa_lib.py`, used in a client project. Implemented in the universal adapter `adapters/excel/`; in English since plan 8.11.
+> Version 1.3 · 2026-10-04 · Extracted from a real `qa_lib.py`, used in a client project. Implemented in the universal adapter `adapters/excel/`; in English since plan 8.11.
 >
 > Project agnostic: no sheet, column or status name specific to a real workbook lives here. Subordinate to `methodology.md`.
 
@@ -69,6 +69,23 @@ In the adapter, the batch is `{"results": [item, …]}`, each item `{"tc", "stat
 Before writing anything, the adapter **refuses the whole batch** (an error with the list of problems) if: the batch is empty; an item has no `tc` or `status`; the same case appears twice; a status is not in `cases.statuses` (includes `Question`, which is resolved before applying — methodology §8.5); a `bug` does not exist in the defects sheet; a new defect still has `"proposed"` (a remote run's proposal, approved only by removing it in the pull request — methodology §9.4; `"proposed": false` is accepted); or, with a list of `priorities`, a new defect's priority is outside it.
 
 A case's status always uses the list of valid statuses **of that project** (defined in `project.yaml` or in the adapter), never a word made up on the spot. Different projects may use different vocabularies for the same concepts (for example, a real project observed writes its case statuses in its own language, and has a richer list for defects, with seven statuses from "open" to "not a defect") — this document imposes no vocabulary; it requires the vocabulary to be explicit and checked in the cross-check (§1, step 4).
+
+### 4.1 Adding approved cases (`add-cases`)
+
+The cases `/generate-cases` proposes only enter the workbook after the user approves them (methodology §5.3), and they enter through the adapter, never by hand: the same load → validate → save-if-clean → recalculate → summary check of a batch.
+
+    python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run] [--label …] [--no-recalc] [--now …]
+
+- **Input:** `<workspace>/cases/cases_<YYYYMMDD>_<nn>.json`, `{"cases": [case, …]}` with the fields of the case model (methodology §2), the same as the tracker adapters' cases file (`technique-jira-xray.md` §7): `id`, `title`, `area`, `feature`, `preconditions`, `steps` [{`action`, `data`, `expected`}], `expected`, `role`, `platform`, `priority`, `technique`, `origin`. The `id` is the **final** ID in the project's pattern (a workbook has no tracker to give one), and its prefix chooses the sheet (`cases.sheets`). A file already added is never edited: new cases go in a new file.
+- **Configuration:** `cases.fields` maps each model field to the header of its column (`{title: "Title", steps: "Steps", expected: "Expected Result", …}`); `title` is required for `add-cases` (it is how duplicates are found); the ID and the status always use `cases.columns`. A mapped column may be missing from some sheets (as `actual_result`): there the field is not written, and the command lists it. A field with no column is listed as not written, never refused. `cases.new_status` (optional) is the status of a new case; by default the first of `cases.statuses` (the pending status the dashboard assumes).
+- **Text of the cells:** `steps` becomes one line per step, `<n>. <action>`, with ` [<data>]` when there is data and ` -> <expected>` when the step has an expected result; a list becomes its items joined with `, `; every other value is written as it is.
+- **Refused whole, before anything is written** (exit 4): no cases; a case that is not an object; an `id` missing, without a configured prefix, repeated in the file or that **already exists** in the workbook; a `title` missing; `steps` not a list of objects; a **candidate duplicate** — the same title (ignoring case and repeated spaces) as a case of the target sheet or another case of the file (methodology §10): the user decides and removes the case from the file; it is never forced.
+- **Where and how:** each case goes in the row after the last row with an ID of its sheet, in the file's order; every cell of the new row gets the style of the previous case row (font, fill, border, alignment, number format, protection); a column the case does not fill that has a **formula** in the previous row gets that formula translated to the new row; a data validation that covered the previous row's cell is extended to the new one. The row height is never set (§3).
+- **Once only:** the file is recorded in the control sheet (§5) like a batch — its identity is the file name, the fingerprint is that of its cases, `items` is the number of cases —; the same file again changes nothing (exit 0) and the same name with another content is refused (exit 4).
+- **Then the usual:** `save_if_clean()` (exit 2 with the cross-check's problems, original untouched), `recalc()` (exit 3) and `check_summary()` (exit 5: a summary with fixed ranges that no longer reach the new rows, or without the new area — fix the formulas).
+- `--dry-run` validates and prints, per case, the sheet, the row and the cells it would write, and the fields not written; it writes nothing (0 valid · 4 refused).
+
+In the adapter: `validate_cases()` (read only) → `add_cases()` → `save_if_clean()` → `recalc()` → `check_summary()`.
 
 ## 5. Consistency between results and defects
 

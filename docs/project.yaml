@@ -86,6 +86,9 @@ excel:
       actual_result: ""        # (opt.) only used in the sheets where it exists
       notes: ""                # (opt.) session notes; only used in the sheets where it exists
     statuses: []               # (req.) valid case statuses, exactly as in the workbook
+    fields: {}                 # (opt.) model field -> column, for add-cases (technique-excel.md 4.1); title is required
+                               #   there, e.g. {title: "Title", steps: "Steps", expected: "Expected Result"}
+    new_status: ""             # (opt.) status of a case added by add-cases (default: the 1st of statuses)
 
   defects:
     sheet: ""                  # (req.) sheet with the full register of defects

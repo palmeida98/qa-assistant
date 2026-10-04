@@ -344,6 +344,21 @@ def history_protected(workspace: str) -> bool:
     return False
 
 
+def rebuild_rule_warnings(workspace: str) -> list[str]:
+    """Plan 10.6: a workspace's CLAUDE.md that still says to rebuild the workbook with the demo's rebuild_workbook.py
+    (a rule of before 8.11; that script only builds the demo's workbook), without a script of its own."""
+    path = os.path.join(workspace, "CLAUDE.md")
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            text = f.read()
+    except OSError:
+        return []
+    if "rebuild_workbook" not in text or os.path.exists(os.path.join(workspace, "rebuild_workbook.py")):
+        return []
+    return [("CLAUDE.md mentions rebuild_workbook.py, which only builds the demo's workbook (since plan 8.11): approved "
+             "cases go in with `python -m adapters.excel.add_cases` (technique-excel.md section 4.1); update the rule")]
+
+
 def validate(workspace: str) -> tuple[list[str], list[str]]:
     from common import read_project
     proj = read_project(workspace)
@@ -421,6 +436,7 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
                         "section 13)")
 
     if proj.get("tracker") == "excel":
+        warnings += rebuild_rule_warnings(workspace)
         from adapters.excel import ConfigError, ExcelAdapter
         try:
             ad = ExcelAdapter.from_project(workspace)

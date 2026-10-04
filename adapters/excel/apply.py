@@ -29,13 +29,13 @@ from datetime import datetime
 from .base import ConfigError, ExcelAdapter, InvalidBatch, read_batch
 
 
-def _resolve(workspace: str, path: str) -> str:
+def _resolve(workspace: str, path: str, what: str = "batch") -> str:
     if os.path.exists(path):
         return path
     alt = os.path.join(workspace, path)
     if os.path.exists(alt):
         return alt
-    raise FileNotFoundError(f"batch not found: {path} (nor in {alt})")
+    raise FileNotFoundError(f"{what} not found: {path} (nor in {alt})")
 
 
 def apply(workspace: str, batch_path: str, label: str | None = None,
