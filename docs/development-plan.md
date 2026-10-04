@@ -1147,6 +1147,21 @@ Acceptance of the phase: a Jira + Xray project and an Azure DevOps project can b
 batches planned from imported cases, send results and bugs at `/checkpoint` with approval and without duplicates,
 export new cases, and be continued on another computer; the unit tests and both goldens pass (methodology §15).
 
+### 10.6 Adding approved cases to an Excel workbook — open (found 04.10.2026)
+Found on the practice workspace: `/generate-cases` says approved cases "go into the workbook/tracker", and the Jira
+and Azure DevOps adapters have `export-cases`, but the Excel adapter has no way to add a case: `apply` only changes
+cases that already exist (it refuses an unknown case ID). The approved case (a keyboard-focus case, WCAG 2.4.7) was
+added by hand in a copy of the workbook, with the previous row's style, and only copied over the official one after
+recalculating, `cross_check()` with no problems and `check_summary()` matching; the workspace's `CLAUDE.md` records
+that procedure. A workspace's old rule "never edit the workbook by hand, rebuild it with the demo's
+`rebuild_workbook.py`" no longer holds since 8.11 (that script builds the demo's English workbook and applies the
+demo's batches), which is worth a check in `scripts/migrate_workspace.py` or `validate_project.py`.
+- [ ] Specify an `add-cases` direction for the Excel adapter (approved cases from a file like the trackers'
+  `cases_<date>.json`; IDs in the project's pattern, refused when they exist; the sheet chosen by the ID prefix;
+  validated before writing, then the usual save-if-clean, recalculation and summary check) and the
+  `/generate-cases` step for the excel tracker.
+- [ ] Not started: it is the user's decision when (it competes with phase 11).
+
 ---
 
 ## Phase 11 — Remote execution (GitHub Actions)
@@ -1427,6 +1442,7 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-10-04 | 10.6 opened (not started): the Excel adapter cannot add approved cases; found while confirming the `focus-not-visible` finding by hand on the practice site (a real WCAG 2.4.7 failure, not a false positive of the engine). |
 | 2026-10-04 | 11.7 postponed by the user's decision, like 10.5: no pilot now; remote execution stays available, validated only against fakes and the fictional golden; the first real project runs the checklist of 11.7 (and measures the optional AVD cache of 11.6) before relying on it. |
 | 2026-09-29 | 11.6 done: `docs/workspace/ci/pr-body.md` and `workspace_ci.py pr-body` (build, batch, a count per status and the cases not run, the proposed bugs with evidence links, the questions, the checks, the agent's summary, time and turns); `docs/workspace/ci/apply.yml` and `workspace_ci.py apply-merged` (on the push to `main` touching `runs/`: each run log applied with the project's adapter — LibreOffice on the runner for Excel, `apply --yes` for Jira / Azure DevOps —, the workbook or `tracker/` committed and pushed, the result commented on the pull request; a run log with `"proposed"` or `Question` left refused and named); the adapter-side check in both `validate_batch` (a `new_defect` with `"proposed"` is never applied nor sent), in `technique-excel.md` §4 and `technique-jira-xray.md` §2.6; `/checkpoint` step 9. Fictional golden OK. 6 new tests (628 → 634). The optional AVD cache stays for the pilot. Choices in the note of 11.6. |
 | 2026-09-29 | 11.5 done: `docs/workspace/ci/agent-prompt.md` (installed as `.github/qa/agent-prompt.md`: `/test-mobile` in conversational mode, results case by case with `run_log.py`, `Question` for a doubt, new bugs only as `"proposed": true`, never apply/send/git, the summary for the PR); the agent step of `mobile.yml` (Claude Code headless with the subscription token, `--max-turns`, `--permission-mode dontAsk`, tools limited to the framework's scripts, Read and writes in `runs/`, `evidence/`, `context.md`, no web tools, SIGINT at the time left); `workspace_ci.py prompt` and `post-check` (no `.env` value in the files to commit, `"proposed": true` enforced, the adapter's validation without applying). The CLI flags confirmed against the official docs (note of 11.5). 3 new tests (625 → 628). Choices in the note of 11.5. |
