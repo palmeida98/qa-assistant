@@ -1496,14 +1496,21 @@ Constraints written down now:
   the two automated audits are a first pass and never write results in a run log; the interface applies a run log
   through the adapter but never commits (`/checkpoint` keeps `context.md` and the commit).
 
-### 12.1 Intake and suggestion rules (`qa_ui/intake.py`, `qa_ui/suggest.py`)
-- [ ] Parsers of `docs/qa-ui.md` §4: pasted text (arrow, tab, `|`, a header line, a Markdown table), `.csv`/`.tsv`,
+### 12.1 Intake and suggestion rules (`qa_ui/intake.py`, `qa_ui/suggest.py`) — done 08.10.2026
+- [x] Parsers of `docs/qa-ui.md` §4: pasted text (arrow, tab, `|`, a header line, a Markdown table), `.csv`/`.tsv`,
   `.txt`/`.md`, `.xlsx`, `.docx`; notes kept apart; the flags `no-expected`, `vague-expected`, `several-expected`,
   `duplicate-id`.
-- [ ] The library: the workbook through the Excel adapter (read only) or `tracker/cases.json`; `not-in-library`.
-- [ ] The rules of §5.1 (one module per case, the signals returned with it) and the cards of §5.2 with their
+- [x] The library: the workbook through the Excel adapter (read only) or `tracker/cases.json`; `not-in-library`.
+- [x] The rules of §5.1 (one module per case, the signals returned with it) and the cards of §5.2 with their
   levels; readiness from `project.yaml` and `validate_project.environment`.
-- [ ] Tests: each format, each rule and tie, each level, the demo workspace as the library.
+- [x] Tests: each format, each rule and tie, each level, the demo workspace as the library.
+- Note (where the spec was open): `ExcelAdapter.case_rows()` (read only) is what the library is read with, instead
+  of the adapter's private iterators. An ID of the library is an ID whatever its form (a work item number), and a
+  case of the input that is in the library gets from it the fields the input did not give. `.xlsx`: every sheet
+  with a header row, the sheet as the area. The rules were tightened while writing their tests: `header` (a page
+  has one) and the ID part `ACC` (as often an account) are not signals, `REST` only in capitals, a status only at
+  the start of the expected result; `vague-expected` only with six words or fewer. A `.docx` that declares XML
+  entities is refused. 36 new tests.
 
 ### 12.2 Batch plan and the workspace's state (`qa_ui/plan.py`, `qa_ui/workspace.py`)
 - [ ] The plan of §6: batches per module, area and role, split at 20, the cases listed apart, the counts adding up

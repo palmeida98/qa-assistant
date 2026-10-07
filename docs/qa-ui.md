@@ -69,11 +69,15 @@ Three sources, which can be combined (a case ID given twice is flagged, the firs
 |---|---|
 | The workspace's library | `tracker: excel` — the workbook through the Excel adapter (read only): ID, the columns of `excel.cases.fields` when set, otherwise the headers `Title`, `Preconditions`, `Steps`, `Expected Result`, `Role`, `Platform`, `Priority` when the sheet has them; the area is the sheet; the last status is the status column. `jira` / `azure-devops` — `tracker/cases.json` as `import-cases` wrote it (never refreshed by the interface: it says how old the file is) |
 | Pasted text | One case per line: `<ID> <title> → <expected result>` (also `->` and `=>`), or cells separated by a tab or `\|` in the order ID, title, expected result; a first line of headers (`id`, `title`, `expected`, `steps`, `preconditions`, `role`, `platform`, `area`, `priority`, in any order) names the cells instead. A Markdown table is the `\|` form |
-| A file | `.csv` and `.tsv` (headers as above), `.txt` and `.md` (as pasted text), `.xlsx` (the first sheet with a header row that has an ID and a title column), `.docx` (its paragraphs and table rows, then as pasted text). Up to 5 MB. `.pdf` is not read (§13) |
+| A file | `.csv` and `.tsv` (headers as above), `.txt` and `.md` (as pasted text), `.xlsx` (every sheet with a header row that has an ID and a title column; the area is the sheet), `.docx` (its paragraphs and table rows, then as pasted text). Up to 5 MB. `.pdf` is not read (§13) |
 
-An ID is letters, digits, `.`, `_` and `-`, starting with a letter and holding a digit (`CHK-013`, `TC-LOGIN-001`,
-`4712` is not one: a work item number is written with its key or prefix). A line without an ID is a **note**: it is
-kept as context for the rules and for Claude, and never becomes a case.
+An ID is letters, digits, `.`, `_` and `-`, starting with a letter and holding a digit (`CHK-013`,
+`TC-LOGIN-001`), or exactly an ID of the workspace's library, whatever its form (an Azure DevOps work item number
+such as `4712`). A line without an ID is a **note**: it is kept as context for the rules and for Claude, and never
+becomes a case.
+
+A case of the input that is in the library gets from the library the fields the input did not give (a list of IDs
+and titles is a way of selecting cases); what the input gave is kept.
 
 Each case carries the fields of the model the source gave (methodology §2) and these flags, never silent fixes
 (methodology §11):
@@ -81,8 +85,8 @@ Each case carries the fields of the model the source gave (methodology §2) and 
 | Flag | When |
 |---|---|
 | `no-expected` | No expected result. The run will mark it `Question` (methodology §8.5) |
-| `vague-expected` | The expected result names no observable outcome ("works", "generic error", "as expected", "correctly") |
-| `several-expected` | Several expected results in one case (methodology §5.3: split it) |
+| `vague-expected` | The expected result has six words or fewer and one of "as expected", "works", "correctly", "properly", "appropriate", "generic error", "tbd", "to be defined": it names no observable outcome |
+| `several-expected` | The expected result is a numbered or bulleted list of two or more lines (methodology §5.3: split the case) |
 | `duplicate-id` | The same ID twice in the input |
 | `not-in-library` | The ID is not in the workspace's library: it can be planned only after it is added (§7) |
 
@@ -97,14 +101,15 @@ the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no sig
 
 | Module | Signals (weight) |
 |---|---|
-| `api` | an HTTP method followed by a path, e.g. `POST /orders` (3); an ID part `API` (3); `endpoint`, `status code`, `HTTP 4xx/5xx` or a bare 3-digit status as the expected result, `request`, `response`, `payload`, `JSON`, `header`, `REST`, `GraphQL` (1 each) |
+| `api` | an HTTP method followed by a path, e.g. `POST /orders` (3); an ID part `API` (3); an expected result that starts with an HTTP status, e.g. `401` or `HTTP 4xx` (1); `endpoint`, `status code`, `http status`, `request`, `response`, `payload`, `JSON`, `GraphQL`, and `REST` in capitals (1 each) |
 | `mobile` | a platform `android`, `ios` or `mobile` (3); an ID part `MOB` (3); `android`, `ios`, `emulator`, `device`, `tap`, `swipe`, `push notification`, `apk`, `the app` (1 each) |
-| `accessibility` | an ID part `A11Y` or `ACC` (3); `WCAG` (3); `accessibility`, `screen reader`, `keyboard`, `focus`, `contrast`, `aria`, `alt text`, `reflow`, `zoom`, `tab order` (1 each) |
+| `accessibility` | an ID part `A11Y` (3); `WCAG` (3); `accessibility`, `screen reader`, `keyboard`, `focus`, `contrast`, `aria`, `alt text`, `reflow`, `zoom`, `tab order` (1 each) |
 | `exploratory` | an ID part `EXP` (3); `charter`, `explore`, `exploratory` (2 each) |
 | `functional-web` | `page`, `click`, `button`, `form`, `browser`, `link`, `login`, `url` (1 each) |
 
-The words are matched whole and without case. The signals of a case are shown next to it, and the user can move a
-case to another module before planning; a moved case says so.
+An ID part is what `-`, `_` and `.` separate (`ACC` is not a signal: it is as often an account as accessibility).
+The words are matched whole, without case, and each one counts once per case. The signals of a case are shown next
+to it, and the user can move a case to another module before planning; a moved case says so.
 
 ### 5.2 The cards
 
