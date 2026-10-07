@@ -1512,12 +1512,18 @@ Constraints written down now:
   the start of the expected result; `vague-expected` only with six words or fewer. A `.docx` that declares XML
   entities is refused. 36 new tests.
 
-### 12.2 Batch plan and the workspace's state (`qa_ui/plan.py`, `qa_ui/workspace.py`)
-- [ ] The plan of §6: batches per module, area and role, split at 20, the cases listed apart, the counts adding up
+### 12.2 Batch plan and the workspace's state (`qa_ui/plan.py`, `qa_ui/workspace.py`) — done 08.10.2026
+- [x] The plan of §6: batches per module, area and role, split at 20, the cases listed apart, the counts adding up
   or a refusal; names free in `batches/` and `runs/`; `batches/<name>.yaml` written only on save.
-- [ ] The state of §11 (`GET /api/state`): the project, the planned batches, the run logs with their counts and
+- [x] The state of §11 (`GET /api/state`): the project, the planned batches, the run logs with their counts and
   what needs the user; a run log's edits of §9 (approve, edit, link, drop, answer), refused for an applied batch.
-- [ ] Tests: the counts, the split, the names, the files, each edit and each refusal.
+- [x] Tests: the counts, the split, the names, the files, each edit and each refusal.
+- Note (where the spec was open): the cases of an area without a role are a batch of their own (the spec said
+  "with the others of its area", which does not say which when the area has several roles). The check before
+  applying reuses `workspace_ci.refusals` and `workspace_ci.adapter_problems`, so the interface and the pull request
+  of a remote run refuse the same run logs. An answer keeps the question in the item's `question` key. The state
+  sent to the page has the environments' keys, never their URLs, and the names of the `.env` variables, never a
+  value. A run log that is not valid JSON is listed with its error instead of breaking the list. 24 new tests.
 
 ### 12.3 The runs (`qa_ui/runs.py`, `qa_ui/prompts/`)
 - [ ] One run at a time; the command per module of §8.1 (the prompt filled in, the tools allowed, the limits) and

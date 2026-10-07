@@ -145,10 +145,12 @@ nothing. It uses the user's Claude subscription, like any Claude Code session.
 
 From the cards the user ticked and the cases assigned to them (methodology §6):
 
-- a batch per module, area and role, in that order; the area is the case's `area`, else its sheet, else the ID up to
-  its last `-`; a case without a role is with the others of its area;
+- a batch per module, area and role: the modules in the methodology's order, the areas and the roles in the order
+  they first appear; the area is the case's `area`, else its sheet, else the ID up to its last `-`; the cases of an
+  area without a role are one batch;
 - inside a batch the cases keep the order of the input (a case that creates state others reuse is ordered by the
-  user, or by `/plan-batch` in a session);
+  user, or by `/plan-batch` in a session); a case with `no-expected` or `vague-expected` is named: the run will
+  mark it `Question`;
 - a batch holds at most 20 cases (a checkpoint every 15–20, methodology §7.2); a larger group is split;
 - a `not-in-library` case is listed apart, with the reason, and is not in any batch;
 - the number of cases in the batches plus those listed apart equals the number selected, or the plan is refused.
@@ -156,7 +158,9 @@ From the cards the user ticked and the cases assigned to them (methodology §6):
 A batch is named `<YYYYMMDD>_<module>_<nn>` (`functional-web` as `web`, `accessibility` as `a11y`, `exploratory`
 as `exp`), the first `<nn>` free in `batches/` and `runs/`. The plan is shown before anything is saved; **Save
 plan** writes each batch as `batches/<name>.yaml` with `cases: [<ID>, …]` (what `/plan-batch` writes and
-`scripts/workspace_ci.py` reads) and the keys `module:` and, when it has one, `role:`.
+`scripts/workspace_ci.py` reads) and the keys `module:` and, when it has one, `role:`; it is refused whole when a
+name was taken since the plan was shown. The plan warns when the library could not be read (whether a case is in it
+is then not known) and when an ID is not in the form the workspace's CI accepts in a planned batch.
 
 ## 7. New cases
 
@@ -226,7 +230,7 @@ Read from the run log, never kept apart:
 | Item | Actions, each one an edit of that item in the run log |
 |---|---|
 | A `new_defect` with `"proposed"` | **Approve** (the key `proposed` is removed); **Edit** (its text fields); **Link an existing bug** (`"bug": "<id>"` replaces the `new_defect`); **Drop** (the `new_defect` is removed, the result stays) |
-| A result in `Question` | **Answer**: the final status, of the project's vocabulary, and what was observed |
+| A result in `Question` | **Answer**: the final status, of the project's vocabulary, and what was observed; the question stays in the item's `question` key (the adapters ignore it) |
 
 An edit is refused when the batch was already applied (`scripts/run_log.py`: the correction goes to a new batch),
 and the file is written whole and atomically, as that script does.
