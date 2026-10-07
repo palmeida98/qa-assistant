@@ -12,6 +12,7 @@ References:
 - docs/heuristics.md — anonymised failure patterns for error guessing (methodology §17; read when generating cases)
 - docs/development-plan.md — the framework's roadmap (read in development sessions)
 - docs/qa-audit.md — `qa-audit` automated audit engine (read when working on `src/qa_audit`); user guide: docs/qa-audit-guide.md
+- docs/qa-ui.md — `qa-ui` local web interface for a workspace: intake, suggested types of test, batch plan, runs, approvals (read when working on `qa_ui/`; plan phase 12)
 
 ## Fixed rules
 - Never write client data (URLs, accounts, names, credentials) in this repository.

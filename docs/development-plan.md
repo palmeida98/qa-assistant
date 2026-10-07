@@ -37,6 +37,7 @@
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (pilot on the real mobile workspace, and the optional AVD cache of 11.6) postponed by the user (04.10.2026) until a real project needs it |
+| 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | In progress (opened 08.10.2026): 12.0 (specification) done |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1452,10 +1453,95 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 ---
 
+## Phase 12 — `qa-ui`, a local web interface
+
+Why: every step of the work cycle is a skill typed in a Claude Code session, one at a time, and what the session
+decided (which type of test, which batch, what is waiting for the user) is only in its text. The user asked
+(06.10.2026) for an interface: give it cases, or a document with cases, and it suggests which type of test to apply
+and starts them. A visual proposal and a clickable prototype with fictional data were reviewed first, outside this
+repository (06.10.2026); this phase builds the real one. It adds no method: it is a front of the existing skills,
+scripts and adapters, and everything it writes is a file a session would also have written.
+
+Decisions of the user (08.10.2026):
+- **Where:** a web page served by this computer, inside `qa-assistant` (`python -m qa_ui <workspace>`), Python's
+  standard library only (no new dependency), one workspace at a time.
+- **Who runs the tests that need an agent:** Claude Code **headless**, started by the interface in the workspace,
+  with the user's subscription, as the runner of phase 11 does. The scripts that need no agent run directly.
+- **Suggestion:** deterministic rules first (immediate, testable, no cost), and a button to ask Claude for a finer
+  reading when the input is free text.
+- **Pace:** the whole phase in one go, one commit per task, on the branch `plan/qa-ui`, nothing pushed until the
+  user says so.
+
+Constraints written down now:
+- The page shows a real project's data: loopback only, a token per start, no external request, nothing written in
+  this repository, no value of `.env` ever sent to the page (`docs/qa-ui.md` §2).
+- Nobody answers the agent during a run started by the interface, so the rules of a remote run hold: `Question`
+  for a doubt, a new bug only as `"proposed": true`, nothing applied nor sent. The approval happens in the
+  interface, as an edit of the run log (methodology §9.4).
+- The interface is in English, like the rest of the repository (plan 8.11).
+- The tests never start a real Claude session, a browser or a site: a fake `claude` and fake scripts.
+
+### 12.0 Specification first (methodology §15) — done 08.10.2026
+- [x] `docs/qa-ui.md`: what it does and never does, where it runs and the privacy rules, the three screens, the
+  sources and formats of the intake, the suggestion rules (signals and weights per module, the cards and their
+  levels, what makes a card ready), asking Claude, the batch plan, the new cases through the adapter, the runs
+  (Claude Code headless per module, the two automated audits, stopping), what needs the user, the apply step, the
+  HTTP routes, the tests and what is not done.
+- [x] Methodology: §9.4 — a run started from the local interface is unattended like a remote run; the approval
+  happens in the interface. Version 2.5, with a migration note.
+- [x] `CLAUDE.md` references `docs/qa-ui.md`; `docs/workspace/gitignore` ignores `.qa-ui/`.
+- Note (where the spec was open): no key is added to `project.yaml` (the limits are options of the command, so
+  `validate_project.py` does not change); a card's readiness reuses `validate_project.environment` instead of a
+  second list of tools; `.docx` is read with the standard library (it is a zip of XML) and `.pdf` is left out;
+  the two automated audits are a first pass and never write results in a run log; the interface applies a run log
+  through the adapter but never commits (`/checkpoint` keeps `context.md` and the commit).
+
+### 12.1 Intake and suggestion rules (`qa_ui/intake.py`, `qa_ui/suggest.py`)
+- [ ] Parsers of `docs/qa-ui.md` §4: pasted text (arrow, tab, `|`, a header line, a Markdown table), `.csv`/`.tsv`,
+  `.txt`/`.md`, `.xlsx`, `.docx`; notes kept apart; the flags `no-expected`, `vague-expected`, `several-expected`,
+  `duplicate-id`.
+- [ ] The library: the workbook through the Excel adapter (read only) or `tracker/cases.json`; `not-in-library`.
+- [ ] The rules of §5.1 (one module per case, the signals returned with it) and the cards of §5.2 with their
+  levels; readiness from `project.yaml` and `validate_project.environment`.
+- [ ] Tests: each format, each rule and tie, each level, the demo workspace as the library.
+
+### 12.2 Batch plan and the workspace's state (`qa_ui/plan.py`, `qa_ui/workspace.py`)
+- [ ] The plan of §6: batches per module, area and role, split at 20, the cases listed apart, the counts adding up
+  or a refusal; names free in `batches/` and `runs/`; `batches/<name>.yaml` written only on save.
+- [ ] The state of §11 (`GET /api/state`): the project, the planned batches, the run logs with their counts and
+  what needs the user; a run log's edits of §9 (approve, edit, link, drop, answer), refused for an applied batch.
+- [ ] Tests: the counts, the split, the names, the files, each edit and each refusal.
+
+### 12.3 The runs (`qa_ui/runs.py`, `qa_ui/prompts/`)
+- [ ] One run at a time; the command per module of §8.1 (the prompt filled in, the tools allowed, the limits) and
+  the two audits of §8.2; the run log created first with the `run` block; the output redacted and stored in
+  `.qa-ui/runs/`; stop (§8.3); the time limit.
+- [ ] Asking Claude (§5.3): the prompt, the JSON read strictly, anything else shown as text.
+- [ ] New cases (§7) and applying a run log (§10): the dry run, then the real run only with the confirmation.
+- [ ] Tests with a fake `claude` and fake scripts: a run that writes results, a failure, a stop, a second run
+  refused, a secret redacted, an answer that is not JSON.
+
+### 12.4 Server and page (`qa_ui/server.py`, `qa_ui/static/`)
+- [ ] The server of §2 and the routes of §11: loopback only, the token, the `Host` check, the status codes.
+- [ ] The page: the three screens of §3 as reviewed in the prototype, no external address, usable with the
+  keyboard, a narrow window included.
+- [ ] `python -m qa_ui <workspace>` with its options and exit codes; the `Scripts` section of `CLAUDE.md`.
+- [ ] Tests: the server on an ephemeral port (token, host, each route's happy path and refusals); the page has no
+  external address; the hook `tests` of `pre-commit` runs when `qa_ui/` changes.
+
+### 12.5 Documentation and closing
+- [ ] `README.md` (how to work, with the interface), `CONTRIBUTING.md` if a rule changes, `CHANGELOG.md` only if
+  the `qa-audit` engine changes (it should not).
+- [ ] The whole suite, `ruff check .` and the fictional golden pass; the interface started against
+  `examples/demo` and looked at in a browser.
+- [ ] A real batch from the interface (a real `claude`, a real site) is the user's to run first: recorded here
+  when done, with what it changed.
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-10-08 | Phase 12 opened by the user's decision: `qa-ui`, a local web interface for a workspace (cases in, suggested types of test, batch plan, runs with Claude Code headless and the scripts, approvals, apply), after a visual proposal and a clickable prototype reviewed outside the repository. 12.0 done: `docs/qa-ui.md`; methodology v2.5 (§9.4: a run started from the interface is unattended, the approval happens in the interface); `CLAUDE.md` reference; `.qa-ui/` in the workspace's `.gitignore` template. Choices in the note of 12.0. |
 | 2026-10-04 | 10.6 done: `adapters/excel/add_cases.py` and `ExcelAdapter.add_cases()` (technique-excel.md v1.3 §4.1, methodology v2.4), `/generate-cases` step 10, the `rebuild_workbook.py` warning in `validate_project.py`; 32 new tests. Choices in the note of 10.6. |
 | 2026-10-04 | 10.6 opened (not started): the Excel adapter cannot add approved cases; found while confirming the `focus-not-visible` finding by hand on the practice site (a real WCAG 2.4.7 failure, not a false positive of the engine). |
 | 2026-10-04 | 11.7 postponed by the user's decision, like 10.5: no pilot now; remote execution stays available, validated only against fakes and the fictional golden; the first real project runs the checklist of 11.7 (and measures the optional AVD cache of 11.6) before relying on it. |
