@@ -1525,14 +1525,23 @@ Constraints written down now:
   sent to the page has the environments' keys, never their URLs, and the names of the `.env` variables, never a
   value. A run log that is not valid JSON is listed with its error instead of breaking the list. 24 new tests.
 
-### 12.3 The runs (`qa_ui/runs.py`, `qa_ui/prompts/`)
-- [ ] One run at a time; the command per module of §8.1 (the prompt filled in, the tools allowed, the limits) and
+### 12.3 The runs (`qa_ui/runs.py`, `qa_ui/prompts/`) — done 08.10.2026
+- [x] One run at a time; the command per module of §8.1 (the prompt filled in, the tools allowed, the limits) and
   the two audits of §8.2; the run log created first with the `run` block; the output redacted and stored in
   `.qa-ui/runs/`; stop (§8.3); the time limit.
-- [ ] Asking Claude (§5.3): the prompt, the JSON read strictly, anything else shown as text.
-- [ ] New cases (§7) and applying a run log (§10): the dry run, then the real run only with the confirmation.
-- [ ] Tests with a fake `claude` and fake scripts: a run that writes results, a failure, a stop, a second run
+- [x] Asking Claude (§5.3): the prompt, the JSON read strictly, anything else shown as text.
+- [x] New cases (§7) and applying a run log (§10): the dry run, then the real run only with the confirmation.
+- [x] Tests with a fake `claude` and fake scripts: a run that writes results, a failure, a stop, a second run
   refused, a secret redacted, an answer that is not JSON.
+- Note (where the spec was open): the prompt carries the cases' text from the library (the agent cannot read a
+  workbook with the tools it is allowed) and goes through standard input, never the command line. The agent passes
+  a proposed bug as a file to `run_log.py add --new-defect`, so it needs no direct edit of the run log. The output
+  is `stream-json`, rendered as the agent's text and one line per tool; the final text is not repeated from the
+  result event. A stop is an interrupt to the command's process group, a kill after ten seconds (Windows: a
+  CTRL_BREAK, then `taskkill /T`; that path is not covered by the tests, which run on Linux). The flags and the
+  event format were checked once against the real Claude Code CLI (2.1.293) with a one-word prompt, and the asking
+  prompt once with four fictional cases: strict JSON back, every case assigned, six gaps. No batch was run with the
+  real CLI (that is the user's first run, 12.5). 25 new tests (two need LibreOffice).
 
 ### 12.4 Server and page (`qa_ui/server.py`, `qa_ui/static/`)
 - [ ] The server of §2 and the routes of §11: loopback only, the token, the `Host` check, the status codes.

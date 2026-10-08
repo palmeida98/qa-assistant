@@ -66,3 +66,91 @@ def executable(folder: str, name: str, body: str) -> str:
         f.write(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n')
     os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
     return path
+
+
+# A fake Claude Code (docs/qa-ui.md section 12): it records how it was called, and behaves by QA_FAKE_CLAUDE.
+# A batch run (stream-json) appends results to the run log named in the prompt, as the real agent would through
+# scripts/run_log.py; an ask (json) prints an answer. No network, no model.
+FAKE_CLAUDE = r'''
+import json, os, re, signal, sys, time
+
+args = sys.argv[1:]
+prompt = sys.stdin.read()
+mode = os.environ.get("QA_FAKE_CLAUDE", "ok")
+record = os.environ.get("QA_FAKE_RECORD")
+if record:
+    with open(record, "w", encoding="utf-8") as f:
+        json.dump({"args": args, "prompt": prompt, "cwd": os.getcwd()}, f)
+
+
+def emit(event):
+    print(json.dumps(event), flush=True)
+
+
+def say(text):
+    emit({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}})
+
+
+def tool(name, **given):
+    emit({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": given}]}})
+
+
+if "stream-json" not in args:                        # asking for a reading of the cases
+    if mode == "ask-bad":
+        print(json.dumps({"type": "result", "result": "I think these are mostly web tests."}))
+    elif mode == "ask-fail":
+        print("not logged in", file=sys.stderr)
+        sys.exit(1)
+    else:
+        ids = re.findall(r'"id": "([^"]+)"', prompt.rpartition("\nCases:\n")[2])
+        answer = {"assignments": [{"id": i, "module": "api" if i.startswith("API") else "functional-web",
+                                   "why": "read by the fake"} for i in ids]
+                  + [{"id": "INVENTED-1", "module": "api", "why": "an ID that was not given"},
+                     {"id": ids[0] if ids else "X-1", "module": "smoke", "why": "not a module of the list"}],
+                  "gaps": [{"id": ids[0] if ids else None, "question": "Which message is expected?"},
+                           {"id": "INVENTED-1", "question": "A gap about nothing given"}, {"question": " "}],
+                  "proposals": [{"id": "whatever", "title": "Pay with an expired card",
+                                 "steps": "1. Add an item\n2. Pay", "expected": "The payment is refused",
+                                 "module": "functional-web", "technique": "Equivalence partitioning",
+                                 "why": "the refused path"}, {"title": " "}]}
+        text = json.dumps(answer)
+        print(json.dumps({"type": "result", "result": "```json\n" + text + "\n```" if mode == "ask-fenced" else text}))
+    sys.exit(0)
+
+emit({"type": "system", "subtype": "init"})
+say("Reading the workspace. The password is fictional-value-555.")
+if mode == "fail":
+    print("a line that is not an event", flush=True)
+    sys.exit(3)
+if mode in ("slow", "stubborn"):
+    if mode == "stubborn":
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    tool("Bash", command="sleep 60")
+    time.sleep(60)
+    sys.exit(0)
+name = re.search(r"Run log: runs/(\S+)\.json", prompt).group(1)
+cases = re.search(r"Cases, in this order: (.*)", prompt).group(1).split()
+path = os.path.join(os.getcwd(), "runs", name + ".json")
+with open(path, encoding="utf-8") as f:
+    doc = json.load(f)
+for n, case in enumerate(cases):
+    item = {"tc": case, "status": "Pass", "actual_result": "observed as expected", "ts": "2026-10-08T10:42:00"}
+    if n == 1:
+        item.update(status="Fail", actual_result="the expired coupon is accepted",
+                    new_defect={"title": "Expired coupon accepted", "description": "The discount is applied",
+                                "severity": "High", "priority": "P2", "area": "Shop", "proposed": True})
+    if n == 2:
+        item.update(status="Question", actual_result="which message is expected?")
+    tool("Bash", command="python qa/scripts/run_log.py ws add " + name + " " + case + " " + item["status"])
+    doc["results"].append(item)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+emit({"type": "user", "message": {"content": [{"type": "tool_result", "content": "added"}]}})
+say("Batch finished.")
+emit({"type": "stream_event", "event": {"type": "an event the interface does not know"}})
+emit({"type": "result", "subtype": "success", "result": "Batch finished.", "num_turns": 7, "duration_ms": 4200})
+'''
+
+
+def fake_claude(folder: str) -> str:
+    return executable(folder, "claude", FAKE_CLAUDE)

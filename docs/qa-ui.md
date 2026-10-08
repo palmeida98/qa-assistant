@@ -138,7 +138,9 @@ expected result, platform), the notes and the list of modules to Claude Code hea
 tool allowed, and asks for JSON: a module and a reason per case, the specification gaps as questions, and, when the
 user ticks it, proposals of new cases with the fields of the model and the design technique (methodology §5.2).
 The answer is shown beside the rules' reading, case by case; it replaces it only where the user accepts it.
-Proposals go to the list of new cases (§7). An answer that is not the expected JSON is shown as text and changes
+Proposals go to the list of new cases (§7), each with a provisional ID (`NEW-1`, …) the user replaces with the
+project's own before adding it. The answer is read strictly: an assignment for an ID that was not given or a module
+that is not of the list is dropped, and an answer that is not the expected JSON is shown as text and changes
 nothing. It uses the user's Claude subscription, like any Claude Code session.
 
 ## 6. Batch plan
@@ -171,10 +173,12 @@ project's adapter and never by hand (methodology §5.3):
 - `jira` / `azure-devops`: `tracker/export/cases_<YYYYMMDD>_<nn>.json`, then `python -m adapters.tracker <workspace>
   export-cases <file>` (a dry run without `--yes`).
 
-The interface shows the dry run's output as it is. Only after the user confirms it runs the same command for real
-(without `--dry-run`, or with `--yes`), shows its output and exit code with the meaning the adapter's technique
-gives it, and reads the library again. A refusal (an ID that exists, a candidate duplicate) is shown and nothing is
-forced: the user removes the case or changes its ID and tries again, in a new file.
+The steps of a case, one per line, become the model's list of `{action, data, expected}`. The interface shows the
+dry run's output as it is. Only after the user confirms it runs the same command for real (without `--dry-run`, or
+with `--yes`), on the very file the dry run read, shows its output and exit code with the meaning the adapter's
+technique gives it, and reads the library again. A refusal (an ID that exists, a candidate duplicate) is shown and
+nothing is forced: the refused file is removed, the user removes the case or changes its ID and tries again, in a
+new file. A dry run that is never confirmed leaves no file either: the next one replaces it.
 
 ## 8. Execution
 
@@ -185,7 +189,10 @@ command's exit code and its redacted output in `.qa-ui/runs/<id>.log`.
 
 The module's skill runs in Claude Code headless (`claude -p`), in the workspace's folder, with the prompt
 `qa_ui/prompts/batch.md` filled in (the workspace, the root of qa-assistant, the batch's name and cases, the skill
-and the turn limit), as the remote run of the methodology does (§12.4), with the user's subscription:
+and the turn limit), as the remote run of the methodology does (§12.4), with the user's subscription. The prompt
+also carries each case's text as the library has it (title, role, platform, preconditions, steps, expected result),
+so the agent needs no tool to read a workbook; a batch with a case that is not in the library does not start. The
+prompt goes through the command's standard input, never its command line.
 
 | Module | Skill | Tools allowed besides `Read`, `Glob`, `Grep`, `Skill`, `run_log.py`, and writing in `runs/` and `evidence/` |
 |---|---|---|
@@ -196,14 +203,19 @@ and the turn limit), as the remote run of the methodology does (§12.4), with th
 
 `--permission-mode dontAsk`, `--max-turns` (default 150), no web tools, and the time limit of `--timeout-minutes`
 (default 60), after which the run is interrupted and what was written is kept. The run log `runs/batch_<name>.json`
-is created first, with the `run` block (the environment and the build the user gave when starting).
+is created first, with the `run` block (the environment and the build the user gave when starting; both are
+required with `jira` and `azure-devops`, whose adapters need them). The scripts are allowed by their absolute path
+with forward slashes (`python <qa>/scripts/<script>.py …`), the way the prompt tells the agent to call them. The
+output is Claude Code's stream of events (`--output-format stream-json`), shown as the agent's text and one line
+per tool it used; an event the interface does not know shows nothing.
 
 Nobody answers the agent during the run, so the rules of a remote run hold (methodology §9.4):
 
 - a result is written as soon as it is classified, with `scripts/run_log.py add`;
 - a doubt about the expected result is `Question`, with the concrete question;
 - a Fail whose problem already has a bug gets `"bug": "<id>"`; a new problem is a `new_defect` with
-  `"proposed": true` — a proposal;
+  `"proposed": true` — a proposal, written by the agent as a file in `evidence/<run log>/` and passed to
+  `run_log.py add --new-defect`;
 - nothing is applied nor sent, no git, no value of `.env` typed or printed.
 
 The page reads the run log every two seconds while a run is `running`: it is the only source of the results.
