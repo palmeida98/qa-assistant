@@ -12,6 +12,7 @@ References:
 - docs/heuristics.md — anonymised failure patterns for error guessing (methodology §17; read when generating cases)
 - docs/development-plan.md — the framework's roadmap (read in development sessions)
 - docs/qa-audit.md — `qa-audit` automated audit engine (read when working on `src/qa_audit`); user guide: docs/qa-audit-guide.md
+- docs/qa-ui.md — `qa-ui` local web interface for a workspace: intake, suggested types of test, batch plan, runs, approvals (read when working on `qa_ui/`; plan phase 12)
 
 ## Fixed rules
 - Never write client data (URLs, accounts, names, credentials) in this repository.
@@ -45,6 +46,7 @@ References:
 - `python scripts/build_dashboard.py <workspace> [--open]` — builds (and opens) the workspace's `dashboard.html`; it is what `/dashboard` runs
 - `python scripts/sync_skills.py [--apply]` — compares (and copies) `.claude/skills/` with `~/.claude/skills/`, the copy the workspaces use; run with `--apply` after changing a skill (0 in sync · 1 differences); also removes the old skill names
 - `qa-audit <url> [--type accessibility,security,performance,functional,visual] [--sitemap] [--browser chromium,firefox,webkit|all] [--allow-submit] [--update-baseline]`; `qa-audit baselines [--delete HOST] [--browser …]`; `qa-audit login <url> --config FILE` (saves a session for `auth.method: storage-state`) and `qa-audit sessions [--delete HOST]`; `qa-audit check --cdp URL --page-url REGEX --label NAME` (audits the page an N2 spec has open; helper `integrations/playwright/qa-audit.ts`) — automated audit of any site (`pip install -e .` first); `qa-audit doctor` checks the environment (docs/qa-audit.md). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
+- `python -m qa_ui <workspace> [--port 8765] [--no-open] [--claude PATH] [--max-turns 150] [--timeout-minutes 60]` — the local web interface of one workspace (docs/qa-ui.md, plan phase 12), on 127.0.0.1 only, with a token per start: cases in (pasted text, `.csv`/`.tsv`/`.txt`/`.md`/`.xlsx`/`.docx`, or the library), a type of test suggested per case by rules that name their signals (and, on request, Claude's reading), the batch plan saved as `batches/<name>.yaml`, a batch started through its module's skill in Claude Code headless (results only through the run log; a new bug only as `"proposed": true`; `Question` for a doubt), the two automated audits (`audit_a11y.py`, `qa-audit`), the user's approvals as edits of the run log, new cases and the apply step through the adapter (a dry run first, the real run only after a confirmation); it never commits (`/checkpoint` does) and writes nothing in this repository (0 stopped by the user · 2 usage or configuration)
 - `python scripts/update_axe.py <version>` — updates the axe-core bundled with `qa-audit` (npm integrity checked)
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `python scripts/golden_check.py --dir <workspace>/golden/<batch>` (methodology §15)
 

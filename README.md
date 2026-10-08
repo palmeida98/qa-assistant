@@ -71,6 +71,20 @@ flowchart LR
 
 The generated cases are proposals until the user approves them; a bug is only created once approved; the results go to the workbook only at the checkpoint, through the adapter, and only if the batch is valid and the cross-check gives 0 problems.
 
+### The local interface (`qa-ui`)
+
+```bash
+python -m qa_ui ../qa-workspaces/<company>/<project>      # opens http://127.0.0.1:8765/?token=…
+```
+
+The same cycle as a page on this computer, for one workspace: paste cases (or give a `.csv`, `.xlsx`, `.docx`, or load
+the project's library), see which type of test the rules suggest for each case and why, plan the batches, start one
+(the module's skill in Claude Code headless, with your subscription) and follow the run log as it grows. What needs
+you waits in the page: a proposed bug to approve, edit, link or drop, a `Question` to answer. An approved run log is
+applied through the project's adapter after a confirmation. Loopback only, a token per start, no request to any
+other address, nothing written in this repository; it never commits (`/checkpoint` still does). A batch started here
+is unattended, so the rules of a remote run hold (methodology §9.4). Specification: [`docs/qa-ui.md`](docs/qa-ui.md).
+
 ### Starting a new project
 
 1. Create the folder `qa-workspaces/<company>/<project>/` (next to this repository).
@@ -119,6 +133,7 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 | 6 · Portfolio (README, demo, visibility: private) | Done |
 | 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
 | 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
+| 12 · `qa-ui`, the local web interface | Built and tested against fakes (08.10.2026); the first batch with a real Claude Code session and a real site is still to run |
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
 
