@@ -40,7 +40,11 @@ The page shows a real project's data (cases, results, bugs), so it follows the p
 - The server listens only on the loopback address (`127.0.0.1`). `--host` does not exist.
 - Each start creates a random token. The page opens at `http://127.0.0.1:<port>/?token=<token>`; every `/api/`
   request must carry it in the `X-QA-Token` header, and a request whose `Host` is not `127.0.0.1:<port>` or
-  `localhost:<port>` is refused (a page of another site cannot reach the interface through the browser).
+  `localhost:<port>` is refused (a page of another site cannot reach the interface through the browser). The page
+  itself and its script hold no data and are served without the token; the page takes the token out of the address
+  bar and keeps it for the tab. The server prints no request line (it could hold the token), and the page is
+  served with a content security policy that allows only its own script and stylesheet: no inline script or style,
+  and what comes from the workspace is always written as text, never as HTML.
 - No request leaves this computer because of the page: no CDN, no external font, no telemetry. The scripts and the
   styles are files of this repository, served by the same server.
 - Nothing is written in the `qa-assistant` repository. The interface writes only in the workspace: `batches/`,
@@ -264,11 +268,12 @@ The output and the exit code are shown with the meaning the technique gives them
 ## 11. The HTTP interface
 
 JSON in and out; every route needs the token (§2). An error is `{"error": "<text>"}` with status 400 (the request),
-403 (token or host), 404, or 409 (refused: a run is in progress, the batch was applied, the plan does not add up).
+403 (token or host), 404, 409 (refused: a run is in progress, the batch was applied, the plan does not add up), or
+500 (the request failed, e.g. a `project.yaml` that is not valid YAML: said, never a dropped connection).
 
 | Route | Does |
 |---|---|
-| `GET /api/state` | the project (name, tracker, modules, environments' keys, statuses), the readiness checks, the planned batches, the run logs with their counts, the run in progress |
+| `GET /api/state` | the project (name, tracker, modules, environments' keys, statuses), the readiness checks (kept 30 seconds; `?refresh=1` runs them again), the planned batches, the run logs with their counts, the run in progress |
 | `POST /api/intake` | `{"text"}`, `{"file": {"name", "data"}}` (base64) or `{"library": true}` → cases, notes, flags |
 | `POST /api/suggest` | `{"cases", "notes"}` → the module of each case with its signals, and the cards |
 | `POST /api/ask-claude` | `{"cases", "notes", "proposals"}` → Claude's reading (§5.3) |

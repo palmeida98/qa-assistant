@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qa-ui</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">qa</span>
+    <span class="brand-name">qa-assistant</span>
+    <span id="project" class="project"></span>
+  </div>
+  <nav aria-label="Steps">
+    <ol class="steps">
+      <li><button type="button" class="step" data-screen="intake"><span class="num">1</span>Intake</button></li>
+      <li><button type="button" class="step" data-screen="suggest"><span class="num">2</span>Suggestion</button></li>
+      <li><button type="button" class="step" data-screen="run"><span class="num">3</span>Execution</button></li>
+    </ol>
+  </nav>
+  <div id="status" class="pill" role="status"></div>
+</header>
+<div id="banner" class="banner" role="alert" hidden></div>
+<main id="main" tabindex="-1">
+  <section id="screen-intake" aria-labelledby="h-intake"></section>
+  <section id="screen-suggest" aria-labelledby="h-suggest" hidden></section>
+  <section id="screen-run" aria-labelledby="h-run" hidden></section>
+</main>
+<noscript>This interface needs JavaScript (a script of this same server; nothing is loaded from elsewhere).</noscript>
+<script src="/static/app.js"></script>
+</body>
+</html>

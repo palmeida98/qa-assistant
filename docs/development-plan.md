@@ -1543,13 +1543,21 @@ Constraints written down now:
   prompt once with four fictional cases: strict JSON back, every case assigned, six gaps. No batch was run with the
   real CLI (that is the user's first run, 12.5). 25 new tests (two need LibreOffice).
 
-### 12.4 Server and page (`qa_ui/server.py`, `qa_ui/static/`)
-- [ ] The server of §2 and the routes of §11: loopback only, the token, the `Host` check, the status codes.
-- [ ] The page: the three screens of §3 as reviewed in the prototype, no external address, usable with the
+### 12.4 Server and page (`qa_ui/server.py`, `qa_ui/static/`) — done 08.10.2026
+- [x] The server of §2 and the routes of §11: loopback only, the token, the `Host` check, the status codes.
+- [x] The page: the three screens of §3 as reviewed in the prototype, no external address, usable with the
   keyboard, a narrow window included.
-- [ ] `python -m qa_ui <workspace>` with its options and exit codes; the `Scripts` section of `CLAUDE.md`.
-- [ ] Tests: the server on an ephemeral port (token, host, each route's happy path and refusals); the page has no
+- [x] `python -m qa_ui <workspace>` with its options and exit codes; the `Scripts` section of `CLAUDE.md`.
+- [x] Tests: the server on an ephemeral port (token, host, each route's happy path and refusals); the page has no
   external address; the hook `tests` of `pre-commit` runs when `qa_ui/` changes.
+- Note (where the spec was open): the page and its script hold no data, so they are served without the token; the
+  page removes the token from the address bar and keeps it for the tab. No request line is printed. A content
+  security policy allows only the page's own script and stylesheet, so the page has no inline script or style and
+  writes everything that comes from the workspace as text. The page is in English and follows the prototype's three
+  screens; what the prototype simulated and is now real: the rules, the plan, the run and its output, the edits and
+  the apply step. Looked at in a headless Chromium against a fictional workspace and the fake `claude` (intake,
+  suggestion, a run to its end, approve, answer, ready to apply): no console error and no request to another
+  address; the narrow window was rendered but not looked at. 15 new tests.
 
 ### 12.5 Documentation and closing
 - [ ] `README.md` (how to work, with the interface), `CONTRIBUTING.md` if a rule changes, `CHANGELOG.md` only if
