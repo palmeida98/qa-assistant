@@ -35,8 +35,8 @@
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
-| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026) until a real project uses Jira or Azure DevOps — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (pilot on the real mobile workspace, and the optional AVD cache of 11.6) postponed by the user (04.10.2026) until a real project needs it |
+| 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1127,7 +1127,7 @@ Specification: `docs/technique-jira-xray.md` (with the common contract of the tr
   never written with `--yes` in the skill, that `/checkpoint` explains the exit codes 0–5, what the onboarding asks,
   `/dashboard`'s message, and that every technique a skill names exists. `examples/demo/` unchanged (Excel).
 
-### 10.5 Pilot on free instances (user) and heuristics — postponed (user, 29.09.2026)
+### 10.5 Pilot on free instances (user) and heuristics — postponed (user, 29.09.2026); at the end of the project (user, 12.10.2026)
 *User decision (29.09.2026): no pilot now; the adapters stay available for when a project uses Jira or Azure DevOps.
 Until then they are validated only against the fakes and the fictional goldens (methodology §15), never against a real
 site. The first real project runs this checklist in its own workspace before its first `--yes`: `check`,
@@ -1434,11 +1434,78 @@ Constraints written down now:
   `/checkpoint` step 9: a remote run's log is never applied locally. The optional box (cache the AVD with the app
   logged in) is left open: it can only be measured on a real run (11.7).
 
-### 11.7 Pilot and heuristics — postponed (user, 04.10.2026)
+### 11.7 A real device without a SIM: the companion driver and the pilot — done 12.10.2026
+*User decision (12.10.2026): the pilot of this phase runs **locally**, on the user's own Android phone connected to
+this computer by USB, in the real mobile workspace — not on a runner (that pilot is 11.8, still postponed). The phone
+has no SIM card, and its vendor build (Xiaomi HyperOS 1.0, Android 13) only enables "USB debugging (Security
+settings)" with a SIM: without it `adb shell input` is refused (`SecurityException: INJECT_EVENTS`), and so are
+`adb install` (`INSTALL_FAILED_USER_RESTRICTED`), `settings put`, `ime` and `pm grant`. Maestro, scrcpy and
+UiAutomator need the same option. Screen reading (`uiautomator dump`, `screencap`), `am start`, `am broadcast` and
+`content call` work. In the first real project this made the device runs "assisted" (the person tapped). The user
+chose (12.10.2026) a companion app over borrowing a SIM, and authorised building and installing it on the phone.*
+
+Diagnosis and proof of concept (12.10.2026, on that phone): an APK of 12 KB built without Gradle (aapt2, javac,
+d8, zipalign, apksigner of build-tools 35.0.0), copied to the phone's Download folder and installed **by the user** from
+the file manager; "Allow restricted settings" (Android 13) and the accessibility service turned on by the user. Through
+`adb shell content call --uri content://io.qaassistant.driver --method <m> --arg <a>`: `ping`, `tap` (search box
+focused, keyboard opened), `text` (`Acessibilidade ção ✓` set exactly, which `input text` cannot), `swipe` (list
+scrolled) and `back` — all `ok=true`. The device's shell splits `--arg` on spaces: arguments go comma-separated.
+
+Design:
+- **The driver** (`tools/android-driver/`, package `io.qaassistant.driver`, plain framework Java, no libraries): an
+  `AccessibilityService` (`canPerformGestures`) and a `ContentProvider` whose `call()` is the only door. Methods:
+  `ping` (service state and the driver's version), `tap x,y`, `longpress x,y,ms`, `swipe x1,y1,x2,y2,ms`, `back`,
+  `home`, `text <base64 UTF-8>` (`ACTION_SET_TEXT` on the focused input field: the whole text in one call, any
+  Unicode), `enter` (`ACTION_IME_ENTER` on the focused field). The result is a Bundle `ok` / `error`, printed by
+  `content call`. Gestures wait for their callback (bounded), so a command returns after it happened.
+- **Security:** `call()` refuses any caller other than the adb shell (uid 2000) or root (`SecurityException`), so
+  another app on the phone cannot drive it; no `INTERNET` permission, no activity, no storage, nothing done on its
+  own; the service is off until the person turns it on in the phone's settings, and can be turned off or the app
+  uninstalled at any time. The signing key is generated on the first build **outside the repository**
+  (`~/.qa-assistant/android-driver.jks`, password in the same folder) and never committed; the APK is built locally,
+  never published.
+- **Build:** `python scripts/build_driver.py [--out DIR]` — the Android SDK from `ANDROID_HOME` / the default folder,
+  build-tools and a platform (the newest installed; the command to install them printed when missing), a JDK 17+;
+  output `tools/android-driver/build/qa-driver.apk` (ignored by git); prints the SHA-256. With `--push` copies it to
+  the device's `Download/` (`adb install` is tried first and, when the device refuses it, the person installs it).
+- **`device.py`:** `mobile.input: adb | driver` in `project.yaml` (default `adb`; `--input` overrides). With
+  `driver`, `tap` and the typing go through the driver (`type`/`send` set the text in one call — no chunks, no Maestro,
+  no IME — then the send control is tapped as today); `check` reports the driver (installed, service on, version) and
+  exits 3 with what to do when it is not usable. New subcommands for both inputs: `swipe X1 Y1 X2 Y2 [--ms]`, `back`
+  (`input swipe` / `input keyevent 4` with `adb`). The guard (the app in the foreground) is unchanged.
+- **`validate_project.py`:** `mobile.input` accepted (`adb` | `driver`); with `--environment` and `input: driver`, a
+  line `[ok|missing] android-driver: …` (installed and the service on, read with `pm list packages` and
+  `settings get secure enabled_accessibility_services`, which work without the security option).
+- **Flows (N2):** Maestro cannot drive such a device; the flows mode stays for the emulator and devices with the option
+  on. Said in the technique.
+
+- [x] Specification: `docs/technique-mobile.md` gets a section "A real device that blocks input injection" (the
+  diagnosis, the driver, installing and turning it on, the protocol, the security, what it cannot do).
+- [x] `tools/android-driver/` and `scripts/build_driver.py`; unit tests for the build script with a fake toolchain.
+- [x] `device.py` (`mobile.input`, the driver route, `swipe`, `back`) and `validate_project.py`; unit tests with the
+  fake adb (the `content call` lines, the comma arguments, the base64 text, a refused or off service → exit 3).
+- [x] On the phone (the user installs the final APK once): `device.py check`, `tap`, `type` with accents, `send`,
+  `swipe`, `back` in the real mobile workspace. 12.10.2026: `check`, `tap`, `type` (accents and a symbol, into the
+  app's React Native field), clearing the field (`text` with no argument), `back` and `swipe` passed with the app
+  logged out; `send` waits for the login of the pilot. `send` passed in the pilot (after the floating accessibility
+  shortcut was turned off: it covered the send button — now in technique §1.2).
+- [x] Pilot (with the user's approval of each step): one batch of the real mobile workspace run on the phone through
+  the driver by `/test-mobile`, without "assisted" steps, applied at `/checkpoint`; notes in that workspace's
+  `context.md`, not here.
+  12.10.2026: the retest of the open bugs on a new build (19 bugs, 17 cases) ran on the phone through the driver, the
+  login by the user (a magic link opened on the phone). Assisted steps only outside the app (the system file picker,
+  airplane mode). Applied at `/checkpoint` with the user's decisions (2 bugs fixed, 17 open). Lesson: 5 cases were
+  first set to Fail only because a linked bug was kept — the mistake the `/log-bug` skill already forbids — and fixed
+  by a correction batch; the rule stays as written.
+- [x] `docs/heuristics.md` and the techniques get what the pilot teaches (anonymised): three patterns in heuristics
+  (a silent refusal of a file type with a stale error, feedback controls only on some answers, the floating
+  accessibility button over the app); technique §1.2 (the shortcut off, other apps as the person's steps).
+
+### 11.8 Pilot of remote execution on a runner — postponed (user, 04.10.2026)
 *User decision (04.10.2026): no pilot now; remote execution stays available, validated only against the fakes and
 the fictional golden (methodology §15). The first real project that runs a batch on a runner goes through this
 checklist in its own workspace first, with the user's approval of each step; the optional AVD cache of 11.6 is
-measured then.*
+measured then. (Until 12.10.2026 this was 11.7.)*
 
 - [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
   build, `workspace_ci.py install`, the secrets set by the user, one batch run from GitHub (not from this computer),
@@ -1456,6 +1523,10 @@ batch, paste the login, review the PR and see the workbook updated; the unit tes
 
 | Date | Change |
 |---|---|
+| 2026-10-12 | 11.7 done: the pilot applied at the workspace's `/checkpoint` (with a correction batch: 5 cases had been set to Fail by their linked bug); three heuristics. |
+| 2026-10-12 | 11.7: the pilot batch ran on the phone through the driver (retest of 19 bugs on a new build); `device.py clear`; technique §1.2: turn off the service's floating shortcut, other apps are the person's steps. Checkpoint pending. |
+| 2026-10-12 | 11.7: the specification (technique-mobile.md v1.4 §1.2), `tools/android-driver/`, `scripts/build_driver.py` and `device.py` (`mobile.input: driver`, `swipe`, `back`) and `validate_project.py` (`mobile.input`, the driver on the device) done; 21 new tests (666 → 687); checked on the phone except `send`. |
+| 2026-10-12 | 11.7 redefined by the user: the pilot runs locally on the user's Android phone (no SIM; its vendor build blocks input injection, `adb install` and settings without one), through a companion accessibility-service driver; proof of concept on the phone (tap, swipe, back, Unicode text) passed. The runner pilot becomes 11.8, still postponed. 10.5 moved to the end of the project (user). |
 | 2026-10-04 | 10.6 done: `adapters/excel/add_cases.py` and `ExcelAdapter.add_cases()` (technique-excel.md v1.3 §4.1, methodology v2.4), `/generate-cases` step 10, the `rebuild_workbook.py` warning in `validate_project.py`; 32 new tests. Choices in the note of 10.6. |
 | 2026-10-04 | 10.6 opened (not started): the Excel adapter cannot add approved cases; found while confirming the `focus-not-visible` finding by hand on the practice site (a real WCAG 2.4.7 failure, not a false positive of the engine). |
 | 2026-10-04 | 11.7 postponed by the user's decision, like 10.5: no pilot now; remote execution stays available, validated only against fakes and the fictional golden; the first real project runs the checklist of 11.7 (and measures the optional AVD cache of 11.6) before relying on it. |

@@ -308,11 +308,11 @@ class Validate(unittest.TestCase):
     def test_the_device_keys_of_mobile(self):
         """The keys scripts/device.py reads (plan 9.3): accepted when well written, refused otherwise."""
         good = {"serial": "emulator-5554", "send_label": ["Send", "Send message"], "ignore_labels": ["New chat"],
-                "evidence_batch": "20260928", "browser": "com.android.chrome"}
+                "evidence_batch": "20260928", "browser": "com.android.chrome", "input": "driver"}
         self.assertEqual(self.with_(modules=["mobile"], mobile={**MOBILE, **good}), ([], []))
         problems, _ = self.with_(modules=["mobile"], mobile={**MOBILE, "send_label": "Send"})
         self.assertEqual(problems, [])                                  # one label as a text is also valid
-        for key, value in [("serial", 5554), ("serial", "emulator 5554"), ("send_label", []),
+        for key, value in [("serial", 5554), ("serial", "emulator 5554"), ("input", "scrcpy"), ("send_label", []),
                            ("send_label", ["Send", 3]), ("ignore_labels", "New chat"), ("ignore_labels", [""]),
                            ("evidence_batch", 20260928), ("evidence_batch", "../other"),
                            ("browser", "chrome"), ("browser", "com.android.chrome/.Main")]:
@@ -494,6 +494,34 @@ class Environment(unittest.TestCase):
         # a real device: no emulator needed
         c = self.checks(modules=["mobile"], mobile={**MOBILE, "serial": "R58M123ABC"})
         self.assertTrue(c["emulator"][0])
+
+    def test_mobile_input_driver_is_read_on_the_device(self):
+        """mobile.input driver (plan 11.7): the companion driver installed and its service on, read with adb."""
+        mobile = {**MOBILE, "serial": "R58M123ABC", "input": "driver"}
+        answers = {"pm": "package:io.qaassistant.driver\n",
+                   "settings": "com.example.reader/.Svc:io.qaassistant.driver/io.qaassistant.driver.DriverService\n"}
+        asked = []
+
+        def run(cmd, **kw):
+            asked.append(cmd)
+            return mock.Mock(returncode=0, stdout=answers.get(cmd[4], ""))
+        with mock.patch.object(vp.subprocess, "run", side_effect=run):
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["android-driver"]
+            self.assertTrue(ok, detail)
+            self.assertEqual(asked[0][:3], ["/sdk/platform-tools/adb", "-s", "R58M123ABC"])
+            self.assertTrue(all(c[3] == "shell" and c[4] in ("pm", "settings") for c in asked))  # read only
+            answers["settings"] = "null\n"
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["android-driver"]
+            self.assertFalse(ok)
+            self.assertIn("service is off", detail)
+            answers["pm"] = ""
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["android-driver"]
+            self.assertIn("not installed", detail)
+        with mock.patch.object(vp.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["android-driver"]
+            self.assertFalse(ok)
+            self.assertIn("no device answered", detail)
+        self.assertNotIn("android-driver", self.checks(modules=["mobile"], mobile=MOBILE))
 
     def test_mobile_web_and_ios(self):
         c = self.checks(modules=["mobile"], mobile={"platform": "web", "flows": "flows"})

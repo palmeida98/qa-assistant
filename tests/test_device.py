@@ -1,10 +1,12 @@
 """scripts/device.py (technique-mobile.md §4.1; plan 9.1): reading the uiautomator XML, exact-before-contains
 matching, the foreground guard, "stable screen" detection, `send` printing only what is new, the routes of `type`
-and `link` never printing the URL. No device nor Maestro: the single adb function is replaced by a fake device.
+and `link` never printing the URL, and the companion driver route (plan 11.7). No device nor Maestro: the single adb
+function is replaced by a fake device.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
 """
 
+import base64
 import contextlib
 import functools
 import io
@@ -498,6 +500,167 @@ class Commands(unittest.TestCase):
         self.assertEqual(rc, 3)
         self.assertNotIn("fictional-one-time-42", out + err)
         self.assertIn("auth.demoshop.example: not opened", err)
+
+
+class DriverDevice(FakeDevice):
+    """FakeDevice with the companion driver (plan 11.7): `content call` answers as the real provider prints it.
+    state: on | off (service off) | missing (no provider: adb fails) | nofocus (text with nothing focused)."""
+
+    def __init__(self, dumps=(HOME,), state="on", **kw):
+        super().__init__(dumps, **kw)
+        self.state = state
+
+    def __call__(self, serial, *args, binary=False, timeout=60):
+        if args[:3] == ("shell", "content", "call"):
+            self.calls.append(args)
+            method = args[args.index("--method") + 1]
+            if self.state == "missing":
+                raise dv.NoTarget("adb failed: Error while accessing provider:io.qaassistant.driver")
+            if self.state == "off":
+                return "Result: Bundle[{version=1, ok=false, error=service off}]\n"
+            if self.state == "nofocus" and method == "text":
+                return "Result: Bundle[{version=1, ok=false, error=no focused field}]\n"
+            return "Result: Bundle[{version=1, ok=true}]\n"
+        return super().__call__(serial, *args, binary=binary, timeout=timeout)
+
+    def driver_calls(self):
+        """(method, arg or None) of each call to the driver."""
+        out = []
+        for a in self.of("shell", "content", "call"):
+            self.assert_uri(a)
+            method = a[a.index("--method") + 1]
+            out.append((method, a[a.index("--arg") + 1] if "--arg" in a else None))
+        return out
+
+    @staticmethod
+    def assert_uri(a):
+        assert a[a.index("--uri") + 1] == "content://io.qaassistant.driver", a
+
+
+class DriverInput(unittest.TestCase):
+    """mobile.input: driver (technique-mobile.md §1.2): tap, swipe, back and typing through the companion driver,
+    never through `adb shell input` nor Maestro; the reading of the screen is unchanged."""
+
+    setUp = Commands.setUp
+    tearDown = Commands.tearDown
+    run_it = Commands.run_it
+
+    def driver_input(self):
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("  input: driver\n")
+
+    def test_check_pings_the_driver(self):
+        self.driver_input()
+        rc, out, _ = self.run_it(DriverDevice(), "check")
+        self.assertEqual(rc, 0)
+        self.assertIn("input: driver 1, service on", out)
+        rc, out, _ = self.run_it(FakeDevice(), "--input", "adb", "check")
+        self.assertIn("input: adb", out)
+
+    def test_driver_missing_or_off_is_3_with_what_to_do(self):
+        self.driver_input()
+        for state, words in [("off", "service is off"), ("missing", "did not answer")]:
+            fake = DriverDevice(state=state)
+            rc, _, err = self.run_it(fake, "tap", "Cart")
+            self.assertEqual(rc, 3, state)
+            self.assertIn(words, err)
+            self.assertIn("§1.2", err)
+            self.assertEqual(fake.taps(), [])
+
+    def test_tap_by_text_and_by_coordinates(self):
+        self.driver_input()
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "tap", "Cart")[0], 0)
+        self.assertEqual(self.run_it(fake, "tap", "--xy", "10", "20")[0], 0)
+        self.assertEqual(fake.driver_calls(), [("tap", "270,250"), ("tap", "10,20")])  # commas: no shell split
+        self.assertEqual(fake.of("shell", "input"), [])
+
+    def test_type_unicode_in_one_call_without_maestro(self):
+        self.driver_input()
+        fake = DriverDevice()
+        text = "Olá, ação ✓ 🙂 (\"quoted\") $HOME; " + "x" * 700
+        with mock.patch.object(dv, "run_maestro") as maestro:
+            rc, out, _ = self.run_it(fake, "type", text)
+        self.assertEqual(rc, 0)
+        self.assertIn("driver set text", out)
+        maestro.assert_not_called()
+        [(method, arg)] = fake.driver_calls()
+        self.assertEqual(method, "text")
+        self.assertEqual(base64.b64decode(arg).decode("utf-8"), text)      # one call, no chunks, nothing lost
+        self.assertEqual(fake.of("shell", "input"), [])
+
+    def test_type_with_a_field_taps_it_first(self):
+        self.driver_input()
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "type", "hi", "--field", "Search products")[0], 0)
+        self.assertEqual([m for m, _ in fake.driver_calls()], ["tap", "text"])
+
+    def test_nothing_focused_is_4_and_via_is_refused(self):
+        self.driver_input()
+        rc, _, err = self.run_it(DriverDevice(state="nofocus"), "type", "hi")
+        self.assertEqual(rc, 4)
+        self.assertIn("focused", err)
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "type", "hi", "--via", "adb")[0], 2)
+        self.assertEqual(fake.driver_calls(), [])
+
+    def test_a_secret_never_reaches_the_driver(self):
+        self.driver_input()
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "type", "my fictional-password-9")[0], 2)
+        self.assertEqual(fake.driver_calls(), [])
+
+    def test_send_sets_the_text_then_taps_the_send_control(self):
+        self.driver_input()
+        fake = DriverDevice([CHAT_TYPED, CHAT_SENT, CHAT_ANSWERED])
+        rc, out, _ = self.run_it(fake, "send", "Where is my order QA-1?")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.splitlines(), ["[0,600][800,700] Your order ships tomorrow. / Track it in Orders."])
+        calls = fake.driver_calls()
+        self.assertEqual(calls[0], ("text", base64.b64encode(b"Where is my order QA-1?").decode()))
+        self.assertEqual(calls[1], ("tap", "1015,2250"))
+        self.assertEqual(fake.of("shell", "input"), [])
+
+    def test_swipe_and_back_with_both_inputs(self):
+        fake = FakeDevice()
+        self.assertEqual(self.run_it(fake, "swipe", "540", "1800", "540", "600")[0], 0)
+        self.assertEqual(self.run_it(fake, "back")[0], 0)
+        self.assertEqual(fake.of("shell", "input"), [("shell", "input", "swipe", "540", "1800", "540", "600", "300"),
+                                                    ("shell", "input", "keyevent", "4")])
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "--input", "driver", "swipe", "1", "2", "3", "4", "--ms", "50")[0], 0)
+        self.assertEqual(self.run_it(fake, "back", "--input", "driver")[0], 0)
+        self.assertEqual(fake.driver_calls(), [("swipe", "1,2,3,4,50"), ("back", None)])
+        self.assertEqual(self.run_it(fake, "swipe", "1", "2", "3", "4", "--ms", "0")[0], 2)
+
+    def test_swipe_and_back_need_the_app_in_the_foreground(self):
+        fake = DriverDevice(focus=OTHER)
+        self.assertEqual(self.run_it(fake, "--input", "driver", "back")[0], 3)
+        self.assertEqual(self.run_it(fake, "--input", "driver", "swipe", "1", "2", "3", "4")[0], 3)
+        self.assertEqual(fake.driver_calls(), [])
+
+    def test_clear_with_both_inputs(self):
+        fake = DriverDevice()
+        self.assertEqual(self.run_it(fake, "--input", "driver", "clear")[0], 0)
+        self.assertEqual(self.run_it(fake, "--input", "driver", "clear", "--field", "Cart")[0], 0)
+        self.assertEqual(fake.driver_calls(), [("text", None), ("tap", "270,250"), ("text", None)])
+        fake = FakeDevice()
+        rc, out, _ = self.run_it(fake, "clear", "--field", "Cart")
+        self.assertEqual(rc, 0)
+        self.assertIn("4 deletions", out)                                    # as many as "Cart" shows
+        self.assertEqual(fake.of("shell", "input", "keyevent"), [("shell", "input", "keyevent", "123"),
+                                                                 ("shell", "input", "keyevent", "67", "67", "67", "67")])
+        fake = FakeDevice()
+        self.assertEqual(self.run_it(fake, "clear")[0], 0)
+        self.assertEqual(len(fake.of("shell", "input", "keyevent")[1]) - 3, dv.CLEAR_KEYS)
+        self.assertEqual(self.run_it(FakeDevice(focus=OTHER), "clear")[0], 3)
+
+    def test_an_unknown_input_is_2(self):
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("  input: scrcpy\n")
+        rc, _, err = self.run_it(FakeDevice(), "check")
+        self.assertEqual(rc, 2)
+        self.assertIn("mobile.input", err)
 
 
 if __name__ == "__main__":
