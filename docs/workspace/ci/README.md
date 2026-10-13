@@ -60,5 +60,10 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
    pull request (drop or change a proposed bug, remove `"proposed"` to approve it, answer each `Question` with the
    final status), then merge. `qa-apply.yml` applies it and comments the result.
 
+The runner tests on its emulator (`emulator-5554`) through `adb`, whatever `mobile.serial` and `mobile.input` say:
+`qa-mobile.yml` sets `QA_MOBILE_SERIAL` and `QA_MOBILE_INPUT`, which the device scripts read before `project.yaml`
+(`technique-mobile.md` §1.2). A project tested locally on a physical phone with the companion driver needs no change
+for the runner, and a flow that only that phone can run (e.g. a vendor build's behaviour) is Blocked there.
+
 What the runner cannot do (a camera, a microphone, biometrics, a login nobody pasted in time) is **Blocked**, never
 Fail. The time each run took and the agent's turns are in the pull request.

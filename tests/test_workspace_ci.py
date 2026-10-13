@@ -492,6 +492,16 @@ class Templates(unittest.TestCase):
         self.assertEqual(wf["jobs"]["run"]["runs-on"], "${{ needs.plan.outputs.runner }}")
         self.assertIn("fromJSON(needs.plan.outputs.timeout)", wf["jobs"]["run"]["timeout-minutes"])
         self.assertIn(r"^ubuntu-(latest|[0-9]{2}\.04)$", text)            # the same rule as validate_project.py
+        # plan 11.8: the emulator and adb over a project's physical phone and companion driver, for the whole job,
+        # and the emulator step checks that the serial is the emulator that booted
+        run = wf["jobs"]["run"]
+        self.assertEqual({k: run["env"][k] for k in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")},
+                         {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"})
+        names = [step.get("name", "") for step in run["steps"]]
+        emulator = run["steps"][names.index("The emulator (cold boot, no GPU)")]
+        self.assertIn('-s "$QA_MOBILE_SERIAL" get-state', emulator["run"])
+        self.assertLess(names.index("The environment (a missing tool stops the run)"), names.index(emulator["name"]))
+        self.assertFalse(any("QA_MOBILE_" in str(step.get("env", {})) for step in run["steps"]))  # never per step
         for runner, ok in [("ubuntu-24.04", True), ("ubuntu-latest", True), ("ubuntu-24.04-4core", False),
                            ("self-hosted", False)]:
             self.assertEqual(bool(re.fullmatch(r"ubuntu-(latest|[0-9]{2}\.04)", runner)), ok)

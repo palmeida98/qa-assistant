@@ -60,6 +60,30 @@ def variable_names(proj) -> list[str]:
     return sorted(found)
 
 
+MOBILE_INPUTS = ("adb", "driver")
+SERIAL_ENV = "QA_MOBILE_SERIAL"
+INPUT_ENV = "QA_MOBILE_INPUT"
+
+
+def mobile_target(m: dict, serial: str | None = None, input_: str | None = None,
+                  environ=None) -> tuple[str | None, str]:
+    """(serial, input) of the mobile target (technique-mobile.md §1.2 and §11; plan 11.8). Each one, in order: the
+    command-line flag, the environment variable (QA_MOBILE_SERIAL / QA_MOBILE_INPUT: a runner sets them to its
+    emulator and adb, over the physical phone and the driver of mobile.serial / mobile.input), project.yaml, the
+    default (no serial: the only device connected; input adb). An empty variable counts as unset. ValueError for an
+    input outside adb | driver, naming where it came from."""
+    environ = os.environ if environ is None else environ
+    m = m or {}
+    serial = serial or environ.get(SERIAL_ENV, "").strip() or m.get("serial")
+    for value, source in ((input_, "--input"), (environ.get(INPUT_ENV, "").strip(), INPUT_ENV),
+                          (m.get("input"), "mobile.input")):
+        if value:
+            if value not in MOBILE_INPUTS:
+                raise ValueError(f"{source} {value!r}: adb or driver (technique-mobile.md §1.2)")
+            return (str(serial) if serial else None), value
+    return (str(serial) if serial else None), "adb"
+
+
 def read_env(path: str) -> dict[str, str]:
     """KEY=VALUE per line; ignores comments, empty lines and 'export '."""
     out = {}

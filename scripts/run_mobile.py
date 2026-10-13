@@ -7,8 +7,9 @@ Runs a workspace's Maestro flows and links each result to its test case
 
 - --helper (plan 11.2): runs ONE flow that is not a case (its file name starts
   with '_', e.g. flows/_request_link.yaml, which asks the app for a login link)
-  with the same MAESTRO_<VAR> values from .env, on --serial / mobile.serial when
-  given; its output is redacted and no result is recorded (it is not a test).
+  with the same MAESTRO_<VAR> values from .env, on --serial / $QA_MOBILE_SERIAL /
+  mobile.serial when given (common.mobile_target, plan 11.8); its output is
+  redacted and no result is recorded (it is not a test).
   Exit 0 when the flow passed, 3 when it failed or there is no target.
 
 - The configuration comes from the mobile: section of project.yaml (platform, flows
@@ -48,7 +49,7 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import Redactor, read_project, read_workspace_env
+from common import Redactor, mobile_target, read_project, read_workspace_env
 
 PLATFORMS = ("android", "ios", "web")
 CASE = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
@@ -175,7 +176,8 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")
         extra, secrets = maestro_environment(workspace, cfg["variables"])
-        serial = serial or (read_project(workspace).get("mobile") or {}).get("serial")
+        # the input does not matter to Maestro: "adb" so that a QA_MOBILE_INPUT for device.py is not read here
+        serial, _ = mobile_target(read_project(workspace).get("mobile") or {}, serial, "adb")
     except UsageError as e:
         return 2, str(e)
     ok, target = target_available(cfg["platform"])
@@ -199,7 +201,7 @@ def main(argv=None) -> int:
     ap.add_argument("--output", help="JSON report (relative to the workspace, unless absolute)")
     ap.add_argument("--helper", metavar="FLOW", help="run one helper flow (flows/_<name>.yaml), not a case: no "
                                                      "result recorded")
-    ap.add_argument("--serial", help="with --helper: the device (default: mobile.serial)")
+    ap.add_argument("--serial", help="with --helper: the device (default: $QA_MOBILE_SERIAL, else mobile.serial)")
     a = ap.parse_args(argv)
     if a.helper:
         if a.flows or a.output:

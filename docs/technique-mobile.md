@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.4 · 2026-10-12 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2).
+> Version 1.5 · 2026-10-13 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2); on a runner, the emulator and `adb` over `mobile.serial` / `mobile.input` (`QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT`) in plan 11.8 (§1.2, §11.1).
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -48,6 +48,8 @@ Do not fall back to "assisted" runs (the person taps): use the **companion drive
 4. **Turn the service on**: Settings → Accessibility → downloaded apps / installed services → *QA driver* → on.
    Then turn **off the service's shortcut** ("QA driver shortcut" / accessibility button) on the same screen: some vendor builds add a floating accessibility button on the right edge when a service is turned on, and the driver's taps land on it instead of the app (in the pilot it covered a chat's send button).
 5. Set `mobile.input: driver` in `project.yaml` (or `--input driver`) and run `device.py check`: it says whether the driver is installed, the service on and its version; `validate_project.py --environment` checks the same.
+
+**The target and the input, in order of precedence.** `mobile.serial` and `mobile.input` describe the computer the project is usually run on (e.g. a physical phone with the driver). Another target overrides them without editing `project.yaml`: for each of the two, the first that is set wins — the command-line flag (`--serial`, `--input`), the environment variable (`QA_MOBILE_SERIAL`, `QA_MOBILE_INPUT`; an empty one counts as unset), `project.yaml`, the default (the only device connected; `adb`). `QA_MOBILE_INPUT` accepts the same values as `mobile.input` (`adb` or `driver`); any other value is a configuration error (exit 2), never ignored. The same order holds in `device.py`, `run_mobile.py --helper`, `remote_login.py` and `validate_project.py --environment` (which then does not ask for the driver when the input is `adb`, and asks for the emulator when the serial is an emulator's). A runner sets both variables (§11.1).
 
 How it works: `device.py` runs `adb shell content call --uri content://io.qaassistant.driver --method <method> --arg <args>`; the methods are `ping`, `tap x,y`, `longpress x,y,ms`, `swipe x1,y1,x2,y2,ms`, `back`, `home`, `text <base64 of the UTF-8 text>` (set on the focused field, any Unicode, the whole text in one call; no argument empties the field — `device.py clear`) and `enter`; each answers `ok` or an `error` once the gesture has happened. The arguments are comma-separated because the device's shell splits on spaces.
 
@@ -187,7 +189,7 @@ A batch can run on a **GitHub-hosted Linux runner** started from the workspace's
 4. **`.env`** from the Actions secrets named in `ci.secrets` (`workspace_ci.py write-env`), never printed nor committed.
 5. `validate_project.py --environment --strict`.
 6. **Build**: `workspace_build.py fetch` (the release's asset, SHA-256 checked against `mobile.build.sha256`).
-7. **Emulator**: `setup_emulator.py --apk … --cold --headless --gpu swiftshader_indirect --no-audio`.
+7. **Emulator**: `setup_emulator.py --apk … --cold --headless --gpu swiftshader_indirect --no-audio`. The only device of a runner is this emulator, `emulator-5554` (the first one a clean machine starts), driven with `adb`: the companion driver (§1.2) is not installed there. The job sets `QA_MOBILE_SERIAL: emulator-5554` and `QA_MOBILE_INPUT: adb`, so `mobile.serial` / `mobile.input` of a project tested locally on a physical phone are overridden for every step — `validate_project.py` (step 5: no driver to check), the login, the flows and the agent's `device.py` calls (which pass no `--serial` nor `--input`) — and the step stops the run when that serial is not the emulator that booted.
 8. **Login** (`ci.login.mode: manual-issue`): `remote_login.py request` (the helper flow asks for the link; an issue asks the owner for it) and `wait` (§11.2).
 9. **Batch**: `run_mobile.py` for the flows (mode `flows` or `both`) and/or the agent (mode `conversational` or `both`, §11.3).
 10. **Checks** after the run (`workspace_ci.py post-check`): the run log is valid for the adapter (without applying), no `.env` value in any file to be committed, every new bug `"proposed": true`.

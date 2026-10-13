@@ -17,9 +17,11 @@ Drives an Android device or emulator through adb for the conversational mode
     back                                    the system's back
     clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
 
-- project.yaml, mobile: section: app_id (required), serial (optional; --serial
-  overrides; with neither, the only device connected), input (adb | driver;
-  --input overrides; default adb), send_label (text or
+- project.yaml, mobile: section: app_id (required), serial (optional; with
+  none, the only device connected), input (adb | driver; default adb). Each of
+  serial and input: --serial / --input > the environment variable
+  QA_MOBILE_SERIAL / QA_MOBILE_INPUT (a runner's emulator and adb, plan 11.8,
+  technique-mobile.md §11) > project.yaml > the default. send_label (text or
   list), ignore_labels (the app's chrome, dropped from `send`), evidence_batch
   (default: today, YYYYMMDD) and browser (package that opens `link`).
 - Privacy: dump, shot, send, tap and type act only with mobile.app_id in the
@@ -80,7 +82,7 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import read_project, read_workspace_env
+from common import MOBILE_INPUTS, mobile_target, read_project, read_workspace_env
 
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
 SEND_LABELS = ("Send", "Send message", "Submit")
@@ -98,7 +100,7 @@ MIN_SECRET_LEN = 4  # a .env value shorter than this is only refused when it is 
 CLEAR_KEYS = 250    # deletions of `clear` through adb when the field's text is not known
 CHUNK = 300         # characters per `adb shell input text` call and per Maestro inputText step
 IME_NOT_ACTIVE = "IME is not active"
-INPUTS = ("adb", "driver")
+INPUTS = MOBILE_INPUTS
 DRIVER_URI = "content://io.qaassistant.driver"
 DRIVER_HELP = "build, install and turn it on: technique-mobile.md §1.2 (python scripts/build_driver.py --push)"
 BUNDLE = re.compile(r"Bundle\[\{(.*)\}\]", re.DOTALL)
@@ -170,13 +172,14 @@ def configuration(workspace: str, serial: str | None, input_: str | None = None)
     if not m.get("app_id"):
         raise UsageError("mobile.app_id missing in project.yaml (the app under test, e.g. com.demoshop.app)")
 
-    input_ = input_ or m.get("input") or "adb"
-    if input_ not in INPUTS:
-        raise UsageError(f"mobile.input {input_!r}: adb or driver (technique-mobile.md §1.2)")
+    try:
+        serial, input_ = mobile_target(m, serial, input_)
+    except ValueError as e:
+        raise UsageError(str(e)) from None
 
     def as_list(v):
         return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
-    return {"workspace": workspace, "app_id": str(m["app_id"]), "serial": serial or m.get("serial"),
+    return {"workspace": workspace, "app_id": str(m["app_id"]), "serial": serial,
             "input": input_,
             "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
             "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
@@ -196,7 +199,8 @@ def resolve_serial(wanted: str | None) -> str:
     if not ready:
         raise NoTarget("no Android device/emulator connected (adb devices)")
     if len(ready) > 1:
-        raise UsageError(f"several devices connected ({', '.join(ready)}): choose one with --serial or mobile.serial")
+        raise UsageError(f"several devices connected ({', '.join(ready)}): choose one with --serial, "
+                         "QA_MOBILE_SERIAL or mobile.serial")
     return ready[0]
 
 
@@ -647,8 +651,10 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Drives an Android device/emulator through adb "
                                              "(technique-mobile.md §4.1).")
     ap.add_argument("workspace")
-    ap.add_argument("--serial", help="device serial (default: mobile.serial, or the only device connected)")
-    ap.add_argument("--input", choices=INPUTS, help="adb, or the companion driver (default: mobile.input, else adb)")
+    ap.add_argument("--serial",
+                    help="device serial (default: $QA_MOBILE_SERIAL, mobile.serial, or the only device connected)")
+    ap.add_argument("--input", choices=INPUTS,
+                    help="adb, or the companion driver (default: $QA_MOBILE_INPUT, mobile.input, else adb)")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--serial", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     common.add_argument("--input", choices=INPUTS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)

@@ -200,6 +200,29 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("passed (helper flow, no result recorded)", out)
 
+    def test_a_helper_flow_device_flag_over_runner_variable_over_project_yaml(self):
+        """Plan 11.8 (technique-mobile.md §11): --serial > QA_MOBILE_SERIAL > mobile.serial; QA_MOBILE_INPUT does not
+        concern Maestro, so not even a wrong value stops a helper flow."""
+        flow = self.helper()
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("  serial: R58M\n  input: driver\n")
+        devices = []
+
+        def maestro(cmd, env, timeout):
+            devices.append(cmd[cmd.index("--device") + 1])
+            return 0, "ok"
+
+        clean = {k: v for k, v in os.environ.items() if k not in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")}
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm, "target_available", return_value=(True, "emulator-5554")), \
+                mock.patch.object(rm, "run_maestro", side_effect=maestro), \
+                mock.patch.dict(os.environ, clean, clear=True):
+            self.assertEqual(rm.run_helper(self.ws, flow)[0], 0)
+            with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "scrcpy"}):
+                self.assertEqual(rm.run_helper(self.ws, flow)[0], 0)
+                self.assertEqual(rm.run_helper(self.ws, flow, "R9DEMO")[0], 0)
+        self.assertEqual(devices, ["R58M", "emulator-5554", "R9DEMO"])
+
     def test_a_helper_flow_is_not_a_case_and_a_case_is_not_a_helper(self):
         self.helper("request_link.yaml")
         with mock.patch.object(rm.shutil, "which", return_value="maestro"):

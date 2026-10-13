@@ -93,7 +93,8 @@ class RemoteLogin(unittest.TestCase):
         env = mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": SLUG, "GITHUB_RUN_ID": "4242"})
         env.start()
         self.addCleanup(env.stop)
-        os.environ.pop("GITHUB_ACTIONS", None)
+        for name in ("GITHUB_ACTIONS", "QA_MOBILE_SERIAL", "QA_MOBILE_INPUT"):
+            os.environ.pop(name, None)
         self.clock = Clock()
 
     def tearDown(self):
@@ -226,6 +227,26 @@ class RemoteLogin(unittest.TestCase):
         self.assertIn("ignored: a comment by @demo-shop", out)
         self.assertIn("shop.demo: opened", out)
         self.assertIn("not checked", out)
+
+    def test_on_a_runner_the_emulator_and_adb_replace_the_phone_and_the_driver(self):
+        """Plan 11.8: project.yaml names a physical phone with the companion driver; the runner's QA_MOBILE_SERIAL /
+        QA_MOBILE_INPUT send the link to its emulator, through adb (the helper flow: test_run_mobile)."""
+        path = os.path.join(self.ws, "project.yaml")
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text.replace("app_id: com.demoshop.app}", "app_id: com.demoshop.app, serial: R58M, input: driver}"))
+        github = self.requested([(0, "demo-shop", LINK)])
+        device = FakeDevice([LOGIN, HOME])                              # only emulator-5554 connected
+        code, out = self.run_(github, "wait", device=device)
+        self.assertEqual(code, 3, out)                                  # the phone is not there
+        github = self.requested([(0, "demo-shop", LINK)])
+        device = FakeDevice([LOGIN, HOME])
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"}):
+            code, out = self.run_(github, "wait", device=device)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(device.of("shell", "am", "start")), 1)
+        self.assertEqual(device.of("shell", "content", "call"), [])     # never the driver
 
     def test_link_in(self):
         hosts = ["auth.demoshop.example", "shop.demo"]
