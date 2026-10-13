@@ -33,7 +33,12 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
    `pull-requests: write` and `issues: write`.
 3. **Secrets** (Settings → Secrets and variables → Actions → Secrets), created by the user — never on a command line
    of a script, never in a file, a chat or a log. `workspace_ci.py install --yes` runs `gh secret set NAME` for each
-   one missing, and `gh` asks for the value in the terminal:
+   one missing, and `gh` asks for the value in the terminal — only when the script runs in **your own interactive
+   terminal** (on Windows a real console: not the NUL device nor a pipe, which Python's `isatty()` takes for a
+   terminal there). Run it yourself, never from an agent session (Claude Code, a CI step): there it sets no secret
+   and only prints the `gh secret set NAME --repo <owner>/<repo>` commands for you to run in your own terminal. A
+   secret set with a wrong or empty value is fixed by running `gh secret set NAME --repo <owner>/<repo>` again (it
+   overwrites the value):
    - `CLAUDE_CODE_OAUTH_TOKEN`: run `claude setup-token` on your own computer (it opens the browser, then prints a
      token valid for one year; it is not saved anywhere) and paste it when `gh secret set` asks for it;
    - `QA_ASSISTANT_TOKEN`: a fine-grained personal access token with **read-only** access to the contents of the

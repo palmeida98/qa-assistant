@@ -1515,6 +1515,11 @@ measured then. (Until 12.10.2026 this was 11.7.)*
   `validate_project.py --environment` (no driver asked for with `adb`); `mobile.yml` sets both at job level
   (`emulator-5554`, the first emulator of a clean runner: the value must be known at step 5, before the boot) and its
   emulator step stops the run when that serial is not the emulator that booted. technique-mobile.md v1.5 §1.2, §11.1.
+- [x] Fix found in the pilot (13.10.2026): `workspace_ci.py install --yes`, run from an agent's shell on Windows, ran
+  `gh secret set` interactively and three secrets were stored with empty values: Python's `isatty()` is True for the
+  NUL device there. `is_terminal()` now asks for stdin and stdout both a terminal and, on Windows, a real console
+  (`GetConsoleMode`); otherwise no secret is set and the commands are printed for the user's own terminal (a secret
+  set wrongly: `gh secret set NAME` again overwrites it). `docs/workspace/ci/README.md` step 3.
 - [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
   build, `workspace_ci.py install`, the secrets set by the user, one batch run from GitHub (not from this computer),
   the login pasted in the issue, the PR reviewed and merged, the workbook updated by `apply.yml`. Time, turns and minutes
@@ -1653,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8 fix: `workspace_ci.py install --yes` sets secrets only from a real interactive console (on Windows, stdin from NUL passed `isatty()` and `gh secret set` stored empty values from an agent's shell); otherwise it prints the commands for the user. README step 3. 6 new tests (792 → 798). |
 | 2026-10-13 | 11.8 prerequisite: `QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT` override `mobile.serial` / `mobile.input` (`common.mobile_target`; technique-mobile.md v1.5 §1.2, §11.1), set by `mobile.yml` to the runner's emulator and `adb`, so a workspace configured for a physical phone with the driver runs unchanged on a runner. 4 new tests (788 → 792). |
 | 2026-10-13 | Fix found while merging phase 12 into 11.7 on Windows: `qa_ui/server.py` binds its port exclusively there (`SO_EXCLUSIVEADDRUSE`, no `SO_REUSEADDR`); before, a taken port gave no error and `test_qa_ui_server` hung forever (Linux CI unaffected). 788 tests. |
 | 2026-10-12 | 11.7 done: the pilot applied at the workspace's `/checkpoint` (with a correction batch: 5 cases had been set to Fail by their linked bug); three heuristics. |

@@ -154,7 +154,21 @@ class Install(Base):
         code, out = self.run_(gh, "install", "--yes")
         self.assertEqual(code, 0, out)
         self.assertIn(f"to run by the user, in a terminal: gh secret set SHOP_APP_USER --repo {SLUG}", out)
+        self.assertIn("no secret is set here", out)
         self.assertEqual(gh.commands("secret", "set"), [])
+
+    def test_stdin_from_nul_on_windows_sets_no_secret(self):
+        # the 11.8 pilot: an agent's shell on Windows, stdin from NUL (isatty() True), stdout a tty-like stream
+        gh = FakeGh()
+        out = TtyOut()
+        with mock.patch.object(sys, "stdin", Stream(True)), mock.patch.object(wc, "WINDOWS", True), \
+                mock.patch.object(wc, "_windows_console", lambda s: False), \
+                mock.patch.object(wc, "gh", gh), mock.patch.object(wg, "gh", lambda *a: gh(*a)), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = wc.main([self.ws, "install", "--yes"])
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertEqual(gh.commands("secret", "set"), [])
+        self.assertIn(f"gh secret set SHOP_APP_USER --repo {SLUG}", out.getvalue())
 
     def test_only_a_private_repository(self):
         for vis, extra, code in [("PUBLIC", ("--i-confirm-private",), 1), ("INTERNAL", (), 1), (None, (), 1),
@@ -172,6 +186,67 @@ class Install(Base):
         code, out = self.run_(FakeGh(), "install")
         self.assertEqual(code, 2)
         self.assertIn("ci.runner", out)
+
+
+class TtyOut(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class Stream:
+    """A stand-in for sys.stdin / sys.stdout: what isatty() answers and a file descriptor."""
+
+    def __init__(self, tty, fd=0):
+        self.tty, self.fd = tty, fd
+
+    def isatty(self):
+        return self.tty
+
+    def fileno(self):
+        return self.fd
+
+
+class IsTerminal(unittest.TestCase):
+    def check(self, stdin, stdout, platform, console=None):
+        with mock.patch.object(sys, "stdin", stdin), mock.patch.object(sys, "stdout", stdout), \
+                mock.patch.object(wc, "WINDOWS", platform == "win32"), \
+                mock.patch.object(wc, "_windows_console", console or (lambda s: True)):
+            return wc.is_terminal()
+
+    def test_a_real_console(self):
+        self.assertTrue(self.check(Stream(True), Stream(True, 1), "win32"))
+        self.assertTrue(self.check(Stream(True), Stream(True, 1), "linux"))
+
+    def test_nul_or_a_pipe_on_windows_is_not_a_terminal(self):
+        # NUL is a character device: isatty() True, but GetConsoleMode fails on it, as on a pipe
+        self.assertFalse(self.check(Stream(True), Stream(True, 1), "win32", lambda s: False))
+        self.assertFalse(self.check(Stream(True), Stream(True, 1), "win32", lambda s: s.fd != 0))
+        self.assertFalse(self.check(Stream(False), Stream(True, 1), "win32"))
+
+    def test_stdout_must_be_a_terminal_too(self):
+        self.assertFalse(self.check(Stream(True), Stream(False, 1), "linux"))
+        self.assertFalse(self.check(Stream(True), io.StringIO(), "linux"))
+        self.assertFalse(self.check(None, Stream(True, 1), "linux"))
+
+    def test_windows_console_asks_get_console_mode(self):
+        for ok in (1, 0):
+            with self.subTest(ok=ok):
+                kernel32 = mock.Mock()
+                kernel32.GetConsoleMode.return_value = ok
+                ctypes_ = SimpleNamespace(c_uint32=lambda: 0, byref=lambda x: x,
+                                          windll=SimpleNamespace(kernel32=kernel32))
+                msvcrt_ = SimpleNamespace(get_osfhandle=lambda fd: 1000 + fd)
+                with mock.patch.dict(sys.modules, {"ctypes": ctypes_, "msvcrt": msvcrt_}):
+                    self.assertEqual(wc._windows_console(Stream(True, 0)), bool(ok))
+                self.assertEqual(kernel32.GetConsoleMode.call_args[0][0], 1000)
+        with mock.patch.dict(sys.modules, {"msvcrt": None}):              # not Windows: no msvcrt
+            self.assertFalse(wc._windows_console(Stream(True, 0)))
+
+    @unittest.skipUnless(sys.platform == "win32", "the NUL device of Windows")
+    def test_the_real_nul_device_is_not_a_console(self):
+        with open(os.devnull) as nul:
+            self.assertTrue(nul.isatty())                  # what Python says (the bug)
+            self.assertFalse(wc._windows_console(nul))     # what the console API says
 
 
 class Check(Base):
