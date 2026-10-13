@@ -263,7 +263,8 @@ class AlreadyDone(Base):
         self.assertEqual(rc, 0, err)
         self.assertTrue(self.line(out, "avd").startswith("[done]"), out)
         self.assertIn(["avdmanager", "create", "avd", "-n", "qa-demo", "-k", IMAGE, "-d", "pixel_7"], fake.calls)
-        self.assertEqual(fake.spawned, [["emulator", "-avd", "qa-demo", "-no-snapshot-save", "-no-boot-anim"]])
+        self.assertEqual(fake.spawned, [["emulator", "-avd", "qa-demo", "-no-snapshot-save", "-no-boot-anim",
+                                         "-partition-size", "3072"]])      # an AVD created in this run
         self.assertTrue(self.line(out, "boot").startswith("[done]"), out)
         self.assertIn("not installed", self.line(out, "build"))
         self.assertTrue(self.line(out, "native-libs").startswith("[done]"), out)

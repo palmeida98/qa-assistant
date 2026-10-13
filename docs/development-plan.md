@@ -1658,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8, 7th run: still 7372.8 MB needed (1.2 × the profile's 6 GB) with only `config.ini` changed; an AVD created in the run now also starts with `-partition-size 3072`, and the avd step says whether it found `config.ini`. |
 | 2026-10-13 | 11.8, 6th run: the AVD was found, then "Not enough space to create userdata partition" (7.35 GB free, 7.37 GB needed); a new AVD now gets `disk.dataPartition.size=3G` (technique-mobile.md §11.5). |
 | 2026-10-13 | 11.8, 5th run: `avdmanager` ignores `ANDROID_AVD_HOME` too; the avd step now looks for `<name>.ini` where recent cmdline-tools write it (`XDG_CONFIG_HOME`, `ANDROID_USER_HOME`, `~/.android`) and points the emulator there, and as a last resort writes the `.ini` in `avd_home()` from `avdmanager list avd`'s `Path:`. |
 | 2026-10-13 | 11.8, 4th run of the pilot: "Unknown AVD name" on the runner: a recent `avdmanager` follows `XDG_CONFIG_HOME` (set on GitHub's runners) and created the AVD in `~/.config/.android/avd`, where the emulator does not look; `setup_emulator.py` now sets `ANDROID_AVD_HOME` (its own `avd_home()`) for both while it runs. |
