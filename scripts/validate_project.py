@@ -610,6 +610,10 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
         mechanism = (((proj.get("excel") or {}).get("recalc") or {}).get("mechanism")) or "libreoffice"
         if mechanism == "excel-com":
             add((True, "recalculation", "excel-com (desktop Excel on Windows; LibreOffice not needed)"))
+        elif ci:
+            # the run job never applies its run log: apply.yml installs LibreOffice and applies it after the merge
+            add((True, "recalculation", "not on this runner: qa-apply.yml installs LibreOffice and applies "
+                 + "the run log after the merge"))
         else:
             exe = soffice()
             add((bool(exe), "libreoffice", exe or "the workbook's recalculation needs it: install LibreOffice "

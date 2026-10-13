@@ -482,6 +482,14 @@ class Environment(unittest.TestCase):
         self.assertTrue(c["recalculation"][0])
         self.assertNotIn("libreoffice", self.checks(tracker="jira"))
 
+    def test_a_ci_runner_does_not_need_libreoffice(self):
+        # the 11.8 pilot: the run job stopped on LibreOffice, which only qa-apply.yml needs (and installs)
+        self.found["soffice"] = None
+        c = {tool: (ok, detail) for ok, tool, detail in vp.environment(self.ws, self.project(tracker="excel"), ci=True)}
+        self.assertNotIn("libreoffice", c)
+        self.assertTrue(c["recalculation"][0])
+        self.assertIn("qa-apply.yml", c["recalculation"][1])
+
     def test_mobile_android(self):
         mobile = {**MOBILE, "build": {"source": "the team's build share", "sha256": "a" * 64}}
         c = self.checks(modules=["mobile"], mobile=mobile)

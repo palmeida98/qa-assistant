@@ -1658,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8, found on the runner (2nd run of the pilot): `validate_project.py --environment --strict --ci` required LibreOffice in the run job, which never applies its run log (`qa-apply.yml` installs it); with `--ci` the recalculation is now not required (technique-mobile.md §11.1 step 5). Before that, the 1st run stopped at the `qa-assistant` checkout: the read-only token had no repository selected (a setting, not a framework bug). |
 | 2026-10-13 | 11.8 fix: `workspace_ci.py install --yes` sets secrets only from a real interactive console (on Windows, stdin from NUL passed `isatty()` and `gh secret set` stored empty values from an agent's shell); otherwise it prints the commands for the user. README step 3. 6 new tests (792 → 798). |
 | 2026-10-13 | 11.8 prerequisite: `QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT` override `mobile.serial` / `mobile.input` (`common.mobile_target`; technique-mobile.md v1.5 §1.2, §11.1), set by `mobile.yml` to the runner's emulator and `adb`, so a workspace configured for a physical phone with the driver runs unchanged on a runner. 4 new tests (788 → 792). |
 | 2026-10-13 | Fix found while merging phase 12 into 11.7 on Windows: `qa_ui/server.py` binds its port exclusively there (`SO_EXCLUSIVEADDRUSE`, no `SO_REUSEADDR`); before, a taken port gave no error and `test_qa_ui_server` hung forever (Linux CI unaffected). 788 tests. |
