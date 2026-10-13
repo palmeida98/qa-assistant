@@ -173,6 +173,7 @@ def avd_home() -> str:
 
 
 DATA_PARTITION = "3G"
+DATA_PARTITION_MB = 3072   # the same, for `-partition-size` (the flag wins over config.ini)
 
 
 def avd_ini_dirs() -> list[str]:
@@ -336,11 +337,12 @@ class Setup:
         if found and found != avd_home():
             # the emulator finds it only through ANDROID_AVD_HOME (11.8 pilot: "Unknown AVD name" on a runner)
             os.environ["ANDROID_AVD_HOME"] = found
-        self.small_data_partition()
-        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE}, data {DATA_PARTITION})"
-                 + (f" in {found}" if found else ""))
+        self.created = True
+        config = "config.ini" if self.small_data_partition() else "config.ini not found, -partition-size only"
+        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE}, data {DATA_PARTITION}: "
+                 f"{config})" + (f" in {found}" if found else ""))
 
-    def small_data_partition(self) -> None:
+    def small_data_partition(self) -> bool:
         """A new AVD's data partition is DATA_PARTITION, not the device profile's ~6 GB: a GitHub-hosted runner has
         about 7 GB free (11.8 pilot: "Not enough space to create userdata partition"), and one app needs far less."""
         config = os.path.join(self.avd_dir(), "config.ini")
@@ -348,9 +350,10 @@ class Setup:
             with open(config, encoding="utf-8") as f:
                 lines = [ln for ln in f.read().splitlines() if not ln.startswith("disk.dataPartition.size")]
         except OSError:
-            return
+            return False
         with open(config, "w", encoding="utf-8") as f:
             f.write("\n".join([*lines, f"disk.dataPartition.size={DATA_PARTITION}"]) + "\n")
+        return True
 
     def write_avd_ini(self) -> str | None:
         """Last resort when no <name>.ini is where the emulator looks: ask avdmanager where the AVD is (its `Path:`)
@@ -402,7 +405,10 @@ class Setup:
         return None
 
     def start_command(self, cold: bool) -> list[str]:
+        # an AVD created in this run (always, on a runner) also gets -partition-size: the 11.8 pilot showed the
+        # emulator still asking for the profile's ~6 GB with only config.ini changed
         return [self.tools["emulator"], "-avd", self.avd, "-no-snapshot-save", "-no-boot-anim",
+                *(["-partition-size", str(DATA_PARTITION_MB)] if getattr(self, "created", False) else []),
                 *(["-no-snapshot-load"] if cold else []), *(["-no-audio"] if self.a.no_audio else []),
                 *(["-gpu", self.a.gpu] if self.a.gpu else []), *(["-no-window"] if self.a.headless else [])]
 
