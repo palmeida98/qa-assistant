@@ -110,6 +110,9 @@ def gh(*args: str, interactive: bool = False) -> subprocess.CompletedProcess | N
                           check=False, timeout=120)
 
 
+WINDOWS = sys.platform == "win32"   # a constant, so the tests can simulate Windows without changing sys.platform
+
+
 def _windows_console(stream) -> bool:
     """True when the stream's handle is a Windows console: GetConsoleMode succeeds (it fails for NUL and pipes)."""
     try:
@@ -132,7 +135,7 @@ def is_terminal() -> bool:
                 return False
         except (AttributeError, OSError, ValueError):
             return False
-        if sys.platform == "win32" and not _windows_console(stream):
+        if WINDOWS and not _windows_console(stream):
             return False
     return True
 

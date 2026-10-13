@@ -161,7 +161,7 @@ class Install(Base):
         # the 11.8 pilot: an agent's shell on Windows, stdin from NUL (isatty() True), stdout a tty-like stream
         gh = FakeGh()
         out = TtyOut()
-        with mock.patch.object(sys, "stdin", Stream(True)), mock.patch.object(sys, "platform", "win32"), \
+        with mock.patch.object(sys, "stdin", Stream(True)), mock.patch.object(wc, "WINDOWS", True), \
                 mock.patch.object(wc, "_windows_console", lambda s: False), \
                 mock.patch.object(wc, "gh", gh), mock.patch.object(wg, "gh", lambda *a: gh(*a)), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
@@ -209,7 +209,7 @@ class Stream:
 class IsTerminal(unittest.TestCase):
     def check(self, stdin, stdout, platform, console=None):
         with mock.patch.object(sys, "stdin", stdin), mock.patch.object(sys, "stdout", stdout), \
-                mock.patch.object(sys, "platform", platform), \
+                mock.patch.object(wc, "WINDOWS", platform == "win32"), \
                 mock.patch.object(wc, "_windows_console", console or (lambda s: True)):
             return wc.is_terminal()
 
