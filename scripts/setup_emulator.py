@@ -172,6 +172,16 @@ def avd_home() -> str:
     return os.path.expanduser(os.path.join("~", ".android", "avd"))
 
 
+def avd_ini_dirs() -> list[str]:
+    """Where an avdmanager may have written <name>.ini: avd_home() first, then the places recent cmdline-tools use
+    (XDG_CONFIG_HOME, set on GitHub's runners; ANDROID_USER_HOME), which the emulator does not search."""
+    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(os.path.join("~", ".config"))
+    dirs = [avd_home(), os.path.join(xdg, ".android", "avd"), os.path.expanduser(os.path.join("~", ".android", "avd"))]
+    if os.environ.get("ANDROID_USER_HOME"):
+        dirs.insert(1, os.path.join(os.environ["ANDROID_USER_HOME"], "avd"))
+    return list(dict.fromkeys(dirs))
+
+
 def mtime(path: str) -> float | None:
     return os.path.getmtime(path) if os.path.exists(path) else None
 
@@ -317,7 +327,28 @@ class Setup:
         rc, out = run(create, stdin="no\n", timeout=300)
         if rc != 0:
             raise ConfigError(f"avdmanager could not create {self.avd}: {out.strip()[-300:]}")
-        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE})")
+        found = next((d for d in avd_ini_dirs() if os.path.isfile(os.path.join(d, f"{self.avd}.ini"))), None)
+        if not found:
+            found = self.write_avd_ini()
+        if found and found != avd_home():
+            # the emulator finds it only through ANDROID_AVD_HOME (11.8 pilot: "Unknown AVD name" on a runner)
+            os.environ["ANDROID_AVD_HOME"] = found
+        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE})"
+                 + (f" in {found}" if found else ""))
+
+    def write_avd_ini(self) -> str | None:
+        """Last resort when no <name>.ini is where the emulator looks: ask avdmanager where the AVD is (its `Path:`)
+        and write the .ini in avd_home() (the emulator only needs `path=`). Returns that folder, or None."""
+        rc, out = run([self.tools["avdmanager"], "list", "avd"], timeout=120)
+        blocks = re.split(r"-{5,}", out or "")
+        path = next((m.group(1).strip() for b in blocks if re.search(rf"Name:\s*{re.escape(self.avd)}\s*$", b, re.MULTILINE)
+                     for m in [re.search(r"Path:\s*(.+)", b)] if m), None)
+        if rc != 0 or not path:
+            return None
+        os.makedirs(avd_home(), exist_ok=True)
+        with open(os.path.join(avd_home(), f"{self.avd}.ini"), "w", encoding="utf-8") as f:
+            f.write(f"avd.ini.encoding=UTF-8\npath={path}\n")
+        return avd_home()
 
     # 3. boot
 
@@ -653,8 +684,8 @@ def main(argv=None) -> int:
         print(f"[fail] configuration: {e}", file=sys.stderr)
         return 2
     setup = Setup(a, mobile, str(proj.get("project") or ""))
-    # avdmanager and the emulator must agree on where the AVDs live: a recent avdmanager follows XDG_CONFIG_HOME
-    # (set on GitHub's runners: ~/.config/.android/avd) and the emulator does not (11.8 pilot: "Unknown AVD name")
+    # the emulator searches only ANDROID_AVD_HOME (then ~/.android/avd): set it for the whole run, and the avd step
+    # moves it to wherever avdmanager really wrote the AVD (11.8 pilot: XDG_CONFIG_HOME on GitHub's runners)
     saved = os.environ.get("ANDROID_AVD_HOME")
     os.environ["ANDROID_AVD_HOME"] = avd_home()
     try:
