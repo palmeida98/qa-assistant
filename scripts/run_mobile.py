@@ -49,7 +49,7 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import Redactor, mobile_target, read_project, read_workspace_env
+from common import Redactor, find_adb, mobile_target, read_project, read_workspace_env
 
 PLATFORMS = ("android", "ios", "web")
 CASE = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
@@ -120,7 +120,7 @@ def target_available(platform: str) -> tuple[bool, str]:
     if platform == "web":
         return True, "Maestro Web (beta) in Chrome"
     if platform == "android":
-        adb = shutil.which("adb")
+        adb = find_adb()
         if not adb:
             return False, "adb not found (no Android SDK)"
         out = subprocess.run([adb, "devices"], capture_output=True, text=True, check=False).stdout

@@ -82,7 +82,13 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import MOBILE_INPUTS, mobile_target, read_project, read_workspace_env
+from common import (
+    MOBILE_INPUTS,
+    find_adb,
+    mobile_target,
+    read_project,
+    read_workspace_env,
+)
 
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
 SEND_LABELS = ("Send", "Send message", "Submit")
@@ -139,9 +145,10 @@ class Node:
 def adb(serial: str | None, *args: str, binary: bool = False, timeout: int = 60):
     """Runs adb (with -s serial) and returns its stdout (bytes if binary). The arguments never reach an error
     message: they can carry a one-time URL (`link`)."""
-    exe = shutil.which("adb")
+    exe = find_adb()
     if not exe:
-        raise NoTarget("adb not found (install the Android SDK platform-tools and put them on the PATH)")
+        raise NoTarget("adb not found (install the Android SDK platform-tools, set ANDROID_HOME or put them on the "
+                       "PATH)")
     cmd = [exe, *(["-s", serial] if serial else []), *args]
     try:
         r = subprocess.run(cmd, capture_output=True, timeout=timeout, check=False)

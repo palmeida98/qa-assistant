@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 
 import yaml
 
@@ -20,6 +21,22 @@ REDACTED = "«redacted»"
 SECRET_HEADERS = {"authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key",
                   "x-auth-token"}
 SECRET_KEY = re.compile(r"token|password|passwd|secret|api[_-]?key", re.IGNORECASE)
+
+
+def find_adb() -> str | None:
+    """adb on the PATH, else in the Android SDK's platform-tools (ANDROID_HOME, ANDROID_SDK_ROOT, the default
+    folders): a GitHub-hosted runner has the SDK but not adb on the PATH (11.8 pilot)."""
+    exe = shutil.which("adb")
+    if exe:
+        return exe
+    roots = [os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")]
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        roots.append(os.path.join(os.environ["LOCALAPPDATA"], "Android", "Sdk"))
+    roots += [os.path.expanduser(os.path.join("~", "Android", "Sdk")),
+              os.path.expanduser(os.path.join("~", "Library", "Android", "sdk"))]
+    name = "adb.exe" if os.name == "nt" else "adb"
+    return next((os.path.join(r, "platform-tools", name) for r in roots
+                 if r and os.path.isfile(os.path.join(r, "platform-tools", name))), None)
 
 
 def read_project(workspace: str) -> dict:

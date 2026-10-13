@@ -51,6 +51,10 @@ class Units(unittest.TestCase):
 
 class Workspace(unittest.TestCase):
     def setUp(self):
+        # adb only as the tests' shutil.which says (find_adb also looks in this computer's real SDK)
+        patcher = mock.patch.object(rm, "find_adb", lambda: rm.shutil.which("adb"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.ws = self.tmp.name
         os.makedirs(os.path.join(self.ws, "flows"))
@@ -207,8 +211,8 @@ class Workspace(unittest.TestCase):
         with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
             f.write("SHOP_U=ana\n")
         seen = {}
-        with mock.patch.object(rm.shutil, "which", return_value="maestro"),                 mock.patch.object(rm, "run_maestro", side_effect=lambda cmd, env, timeout: seen.update(env=env)
-                                  or (0, "ok")):
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"),                 mock.patch.object(rm, "run_maestro",
+                                  side_effect=lambda cmd, env, timeout: seen.update(env=env) or (0, "ok")):
             rc, out, err = self.run_it("--helper", flow)
         self.assertEqual(rc, 0, out + err)
         self.assertEqual({k for k in seen["env"] if k.startswith("MAESTRO_")}, {"MAESTRO_SHOP_U"})
