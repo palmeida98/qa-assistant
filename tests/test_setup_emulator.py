@@ -64,6 +64,7 @@ class FakeSDK:
         self.perms = dict(perms or {})
         self.calls, self.spawned, self.boot_polls = [], [], 0
         self.crash = None
+        self.avd_path = "/home/runner/.config/.android/avd"
 
     def spawn(self, cmd, log=None):
         self.spawned.append(cmd)
@@ -84,6 +85,8 @@ class FakeSDK:
         tool, args = cmd[0], cmd[1:]
         if tool == "emulator" and args == ["-list-avds"]:
             return 0, "".join(a + "\n" for a in self.avds)
+        if tool == "avdmanager" and args[:2] == ["list", "avd"]:
+            return 0, "".join(f"    Name: {n}\n    Path: {self.avd_path}/{n}.avd\n---------\n" for n in self.avds)
         if tool == "avdmanager":
             self.avds.append(args[args.index("-n") + 1])
             return 0, ""
@@ -201,6 +204,29 @@ class AlreadyDone(Base):
             rc, _, err = self.go(fake, "--apk", self.apk)
             self.assertNotIn("ANDROID_AVD_HOME", os.environ)          # restored after the run
         self.assertEqual(rc, 0, err)
+        self.assertEqual(fake.spawn_avd_home, os.path.join(self.tmp.name, "avd"))
+
+    def test_an_avd_written_under_xdg_config_home_is_found(self):
+        # the 11.8 pilot: avdmanager ignored ANDROID_AVD_HOME and wrote the .ini under XDG_CONFIG_HOME
+        xdg = os.path.join(self.tmp.name, "xdg")
+        os.makedirs(os.path.join(xdg, ".android", "avd"))
+        with open(os.path.join(xdg, ".android", "avd", "qa-demo.ini"), "w", encoding="utf-8") as f:
+            f.write("path=somewhere\n")
+        fake = FakeSDK(avds=(), running=False, boot_after=2, installed_code="")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": xdg}):
+            os.environ.pop("ANDROID_AVD_HOME", None)
+            rc, _, err = self.go(fake, "--apk", self.apk)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(fake.spawn_avd_home, os.path.join(xdg, ".android", "avd"))
+
+    def test_with_no_ini_where_expected_one_is_written_from_avdmanager_list(self):
+        fake = FakeSDK(avds=(), running=False, boot_after=2, installed_code="")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": os.path.join(self.tmp.name, "none")}):
+            os.environ.pop("ANDROID_AVD_HOME", None)
+            rc, _, err = self.go(fake, "--apk", self.apk)
+        self.assertEqual(rc, 0, err)
+        with open(os.path.join(self.tmp.name, "avd", "qa-demo.ini"), encoding="utf-8") as f:
+            self.assertIn("path=/home/runner/.config/.android/avd/qa-demo.avd", f.read())
         self.assertEqual(fake.spawn_avd_home, os.path.join(self.tmp.name, "avd"))
 
     def test_an_emulator_that_exits_while_starting_shows_its_last_output(self):

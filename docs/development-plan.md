@@ -1658,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8, 5th run: `avdmanager` ignores `ANDROID_AVD_HOME` too; the avd step now looks for `<name>.ini` where recent cmdline-tools write it (`XDG_CONFIG_HOME`, `ANDROID_USER_HOME`, `~/.android`) and points the emulator there, and as a last resort writes the `.ini` in `avd_home()` from `avdmanager list avd`'s `Path:`. |
 | 2026-10-13 | 11.8, 4th run of the pilot: "Unknown AVD name" on the runner: a recent `avdmanager` follows `XDG_CONFIG_HOME` (set on GitHub's runners) and created the AVD in `~/.config/.android/avd`, where the emulator does not look; `setup_emulator.py` now sets `ANDROID_AVD_HOME` (its own `avd_home()`) for both while it runs. |
 | 2026-10-13 | 11.8, 3rd run of the pilot: the runner's emulator exited with code 1 while starting and `setup_emulator.py` threw its output away (`DEVNULL`); the emulator's output now goes to `<temp>/emulator-<avd>.log` and its last 25 lines are in the error, so a runner shows why. |
 | 2026-10-13 | 11.8, found on the runner (2nd run of the pilot): `validate_project.py --environment --strict --ci` required LibreOffice in the run job, which never applies its run log (`qa-apply.yml` installs it); with `--ci` the recalculation is now not required (technique-mobile.md §11.1 step 5). Before that, the 1st run stopped at the `qa-assistant` checkout: the read-only token had no repository selected (a setting, not a framework bug). |
