@@ -86,6 +86,15 @@ jobs:
         id: start
         run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
+      # a standard runner has ~7 GB free and the emulator's userdata needs more (11.8 pilot): drop preinstalled
+      # toolchains the batch never uses (.NET, Haskell, Boost, CodeQL, Swift); the Android SDK, Java, Python and Node stay
+      - name: Free disk space
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/share/swift \
+            "$AGENT_TOOLSDIRECTORY/CodeQL"
+          df -h / | tail -1
+
       - name: Checkout the workspace
         uses: actions/checkout@v5
         with:

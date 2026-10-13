@@ -573,6 +573,10 @@ class Templates(unittest.TestCase):
         self.assertEqual({k: run["env"][k] for k in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")},
                          {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"})
         names = [step.get("name", "") for step in run["steps"]]
+        # the 11.8 pilot: disk freed before the SDK, never the Android SDK itself
+        free = run["steps"][names.index("Free disk space")]
+        self.assertLess(names.index("Free disk space"), names.index("Android SDK, Maestro and KVM"))
+        self.assertNotIn("android", free["run"].lower())
         emulator = run["steps"][names.index("The emulator (cold boot, no GPU)")]
         self.assertIn('-s "$QA_MOBILE_SERIAL" get-state', emulator["run"])
         self.assertLess(names.index("The environment (a missing tool stops the run)"), names.index(emulator["name"]))
