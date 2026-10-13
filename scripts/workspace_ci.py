@@ -21,9 +21,11 @@ them — they read project.yaml.
   the variable the workflows need and which exist (`gh secret list`), and checks that the repository is private
   (PUBLIC / INTERNAL refused; unknown only with --i-confirm-private). Without --yes nothing is written (a dry run).
   With --yes: the files copied, the variable QA_ASSISTANT_REPOSITORY set (it is not a secret: this qa-assistant's
-  own origin) and, in a terminal, `gh secret set NAME` for each secret missing — gh asks for the value, which the
-  user types or pastes; it never goes on a command line, a file or a log. Outside a terminal the commands are
-  printed for the user to run. Nothing is committed nor pushed.
+  own origin) and, in the user's own interactive terminal (stdin and stdout a real console: on Windows the NUL
+  device and pipes are not, although isatty() says so), `gh secret set NAME` for each secret missing — gh asks for
+  the value, which the user types or pastes; it never goes on a command line, a file or a log. Outside a terminal
+  (e.g. an agent session) no secret is set: the commands are printed for the user to run in their own terminal. A
+  secret set wrongly is fixed by running `gh secret set NAME` again (it overwrites). Nothing is committed nor pushed.
 - check: the installed copies equal the templates, every secret exists, ci: is valid (validate_project.py), the
   login's helper flow and the flows folder exist, mobile.build is a release, --batch resolves; and the account's
   Actions spending (a warning when it can be read and is not 0; the minutes used this month when GitHub's billing
@@ -108,8 +110,31 @@ def gh(*args: str, interactive: bool = False) -> subprocess.CompletedProcess | N
                           check=False, timeout=120)
 
 
+def _windows_console(stream) -> bool:
+    """True when the stream's handle is a Windows console: GetConsoleMode succeeds (it fails for NUL and pipes)."""
+    try:
+        import ctypes
+        import msvcrt
+        handle = msvcrt.get_osfhandle(stream.fileno())
+        mode = ctypes.c_uint32()
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)))
+    except (AttributeError, ImportError, OSError, ValueError):
+        return False
+
+
 def is_terminal() -> bool:
-    return sys.stdin.isatty()
+    """A person at a real interactive console, stdin and stdout both. isatty() alone is not enough on Windows, where
+    it is True for any character device, e.g. stdin from NUL in a non-interactive agent shell (found in the 11.8
+    pilot: `gh secret set` then stored empty values)."""
+    for stream in (sys.stdin, sys.stdout):
+        try:
+            if stream is None or not stream.isatty():
+                return False
+        except (AttributeError, OSError, ValueError):
+            return False
+        if sys.platform == "win32" and not _windows_console(stream):
+            return False
+    return True
 
 
 def now() -> datetime:
@@ -355,9 +380,13 @@ def cmd_install(workspace: str, a) -> int:
         if r is None or r.returncode != 0:
             print("warning: QA_ASSISTANT_REPOSITORY not set (gh failed): set it in Settings > Secrets and variables "
                   "> Actions > Variables", file=sys.stderr)
+    terminal = is_terminal()
+    if missing and not terminal:
+        print("not an interactive terminal (e.g. an agent session): no secret is set here -- run these commands in "
+              "your own terminal; a secret set wrongly is fixed by running gh secret set NAME again (it overwrites)")
     for n in missing:
         command = ["secret", "set", n, "--repo", slug]
-        if is_terminal():
+        if terminal:
             print(f"gh {' '.join(command)}  (paste the value when gh asks; it is never shown)")
             r = gh(*command, interactive=True)
             if r is None or r.returncode != 0:
