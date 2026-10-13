@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -73,3 +74,21 @@ class Common(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FindAdb(unittest.TestCase):
+    """The 11.8 pilot: a GitHub-hosted runner has the SDK (ANDROID_HOME) but not adb on the PATH."""
+
+    def test_on_the_path_first_then_in_the_sdk(self):
+        with tempfile.TemporaryDirectory() as sdk:
+            os.makedirs(os.path.join(sdk, "platform-tools"))
+            adb = os.path.join(sdk, "platform-tools", "adb.exe" if os.name == "nt" else "adb")
+            open(adb, "w").close()
+            with mock.patch.object(common.shutil, "which", return_value=None),                     mock.patch.dict(os.environ, {"ANDROID_HOME": sdk}):
+                self.assertEqual(common.find_adb(), adb)
+            with mock.patch.object(common.shutil, "which", return_value="/usr/bin/adb"):
+                self.assertEqual(common.find_adb(), "/usr/bin/adb")
+
+    def test_nowhere_is_none(self):
+        with tempfile.TemporaryDirectory() as home, mock.patch.object(common.shutil, "which", return_value=None),                 mock.patch.object(common.os.path, "expanduser", lambda p: p.replace("~", home)),                 mock.patch.dict(os.environ, {"ANDROID_HOME": "", "ANDROID_SDK_ROOT": "", "LOCALAPPDATA": home}):
+            self.assertIsNone(common.find_adb())
