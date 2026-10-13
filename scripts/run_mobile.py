@@ -194,7 +194,10 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
     code, output = run_maestro([maestro, *(["--device", str(serial)] if serial else []), "test",
                                 os.path.abspath(path)], extra, cfg["timeout"])
     red = Redactor(secrets)
-    tail = " | ".join(red.text(ln.strip()) for ln in output.strip().splitlines()[-5:] if ln.strip())
+    lines = [ln.strip() for ln in output.strip().splitlines() if ln.strip()]
+    # the step that failed first: Maestro's last lines are often only its debug-folder notice (11.8 pilot)
+    failed = [ln for ln in lines if re.search(r"FAILED|Element not found|Assertion is false|Timeout", ln)][:3]
+    tail = " | ".join(red.text(ln) for ln in [*failed, *[ln for ln in lines[-5:] if ln not in failed]])
     if code != 0:
         return 3, f"{os.path.basename(path)} failed (Maestro exit {code}): {tail}"
     return 0, f"{os.path.basename(path)}: passed (helper flow, no result recorded)"
