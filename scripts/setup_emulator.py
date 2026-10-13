@@ -653,6 +653,10 @@ def main(argv=None) -> int:
         print(f"[fail] configuration: {e}", file=sys.stderr)
         return 2
     setup = Setup(a, mobile, str(proj.get("project") or ""))
+    # avdmanager and the emulator must agree on where the AVDs live: a recent avdmanager follows XDG_CONFIG_HOME
+    # (set on GitHub's runners: ~/.config/.android/avd) and the emulator does not (11.8 pilot: "Unknown AVD name")
+    saved = os.environ.get("ANDROID_AVD_HOME")
+    os.environ["ANDROID_AVD_HOME"] = avd_home()
     try:
         return setup.execute()
     except ConfigError as e:
@@ -661,6 +665,11 @@ def main(argv=None) -> int:
     except TargetError as e:
         print(f"[fail] {setup.current}: {e}", file=sys.stderr)
         return 3
+    finally:
+        if saved is None:
+            os.environ.pop("ANDROID_AVD_HOME", None)
+        else:
+            os.environ["ANDROID_AVD_HOME"] = saved
 
 
 if __name__ == "__main__":

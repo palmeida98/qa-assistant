@@ -68,6 +68,7 @@ class FakeSDK:
     def spawn(self, cmd, log=None):
         self.spawned.append(cmd)
         self.log = log
+        self.spawn_avd_home = os.environ.get("ANDROID_AVD_HOME")
         if self.crash is not None:          # the emulator writes its error and exits while starting
             with open(log, "w", encoding="utf-8") as f:
                 f.write(self.crash)
@@ -191,6 +192,16 @@ class AlreadyDone(Base):
         self.assertEqual(fake.of("push"), [])
         self.assertEqual([c for c in fake.calls if c[0] == "avdmanager"], [])
         self.assertFalse([c for c in fake.calls if len(c) > 4 and c[4] in ("grant", "revoke")])
+
+    def test_avdmanager_and_the_emulator_share_the_avd_home(self):
+        # the 11.8 pilot: avdmanager followed XDG_CONFIG_HOME, the emulator did not ("Unknown AVD name")
+        fake = FakeSDK(avds=(), running=False, boot_after=2, installed_code="")
+        with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "/home/runner/.config"}):
+            os.environ.pop("ANDROID_AVD_HOME", None)
+            rc, _, err = self.go(fake, "--apk", self.apk)
+            self.assertNotIn("ANDROID_AVD_HOME", os.environ)          # restored after the run
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(fake.spawn_avd_home, os.path.join(self.tmp.name, "avd"))
 
     def test_an_emulator_that_exits_while_starting_shows_its_last_output(self):
         # the 11.8 pilot: the runner's emulator exited with code 1 and the reason was thrown away
