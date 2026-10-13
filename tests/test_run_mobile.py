@@ -200,6 +200,19 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("passed (helper flow, no result recorded)", out)
 
+    def test_a_helper_flow_needs_only_the_variables_it_uses(self):
+        # the 11.8 pilot: a runner's .env holds only ci.secrets (the e-mail), not every mobile.variables
+        flow = self.helper()                                    # uses ${MAESTRO_SHOP_U} only
+        self.project("web")
+        with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
+            f.write("SHOP_U=ana\n")
+        seen = {}
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"),                 mock.patch.object(rm, "run_maestro", side_effect=lambda cmd, env, timeout: seen.update(env=env)
+                                  or (0, "ok")):
+            rc, out, err = self.run_it("--helper", flow)
+        self.assertEqual(rc, 0, out + err)
+        self.assertEqual({k for k in seen["env"] if k.startswith("MAESTRO_")}, {"MAESTRO_SHOP_U"})
+
     def test_a_helper_flow_device_flag_over_runner_variable_over_project_yaml(self):
         """Plan 11.8 (technique-mobile.md §11): --serial > QA_MOBILE_SERIAL > mobile.serial; QA_MOBILE_INPUT does not
         concern Maestro, so not even a wrong value stops a helper flow."""

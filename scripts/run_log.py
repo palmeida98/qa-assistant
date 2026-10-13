@@ -68,6 +68,26 @@ def vocabulary(proj: dict) -> list[str]:
     return []
 
 
+MEANINGS = {"pass": ("Pass", "ok"), "fail": ("Fail", "fail"), "blocked": ("Blocked", "blocked"),
+            "na": ("N/A", "na"), "not run": ("Not run", "pending")}
+
+
+def project_status(proj: dict, meaning: str) -> str:
+    """The project's word for a meaning a script writes on its own (pass, fail, blocked, na, not run): the status
+    of that type in dashboard.states, else the English word when the vocabulary has it (11.8 pilot: a workflow wrote
+    'Blocked' in a project whose word is 'Bloqueado')."""
+    english, kind = MEANINGS[meaning]
+    statuses = vocabulary(proj)
+    if not statuses or english in statuses:
+        return english
+    states = (proj.get("dashboard") or {}).get("states") or {}
+    word = next((str(k) for k, v in states.items() if v == kind and str(k) in statuses), None)
+    if word is None:
+        raise UsageError(f"no status of the project means {meaning!r}: add it to dashboard.states "
+                         f"(e.g. {{\"<status>\": {kind}}}) -- the vocabulary is {statuses}")
+    return word
+
+
 def applied(workspace: str, proj: dict, name: str) -> str | None:
     """Where the batch `name` was already applied, or None. Excel: the workbook's control sheet (read only);
     Jira / Azure DevOps: a record in tracker/sent/."""
