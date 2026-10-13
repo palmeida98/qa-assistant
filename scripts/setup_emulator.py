@@ -172,6 +172,9 @@ def avd_home() -> str:
     return os.path.expanduser(os.path.join("~", ".android", "avd"))
 
 
+DATA_PARTITION = "3G"
+
+
 def avd_ini_dirs() -> list[str]:
     """Where an avdmanager may have written <name>.ini: avd_home() first, then the places recent cmdline-tools use
     (XDG_CONFIG_HOME, set on GitHub's runners; ANDROID_USER_HOME), which the emulator does not search."""
@@ -333,8 +336,21 @@ class Setup:
         if found and found != avd_home():
             # the emulator finds it only through ANDROID_AVD_HOME (11.8 pilot: "Unknown AVD name" on a runner)
             os.environ["ANDROID_AVD_HOME"] = found
-        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE})"
+        self.small_data_partition()
+        self.say("done", "avd", f"{self.avd} created ({self.image}, {DEVICE_PROFILE}, data {DATA_PARTITION})"
                  + (f" in {found}" if found else ""))
+
+    def small_data_partition(self) -> None:
+        """A new AVD's data partition is DATA_PARTITION, not the device profile's ~6 GB: a GitHub-hosted runner has
+        about 7 GB free (11.8 pilot: "Not enough space to create userdata partition"), and one app needs far less."""
+        config = os.path.join(self.avd_dir(), "config.ini")
+        try:
+            with open(config, encoding="utf-8") as f:
+                lines = [ln for ln in f.read().splitlines() if not ln.startswith("disk.dataPartition.size")]
+        except OSError:
+            return
+        with open(config, "w", encoding="utf-8") as f:
+            f.write("\n".join([*lines, f"disk.dataPartition.size={DATA_PARTITION}"]) + "\n")
 
     def write_avd_ini(self) -> str | None:
         """Last resort when no <name>.ini is where the emulator looks: ask avdmanager where the AVD is (its `Path:`)
