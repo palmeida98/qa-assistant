@@ -389,6 +389,10 @@ class Environment(unittest.TestCase):
         self.found = dict(self.ALL)
         self.android = {"adb": "/sdk/platform-tools/adb", "emulator": "/sdk/emulator/emulator"}
         self.skills = {"checkpoint": "same", "run-batch": "same"}
+        clean = {k: v for k, v in os.environ.items() if k not in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")}
+        patcher = mock.patch.dict(os.environ, clean, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         for name, fake in [("which", lambda n: self.found.get(n)), ("python_version", lambda: (3, 12, 1)),
                            ("soffice", lambda: self.found.get("soffice", "/opt/soffice")),
                            ("android_tools", lambda: dict(self.android)), ("qa_audit_installed", lambda: True),
@@ -522,6 +526,30 @@ class Environment(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("no device answered", detail)
         self.assertNotIn("android-driver", self.checks(modules=["mobile"], mobile=MOBILE))
+
+    def test_mobile_runner_overrides_the_phone_and_the_driver(self):
+        """A runner (plan 11.8): QA_MOBILE_SERIAL / QA_MOBILE_INPUT over mobile.serial / mobile.input; with adb the
+        driver is not required and the emulator is; an input outside adb | driver is a problem, never ignored."""
+        mobile = {**MOBILE, "serial": "R58M123ABC", "input": "driver"}
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"}), \
+                mock.patch.object(vp.subprocess, "run") as run:
+            c = self.checks(modules=["mobile"], mobile=mobile)
+        run.assert_not_called()
+        self.assertNotIn("android-driver", c)
+        self.assertEqual(c["emulator"], (True, "/sdk/emulator/emulator"))
+        self.android["emulator"] = None
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"}):
+            self.assertFalse(self.checks(modules=["mobile"], mobile=mobile)["emulator"][0])
+        # only the serial overridden: the driver is still read, on the serial of the variable
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "R9DEMO"}), \
+                mock.patch.object(vp.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")) as run:
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["android-driver"]
+        self.assertFalse(ok)
+        self.assertEqual(run.call_args[0][0][:3], ["/sdk/platform-tools/adb", "-s", "R9DEMO"])
+        with mock.patch.dict(os.environ, {"QA_MOBILE_INPUT": "scrcpy"}):
+            ok, detail = self.checks(modules=["mobile"], mobile=mobile)["mobile input"]
+        self.assertFalse(ok)
+        self.assertIn("QA_MOBILE_INPUT 'scrcpy'", detail)
 
     def test_mobile_web_and_ios(self):
         c = self.checks(modules=["mobile"], mobile={"platform": "web", "flows": "flows"})

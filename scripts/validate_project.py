@@ -26,7 +26,9 @@ the recalculation finds it); functional-web/exploratory: Node.js (Playwright
 MCP); accessibility: qa-audit importable and its browser downloaded; mobile:
 maestro, and for android adb and emulator (as setup_emulator.py finds them),
 with mobile.input driver the companion driver on the device (installed and
-its service on, read with adb; plan 11.7), for ios xcrun, for an app
+its service on, read with adb; plan 11.7) — the serial and the input as the
+device scripts take them, QA_MOBILE_SERIAL / QA_MOBILE_INPUT over project.yaml
+(a runner sets them to its emulator and adb: no driver; plan 11.8) — for ios xcrun, for an app
 mobile.build.source. Nothing is started nor installed. A missing tool is a
 warning (exit 0) unless --strict.
 
@@ -639,11 +641,17 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
             sdk = ("install the Android SDK (Android Studio or the command-line tools) and set ANDROID_HOME; then "
                    f"python scripts/setup_emulator.py {workspace} --dry-run")
             add((bool(tools.get("adb")), "adb", tools.get("adb") or sdk))
-            if m.get("input") == "driver":
-                usable, detail = (driver_on_device(tools["adb"], m.get("serial")) if tools.get("adb")
+            from common import mobile_target
+            try:
+                target, input_ = mobile_target(m)       # QA_MOBILE_SERIAL / QA_MOBILE_INPUT over project.yaml
+            except ValueError as e:
+                target, input_ = mobile_target(m, input_="adb")[0], None
+                add((False, "mobile input", str(e)))
+            if input_ == "driver":
+                usable, detail = (driver_on_device(tools["adb"], target) if tools.get("adb")
                                   else (False, "needs adb"))
                 add((usable, "android-driver", detail))
-            serial = str(m.get("serial") or "")
+            serial = str(target or "")
             if serial and not serial.startswith("emulator-"):
                 add((True, "emulator", f"not needed: the target is the device {serial}"))
             else:

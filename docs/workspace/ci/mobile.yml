@@ -77,6 +77,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       MODE: ${{ inputs.mode }}
       TIMEOUT_MINUTES: ${{ needs.plan.outputs.timeout }}
+      # the runner's only device is its emulator, driven with adb: over mobile.serial / mobile.input (a physical
+      # phone, the companion driver) for every step and the agent's device.py calls (technique-mobile.md §1.2, §11.1)
+      QA_MOBILE_SERIAL: emulator-5554
+      QA_MOBILE_INPUT: adb
     steps:
       - name: Start
         id: start
@@ -165,9 +169,14 @@ jobs:
         run: python "$QA/scripts/workspace_build.py" "$WS" fetch ${BUILD_TAG:+--tag "$BUILD_TAG"}
 
       - name: The emulator (cold boot, no GPU)
-        run: >
-          python "$QA/scripts/setup_emulator.py" "$WS" --apk "${{ steps.build.outputs.apk }}"
-          --cold --headless --gpu swiftshader_indirect --no-audio --boot-timeout 600
+        run: |
+          python "$QA/scripts/setup_emulator.py" "$WS" --apk "${{ steps.build.outputs.apk }}" \
+            --cold --headless --gpu swiftshader_indirect --no-audio --boot-timeout 600
+          if [ "$("$ANDROID_HOME/platform-tools/adb" -s "$QA_MOBILE_SERIAL" get-state 2>/dev/null)" != "device" ]; then
+            echo "::error::the emulator is not $QA_MOBILE_SERIAL (QA_MOBILE_SERIAL): adb devices shows"
+            "$ANDROID_HOME/platform-tools/adb" devices
+            exit 1
+          fi
 
       - name: Login through an issue (the owner pastes the link)
         id: login

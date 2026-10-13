@@ -16,6 +16,8 @@ pastes it as a comment, the runner opens it on the emulator and deletes the comm
   command line of this computer), the comment is DELETED, the issue closed, and — with ci.login.screen_text — the
   app is checked to have left the login screen. Any other comment is ignored and reported (who, never its text).
   No link in time: the issue is closed saying so, exit 3, and the batch is Blocked (login), never failed.
+- The device: --serial, else $QA_MOBILE_SERIAL (the runner's emulator, plan 11.8), else mobile.serial, else the only
+  one connected; the input likewise from $QA_MOBILE_INPUT (device.py's configuration, common.mobile_target).
 - The URL never reaches a file, a log line, an issue comment nor the pull request. The run id is $GITHUB_RUN_ID on a
   runner. The GitHub API goes through `gh api` (one function; the tests replace it with a fake GitHub).
 
@@ -259,7 +261,8 @@ def main(argv=None) -> int:
                        ("wait", "wait for the owner's comment, open the link, delete the comment")):
         p = sub.add_parser(name, help=text)
         p.add_argument("--run-id", help="default: $GITHUB_RUN_ID")
-        p.add_argument("--serial", help="device (default: mobile.serial, or the only one connected)")
+        p.add_argument("--serial",
+                       help="device (default: $QA_MOBILE_SERIAL, mobile.serial, or the only one connected)")
         if name == "wait":
             p.add_argument("--interval", type=float, default=15, help="seconds between readings (default 15)")
     a = ap.parse_args(argv)

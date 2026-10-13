@@ -187,8 +187,12 @@ class Commands(unittest.TestCase):
                     "  ignore_labels: [Demo Shop, Send, Type a message]\n  evidence_batch: batch_20260928_01\n")
         with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
             f.write("SHOP_U=ana\nSHOP_P=fictional-password-9\n")
+        self.environ = mock.patch.dict(os.environ, {k: v for k, v in os.environ.items()
+                                                    if k not in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")}, clear=True)
+        self.environ.start()
 
     def tearDown(self):
+        self.environ.stop()
         self.tmp.cleanup()
 
     def run_it(self, fake, *args, clock=None):
@@ -230,6 +234,31 @@ class Commands(unittest.TestCase):
         fake = FakeDevice(devices="emulator-5554\tdevice\nR58M\tdevice\n")
         self.assertEqual(self.run_it(fake, "--serial", "R58M", "dump")[0], 0)
         self.assertEqual(self.run_it(fake, "dump", "--serial", "R58M")[0], 0)
+
+    def test_runner_variables_override_project_yaml_and_flags_override_them(self):
+        """Plan 11.8 (technique-mobile.md §11): flag > QA_MOBILE_SERIAL / QA_MOBILE_INPUT > project.yaml > default."""
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("  serial: R58M\n  input: driver\n")
+        fake = FakeDevice()                                                 # only emulator-5554 connected
+        rc, _, err = self.run_it(fake, "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("device R58M: not connected", err)
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "emulator-5554", "QA_MOBILE_INPUT": "adb"}):
+            rc, out, _ = self.run_it(fake, "check")
+            self.assertEqual(rc, 0)
+            self.assertIn("target: emulator-5554", out)
+            self.assertIn("input: adb", out)
+            self.assertEqual(self.run_it(fake, "tap", "Cart")[0], 0)
+            self.assertEqual(fake.taps()[-1], ("270", "250"))              # adb input, not the driver
+            cfg = dv.configuration(self.ws, "R58M", "driver")              # the flags still win
+            self.assertEqual((cfg["serial"], cfg["input"]), ("R58M", "driver"))
+        with mock.patch.dict(os.environ, {"QA_MOBILE_SERIAL": "", "QA_MOBILE_INPUT": ""}):   # empty = unset
+            cfg = dv.configuration(self.ws, None)
+            self.assertEqual((cfg["serial"], cfg["input"]), ("R58M", "driver"))
+        with mock.patch.dict(os.environ, {"QA_MOBILE_INPUT": "scrcpy"}):
+            rc, _, err = self.run_it(fake, "check")
+        self.assertEqual(rc, 2)
+        self.assertIn("QA_MOBILE_INPUT 'scrcpy'", err)
 
     # --- the foreground guard
 

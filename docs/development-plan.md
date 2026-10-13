@@ -36,7 +36,7 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026); its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated only against a fake `claude` and the fictional fixture; the first batch with a real session and a real site is the user's to run |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
@@ -1508,6 +1508,13 @@ the fictional golden (methodology §15). The first real project that runs a batc
 checklist in its own workspace first, with the user's approval of each step; the optional AVD cache of 11.6 is
 measured then. (Until 12.10.2026 this was 11.7.)*
 
+- [x] Prerequisite (13.10.2026): the runner tests on its emulator through `adb` whatever `mobile.serial` /
+  `mobile.input` say (11.7 set them to a physical phone and the companion driver, which a runner does not have).
+  `QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT` override them (flag > variable > `project.yaml` > default) in one place,
+  `common.mobile_target`, used by `device.py`, `run_mobile.py --helper`, `remote_login.py` (through those two) and
+  `validate_project.py --environment` (no driver asked for with `adb`); `mobile.yml` sets both at job level
+  (`emulator-5554`, the first emulator of a clean runner: the value must be known at step 5, before the boot) and its
+  emulator step stops the run when that serial is not the emulator that booted. technique-mobile.md v1.5 §1.2, §11.1.
 - [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
   build, `workspace_ci.py install`, the secrets set by the user, one batch run from GitHub (not from this computer),
   the login pasted in the issue, the PR reviewed and merged, the workbook updated by `apply.yml`. Time, turns and minutes
@@ -1646,6 +1653,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8 prerequisite: `QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT` override `mobile.serial` / `mobile.input` (`common.mobile_target`; technique-mobile.md v1.5 §1.2, §11.1), set by `mobile.yml` to the runner's emulator and `adb`, so a workspace configured for a physical phone with the driver runs unchanged on a runner. 4 new tests (788 → 792). |
 | 2026-10-13 | Fix found while merging phase 12 into 11.7 on Windows: `qa_ui/server.py` binds its port exclusively there (`SO_EXCLUSIVEADDRUSE`, no `SO_REUSEADDR`); before, a taken port gave no error and `test_qa_ui_server` hung forever (Linux CI unaffected). 788 tests. |
 | 2026-10-12 | 11.7 done: the pilot applied at the workspace's `/checkpoint` (with a correction batch: 5 cases had been set to Fail by their linked bug); three heuristics. |
 | 2026-10-12 | 11.7: the pilot batch ran on the phone through the driver (retest of 19 bugs on a new build); `device.py clear`; technique §1.2: turn off the service's floating shortcut, other apps are the person's steps. Checkpoint pending. |
