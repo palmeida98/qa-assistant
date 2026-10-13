@@ -94,12 +94,26 @@ def run(cmd: list[str], timeout: int = 120, stdin: str | None = None) -> tuple[i
     return r.returncode, (r.stdout + r.stderr).replace("\r\n", "\n")
 
 
-def spawn(cmd: list[str]):
-    """Starts a program detached from this one (the emulator keeps running after the script ends)."""
+def spawn(cmd: list[str], log: str | None = None):
+    """Starts a program detached from this one (the emulator keeps running after the script ends); its output goes
+    to `log` when given (read back when it exits while starting), otherwise nowhere."""
     kw = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
           if os.name == "nt" else {"start_new_session": True})
-    return subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            **kw)
+    if not log:
+        return subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, **kw)
+    with open(log, "wb") as out:
+        return subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, **kw)
+
+
+def log_tail(path: str, lines: int = 25) -> str:
+    """The last lines of the emulator's output (it holds no secret: the emulator's own messages)."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            tail = [ln.rstrip() for ln in f.read().splitlines() if ln.strip()][-lines:]
+    except OSError:
+        return ""
+    return "\n".join(tail)
 
 
 def now() -> float:
@@ -366,14 +380,17 @@ class Setup:
             self.serial = None
             return
         started = False
+        log = os.path.join(tempfile.gettempdir(), f"emulator-{self.avd}.log")
         if not self.serial:
-            proc = spawn(start)
+            proc = spawn(start, log)
             started = True
         begin = now()
         while now() - begin < self.a.boot_timeout:
             if started and proc.poll() not in (None, 0):
-                raise TargetError(f"the emulator exited (code {proc.poll()}) while starting {self.avd}: run "
-                                  f"`{' '.join(start)}` by hand to see why")
+                tail = log_tail(log)
+                raise TargetError(f"the emulator exited (code {proc.poll()}) while starting {self.avd}"
+                                  + (f"; its last output ({log}):\n{tail}" if tail else
+                                     f": run `{' '.join(start)}` by hand to see why"))
             if not self.serial:
                 self.serial, _ = self.running_serial()
             if self.serial and self.booted():

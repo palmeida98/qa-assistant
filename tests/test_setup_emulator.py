@@ -41,8 +41,11 @@ class Clock:
 
 
 class Proc:
+    def __init__(self, code=None):
+        self.code = code
+
     def poll(self):
-        return None
+        return self.code
 
 
 class FakeSDK:
@@ -60,9 +63,15 @@ class FakeSDK:
         self.chrome, self.chrome_done = chrome, chrome_done
         self.perms = dict(perms or {})
         self.calls, self.spawned, self.boot_polls = [], [], 0
+        self.crash = None
 
-    def spawn(self, cmd):
+    def spawn(self, cmd, log=None):
         self.spawned.append(cmd)
+        self.log = log
+        if self.crash is not None:          # the emulator writes its error and exits while starting
+            with open(log, "w", encoding="utf-8") as f:
+                f.write(self.crash)
+            return Proc(code=1)
         self.running = True
         return Proc()
 
@@ -182,6 +191,16 @@ class AlreadyDone(Base):
         self.assertEqual(fake.of("push"), [])
         self.assertEqual([c for c in fake.calls if c[0] == "avdmanager"], [])
         self.assertFalse([c for c in fake.calls if len(c) > 4 and c[4] in ("grant", "revoke")])
+
+    def test_an_emulator_that_exits_while_starting_shows_its_last_output(self):
+        # the 11.8 pilot: the runner's emulator exited with code 1 and the reason was thrown away
+        fake = FakeSDK(avds=(), running=False)
+        fake.crash = "INFO | starting\nERROR | x86_64 emulation currently requires hardware acceleration!\n"
+        rc, out, err = self.go(fake, "--apk", self.apk)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("exited (code 1)", out + err)
+        self.assertIn("requires hardware acceleration", out + err)
+        os.remove(fake.log)
 
     def test_missing_pieces_are_done(self):
         fake = FakeSDK(avds=(), running=False, boot_after=2, installed_code="")
