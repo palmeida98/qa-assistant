@@ -175,7 +175,15 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
         maestro = shutil.which("maestro")
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")
-        extra, secrets = maestro_environment(workspace, cfg["variables"])
+        # only the variables the helper uses: a runner's .env holds only ci.secrets (11.8 pilot: the login flow
+        # needs the e-mail, not the password nor the phone of mobile.variables)
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        used = [v for v in cfg["variables"] if f"MAESTRO_{v}" in text]
+        extra, secrets = maestro_environment(workspace, used)
+        env_ws = read_workspace_env(workspace)      # the others with a value are still redacted from the output
+        secrets.update({v: env_ws.get(v) or os.environ.get(v) for v in cfg["variables"]
+                        if v not in secrets and (env_ws.get(v) or os.environ.get(v))})
         # the input does not matter to Maestro: "adb" so that a QA_MOBILE_INPUT for device.py is not read here
         serial, _ = mobile_target(read_project(workspace).get("mobile") or {}, serial, "adb")
     except UsageError as e:

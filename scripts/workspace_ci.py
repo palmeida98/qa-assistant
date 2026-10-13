@@ -273,12 +273,13 @@ def cmd_batch(workspace: str, a) -> int:
 
 
 def cmd_blocked(workspace: str, a) -> int:
-    for case in a.cases:
-        try:
-            run_log.add(workspace, a.run_log, case, "Blocked", a.reason)
-        except (run_log.UsageError, run_log.Refused) as e:
-            raise UsageError(str(e)) from None
-    print(f"{len(a.cases)} case(s) Blocked in {a.run_log}: {a.reason}")
+    try:
+        blocked = run_log.project_status(read_project(workspace), "blocked")
+        for case in a.cases:
+            run_log.add(workspace, a.run_log, case, blocked, a.reason)
+    except (run_log.UsageError, run_log.Refused) as e:
+        raise UsageError(str(e)) from None
+    print(f"{len(a.cases)} case(s) {blocked} in {a.run_log}: {a.reason}")
     return 0
 
 
@@ -294,7 +295,8 @@ def cmd_import_flows(workspace: str, a) -> int:
             continue
         note = f"flow {r.get('flow')} on {report.get('target')}" + (f": {r['message']}" if r.get("message") else "")
         try:
-            run_log.add(workspace, a.run_log, r["case"], r["suggested_status"], note)
+            status = run_log.project_status(read_project(workspace), r["suggested_status"].lower())
+            run_log.add(workspace, a.run_log, r["case"], status, note)
         except (run_log.UsageError, run_log.Refused) as e:
             raise UsageError(str(e)) from None
         n += 1

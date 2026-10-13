@@ -1658,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | 11.8, 9th run: disk freed (13 → 27 GB), the emulator booted in 76 s and build 21 installed; then the login helper refused to start (a password variable of `mobile.variables` not in the runner's `.env`) and the fallback wrote `Blocked`, not the project's word. A helper flow now needs only the variables it uses; `run_log.project_status()` gives the project's word for a meaning (`dashboard.states`, or the English word), used by `workspace_ci.py blocked` and `import-flows`. |
 | 2026-10-13 | 11.8, 8th run: with `config.ini` found and `-partition-size 3072` the emulator still asked for 7372.8 MB, so the size is not the AVD's data partition (#15 and #16 stay: harmless, and they keep a new AVD small); `mobile.yml` now frees disk first (.NET, Haskell, Boost, Swift, CodeQL; never the Android SDK, Java, Python or Node). A workspace takes it with `workspace_ci.py install --yes` and a push. |
 | 2026-10-13 | 11.8, 7th run: still 7372.8 MB needed (1.2 × the profile's 6 GB) with only `config.ini` changed; an AVD created in the run now also starts with `-partition-size 3072`, and the avd step says whether it found `config.ini`. |
 | 2026-10-13 | 11.8, 6th run: the AVD was found, then "Not enough space to create userdata partition" (7.35 GB free, 7.37 GB needed); a new AVD now gets `disk.dataPartition.size=3G` (technique-mobile.md §11.5). |

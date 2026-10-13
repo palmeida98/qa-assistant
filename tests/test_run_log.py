@@ -120,3 +120,29 @@ class RunLog(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectStatus(unittest.TestCase):
+    """The 11.8 pilot: a workflow wrote 'Blocked' in a project whose word is 'Bloqueado'."""
+    PT = ("Por executar", "Passou", "Falhou", "Bloqueado", "N/A")
+
+    def proj(self, statuses, states=None):
+        return {"tracker": "excel", "excel": {"cases": {"statuses": list(statuses)}},
+                **({"dashboard": {"states": states}} if states else {})}
+
+    def test_the_project_word_from_dashboard_states(self):
+        p = self.proj(self.PT, {"Por executar": "pending", "Passou": "ok", "Falhou": "fail", "Bloqueado": "blocked",
+                                "N/A": "na"})
+        self.assertEqual(rl.project_status(p, "blocked"), "Bloqueado")
+        self.assertEqual(rl.project_status(p, "pass"), "Passou")
+        self.assertEqual(rl.project_status(p, "not run"), "Por executar")
+
+    def test_the_english_word_when_the_vocabulary_has_it_or_has_none(self):
+        self.assertEqual(rl.project_status(self.proj(["Not run", "Pass", "Fail", "Blocked", "N/A"]), "blocked"),
+                         "Blocked")
+        self.assertEqual(rl.project_status({"tracker": "excel"}, "fail"), "Fail")
+
+    def test_no_word_for_the_meaning_is_a_usage_error(self):
+        with self.assertRaises(rl.UsageError) as e:
+            rl.project_status(self.proj(self.PT), "blocked")
+        self.assertIn("dashboard.states", str(e.exception))

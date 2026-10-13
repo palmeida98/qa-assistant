@@ -205,6 +205,8 @@ A login that needs a person (a one-time magic link sent by e-mail) stays **manua
 - masks the URL in the log (`::add-mask::`), opens it on the emulator with the device driver's `link` (never printed), **deletes the comment**, closes the issue, and checks that the app left the login screen (`ci.login.screen_text`);
 - with no comment within `ci.login.timeout_minutes`, stops with exit 3: the batch is **Blocked (login)**, never failed.
 
+The helper flow gets only the `mobile.variables` it uses (`${MAESTRO_<VAR>}` in its text), so the runner needs only those in `ci.secrets`; the others with a value are still redacted from its output. A status a script writes on its own (Blocked by the workflow, Pass / Fail from a flow) is the project's word for that meaning: `dashboard.states`, or the English word when the vocabulary has it.
+
 The URL never reaches a file, a log line nor the pull request. The link is spent once opened: it must not be opened in the user's own browser first.
 
 ### 11.3 Conversational mode on a runner
