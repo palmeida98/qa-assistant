@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.3 · 2026-09-29 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11).
+> Version 1.4 · 2026-10-12 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2).
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -36,6 +36,25 @@
 - **A stale snapshot**: an emulator restarted from the AVD's saved snapshot comes back as it was then — with the old build installed, and without the native libraries copied later. `setup_emulator.py` boots **cold** (`-no-snapshot-load`) when the snapshot is older than the build, or with `--cold` (saving a snapshot can fail anyway with some apps, e.g. `UNSUPPORTED_VK_APP` for a Vulkan app).
 - **No microphone** on the computer: dictation cases are **Blocked** (environment), unless a real device with a microphone is used.
 
+### 1.2 A real device that blocks input injection
+
+Some vendor builds only let `adb` inject input with an extra option that needs a SIM card or a vendor account — on Xiaomi (MIUI / HyperOS), "USB debugging (Security settings)". Without it `adb shell input` fails with `SecurityException: … INJECT_EVENTS`, and so do `adb install` (`INSTALL_FAILED_USER_RESTRICTED`), `settings put`, `ime` and `pm grant`; Maestro, scrcpy and UiAutomator depend on the same option. Reading the screen (`uiautomator dump`, `screencap`), `am start`, `am broadcast` and `content call` still work. Diagnose it with `device.py check` and one `adb shell input keyevent 0`.
+
+Do not fall back to "assisted" runs (the person taps): use the **companion driver** of `qa-assistant` (`tools/android-driver/`), a small app with an accessibility service that taps, swipes, goes back and sets text through the accessibility APIs, which need none of those permissions.
+
+1. **Build** it on this computer: `python scripts/build_driver.py --push` (Android build-tools, a platform and a JDK 17+; the signing key is created on the first build in `~/.qa-assistant/`, outside every repository). `--push` tries `adb install` and, when the device refuses it, copies the APK to the device's `Download/` folder.
+2. **Install** it on the device (the person, once, and after each new version of the driver): the file manager → `Download/qa-driver.apk` → install (allow the file manager to install apps when asked).
+3. **Allow restricted settings** (Android 13+, for an app not installed from a store): Settings → Apps → *QA driver* → ⋮ → *Allow restricted settings* (the menu appears after the first attempt to turn the service on).
+4. **Turn the service on**: Settings → Accessibility → downloaded apps / installed services → *QA driver* → on.
+   Then turn **off the service's shortcut** ("QA driver shortcut" / accessibility button) on the same screen: some vendor builds add a floating accessibility button on the right edge when a service is turned on, and the driver's taps land on it instead of the app (in the pilot it covered a chat's send button).
+5. Set `mobile.input: driver` in `project.yaml` (or `--input driver`) and run `device.py check`: it says whether the driver is installed, the service on and its version; `validate_project.py --environment` checks the same.
+
+How it works: `device.py` runs `adb shell content call --uri content://io.qaassistant.driver --method <method> --arg <args>`; the methods are `ping`, `tap x,y`, `longpress x,y,ms`, `swipe x1,y1,x2,y2,ms`, `back`, `home`, `text <base64 of the UTF-8 text>` (set on the focused field, any Unicode, the whole text in one call; no argument empties the field — `device.py clear`) and `enter`; each answers `ok` or an `error` once the gesture has happened. The arguments are comma-separated because the device's shell splits on spaces.
+
+Security: the driver accepts commands only from the adb shell (or root), checked on every call, so no other app on the device can use it; it has no network permission, no screen of its own, stores nothing and does nothing by itself. It is off until the person turns it on, and it is turned off (or uninstalled) in the device's settings when the project ends. The APK is built locally and never published.
+
+Limits: the driver replaces input only. Other apps are never driven nor read (the foreground guard of `device.py`): a system file picker or the system's settings (airplane mode, which such a device does not let `adb` change either) are steps of the person, said in the run log as assisted steps. Maestro flows (N2) still cannot run on such a device (use the emulator for them); setting a field's text replaces its whole content (`ACTION_SET_TEXT`), so a field that reacts to each key press may behave differently than with a keyboard — when a case is about typing itself, say so in the result; a permission dialog of the system is tapped like any other screen, but `pm grant` stays unavailable.
+
 Rule: the run log and the bug **always** say where it ran (platform, OS version, model or emulator, app version). A Pass on the emulator does not count for "real device" nor the other way round, if the case distinguishes them.
 
 ---
@@ -46,7 +65,7 @@ Rule: the run log and the bug **always** say where it ran (platform, OS version,
 |---|---|---|
 | **N1 · Agent** | Maestro Studio / commands by the agent | Exploring, writing and tuning flows |
 | **N1 · Flows** | `scripts/run_mobile.py` (runs `maestro test`) | Batches of cases, each case a flow |
-| **N1 · Device driver** | `scripts/device.py` (`adb`; Maestro only to type Unicode) | Conversational mode (§4.1); assisted runs on a device that refuses input injection (the user taps, the driver only reads) |
+| **N1 · Device driver** | `scripts/device.py` (`adb`; Maestro only to type Unicode; or the companion driver with `mobile.input: driver`, §1.2) | Conversational mode (§4.1), on an emulator or a real device — also one that refuses input injection (§1.2) |
 | **N2 · Regression** | The same flows in CI or Maestro Cloud | Smoke and regression |
 
 The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except the demo).

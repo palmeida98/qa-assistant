@@ -28,6 +28,10 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
 6. Conversational (Android): prepare the target -- python scripts/setup_emulator.py <workspace> (or the
    device in mobile.serial) -- then python scripts/device.py <workspace> check. Record platform, OS, model
    and app version. Exit 3 (no target, app not installed) -> the cases are Blocked (environment).
+   A real device that refuses input injection (adb shell input -> SecurityException INJECT_EVENTS, e.g. a
+   Xiaomi without a SIM): mobile.input: driver, the companion driver (technique-mobile.md section 1.2;
+   python scripts/build_driver.py --push, the person installs it and turns its service on once); check
+   then says "input: driver <n>, service on". Scroll with device.py swipe, go back with device.py back.
 7. Login by link: the user asks for it in the app and hands it over; open it with
    device.py <workspace> link "<url>". Never write the link anywhere (it is a one-time credential), never
    open it elsewhere first. Typing a credential to ask for the link: a helper flow, never device.py type --
@@ -47,8 +51,8 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
    capture's path (evidence/<batch>/<case>_t<N>.png), through
    python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path>]
    (one item per case, replaced when written again; a batch already applied is refused: use the new name
-   it suggests). Assisted mode, on a device that refuses input
-   injection: the user taps and types; the driver only reads (dump, shot).
+   it suggests). Assisted mode (the user taps and types; device.py only reads) only when the companion
+   driver cannot be used on that device, said in the run log.
 10. Classify by methodology section 8 and technique-mobile.md section 6. An answer judged against the
     specification's guardrails is Pass/Fail by the specification's TEXT, never by taste; a doubt is
     Question (asked at the checkpoint). Run log in the format of methodology section 7.1, with the platform

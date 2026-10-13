@@ -1,0 +1,4 @@
+<resources>
+  <string name="app_name">QA driver</string>
+  <string name="description">Lets qa-assistant tap and type through adb on devices that block input injection. Accepts commands only from adb shell.</string>
+</resources>

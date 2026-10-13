@@ -25,8 +25,10 @@ copy (sync_skills.py's comparison, read only); tracker excel: LibreOffice (as
 the recalculation finds it); functional-web/exploratory: Node.js (Playwright
 MCP); accessibility: qa-audit importable and its browser downloaded; mobile:
 maestro, and for android adb and emulator (as setup_emulator.py finds them),
-for ios xcrun, for an app mobile.build.source. Nothing is started nor
-installed. A missing tool is a warning (exit 0) unless --strict.
+with mobile.input driver the companion driver on the device (installed and
+its service on, read with adb; plan 11.7), for ios xcrun, for an app
+mobile.build.source. Nothing is started nor installed. A missing tool is a
+warning (exit 0) unless --strict.
 
 Read only; never changes anything. Problems prevent calling the onboarding done;
 warnings are shown to the user.
@@ -44,6 +46,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tomllib
 from urllib.parse import urlsplit
@@ -151,13 +154,17 @@ def is_texts(v) -> bool:
 
 def mobile_target(proj: dict) -> tuple[list[str], list[str]]:
     """The keys of mobile: that scripts/setup_emulator.py reads (plan 9.2: avd, image, build, permissions) and
-    those that scripts/device.py reads (plan 9.3: serial, send_label, ignore_labels, evidence_batch, browser)."""
+    those that scripts/device.py reads (plan 9.3: serial, send_label, ignore_labels, evidence_batch, browser;
+    plan 11.7: input)."""
     m = proj.get("mobile")
     if not isinstance(m, dict):
         return [], []
     problems, warnings = [], []
     if m.get("serial") is not None and not (isinstance(m["serial"], str) and re.fullmatch(r"\S+", m["serial"])):
         problems.append(f"mobile.serial {m['serial']!r}: a device serial as a quoted text, e.g. \"emulator-5554\"")
+    if m.get("input") is not None and m["input"] not in ("adb", "driver"):
+        problems.append(f"mobile.input {m['input']!r}: adb (the default) or driver (the companion driver for a "
+                        "device that refuses input injection, technique-mobile.md §1.2)")
     label = m.get("send_label")
     if label is not None and not ((isinstance(label, str) and label.strip()) or (is_texts(label) and label)):
         problems.append("mobile.send_label must be a text or a list of texts (the send control's label)")
@@ -485,6 +492,31 @@ def android_tools() -> dict:
     return setup_emulator.find_tools()
 
 
+DRIVER_PACKAGE = "io.qaassistant.driver"
+
+
+def driver_on_device(adb: str, serial: str | None) -> tuple[bool, str]:
+    """(usable, detail) of the companion driver on the device, read only: the package installed and its service in
+    enabled_accessibility_services (both readable without the vendor's security option)."""
+    def ask(*args):
+        try:
+            r = subprocess.run([adb, *(["-s", serial] if serial else []), *args], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=20, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return r.stdout if r.returncode == 0 else None
+    help_ = "technique-mobile.md §1.2 (python scripts/build_driver.py --push)"
+    packages = ask("shell", "pm", "list", "packages", DRIVER_PACKAGE)
+    if packages is None:
+        return False, f"no device answered{f' ({serial})' if serial else ''}: connect it, then {help_}"
+    if f"package:{DRIVER_PACKAGE}" not in packages.split():
+        return False, f"not installed on the device: {help_}"
+    services = ask("shell", "settings", "get", "secure", "enabled_accessibility_services") or ""
+    if f"{DRIVER_PACKAGE}/" not in services:
+        return False, f"installed, but its accessibility service is off: {help_}"
+    return True, "installed and its service on (device.py check pings it)"
+
+
 def qa_audit_installed() -> bool:
     return importlib.util.find_spec("qa_audit") is not None
 
@@ -607,6 +639,10 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
             sdk = ("install the Android SDK (Android Studio or the command-line tools) and set ANDROID_HOME; then "
                    f"python scripts/setup_emulator.py {workspace} --dry-run")
             add((bool(tools.get("adb")), "adb", tools.get("adb") or sdk))
+            if m.get("input") == "driver":
+                usable, detail = (driver_on_device(tools["adb"], m.get("serial")) if tools.get("adb")
+                                  else (False, "needs adb"))
+                add((usable, "android-driver", detail))
             serial = str(m.get("serial") or "")
             if serial and not serial.startswith("emulator-"):
                 add((True, "emulator", f"not needed: the target is the device {serial}"))

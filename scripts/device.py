@@ -13,9 +13,13 @@ Drives an Android device or emulator through adb for the conversational mode
                                             type, tap send, wait until the screen is stable, print what is new
     shot NAME [--batch B]                   screenshot to <workspace>/evidence/<batch>/<NAME>.png
     link URL [--package P]                  opens a deep link or a login callback with `am start`
+    swipe X1 Y1 X2 Y2 [--ms 300]            a swipe (e.g. to scroll a long answer)
+    back                                    the system's back
+    clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
 
 - project.yaml, mobile: section: app_id (required), serial (optional; --serial
-  overrides; with neither, the only device connected), send_label (text or
+  overrides; with neither, the only device connected), input (adb | driver;
+  --input overrides; default adb), send_label (text or
   list), ignore_labels (the app's chrome, dropped from `send`), evidence_batch
   (default: today, YYYYMMDD) and browser (package that opens `link`).
 - Privacy: dump, shot, send, tap and type act only with mobile.app_id in the
@@ -35,19 +39,31 @@ Drives an Android device or emulator through adb for the conversational mode
   (with --field) and Maestro retried once; if it fails again, ASCII text falls
   back to chunked adb (said on stderr), other text is exit 3. --via adb|maestro
   forces a route for ASCII (e.g. a field that ignores `input text`).
+- Input through the companion driver (plan 11.7, technique-mobile.md §1.2):
+  with `input: driver`, tap, swipe, back and the typing go through
+  `adb shell content call --uri content://io.qaassistant.driver` (comma-
+  separated arguments; the text as base64 of its UTF-8, set on the focused
+  field in one call: any Unicode, no chunks, no Maestro), for a device that
+  refuses `adb shell input` (INJECT_EVENTS). `check` pings it. Reading the
+  screen is the same for both inputs. `clear` sets the empty text with the
+  driver; with adb it moves to the end and deletes (as many characters as the
+  field shows with --field, else CLEAR_KEYS).
 
 Exit codes:
   0  ok
   2  invalid usage or configuration (e.g. no mobile.app_id, several devices
      without --serial, a .env value in the text, Maestro missing)
   3  no target (no adb, no device, app not installed), app not in the
-     foreground, screen not readable, or `send` timed out
-  4  element not found (tap, --field, the send control)
+     foreground, screen not readable, `send` timed out, or the driver not
+     installed / its service off
+  4  element not found (tap, --field, the send control; with the driver, no
+     focused field to type into)
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -79,8 +95,13 @@ SHELL_SPECIAL = set("\\'\"()<>|;&*~$`!?[]{}#")
 XML_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 XML_REF = re.compile(r"&#(x[0-9a-fA-F]+|[0-9]+);")
 MIN_SECRET_LEN = 4  # a .env value shorter than this is only refused when it is the whole text
+CLEAR_KEYS = 250    # deletions of `clear` through adb when the field's text is not known
 CHUNK = 300         # characters per `adb shell input text` call and per Maestro inputText step
 IME_NOT_ACTIVE = "IME is not active"
+INPUTS = ("adb", "driver")
+DRIVER_URI = "content://io.qaassistant.driver"
+DRIVER_HELP = "build, install and turn it on: technique-mobile.md §1.2 (python scripts/build_driver.py --push)"
+BUNDLE = re.compile(r"Bundle\[\{(.*)\}\]", re.DOTALL)
 
 
 class UsageError(Exception):
@@ -141,7 +162,7 @@ def hide_urls(s: str) -> str:
 
 # --- configuration and target -----------------------------------------------------------------------------------
 
-def configuration(workspace: str, serial: str | None) -> dict:
+def configuration(workspace: str, serial: str | None, input_: str | None = None) -> dict:
     try:
         m = read_project(workspace).get("mobile") or {}
     except FileNotFoundError as e:
@@ -149,9 +170,14 @@ def configuration(workspace: str, serial: str | None) -> dict:
     if not m.get("app_id"):
         raise UsageError("mobile.app_id missing in project.yaml (the app under test, e.g. com.demoshop.app)")
 
+    input_ = input_ or m.get("input") or "adb"
+    if input_ not in INPUTS:
+        raise UsageError(f"mobile.input {input_!r}: adb or driver (technique-mobile.md §1.2)")
+
     def as_list(v):
         return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
     return {"workspace": workspace, "app_id": str(m["app_id"]), "serial": serial or m.get("serial"),
+            "input": input_,
             "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
             "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
             "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
@@ -274,8 +300,74 @@ def after_message(lines: list[str], message: str, ignore: set[str]) -> tuple[lis
 
 # --- acting -----------------------------------------------------------------------------------------------------
 
-def tap_xy(serial: str, x: int, y: int) -> None:
-    adb(serial, "shell", "input", "tap", str(x), str(y))
+def driver(serial: str, method: str, arg: str | None = None) -> dict:
+    """One call to the companion driver; returns its answer ({'ok': True, 'version': '1'}). Not installed, the
+    service off or a refused action is NoTarget; nothing focused to type into is NotFound."""
+    try:
+        out = adb(serial, "shell", "content", "call", "--uri", DRIVER_URI, "--method", method,
+                  *(["--arg", arg] if arg is not None else []))
+    except NoTarget as e:
+        raise NoTarget(f"the driver did not answer ({e}): {DRIVER_HELP}") from None
+    m = BUNDLE.search(out)
+    if not m:
+        first = next((ln.strip() for ln in out.splitlines() if ln.strip()), "no answer")
+        raise NoTarget(f"the driver did not answer ({first[:160]}): {DRIVER_HELP}")
+    body = m.group(1)
+    fields = dict(re.findall(r"(?:^|, )(ok|version)=([^,]*)", body))
+    error = re.search(r"(?:^|, )error=(.*?)(?=, (?:ok|version)=|$)", body)
+    if fields.get("ok") == "true":
+        return {"ok": True, "version": fields.get("version", "?")}
+    reason = error.group(1) if error else "refused"
+    if reason == "no focused field":
+        raise NotFound("no focused field to type into (tap the field first, or use --field)")
+    if reason == "service off":
+        raise NoTarget(f"the driver's accessibility service is off: {DRIVER_HELP}")
+    raise NoTarget(f"driver {method}: {reason}")
+
+
+def tap_xy(cfg: dict, serial: str, x: int, y: int) -> None:
+    if cfg.get("input") == "driver":
+        driver(serial, "tap", f"{x},{y}")
+    else:
+        adb(serial, "shell", "input", "tap", str(x), str(y))
+
+
+def swipe_xy(cfg: dict, serial: str, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
+    if cfg.get("input") == "driver":
+        driver(serial, "swipe", f"{x1},{y1},{x2},{y2},{ms}")
+    else:
+        adb(serial, "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
+
+
+def press_back(cfg: dict, serial: str) -> None:
+    if cfg.get("input") == "driver":
+        driver(serial, "back")
+    else:
+        adb(serial, "shell", "input", "keyevent", "4")
+
+
+def clear_field(cfg: dict, serial: str, field: str | None) -> str:
+    """Empties the focused field (after tapping the field, if given); returns the route used."""
+    known = None
+    if field:
+        node = find(read_screen(cfg, serial), field)
+        tap_xy(cfg, serial, *node.centre)
+        known = len(node.text)
+    else:
+        guard(cfg, serial, "clear")
+    if cfg.get("input") == "driver":
+        driver(serial, "text")                    # no argument: the empty text
+        return "driver set empty text"
+    n = known if known is not None else CLEAR_KEYS
+    adb(serial, "shell", "input", "keyevent", "123")                  # KEYCODE_MOVE_END
+    adb(serial, "shell", "input", "keyevent", *(["67"] * n))          # KEYCODE_DEL
+    return f"adb {n} deletions"
+
+
+def type_driver(serial: str, text: str) -> None:
+    """The whole text set on the focused field (ACTION_SET_TEXT): base64 of the UTF-8, so no quoting and any
+    Unicode."""
+    driver(serial, "text", base64.b64encode(text.encode("utf-8")).decode("ascii"))
 
 
 def input_text_arg(text: str) -> str:
@@ -333,9 +425,14 @@ def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "
     """Types the text (after tapping the field, if given); returns the route used."""
     refuse_secrets(cfg["workspace"], text)
     if field:
-        tap_xy(serial, *find(read_screen(cfg, serial), field).centre)
+        tap_xy(cfg, serial, *find(read_screen(cfg, serial), field).centre)
     else:
         guard(cfg, serial, "type")
+    if cfg.get("input") == "driver":
+        if via != "auto":
+            raise UsageError(f"--via {via}: with mobile.input driver the text is set by the driver")
+        type_driver(serial, text)
+        return "driver set text"
     ascii_only = all(" " <= ch <= "~" for ch in text)
     if via == "adb" and not ascii_only:
         raise UsageError("--via adb: `adb shell input text` types only ASCII; this text needs Maestro")
@@ -346,7 +443,7 @@ def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "
     if r.returncode != 0 and IME_NOT_ACTIVE in (r.stdout + r.stderr):
         # intermittent: Maestro's keyboard lost the focus; the field again, then one retry
         if field:
-            tap_xy(serial, *find(read_screen(cfg, serial), field).centre)
+            tap_xy(cfg, serial, *find(read_screen(cfg, serial), field).centre)
         r = type_maestro(cfg, serial, text)
         if r.returncode != 0 and IME_NOT_ACTIVE in (r.stdout + r.stderr) and ascii_only:
             print("NOTE: Maestro's keyboard is not active (twice): the ASCII text was typed through adb instead",
@@ -428,6 +525,10 @@ def cmd_check(cfg, serial, a) -> int:
     if not name:
         raise NoTarget(f"app {cfg['app_id']} is not installed on {serial}")
     print(f"app: {cfg['app_id']} {name.group(1)}" + (f" (code {code.group(1)})" if code else ""))
+    if cfg["input"] == "driver":
+        print(f"input: driver {driver(serial, 'ping')['version']}, service on")
+    else:
+        print("input: adb")
     return 0
 
 
@@ -449,7 +550,7 @@ def cmd_tap(cfg, serial, a) -> int:
         (x, y), label = node.centre, node.line()
     else:
         raise UsageError("tap needs a TEXT or --xy X Y")
-    tap_xy(serial, x, y)
+    tap_xy(cfg, serial, x, y)
     print(f"tapped: {label}")
     return 0
 
@@ -472,7 +573,7 @@ def cmd_send(cfg, serial, a) -> int:
                         if lab.casefold() in n.text.casefold() and key not in n.text.casefold()), None)
     if control is None:
         raise NotFound(f"send control not found (tried {labels}; set mobile.send_label or --send-label)")
-    tap_xy(serial, *control.centre)
+    tap_xy(cfg, serial, *control.centre)
 
     def read():
         return [n.line() for n in read_screen(cfg, serial)]
@@ -487,6 +588,27 @@ def cmd_send(cfg, serial, a) -> int:
     if not stable:
         raise NoTarget(f"the screen did not settle in {a.timeout:.0f} s (answer still streaming?): "
                        "the lines above are the last reading")
+    return 0
+
+
+def cmd_swipe(cfg, serial, a) -> int:
+    if a.ms < 1:
+        raise UsageError("--ms must be a positive number of milliseconds")
+    guard(cfg, serial, "swipe", allow_dialogs=True)
+    swipe_xy(cfg, serial, a.x1, a.y1, a.x2, a.y2, a.ms)
+    print(f"swiped: ({a.x1},{a.y1}) -> ({a.x2},{a.y2}) in {a.ms} ms")
+    return 0
+
+
+def cmd_clear(cfg, serial, a) -> int:
+    print(f"cleared ({clear_field(cfg, serial, a.field)})")
+    return 0
+
+
+def cmd_back(cfg, serial, a) -> int:
+    guard(cfg, serial, "back", allow_dialogs=True)
+    press_back(cfg, serial)
+    print("back")
     return 0
 
 
@@ -517,7 +639,8 @@ def cmd_link(cfg, serial, a) -> int:
 
 
 COMMANDS = {"check": cmd_check, "dump": cmd_dump, "tap": cmd_tap, "type": cmd_type, "send": cmd_send,
-            "shot": cmd_shot, "link": cmd_link}
+            "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "back": cmd_back,
+            "clear": cmd_clear}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -525,8 +648,10 @@ def parser() -> argparse.ArgumentParser:
                                              "(technique-mobile.md §4.1).")
     ap.add_argument("workspace")
     ap.add_argument("--serial", help="device serial (default: mobile.serial, or the only device connected)")
+    ap.add_argument("--input", choices=INPUTS, help="adb, or the companion driver (default: mobile.input, else adb)")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--serial", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    common.add_argument("--input", choices=INPUTS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("check", parents=[common], help="target, OS, model, app version, foreground app")
     p = sub.add_parser("dump", parents=[common], help="visible text with bounds, one line per node")
@@ -556,13 +681,20 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("link", parents=[common], help="open a deep link / login callback (never printed)")
     p.add_argument("url")
     p.add_argument("--package", help="app that opens it (default: mobile.browser, else the system's choice)")
+    p = sub.add_parser("swipe", parents=[common], help="a swipe from (X1,Y1) to (X2,Y2)")
+    for name in ("x1", "y1", "x2", "y2"):
+        p.add_argument(name, type=int)
+    p.add_argument("--ms", type=int, default=300, help="duration in milliseconds (default 300)")
+    sub.add_parser("back", parents=[common], help="the system's back")
+    p = sub.add_parser("clear", parents=[common], help="empty the focused field (or --field, tapped first)")
+    p.add_argument("--field", metavar="LABEL", help="tap this field first")
     return ap
 
 
 def main(argv=None) -> int:
     a = parser().parse_args(argv)
     try:
-        cfg = configuration(a.workspace, a.serial)
+        cfg = configuration(a.workspace, a.serial, a.input)
         serial = resolve_serial(cfg["serial"])
         return COMMANDS[a.command](cfg, serial, a)
     except UsageError as e:

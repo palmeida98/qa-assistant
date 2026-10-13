@@ -16,6 +16,7 @@ import hmac
 import json
 import os
 import secrets
+import socket
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
@@ -265,12 +266,23 @@ def make_handler(app: App, port_of):
     return Handler
 
 
+class _Server(ThreadingHTTPServer):
+    """On Windows, SO_REUSEADDR (which HTTPServer sets) lets a second server bind a port another one is using, so a
+    taken port gave no error and two interfaces shared it: there the port is asked for exclusively instead."""
+    if os.name == "nt":
+        allow_reuse_address = False
+
+        def server_bind(self):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
+
+
 def serve(ws: str, runner: runs.Runner, port: int = 8765, token: str | None = None) -> tuple[ThreadingHTTPServer, str]:
     """The server bound to the loopback address (port 0: a free one) and the address to open. OSError when the
     port is taken."""
     app = App(ws, runner, token)
     box = {}
-    server = ThreadingHTTPServer((HOST, port), make_handler(app, lambda: box["port"]))
+    server = _Server((HOST, port), make_handler(app, lambda: box["port"]))
     server.daemon_threads = True
     box["port"] = server.server_address[1]
     server.app = app
