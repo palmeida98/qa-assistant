@@ -88,7 +88,13 @@ class FakeSDK:
         if tool == "avdmanager" and args[:2] == ["list", "avd"]:
             return 0, "".join(f"    Name: {n}\n    Path: {self.avd_path}/{n}.avd\n---------\n" for n in self.avds)
         if tool == "avdmanager":
-            self.avds.append(args[args.index("-n") + 1])
+            name = args[args.index("-n") + 1]
+            self.avds.append(name)
+            folder = os.path.join(os.environ.get("ANDROID_AVD_HOME", ""), f"{name}.avd")
+            if os.environ.get("ANDROID_AVD_HOME"):
+                os.makedirs(folder, exist_ok=True)
+                with open(os.path.join(folder, "config.ini"), "w", encoding="utf-8") as f:
+                    f.write("hw.ramSize=2048\ndisk.dataPartition.size=6442450944\n")
             return 0, ""
         if tool == "aapt2":
             return 0, f"package: name='com.demoshop.app' versionCode='{self.apk_code}' versionName='1.4.0'\n"
@@ -228,6 +234,18 @@ class AlreadyDone(Base):
         with open(os.path.join(self.tmp.name, "avd", "qa-demo.ini"), encoding="utf-8") as f:
             self.assertIn("path=/home/runner/.config/.android/avd/qa-demo.avd", f.read())
         self.assertEqual(fake.spawn_avd_home, os.path.join(self.tmp.name, "avd"))
+
+    def test_a_new_avd_gets_a_small_data_partition(self):
+        # the 11.8 pilot: "Not enough space to create userdata partition" on a GitHub-hosted runner
+        fake = FakeSDK(avds=(), running=False, boot_after=2, installed_code="")
+        rc, out, err = self.go(fake, "--apk", self.apk)
+        self.assertEqual(rc, 0, err)
+        with open(os.path.join(self.tmp.name, "avd", "qa-demo.avd", "config.ini"), encoding="utf-8") as f:
+            config = f.read().splitlines()
+        self.assertIn("hw.ramSize=2048", config)
+        self.assertEqual([ln for ln in config if ln.startswith("disk.dataPartition")],
+                         ["disk.dataPartition.size=3G"])
+        self.assertIn("data 3G", self.line(out, "avd"))
 
     def test_an_emulator_that_exits_while_starting_shows_its_last_output(self):
         # the 11.8 pilot: the runner's emulator exited with code 1 and the reason was thrown away
