@@ -392,6 +392,15 @@ class ExcelAdapter:
             out[sheet] = dict(cnt)
         return out
 
+    def case_rows(self) -> dict:
+        """{sheet: [row as dict by header, with '_row']} of every case, in the order of the sheets and of the
+        rows (read only; what docs/qa-ui.md section 4 reads as the workspace's library)."""
+        out = {}
+        for sheet, ws, h in self._case_sheets():
+            out[sheet] = [{**{name: ws.cell(r, c).value for name, c in h.items()}, "_row": r}
+                          for r, _ in self._case_rows(ws, h)]
+        return out
+
     def cases_with_status(self, status: str) -> dict:
         """{sheet: [row as dict, with '_row']} of the cases in a given status."""
         st = self.cfg["cases"]["columns"]["status"]
