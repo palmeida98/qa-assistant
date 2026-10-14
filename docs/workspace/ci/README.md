@@ -17,7 +17,9 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 - **GitHub Actions**: GitHub-hosted **standard** runners only (`ubuntu-24.04`); a larger runner is refused by
   `validate_project.py` and by the workflow (larger runners are always paid). A private repository on the Free plan has
   2 000 Linux minutes a month, shared by all the user's private repositories, and each job is rounded up to the
-  minute. Set the **spending limit to 0** (account Settings → Billing and licensing → Budgets and alerts: a budget of
+  minute. The minutes are shared with any other private repository's CI too (e.g. a private `qa-assistant`: each
+  pull request runs its CI once, about 7 job-minutes). A run of a batch takes about 15 minutes without the login
+  wait (the emulator's first boot, the SDK, the agent) plus the time the issue waits for the link. Set the **spending limit to 0** (account Settings → Billing and licensing → Budgets and alerts: a budget of
   0 for Actions with "stop usage when the budget limit is reached"), so a job stops instead of being billed.
   `workspace_ci.py check` warns when it can read a non-zero limit (organisations) and shows the minutes used this
   month when the billing API answers.

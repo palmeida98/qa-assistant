@@ -1,10 +1,18 @@
-# The framework's CI (plan 4.1): lint, unit tests, secrets and golden test on each push.
+# The framework's CI (plan 4.1): lint, unit tests, secrets and golden test on each pull request and on main.
 # The personal denylist does not run here on purpose -- it lives only in the local pre-commit.
+# Minutes (a private repository shares 2 000 a month with the workspaces' runs; each job rounds up to the minute):
+# a branch runs once, through its pull request (not also on push), and a newer push cancels the older run
+# (11.8 pilot: the month's minutes ran out).
 name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
