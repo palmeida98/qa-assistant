@@ -357,6 +357,8 @@ Checks (24.09.2026, 52 commits, 219 file versions extracted from every branch):
 - No `.env` nor `.api-session.env` ever in the history; the demo passwords do not appear in any version; no local paths nor the machine's user name (only the repository's name on GitHub, in the badge).
 - `examples/demo/`: only public practice sites (saucedemo.com, restful-booker), demo accounts published by the sites themselves referred to by the variable's name, test data with the `QA-AUTO-` prefix, bugs of the practice sites.
 
+Re-check (14.10.2026, 222 commits of every branch, contents and messages): the denylist 0 hits; one variable name of a real workspace in a change-log row of 13.10.2026 (fixed in the current state, kept by the history and removed from the pull request's body). Decision (assistant, by the user's delegation of 14.10.2026): **still private** — making it public would need that history rewritten (a force-push of `main`), and the Actions minutes are handled by the CI running once per branch (#24) and the monthly reset. The personal denylist got exact entries for that project.
+
 ---
 
 ## Phase 7 — Closing the framework
