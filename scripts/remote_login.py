@@ -35,6 +35,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -49,6 +50,7 @@ from workspace_build import UsageError as BuildUsage
 from workspace_build import repository
 
 TITLE = "Login needed — {run_id}"
+LIST_TRIES, LIST_PAUSE_S = 6, 5
 URL = re.compile(r"https?://[^\s<>()\[\]\"'`]+")
 SCREEN_WAIT_S, SCREEN_POLL_S = 60, 5
 
@@ -130,6 +132,33 @@ def find_issue(cfg: dict) -> dict | None:
     return next((i for i in issues if i.get("title") == title and "pull_request" not in i), None)
 
 
+def issue_file(cfg: dict) -> str:
+    """Where `request` leaves the issue's number for `wait` (the runner's temp folder, never the workspace)."""
+    return os.path.join(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir(), f"qa-login-{cfg['run_id']}.json")
+
+
+def issue_number(cfg: dict) -> int | None:
+    """The number `request` left; else the open issue found by its title, searched for a little while: GitHub's
+    listing of open issues lags behind a new issue (11.8 pilot: `wait` did not find the issue just opened)."""
+    try:
+        with open(issue_file(cfg), encoding="utf-8") as f:
+            return int(json.load(f)["number"])
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    for attempt in range(LIST_TRIES):
+        issue = find_issue(cfg)
+        if issue:
+            return int(issue["number"])
+        if attempt < LIST_TRIES - 1:
+            pause(LIST_PAUSE_S)
+    return None
+
+
+def remember(cfg: dict, number: int) -> None:
+    with open(issue_file(cfg), "w", encoding="utf-8") as f:
+        json.dump({"number": number}, f)
+
+
 # --- request ----------------------------------------------------------------------------------------------------
 
 def cmd_request(workspace: str, cfg: dict, a) -> int:
@@ -144,6 +173,7 @@ def cmd_request(workspace: str, cfg: dict, a) -> int:
     issue = find_issue(cfg)
     minutes = cfg["timeout_s"] // 60
     if issue:
+        remember(cfg, int(issue["number"]))
         print(f"issue #{issue['number']}: already open, reused")
         return 0
     run = run_url()
@@ -156,6 +186,7 @@ def cmd_request(workspace: str, cfg: dict, a) -> int:
             "and closes this issue. With no link in time, the batch is Blocked (login).")
     created = gh_api("POST", f"repos/{cfg['slug']}/issues", {"title": TITLE.format(run_id=cfg["run_id"]),
                                                             "body": body})
+    remember(cfg, int(created["number"]))
     print(f"issue #{created['number']}: opened, waiting for @{cfg['user']} ({minutes} min)")
     return 0
 
@@ -197,10 +228,10 @@ def use_link(workspace: str, cfg: dict, a, url: str) -> str:
 
 
 def cmd_wait(workspace: str, cfg: dict, a) -> int:
-    issue = find_issue(cfg)
-    if not issue:
+    number = issue_number(cfg)
+    if number is None:
         raise UsageError(f"no open issue \"{TITLE.format(run_id=cfg['run_id'])}\": run `request` first")
-    number, seen, reported = issue["number"], set(), set()
+    seen, reported = set(), set()
     begin = now()
     print(f"issue #{number}: waiting up to {cfg['timeout_s'] // 60} min for a link by @{cfg['user']}", flush=True)
     while True:
