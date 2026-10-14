@@ -439,6 +439,12 @@ class Setup:
             started = True
         begin = now()
         while now() - begin < self.a.boot_timeout:
+            if started and "Showing crashdialog" in log_tail(log, 200):
+                # after an emulator was killed, the next one waits for a consent dialog on the desktop (11.8 pilot)
+                raise TargetError("the emulator is waiting for its crash-report dialog (reports left by an emulator "
+                                  "that was stopped by force): answer it on the screen, or delete "
+                                  f"{os.path.join(tempfile.gettempdir(), 'AndroidEmulator', 'emu-crash-*.db')}, stop "
+                                  "that emulator and run again")
             if started and proc.poll() not in (None, 0):
                 tail = log_tail(log)
                 raise TargetError(f"the emulator exited (code {proc.poll()}) while starting {self.avd}"

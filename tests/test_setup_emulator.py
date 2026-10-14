@@ -64,12 +64,17 @@ class FakeSDK:
         self.perms = dict(perms or {})
         self.calls, self.spawned, self.boot_polls = [], [], 0
         self.crash = None
+        self.dialog = False
         self.avd_path = "/home/runner/.config/.android/avd"
 
     def spawn(self, cmd, log=None):
         self.spawned.append(cmd)
         self.log = log
         self.spawn_avd_home = os.environ.get("ANDROID_AVD_HOME")
+        if self.dialog:                     # the emulator waits for its crash-report dialog, never boots
+            with open(log, "w", encoding="utf-8") as f:
+                f.write("INFO | Showing crashdialog to get consent.\n")
+            return Proc()
         if self.crash is not None:          # the emulator writes its error and exits while starting
             with open(log, "w", encoding="utf-8") as f:
                 f.write(self.crash)
@@ -246,6 +251,17 @@ class AlreadyDone(Base):
         self.assertEqual([ln for ln in config if ln.startswith("disk.dataPartition")],
                          ["disk.dataPartition.size=3G"])
         self.assertIn("data 3G", self.line(out, "avd"))
+
+    def test_an_emulator_waiting_for_its_crash_dialog_stops_at_once(self):
+        # the 11.8 pilot: after emulators stopped by force, the next one waited for a dialog on the desktop
+        fake = FakeSDK(avds=(), running=False)
+        fake.dialog = True
+        clock = Clock()
+        rc, out, err = self.go(fake, "--apk", self.apk, clock=clock)
+        self.assertEqual(rc, 3)
+        self.assertIn("crash-report dialog", out + err)
+        self.assertLess(clock.t, 30)                                # not the whole boot timeout
+        os.remove(fake.log)
 
     def test_an_emulator_that_exits_while_starting_shows_its_last_output(self):
         # the 11.8 pilot: the runner's emulator exited with code 1 and the reason was thrown away
