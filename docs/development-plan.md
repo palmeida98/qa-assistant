@@ -1658,6 +1658,7 @@ Constraints written down now:
 
 | Date | Change |
 |---|---|
+| 2026-10-14 | 11.8: what the pilot runs taught, for the next ones: the input `login: skip` (a pipeline check without the owner; the prompt's `{{login}}` tells the agent), a diagnostics artifact on every run (emulator, Maestro, agent, checks), and no pull request when the run log has no result (10 empty or login-Blocked pull requests were closed by hand). |
 | 2026-10-14 | 11.8, 12th run: the login helper flow passed on the runner and the issue was opened; then `remote_login.py wait` did not find it (GitHub's listing of open issues lags behind a new issue), so the batch was Blocked (login) before anyone could paste. `request` now leaves the issue's number in the runner's temp folder for `wait`, which falls back to searching for ~30 s. |
 | 2026-10-13 | 11.8, 11th run: adb found; the login helper flow failed because nothing opened the app on the runner (the workspace's flow now starts with `launchApp`, a workspace fix), and the message held only Maestro's debug-folder notice: a failed helper flow now names the step that failed first (`FAILED`, `Element not found`, …). |
 | 2026-10-13 | 11.8, 10th run: the run ended green through the fallback (the 5 cases Bloqueado, in the project's word): the login helper said 'adb not found' â the runner has the SDK but not adb on the PATH. `common.find_adb()` (the PATH, then `platform-tools` of ANDROID_HOME / ANDROID_SDK_ROOT / the default folders) for `device.py` and `run_mobile.py`. |

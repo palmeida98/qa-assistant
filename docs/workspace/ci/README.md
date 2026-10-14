@@ -57,7 +57,8 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
    you approve it: a release `build-<versionName>-<versionCode>` with the APK, and `mobile.build` updated.
 2. Plan the batch with `/plan-batch`; the confirmed plan is saved as `batches/<name>.yaml` and pushed.
 3. On GitHub: Actions → "QA mobile" → Run workflow: `batch` (the planned batch's name, or case IDs separated by
-   spaces), `build` (empty = `mobile.build`), `mode`.
+   spaces), `build` (empty = `mobile.build`), `mode`, `login` (`issue`; `skip` for a check of the pipeline without you: no login, the
+   agent marks every case Blocked — never merge that pull request).
 4. When the login issue appears (you are mentioned), copy the link from the e-mail **as text** and paste it as a
    comment — nothing else in the comment. Do not open it in your own browser first (that spends it). The runner opens
    it on the emulator, deletes your comment and closes the issue.
@@ -72,3 +73,7 @@ for the runner, and a flow that only that phone can run (e.g. a vendor build's b
 
 What the runner cannot do (a camera, a microphone, biometrics, a login nobody pasted in time) is **Blocked**, never
 Fail. The time each run took and the agent's turns are in the pull request.
+
+Every run uploads a **diagnostics** artifact (7 days): the emulator's output, Maestro's logs and screenshots, the
+agent's result and the checks. A run that stops before any case opens no pull request: the artifact and the job's
+log say why.

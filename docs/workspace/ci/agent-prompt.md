@@ -9,7 +9,7 @@ decision that needs the user waits for the pull request this run opens.
 - Cases, in this order: {{cases}}
 - Run log: runs/{{run_log}}.json (already created, with the run block). Captures: evidence/{{run_log}}/ (pass
   `--batch {{run_log}}` to every `device.py send --capture`, `dump --capture` and `shot`).
-- Limits: {{max_turns}} turns and the job's time limit. The emulator is running, the build installed, the login done.
+- Limits: {{max_turns}} turns and the job's time limit. The emulator is running, the build installed. {{login}}
 
 1. Read the workspace's CLAUDE.md and context.md, then the mobile: section of project.yaml and the cases' text
    (the workbook or tracker/cases.json, read only). `python {{qa}}/scripts/device.py {{workspace}} check` once.

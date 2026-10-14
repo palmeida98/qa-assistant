@@ -374,8 +374,15 @@ class Agent(Base):
         self.assertNotRegex(out, r"\{\{[a-z_]+\}\}")
         for needle in ("Cases, in this order: TC-MOB-001 TC-MOB-002", "runs/batch_adhoc_r9.json",
                        "--batch batch_adhoc_r9", f"python {ROOT}/scripts/run_log.py {self.ws} add batch_adhoc_r9",
-                       "Limits: 80 turns", '"proposed": true', "Never apply", "runs/batch_adhoc_r9.summary.md"):
+                       "Limits: 80 turns", '"proposed": true', "Never apply", "runs/batch_adhoc_r9.summary.md",
+                       "The login is done."):
             self.assertIn(needle, out)
+        # a pipeline check (input login: skip): the agent is told not to log in and to mark Blocked
+        code, out = self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001",
+                              "--login", "skipped")
+        self.assertEqual(code, 0, out)
+        self.assertIn("login was SKIPPED", out)
+        self.assertNotIn("The login is done.", out)
 
     def post(self, results, evidence=b"screen text"):
         with open(os.path.join(self.ws, ".env"), "w", encoding="utf-8") as f:
@@ -560,7 +567,8 @@ class Templates(unittest.TestCase):
         wf = yaml.safe_load(text)
         trigger = wf.get("on", wf.get(True))                           # YAML 1.1 reads `on` as true
         self.assertEqual(set(trigger), {"workflow_dispatch"})
-        self.assertEqual(set(trigger["workflow_dispatch"]["inputs"]), {"batch", "build", "mode"})
+        self.assertEqual(set(trigger["workflow_dispatch"]["inputs"]), {"batch", "build", "mode", "login"})
+        self.assertEqual(trigger["workflow_dispatch"]["inputs"]["login"]["default"], "issue")
         self.assertEqual(trigger["workflow_dispatch"]["inputs"]["mode"]["options"], ["conversational", "flows", "both"])
         self.assertEqual(wf["permissions"], {"contents": "write", "pull-requests": "write", "issues": "write"})
         self.assertEqual(wf["jobs"]["plan"]["runs-on"], "ubuntu-24.04")
@@ -577,6 +585,14 @@ class Templates(unittest.TestCase):
         free = run["steps"][names.index("Free disk space")]
         self.assertLess(names.index("Free disk space"), names.index("Android SDK, Maestro and KVM"))
         self.assertNotIn("android", free["run"].lower())
+        # the 11.8 pilot: a diagnostics artifact on every run, never the workspace's .env
+        diag = run["steps"][names.index("Diagnostics")]
+        self.assertEqual(diag["if"], "always()")
+        self.assertNotIn(".env", diag["with"]["path"])
+        login = run["steps"][names.index("Login through an issue (the owner pastes the link)")]
+        self.assertIn("inputs.login != 'skip'", login["if"])
+        pr = run["steps"][names.index("Pull request (run/<batch>-<run id>; never main)")]
+        self.assertIn("no result in the run log", pr["run"])
         emulator = run["steps"][names.index("The emulator (cold boot, no GPU)")]
         self.assertIn('-s "$QA_MOBILE_SERIAL" get-state', emulator["run"])
         self.assertLess(names.index("The environment (a missing tool stops the run)"), names.index(emulator["name"]))
