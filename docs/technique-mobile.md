@@ -218,7 +218,7 @@ Claude Code **headless** (`claude -p`) runs the batch with `/test-mobile`, authe
 
 - **No screen for the user**: the screenshots in `evidence/` are the only view. A turn whose dump may miss content always gets its screenshot read before it is classified (§4.1).
 - **No one to ask**: a doubt is `Question` in the run log, answered in the pull request; a new bug is a `new_defect` with `"proposed": true` (methodology §9.4); the run log is **never applied** on the runner.
-- **Tools limited**: Bash only for the framework's scripts, Read, and Write/Edit only in `runs/`, `evidence/` and `context.md`; no web tools.
+- **Tools limited**: Bash only for the framework's scripts, one command per call (no `cd`, `;`, `|`, `sleep`, `adb`: a compound command is denied), Read, and Write/Edit only in `runs/`, `evidence/` and `context.md`; no web tools. The app is opened with `device.py launch` (the pilot's agent, with no such command, tried `adb` and was denied).
 - **A reply still streaming**: reopening a conversation while the answer streams may show only the user's message; the driver waits for the screen to settle (`send`), and a dump after reopening is read again before deciding.
 - **Long or non-ASCII text**: from a UTF-8 file (`device.py type --file`), typed in chunks (§4.1).
 
