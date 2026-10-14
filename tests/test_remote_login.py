@@ -44,6 +44,7 @@ class FakeGitHub:
         self.clock, self.script = clock, list(script)
         self.issues, self.comments, self.calls, self.deleted = {}, {}, [], []
         self.next_id = 100
+        self.lag = False
 
     def __call__(self, method, path, fields=None):
         self.calls.append((method, path, dict(fields or {})))
@@ -51,6 +52,8 @@ class FakeGitHub:
         assert path.startswith(prefix), path
         rest = path[len(prefix):]
         if method == "GET" and rest.startswith("?"):
+            if self.lag:                    # GitHub's listing lags behind a new issue (11.8 pilot)
+                return []
             return [i for i in self.issues.values() if i["state"] == "open"]
         if method == "POST" and rest == "":
             number = len(self.issues) + 1
@@ -90,7 +93,8 @@ class RemoteLogin(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.ws = self.tmp.name
         self.project()
-        env = mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": SLUG, "GITHUB_RUN_ID": "4242"})
+        env = mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": SLUG, "GITHUB_RUN_ID": "4242",
+                                           "RUNNER_TEMP": self.tmp.name})
         env.start()
         self.addCleanup(env.stop)
         for name in ("GITHUB_ACTIONS", "QA_MOBILE_SERIAL", "QA_MOBILE_INPUT"):
@@ -209,6 +213,25 @@ class RemoteLogin(unittest.TestCase):
         self.assertEqual(len(github.deleted), 1)
         self.assertEqual(github.issues[1]["state"], "closed")
         self.assertNotIn("fictional-one-time-77", out)
+
+    def test_wait_finds_the_issue_request_opened_although_the_listing_lags(self):
+        # the 11.8 pilot: GitHub's list of open issues did not have the issue just opened yet
+        github = self.requested([(15, "demo-shop", LINK)])
+        github.lag = True
+        code, out = self.run_(github, "wait", device=FakeDevice([LOGIN, HOME]))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(github.issues[1]["state"], "closed")
+
+    def test_without_the_number_wait_searches_for_a_while(self):
+        github = self.requested([(40, "demo-shop", LINK)])
+        os.remove(rlg.issue_file({"run_id": "4242"}))
+        lists = [c for c in github.calls if c[0] == "GET" and "?" in c[1]]
+        github.lag = True
+        code, out = self.run_(github, "wait")
+        self.assertNotEqual(code, 0)
+        self.assertIn("run `request` first", out)
+        self.assertEqual(len([c for c in github.calls if c[0] == "GET" and "?" in c[1]]) - len(lists),
+                         rlg.LIST_TRIES)
 
     def test_wait_without_the_issue_and_mode_none(self):
         code, out = self.run_(FakeGitHub(self.clock), "wait")
