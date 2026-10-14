@@ -483,6 +483,14 @@ def cmd_check(workspace: str, a) -> int:
 
 # --- the agent (plan 11.5) --------------------------------------------------------------------------------------
 
+LOGIN_LINES = {
+    "done": "The login is done.",
+    "skipped": ("The login was SKIPPED on purpose (a check of the pipeline, input `login: skip`): do not try to log "
+                "in. If the app shows its login screen, write every case Blocked (the project's word for it) with "
+                "\"login skipped (pipeline check)\" and stop."),
+}
+
+
 def cmd_prompt(workspace: str, a) -> int:
     """The installed prompt with its placeholders filled in (printed: the workflow passes it to `claude -p`)."""
     path = os.path.join(workspace, *TEMPLATES["agent-prompt.md"].split("/"))
@@ -492,7 +500,7 @@ def cmd_prompt(workspace: str, a) -> int:
     with open(path, encoding="utf-8") as f:
         text = f.read()
     values = {"workspace": workspace, "qa": ROOT, "run_log": run_log.batch_id(a.run_log), "cases": " ".join(a.cases),
-              "max_turns": str(int(ci.get("max_turns") or 150))}
+              "max_turns": str(int(ci.get("max_turns") or 150)), "login": LOGIN_LINES[a.login]}
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
     left = sorted(set(re.findall(r"\{\{[a-z_]+\}\}", text)))
@@ -790,6 +798,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("prompt", help="(workflow) the agent's prompt, filled in")
     p.add_argument("--run-log", required=True)
     p.add_argument("--cases", nargs="+", required=True)
+    p.add_argument("--login", choices=sorted(LOGIN_LINES), default="done",
+                   help="skipped: a pipeline check without the owner (input login: skip)")
     p = sub.add_parser("post-check", help="(workflow) the checks after the agent, before the commit")
     p.add_argument("--run-log", required=True)
     p.add_argument("--report", help="JSON report for the pull request's body")

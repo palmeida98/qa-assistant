@@ -29,6 +29,12 @@ on:
         type: choice
         options: [conversational, flows, both]
         default: conversational
+      login:
+        description: "issue (the owner pastes the link) | skip (a pipeline check: no login, the agent marks Blocked)"
+        required: true
+        type: choice
+        options: [issue, skip]
+        default: issue
 
 permissions:
   contents: write
@@ -189,7 +195,7 @@ jobs:
 
       - name: Login through an issue (the owner pastes the link)
         id: login
-        if: steps.batch.outputs.login == 'manual-issue'
+        if: steps.batch.outputs.login == 'manual-issue' && inputs.login != 'skip'
         continue-on-error: true
         run: |
           python "$QA/scripts/remote_login.py" "$WS" request
@@ -222,10 +228,11 @@ jobs:
           RUN_LOG: ${{ steps.batch.outputs.run_log }}
           MAX_TURNS: ${{ steps.batch.outputs.max_turns }}
           START: ${{ steps.start.outputs.at }}
+          LOGIN: ${{ inputs.login == 'skip' && 'skipped' || 'done' }}
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           export PATH="$HOME/.local/bin:$PATH"
-          python "$QA/scripts/workspace_ci.py" "$WS" prompt --run-log "$RUN_LOG" --cases $AGENT_CASES > "$RUNNER_TEMP/prompt.md"
+          python "$QA/scripts/workspace_ci.py" "$WS" prompt --run-log "$RUN_LOG" --cases $AGENT_CASES             --login "$LOGIN" > "$RUNNER_TEMP/prompt.md"
           # what is left of the job's time, minus 5 minutes for the checks and the pull request
           left=$(( START + TIMEOUT_MINUTES * 60 - 300 - $(date +%s) ))
           if (( left < 60 )); then echo "::error::no time left for the agent (ci.timeout_minutes)"; exit 1; fi
@@ -258,6 +265,9 @@ jobs:
           BUILD_TAG: ${{ steps.build.outputs.tag }}
         run: |
           cd "$WS"
+          # nothing was run (the run stopped before any case): no pull request, the diagnostics artifact says why
+          n=$(python -c 'import json, sys; print(len(json.load(open(sys.argv[1], encoding="utf-8")).get("results") or []))' "runs/$RUN_LOG.json")
+          if [ "$n" = "0" ]; then echo "::warning::no result in the run log: no pull request (see the diagnostics artifact)"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
@@ -270,3 +280,18 @@ jobs:
             --checks "$RUNNER_TEMP/post-check.json" > "$RUNNER_TEMP/pr-body.md"
           gh pr create --base "$BASE" --head "$BRANCH" --title "QA run: $BATCH_NAME ($GITHUB_RUN_ID)" \
             --body-file "$RUNNER_TEMP/pr-body.md"
+
+      # what the run saw, for a diagnosis without re-running: the emulator's output, Maestro's logs and screenshots,
+      # the agent's result and the checks (never .env, which lives in the workspace; 7 days, private repository)
+      - name: Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/*.json
+            ${{ runner.temp }}/*.md
+            /tmp/emulator-*.log
+            ~/.maestro/tests
+          if-no-files-found: ignore
+          retention-days: 7

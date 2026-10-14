@@ -197,6 +197,8 @@ A batch can run on a **GitHub-hosted Linux runner** started from the workspace's
 
 After the merge, a second workflow (`apply.yml`) applies each new run log with the project's adapter (§11.4).
 
+The workflow's input `login: skip` checks the pipeline without the owner (no login; the agent is told so and marks every case Blocked): its pull request is never merged. Every run uploads a diagnostics artifact (the emulator's output, Maestro's logs and screenshots, the agent's result, the checks; never `.env`), and a run that stops before any case opens no pull request.
+
 ### 11.2 Manual login through an issue
 
 A login that needs a person (a one-time magic link sent by e-mail) stays **manual**: the helper flow `ci.login.flow` (e.g. `flows/_request_link.yaml`: tap the e-mail field, `inputText: ${MAESTRO_<VAR>}`, tap send, wait until the sheet closes — no `hideKeyboard`, it can close the app's bottom sheet) asks for the link; `remote_login.py` opens an issue "Login needed — <run id>" that mentions the repository's owner (or `ci.login.user`) with what to paste and the time limit. The owner copies the link from the e-mail (as text: the e-mail may show it as plain text) and pastes it as a **comment** of that issue. The runner then:
