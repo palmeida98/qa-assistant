@@ -366,6 +366,9 @@ class Agent(Base):
     """plan 11.5: the prompt and the checks after the agent."""
 
     def test_the_prompt_is_the_installed_template_filled_in(self):
+        def posix(p):                       # the agent's tool rules match the text: forward slashes, also on Windows
+            return os.path.abspath(p).replace("\\", "/")
+
         self.assertEqual(self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001")[0], 2)
         self.assertEqual(self.run_(FakeGh(), "install", "--yes")[0], 0)
         code, out = self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001", "TC-MOB-002")
@@ -373,7 +376,7 @@ class Agent(Base):
         self.assertTrue(out.startswith("/test-mobile\n"))                     # the skill, expanded by claude -p
         self.assertNotRegex(out, r"\{\{[a-z_]+\}\}")
         for needle in ("Cases, in this order: TC-MOB-001 TC-MOB-002", "runs/batch_adhoc_r9.json",
-                       "--batch batch_adhoc_r9", f"python {ROOT}/scripts/run_log.py {self.ws} add batch_adhoc_r9",
+                       "--batch batch_adhoc_r9", f"python {posix(ROOT)}/scripts/run_log.py {posix(self.ws)} add batch_adhoc_r9",
                        "Limits: 80 turns", '"proposed": true', "Never apply", "runs/batch_adhoc_r9.summary.md",
                        "The login is done."):
             self.assertIn(needle, out)
@@ -629,3 +632,26 @@ class Templates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FilesToCommit(unittest.TestCase):
+    """The 11.8 pilot: post-check counted every file of runs/ and evidence/ (1135), not the run's own."""
+
+    def test_only_new_or_changed_files_in_a_repository(self):
+        with tempfile.TemporaryDirectory() as ws:
+            def git(*args):
+                return subprocess.run(["git", "-C", ws, "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                                      capture_output=True, check=True)
+            git("init", "-q")
+            os.makedirs(os.path.join(ws, "runs"))
+            os.makedirs(os.path.join(ws, "evidence", "old"))
+            for rel in ("runs/old.json", "evidence/old/a.png", "context.md"):
+                with open(os.path.join(ws, rel), "w", encoding="utf-8") as f:
+                    f.write("old")
+            git("add", "-A")
+            git("commit", "-q", "-m", "history")
+            os.makedirs(os.path.join(ws, "evidence", "new"))
+            for rel in ("runs/new.json", "evidence/new/b.png", "context.md"):
+                with open(os.path.join(ws, rel), "w", encoding="utf-8") as f:
+                    f.write("new")
+            self.assertEqual(wc.files_to_commit(ws), ["context.md", "evidence/new/b.png", "runs/new.json"])

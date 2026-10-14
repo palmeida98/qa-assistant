@@ -499,7 +499,9 @@ def cmd_prompt(workspace: str, a) -> int:
     ci = ci_of(project(workspace))
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    values = {"workspace": workspace, "qa": ROOT, "run_log": run_log.batch_id(a.run_log), "cases": " ".join(a.cases),
+    # forward slashes: the agent's tool rules match the command's text, and Python takes them on Windows too
+    values = {"workspace": os.path.abspath(workspace).replace("\\", "/"), "qa": ROOT.replace("\\", "/"),
+              "run_log": run_log.batch_id(a.run_log), "cases": " ".join(a.cases),
               "max_turns": str(int(ci.get("max_turns") or 150)), "login": LOGIN_LINES[a.login]}
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", value)
@@ -511,7 +513,13 @@ def cmd_prompt(workspace: str, a) -> int:
 
 
 def files_to_commit(workspace: str) -> list[str]:
-    """The files under runs/, evidence/ and context.md (relative paths), as the pull request step would add them."""
+    """The files the pull request step would commit: new or changed under runs/, evidence/ and context.md (relative
+    paths; git status). Outside a git repository, every file there (11.8: the count was the whole history)."""
+    if wg.inside_repository(workspace):
+        r = wg.git(workspace, "status", "--porcelain", "-z", "--untracked-files=all", "--", *COMMITTED)
+        if r.returncode == 0:
+            entries = [e for e in r.stdout.split("\0") if e]
+            return sorted({e[3:] for e in entries if len(e) > 3 and e[:2] != " D" and e[0] != "D"})
     out = []
     for top in COMMITTED:
         full = os.path.join(workspace, top)
