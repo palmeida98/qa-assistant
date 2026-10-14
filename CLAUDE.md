@@ -21,11 +21,6 @@ References:
 - Before any change to the framework, follow the validation process (methodology section 15).
 - Everything in this repository is in English (plan 8.11); a project's own names (sheets, columns, statuses) are never translated.
 
-## Available commands
-/project-onboarding · /analyze-feature · /generate-cases · /plan-batch
-/run-batch · /log-bug · /checkpoint · /end-session · /dashboard
-/test-api · /audit-accessibility · /test-mobile
-
 ## Scripts (from the root of qa-assistant)
 Each script's docstring and `--help` give its flags and exit codes: read them before using one. What they do:
 - `scripts/validate_project.py <workspace> [--environment]` — validates `project.yaml` and, with `--environment`, the tools this computer needs

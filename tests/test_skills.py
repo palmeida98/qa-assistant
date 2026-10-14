@@ -14,7 +14,7 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS = os.path.join(ROOT, ".claude", "skills")
-CLAUDE_MD = os.path.join(ROOT, "CLAUDE.md")
+METHODOLOGY = os.path.join(ROOT, "docs", "methodology.md")
 
 
 def frontmatter(path: str) -> dict:
@@ -39,8 +39,10 @@ class Skills(unittest.TestCase):
                 self.assertIsInstance(fm.get("description"), str)
                 self.assertGreater(len(fm["description"]), 20)
 
-    def test_each_skill_is_in_the_commands_of_claude_md(self):
-        with open(CLAUDE_MD, encoding="utf-8-sig") as f:
+    def test_each_skill_is_in_the_work_cycle_of_the_methodology(self):
+        # the methodology's stage table (section 3) is the list of the skills; CLAUDE.md no longer repeats it
+        # (Claude Code lists the skills, with their descriptions, in every session)
+        with open(METHODOLOGY, encoding="utf-8-sig") as f:
             commands = f.read()
         for name in self.names():
             with self.subTest(skill=name):
