@@ -1502,7 +1502,7 @@ Design:
   (a silent refusal of a file type with a stale error, feedback controls only on some answers, the floating
   accessibility button over the app); technique §1.2 (the shortcut off, other apps as the person's steps).
 
-### 11.8 Pilot of remote execution on a runner — postponed (user, 04.10.2026)
+### 11.8 Pilot of remote execution on a runner — in progress (started 13.10.2026; the end-to-end waits for the user)
 *User decision (04.10.2026): no pilot now; remote execution stays available, validated only against the fakes and
 the fictional golden (methodology §15). The first real project that runs a batch on a runner goes through this
 checklist in its own workspace first, with the user's approval of each step; the optional AVD cache of 11.6 is
@@ -1520,10 +1520,17 @@ measured then. (Until 12.10.2026 this was 11.7.)*
   NUL device there. `is_terminal()` now asks for stdin and stdout both a terminal and, on Windows, a real console
   (`GetConsoleMode`); otherwise no secret is set and the commands are printed for the user's own terminal (a secret
   set wrongly: `gh secret set NAME` again overwrites it). `docs/workspace/ci/README.md` step 3.
-- [ ] On the real mobile workspace (with the user's approval of each step): `workspace_build.py publish` of the current
-  build, `workspace_ci.py install`, the secrets set by the user, one batch run from GitHub (not from this computer),
-  the login pasted in the issue, the PR reviewed and merged, the workbook updated by `apply.yml`. Time, turns and minutes
-  written in that workspace's `context.md`, not here.
+- [x] The runner's side, run by run (13–14.10.2026; one fix per run, in the change log): the build as a release, the
+  `ci:` section, the batch file, the workflows and the secrets; then disk, AVD, emulator, `adb`, the login helper flow
+  (it now opens the app and passes the notifications dialog and the onboarding of a fresh install), the login issue
+  (opened, and found by `wait`), the project's status words, and — with the input `login: skip` and a local
+  reproduction of the agent step — the agent (`device.py launch`, one allowed command per call), `post-check` and the
+  pull request's body. A diagnostics artifact on every run; no pull request when nothing ran. `apply-merged` applied a
+  run log to a copy of the real workbook (local remote). Pull requests #9–#26.
+- [ ] The end-to-end with the user: R01 from GitHub with `login: issue`, the link pasted in the issue within 30 minutes,
+  the agent's batch, the pull request reviewed and merged, the workbook updated by `apply.yml`. Waits for the Actions
+  minutes (the month's 2 000 ran out on 14.10.2026; the spending limit at 0 stopped the next run, as intended). Time,
+  turns and minutes go to the workspace's `context.md`.
 - [ ] `docs/heuristics.md` and the techniques get what the pilot teaches (anonymised).
 
 Acceptance of the phase: with only a browser (no emulator, no local clone), the user can publish a build, start a
