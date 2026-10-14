@@ -36,6 +36,8 @@
 - **A stale snapshot**: an emulator restarted from the AVD's saved snapshot comes back as it was then — with the old build installed, and without the native libraries copied later. `setup_emulator.py` boots **cold** (`-no-snapshot-load`) when the snapshot is older than the build, or with `--cold` (saving a snapshot can fail anyway with some apps, e.g. `UNSUPPORTED_VK_APP` for a Vulkan app).
 - **No microphone** on the computer: dictation cases are **Blocked** (environment), unless a real device with a microphone is used.
 
+An emulator stopped by force leaves crash reports behind; the next one then waits for a consent dialog on the desktop and never boots. `setup_emulator.py` sees it in the emulator's output and stops at once: answer the dialog, or delete `%TEMP%\AndroidEmulator\emu-crash-*.db` (and any `*.lock` left in the AVD's folder) and run again.
+
 ### 1.2 A real device that blocks input injection
 
 Some vendor builds only let `adb` inject input with an extra option that needs a SIM card or a vendor account — on Xiaomi (MIUI / HyperOS), "USB debugging (Security settings)". Without it `adb shell input` fails with `SecurityException: … INJECT_EVENTS`, and so do `adb install` (`INSTALL_FAILED_USER_RESTRICTED`), `settings put`, `ime` and `pm grant`; Maestro, scrcpy and UiAutomator depend on the same option. Reading the screen (`uiautomator dump`, `screencap`), `am start`, `am broadcast` and `content call` still work. Diagnose it with `device.py check` and one `adb shell input keyevent 0`.
