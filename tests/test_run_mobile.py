@@ -204,6 +204,21 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("passed (helper flow, no result recorded)", out)
 
+    def test_a_failed_helper_flow_names_the_step_that_failed(self):
+        # the 11.8 pilot: the message held only Maestro's debug-folder notice
+        flow = self.helper()
+        self.project("web")
+        out_maestro = ("Launch app... COMPLETED\nTap on \"Sign in with email\"... FAILED\n"
+                       + "Element not found: Text matching regex: Sign in with email\n"
+                       + "- This could be a real regression that needs to be addressed.\n"
+                       + "==== Debug output (logs & screenshots) ====\n/home/runner/.maestro/tests/x\n")
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm, "run_maestro", return_value=(1, out_maestro)):
+            rc, out, err = self.run_it("--helper", flow)
+        self.assertEqual(rc, 3)
+        self.assertIn('Tap on "Sign in with email"... FAILED', out + err)
+        self.assertIn("Element not found", out + err)
+
     def test_a_helper_flow_needs_only_the_variables_it_uses(self):
         # the 11.8 pilot: a runner's .env holds only ci.secrets (the e-mail), not every mobile.variables
         flow = self.helper()                                    # uses ${MAESTRO_SHOP_U} only
