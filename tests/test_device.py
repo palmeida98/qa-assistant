@@ -662,6 +662,37 @@ class DriverInput(unittest.TestCase):
         self.assertEqual(fake.driver_calls(), [("swipe", "1,2,3,4,50"), ("back", None)])
         self.assertEqual(self.run_it(fake, "swipe", "1", "2", "3", "4", "--ms", "0")[0], 2)
 
+    # --- launch (11.8 pilot: the agent on a runner had no way to open the app)
+
+    def test_launch_opens_the_app_waits_and_prints_its_screen(self):
+        class Launching(FakeDevice):
+            def __call__(self, serial, *args, binary=False, timeout=60):
+                if args[:3] == ("shell", "monkey", "-p"):
+                    self.focus = APP
+                return super().__call__(serial, *args, binary=binary, timeout=timeout)
+
+        fake = Launching(focus=OTHER)
+        with mock.patch.object(dv.time, "sleep"):
+            rc, out, err = self.run_it(fake, "launch")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(len(fake.of("shell", "monkey", "-p", "com.demoshop.app")), 1)
+        self.assertIn("launched: com.demoshop.app", out)
+        self.assertFalse(fake.of("shell", "am", "force-stop"))
+        with mock.patch.object(dv.time, "sleep"):                 # already in the foreground: not opened again
+            self.assertEqual(self.run_it(fake, "launch")[0], 0)
+        self.assertEqual(len(fake.of("shell", "monkey", "-p", "com.demoshop.app")), 1)
+        with mock.patch.object(dv.time, "sleep"):
+            self.assertEqual(self.run_it(fake, "launch", "--restart")[0], 0)
+        self.assertEqual(len(fake.of("shell", "am", "force-stop", "com.demoshop.app")), 1)
+
+    def test_launch_that_never_reaches_the_foreground_is_3(self):
+        fake = FakeDevice(focus=OTHER)
+        ticks = iter(range(0, 1000, 10))
+        with mock.patch.object(dv.time, "sleep"), mock.patch.object(dv.time, "monotonic", lambda: next(ticks)):
+            rc, _, err = self.run_it(fake, "launch", "--timeout", "30")
+        self.assertEqual(rc, 3)
+        self.assertIn("did not come to the foreground", err)
+
     def test_swipe_and_back_need_the_app_in_the_foreground(self):
         fake = DriverDevice(focus=OTHER)
         self.assertEqual(self.run_it(fake, "--input", "driver", "back")[0], 3)

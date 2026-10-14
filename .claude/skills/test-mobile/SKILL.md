@@ -32,6 +32,8 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
    Xiaomi without a SIM): mobile.input: driver, the companion driver (technique-mobile.md section 1.2;
    python scripts/build_driver.py --push, the person installs it and turns its service on once); check
    then says "input: driver <n>, service on". Scroll with device.py swipe, go back with device.py back.
+   Open the app (or bring it back) with device.py <workspace> launch (--restart when it hangs): it waits for
+   the app and prints its screen; never adb by hand.
 7. Login by link: the user asks for it in the app and hands it over; open it with
    device.py <workspace> link "<url>". Never write the link anywhere (it is a one-time credential), never
    open it elsewhere first. Typing a credential to ask for the link: a helper flow, never device.py type --

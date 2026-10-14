@@ -12,7 +12,15 @@ decision that needs the user waits for the pull request this run opens.
 - Limits: {{max_turns}} turns and the job's time limit. The emulator is running, the build installed. {{login}}
 
 1. Read the workspace's CLAUDE.md and context.md, then the mobile: section of project.yaml and the cases' text
-   (the workbook or tracker/cases.json, read only). `python {{qa}}/scripts/device.py {{workspace}} check` once.
+   (the workbook or tracker/cases.json, read only). `python {{qa}}/scripts/device.py {{workspace}} check` once,
+   then `python {{qa}}/scripts/device.py {{workspace}} launch` to open the app (also to bring it back, or
+   `launch --restart` when it hangs).
+
+   Tools: each Bash call is ONE command, exactly `python {{qa}}/scripts/device.py ...`,
+   `python {{qa}}/scripts/run_log.py ...` or `python {{qa}}/scripts/run_mobile.py ...` with absolute paths: no
+   `cd`, `;`, `&&`, `|`, redirections, `sleep` nor `adb` (anything else is denied in this run and nobody can allow
+   it). Waiting is built in (`launch` and `send` wait for the screen to settle); files are read with Read and
+   written with Write/Edit, only in runs/, evidence/ and context.md.
 2. Run the cases with /test-mobile in CONVERSATIONAL mode (technique-mobile.md 4.1), one turn per step:
    `device.py {{workspace}} send "<message>" --capture <case>_t<N> --batch {{run_log}}`; a message with emoji or
    several lines goes through a UTF-8 file in evidence/{{run_log}}/ and `send --file`. Read the screenshot

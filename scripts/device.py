@@ -15,6 +15,7 @@ Drives an Android device or emulator through adb for the conversational mode
     link URL [--package P]                  opens a deep link or a login callback with `am start`
     swipe X1 Y1 X2 Y2 [--ms 300]            a swipe (e.g. to scroll a long answer)
     back                                    the system's back
+    launch [--restart] [--timeout 60]       opens mobile.app_id, waits for it and prints its screen
     clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
 
 - project.yaml, mobile: section: app_id (required), serial (optional; with
@@ -623,6 +624,29 @@ def cmd_back(cfg, serial, a) -> int:
     return 0
 
 
+def cmd_launch(cfg, serial, a) -> int:
+    """Opens mobile.app_id (or brings it back) and waits until it is in the foreground and its screen is stable;
+    prints that screen like `dump`. --restart stops it first. The agent on a runner has no other way to open the
+    app (11.8 pilot: it tried `adb shell monkey` itself, outside the tools it may use)."""
+    app = cfg["app_id"]
+    if a.restart:
+        adb(serial, "shell", "am", "force-stop", app)
+    if a.restart or not foreground(serial).startswith(app + "/"):
+        adb(serial, "shell", "monkey", "-p", app, "-c", "android.intent.category.LAUNCHER", "1")
+    start = time.monotonic()
+    while not foreground(serial).startswith(app + "/"):
+        if time.monotonic() - start > a.timeout:
+            raise NoTarget(f"{app} did not come to the foreground in {a.timeout:.0f} s "
+                           f"(foreground: {foreground(serial) or 'nothing'})")
+        time.sleep(1)
+    lines, stable = wait_stable(lambda: [n.line() for n in read_screen(cfg, serial, allow_dialogs=True)],
+                                max(a.timeout - (time.monotonic() - start), SETTLE_MIN_S + POLL_S))
+    print(f"launched: {app}" + ("" if stable else " (the screen was still changing)"))
+    for line in lines:
+        print(line)
+    return 0
+
+
 def cmd_shot(cfg, serial, a) -> int:
     print(f"capture: {shot(cfg, serial, a.name, a.batch)}")
     return 0
@@ -651,7 +675,7 @@ def cmd_link(cfg, serial, a) -> int:
 
 COMMANDS = {"check": cmd_check, "dump": cmd_dump, "tap": cmd_tap, "type": cmd_type, "send": cmd_send,
             "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "back": cmd_back,
-            "clear": cmd_clear}
+            "clear": cmd_clear, "launch": cmd_launch}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -699,6 +723,9 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument(name, type=int)
     p.add_argument("--ms", type=int, default=300, help="duration in milliseconds (default 300)")
     sub.add_parser("back", parents=[common], help="the system's back")
+    p = sub.add_parser("launch", parents=[common], help="open the app (or bring it back), wait, print its screen")
+    p.add_argument("--restart", action="store_true", help="stop the app first")
+    p.add_argument("--timeout", type=float, default=60)
     p = sub.add_parser("clear", parents=[common], help="empty the focused field (or --field, tapped first)")
     p.add_argument("--field", metavar="LABEL", help="tap this field first")
     return ap
