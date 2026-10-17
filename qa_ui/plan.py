@@ -18,7 +18,7 @@ from datetime import date
 import yaml
 
 from . import MODULES
-from .suggest import SKILLS
+from .suggest import skill_for
 
 MAX_CASES = 20                                    # a checkpoint every 15-20 cases (methodology 7.2)
 SHORT = {"functional-web": "web", "exploratory": "exp", "api": "api", "accessibility": "a11y", "mobile": "mobile"}
@@ -55,9 +55,11 @@ def free_name(workspace: str, module: str, today: date, used: set[str]) -> str:
             return name
 
 
-def build(workspace: str, cases: list[dict], assignments: dict, cards: list[str], today: date | None = None) -> dict:
+def build(workspace: str, cases: list[dict], assignments: dict, cards: list[str], today: date | None = None,
+          proj: dict | None = None) -> dict:
     """The batches of the ticked module cards. `assignments` is {case ID: {"module": ...}} (suggest.suggest) and
-    `cards` the keys ticked; the automated audits need no batch and are ignored here."""
+    `cards` the keys ticked; the automated audits need no batch and are ignored here. `proj` gives each batch's
+    skill (suggest.skill_for: exploratory charters of a mobile project run with /test-mobile)."""
     today = today or date.today()
     ticked = [m for m in MODULES if m in set(cards)]
     selected = [c for c in cases if assignments.get(c["id"], {}).get("module") in ticked]
@@ -78,7 +80,7 @@ def build(workspace: str, cases: list[dict], assignments: dict, cards: list[str]
             for start in range(0, len(group), MAX_CASES):
                 chunk = group[start:start + MAX_CASES]
                 batches.append({"name": free_name(workspace, module, today, used), "module": module,
-                                "skill": SKILLS[module], "area": area, "role": role or None,
+                                "skill": skill_for(module, proj or {}), "area": area, "role": role or None,
                                 "cases": [c["id"] for c in chunk],
                                 "titles": {c["id"]: c.get("title", "") for c in chunk},
                                 "questions": [c["id"] for c in chunk

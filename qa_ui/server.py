@@ -144,7 +144,7 @@ class App:
             if not isinstance(assignments, dict) or not isinstance(cards, list):
                 raise BadRequest("`assignments` must be an object and `cards` a list")
             assignments = {str(k): {"module": v.get("module")} for k, v in assignments.items() if isinstance(v, dict)}
-            out = plan.build(self.ws, cases, assignments, [str(c) for c in cards])
+            out = plan.build(self.ws, cases, assignments, [str(c) for c in cards], proj=proj)
             if body.get("save"):
                 if not out["batches"]:
                     raise plan.PlanError("there is no batch to save")

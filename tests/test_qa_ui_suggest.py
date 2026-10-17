@@ -127,6 +127,21 @@ class ActiveModules(unittest.TestCase):
         self.assertEqual({c["key"]: c["level"] for c in out["cards"]}["functional-web"], "not-suggested")
 
 
+class ExploratoryOnTheApp(unittest.TestCase):
+    def test_a_mobile_project_explores_its_app(self):
+        proj = dict(kit.PROJECT, modules=["mobile", "exploratory"])
+        self.assertTrue(sg.exploratory_on_mobile(proj))
+        self.assertFalse(sg.exploratory_on_mobile(dict(kit.PROJECT, modules=["mobile", "functional-web"])))
+        self.assertEqual(sg.skill_for("exploratory", proj), "/test-mobile")
+        self.assertEqual(sg.skill_for("exploratory", kit.PROJECT), "/run-batch")
+        out = sg.suggest([case("EXP-001", "Charter: the new chat")], proj,
+                         READY + [(False, "adb", "adb not found")], "claude")
+        card = {c["key"]: c for c in out["cards"]}["exploratory"]
+        self.assertEqual((card["runs"], card["tool"]), ("/test-mobile", sg.MOBILE_EXPLORATORY_TOOL))
+        self.assertEqual(card["blockers"], ["adb: adb not found"])          # the mobile tools, not node
+        self.assertEqual({c["key"]: c for c in out["cards"]}["audit-site"]["level"], "not-suggested")
+
+
 class Cards(unittest.TestCase):
     def cards(self, cases, proj=None, checks=READY, claude="claude") -> dict:
         out = sg.suggest(cases, proj or kit.PROJECT, checks, claude)

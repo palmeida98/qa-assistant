@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.5 · 2026-10-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12.
+> Version 2.6 · 2026-10-17 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -141,7 +141,7 @@ A workspace created before the translation (plan 8.11) is converted once with `p
 | Module | Technique | Skill | Section in `project.yaml` |
 |---|---|---|---|
 | `functional-web` | `technique-browser.md` | `/run-batch` | `environments`, `roles` |
-| `exploratory` | `technique-browser.md` (charters, methodology §5.2) | `/run-batch` | — |
+| `exploratory` | `technique-browser.md` (charters, methodology §5.2); in a project with `mobile` and without `functional-web`, the charters run on the app: `technique-mobile.md` §4.2, `/test-mobile` | `/run-batch` (`/test-mobile` on the app) | — |
 | `api` | `technique-api.md` | `/test-api` | `api:` |
 | `accessibility` | `technique-accessibility.md` | `/audit-accessibility` | `accessibility:` |
 | `mobile` | `technique-mobile.md` | `/test-mobile` | `mobile:` |
@@ -559,6 +559,11 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.5 → v2.6 (plan 12.6, 17.10.2026)
+
+- **New:** in a project with `mobile` and without `functional-web`, the `exploratory` charters run on the app with the mobile technique and `/test-mobile` (§4.1); before, they could only use the browser.
+- **Kept:** the closed list of modules, a charter judged by its expected result, the run log as the source.
 
 ### v2.4 → v2.5 (plan phase 12, 08.10.2026)
 

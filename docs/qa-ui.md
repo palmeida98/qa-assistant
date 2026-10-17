@@ -215,6 +215,11 @@ prompt goes through the command's standard input, never its command line.
 | `accessibility` | `/audit-accessibility` | `scripts/audit_a11y.py` and the Playwright MCP |
 | `mobile` | `/test-mobile` | `scripts/device.py`, `scripts/run_mobile.py` |
 
+In a project with `mobile` and without `functional-web` among its modules there is no web site to explore: its
+`exploratory` charters run on the app, with `/test-mobile` and the tools of `mobile` (no Playwright MCP), and the
+prompt says so (methodology §4.1; technique-mobile.md §4.2). The card of the module shows that tool and depends on
+the mobile checks.
+
 `--permission-mode dontAsk`, `--max-turns` (default 150), no web tools, and the time limit of `--timeout-minutes`
 (default 60), after which the run is interrupted and what was written is kept. The run log `runs/batch_<name>.json`
 is created first, with the `run` block (the environment and the build the user gave when starting; both are

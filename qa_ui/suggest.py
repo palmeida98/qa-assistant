@@ -34,6 +34,9 @@ NEEDS = {"functional-web": (".env", "skills", "node"), "exploratory": (".env", "
          "audit-a11y": (".env", "qa-audit", "browser "), "audit-site": ("qa-audit", "browser ")}
 AUDITS = ("audit-a11y", "audit-site")
 
+# exploratory charters on the app, in a project that tests a mobile app and not a web site (exploratory_on_mobile)
+MOBILE_EXPLORATORY_TOOL = "the device driver of /test-mobile (a mobile project: charters on the app)"
+
 ID_PARTS = {"API": "api", "MOB": "mobile", "A11Y": "accessibility", "EXP": "exploratory"}
 HTTP_CALL = re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S*")
 STATUS_FIRST = re.compile(r"\s*(?:HTTP\s+)?[1-5](?:\d\d|xx)\b", re.IGNORECASE)
@@ -121,6 +124,18 @@ def assign(case: dict, active=None) -> dict:
     return {"module": module, "signals": found, "why": why + note}
 
 
+def exploratory_on_mobile(proj: dict) -> bool:
+    """Exploratory charters run on the app, with the mobile tools, when the project has `mobile` and not
+    `functional-web` among its modules (there is no web site to explore); otherwise in the browser."""
+    active = set(proj.get("modules") or [])
+    return "mobile" in active and "functional-web" not in active
+
+
+def skill_for(module: str, proj: dict) -> str:
+    """The skill a batch of the module runs: /test-mobile for exploratory charters on the app."""
+    return SKILLS["mobile"] if module == "exploratory" and exploratory_on_mobile(proj) else SKILLS[module]
+
+
 def find_test_environment(proj: dict) -> tuple[str | None, str]:
     """(key, reason): the test environment of project.yaml — the key `test`, or the only one. Never guessed."""
     envs = {str(k): str(v or "") for k, v in (proj.get("environments") or {}).items() if v}
@@ -142,12 +157,13 @@ def find_claude(path: str | None = None) -> str | None:
 
 def _blockers(key: str, checks, active: bool, claude: str | None, proj: dict) -> list[str]:
     out = []
+    needs = NEEDS["mobile"] if key == "exploratory" and exploratory_on_mobile(proj) else NEEDS[key]
     module = key if key in MODULES else "accessibility" if key == "audit-a11y" else None
     if module and not active:
         out.append(f"`{module}` is not in `modules:` of project.yaml: it is added at the onboarding, with its "
                    "section (methodology 4.1)")
     for ok, tool, detail in checks:
-        if not ok and any(tool == n or (n.endswith(" ") and tool.startswith(n)) for n in NEEDS[key]):
+        if not ok and any(tool == n or (n.endswith(" ") and tool.startswith(n)) for n in needs):
             out.append(f"{tool}: {detail}")
     if key in MODULES and not claude:
         out.append("Claude Code was not found on this computer (the `claude` executable, or --claude PATH)")
@@ -165,12 +181,15 @@ def cards(cases: list[dict], assignments: dict, proj: dict, checks, claude: str 
     validate_project.environment; `claude` the executable found, or None."""
     active = set(proj.get("modules") or [])
     by_module = {m: [c["id"] for c in cases if assignments.get(c["id"], {}).get("module") == m] for m in MODULES}
-    web = [c for c in cases if assignments.get(c["id"], {}).get("module") in ("functional-web", "exploratory")]
+    web_modules = ("functional-web",) if exploratory_on_mobile(proj) else ("functional-web", "exploratory")
+    web = [c for c in cases if assignments.get(c["id"], {}).get("module") in web_modules]
     out = []
     for m in MODULES:
         ids = by_module[m]
         blockers = _blockers(m, checks, m in active, claude, proj)
-        out.append({"key": m, "kind": "module", "title": TITLES[m], "runs": SKILLS[m], "tool": TOOLS[m],
+        on_app = m == "exploratory" and exploratory_on_mobile(proj)
+        out.append({"key": m, "kind": "module", "title": TITLES[m], "runs": skill_for(m, proj),
+                    "tool": MOBILE_EXPLORATORY_TOOL if on_app else TOOLS[m],
                     "level": "recommended" if ids else "not-suggested",
                     "reason": (f"{len(ids)} case(s) assigned by the rules." if ids
                                else "No case was assigned to this module."),

@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.5 · 2026-10-13 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2); on a runner, the emulator and `adb` over `mobile.serial` / `mobile.input` (`QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT`) in plan 11.8 (§1.2, §11.1).
+> Version 1.6 · 2026-10-17 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2); on a runner, the emulator and `adb` over `mobile.serial` / `mobile.input` (`QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT`) in plan 11.8 (§1.2, §11.1); exploratory charters on the app in plan 12.6 (§4.2).
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -107,6 +107,15 @@ When the expected result cannot be asserted by a flow — the app's content is g
 - **Typing**: a message with emoji or several lines goes from a UTF-8 file (`send --file`); `adb shell input text` is cut at about 430 characters and Maestro's `inputText` slows down and stops on long texts, so the driver types in chunks of 300 characters. Maestro's keyboard sometimes is not active ("Maestro IME is not active"): the driver taps the field again and retries once, then types ASCII through `adb` and says so.
 - **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path, written with `scripts/run_log.py add` (it never touches a batch already applied).
 - **Classification**: the same rules (§6 and methodology §8). An answer judged against the specification's guardrails is Pass/Fail by the specification's text, never by taste; a doubt is `Question`.
+
+### 4.2 Exploratory charters on the app
+
+A project with `mobile` and without `functional-web` among its modules has no web site to explore: its `exploratory`
+charters (methodology §5.2) run on the app with `/test-mobile`, in conversational mode (§4.1) — the device driver,
+one note per turn, a screenshot whenever the dump may miss content — and each charter is judged by its expected
+result. A step only a person can do (airplane mode, an incoming call, a system dialog of another app) is an assisted
+step: an unattended run says it did not cover it, and the charter's result says what was explored. The local
+interface (`docs/qa-ui.md` §8.1) gives such a batch the mobile tools.
 
 ## 5. What to test on mobile (beyond the functional)
 

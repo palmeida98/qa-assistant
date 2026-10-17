@@ -430,6 +430,31 @@ class Adapters(Base):
                          (True, True, False, "dry run: nothing sent yet"))
         self.assertEqual((real["done"], real["meaning"]), (True, "sent, or nothing to send"))
 
+class MobileProject(Base):
+    """The first real batch: exploratory charters of a mobile project ran with the browser's tools only, and the
+    agent was refused the device on its first command. They run with the mobile scripts."""
+    modules = ("mobile", "exploratory")
+
+    def test_exploratory_charters_run_on_the_app_with_the_mobile_tools(self):
+        with open(os.path.join(self.ws, ".mcp.json"), "w", encoding="utf-8") as f:
+            json.dump({"mcpServers": {"playwright": {"command": "npx", "args": ["@playwright/mcp@0.0.82"]}}}, f)
+        qa = rn.posix(ROOT)
+        self.batch("charters", module="exploratory")
+        self.wait(self.runner.start_batch(self.proj, "charters"))
+        rec = self.recorded()
+        tools = rec["args"][rec["args"].index("--allowedTools") + 1].split(",")
+        self.assertIn(f"Bash(python {qa}/scripts/device.py *)", tools)
+        self.assertNotIn("mcp__playwright", tools)
+        self.assertNotIn("--mcp-config", rec["args"])
+        self.assertTrue(rec["prompt"].startswith("/test-mobile\n"))
+        self.assertIn("Module: exploratory, charters on the mobile app", rec["prompt"])
+
+    def test_with_a_web_module_too_the_charters_stay_in_the_browser(self):
+        self.assertEqual(rn.allowed_tools("exploratory", "/qa", ["playwright"]),
+                         rn.allowed_tools("functional-web", "/qa", ["playwright"]))
+        self.assertEqual(rn.allowed_tools("exploratory", "/qa", ["playwright"], on_app=True),
+                         rn.allowed_tools("mobile", "/qa", ["playwright"]))
+
 
 if __name__ == "__main__":
     unittest.main()

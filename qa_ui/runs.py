@@ -29,7 +29,12 @@ import run_log
 from common import Redactor, read_workspace_env
 
 from . import MODULES, ROOT, intake, workspace
-from .suggest import SKILLS, find_claude, find_test_environment
+from .suggest import (
+    exploratory_on_mobile,
+    find_claude,
+    find_test_environment,
+    skill_for,
+)
 
 TAIL = 400                      # lines of output kept in memory per run
 GRACE = 10                      # seconds between the interrupt and the kill (docs/qa-ui.md section 8.3)
@@ -99,20 +104,26 @@ def mcp_servers(ws: str) -> list[str]:
     return [str(n) for n in servers] if isinstance(servers, dict) else []
 
 
-def allowed_tools(module: str, qa: str, servers: list[str]) -> list[str]:
+def tools_of(module: str, on_app: bool = False) -> str:
+    """The module whose tools a batch gets: exploratory charters on the app (suggest.exploratory_on_mobile) use the
+    mobile scripts, not the browser."""
+    return "mobile" if module == "exploratory" and on_app else module
+
+
+def allowed_tools(module: str, qa: str, servers: list[str], on_app: bool = False) -> list[str]:
     tools = ["Read", "Glob", "Grep", "Skill", f"Bash(python {qa}/scripts/run_log.py *)", "Write(runs/**)",
              "Edit(runs/**)", "Write(evidence/**)", "Edit(evidence/**)"]
-    tools += [f"Bash(python {qa}/scripts/{script} *)" for script in MODULE_SCRIPTS[module]]
-    if module in MODULE_MCP:
+    tools += [f"Bash(python {qa}/scripts/{script} *)" for script in MODULE_SCRIPTS[tools_of(module, on_app)]]
+    if tools_of(module, on_app) in MODULE_MCP:
         tools += [f"mcp__{name}" for name in servers]
     return tools
 
 
-def batch_command(claude: str, module: str, ws: str, qa: str, max_turns: int) -> list[str]:
-    servers = mcp_servers(ws) if module in MODULE_MCP else []
+def batch_command(claude: str, module: str, ws: str, qa: str, max_turns: int, on_app: bool = False) -> list[str]:
+    servers = mcp_servers(ws) if tools_of(module, on_app) in MODULE_MCP else []
     cmd = [claude, "-p", "--max-turns", str(max_turns), "--permission-mode", "dontAsk", "--output-format",
            "stream-json", "--verbose", "--add-dir", qa, "--disallowedTools", "WebFetch,WebSearch",
-           "--allowedTools", ",".join(allowed_tools(module, qa, servers))]
+           "--allowedTools", ",".join(allowed_tools(module, qa, servers, on_app))]
     if servers:
         cmd += ["--mcp-config", os.path.join(ws, ".mcp.json")]
     return cmd
@@ -322,14 +333,18 @@ class Runner:
             except workspace.Refused as e:
                 raise Refused(str(e)) from None
             ws, qa = posix(self.ws), posix(self.qa)
+            on_app = module == "exploratory" and exploratory_on_mobile(proj)
+            shown = (f"{module}, charters on the mobile app (a mobile project): explore with the device tools of "
+                     f"{skill_for(module, proj)} in conversational mode, one note per turn, and judge each charter "
+                     "by its expected result" if on_app else module)
             prompt = template("batch.md", {
-                "skill": SKILLS[module], "module": module, "workspace": ws, "qa": qa,
+                "skill": skill_for(module, proj), "module": shown, "workspace": ws, "qa": qa,
                 "run_log": run_log.batch_id(name), "cases": " ".join(batch["cases"]),
                 "max_turns": str(self.max_turns),
                 "case_text": "\n\n".join(case_block(by_id[c]) for c in batch["cases"])})
             run_id = self._new_id("batch")
             run = Run(run_id, "batch", f"{name} ({module}, {len(batch['cases'])} case(s))",
-                      batch_command(claude, module, self.ws, qa, self.max_turns),
+                      batch_command(claude, module, self.ws, qa, self.max_turns, on_app),
                       os.path.join(self.ws, ".qa-ui", "runs", run_id + ".log"), batch=run_log.batch_id(name))
             return self._spawn(run, self.ws, prompt, render=True)
 
