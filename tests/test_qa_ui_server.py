@@ -209,6 +209,18 @@ class Http(unittest.TestCase):
         self.assertEqual((status, out["state"], out["reason"]), (200, "stopped", "stopped by the user"))
         self.assertIsNone(self.call("GET", "/api/state")[1]["run"])
 
+    def test_a_planned_batch_without_a_module_gets_one_over_http(self):
+        os.makedirs(os.path.join(self.ws, "batches"), exist_ok=True)
+        with open(os.path.join(self.ws, "batches", "old.yaml"), "w", encoding="utf-8") as f:
+            f.write("cases: [TC-SHOP-001]\n")
+        self.assertEqual(self.call("POST", "/api/batches/old/module", {})[0], 400)
+        status, out, _ = self.call("POST", "/api/batches/old/module", {"module": "mobile"})
+        self.assertEqual(status, 409)
+        self.assertIn("not in `modules:`", out["error"])
+        status, out, _ = self.call("POST", "/api/batches/old/module", {"module": "api"})
+        self.assertEqual((status, out["module"]), (200, "api"))
+        self.assertEqual(self.call("POST", "/api/batches/nope/module", {"module": "api"})[0], 404)
+
     def test_new_cases_dry_run_over_http(self):
         status, dry, _ = self.call("POST", "/api/cases", {"cases": [{"id": "TC-SHOP-005", "title": "Pay with an "
                                                                     "expired card", "expected": "refused"}]})
@@ -259,7 +271,7 @@ class Page(unittest.TestCase):
         called = set(re.findall(r"'(/api/[a-z-]+)", self.read("app.js"))) | \
             set(re.findall(r"`(/api/[a-z-]+)", self.read("app.js")))
         self.assertEqual(called, {"/api/state", "/api/intake", "/api/suggest", "/api/plan", "/api/cases",
-                                  "/api/ask-claude", "/api/runs", "/api/runlogs"})
+                                  "/api/ask-claude", "/api/runs", "/api/runlogs", "/api/batches"})
 
 
 class CommandLine(unittest.TestCase):

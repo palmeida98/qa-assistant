@@ -129,6 +129,40 @@ def batch_command(claude: str, module: str, ws: str, qa: str, max_turns: int, on
     return cmd
 
 
+REFUSAL = re.compile(r"permission|not allowed|haven't granted|was denied|denied by|dontAsk", re.IGNORECASE)
+MAX_REFUSED = 20
+
+
+def refusals(line: str) -> list[str]:
+    """The tool uses Claude Code refused in one stream-json event (the batch's tools are fixed: section 8.1): the
+    `permission_denials` of the result event ("Bash: adb devices"), and a tool result that is an error about a
+    permission. [] for anything else."""
+    try:
+        ev = json.loads(line)
+    except ValueError:
+        return []
+    if not isinstance(ev, dict):
+        return []
+    out = []
+    if ev.get("type") == "result":
+        for d in ev.get("permission_denials") or []:
+            if isinstance(d, dict) and d.get("tool_name"):
+                given = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+                detail = next((str(given[k]) for k in ("command", "file_path", "path", "url") if given.get(k)), "")
+                out.append(f"{d['tool_name']}" + (f": {detail[:120]}" if detail else ""))
+    elif ev.get("type") == "user":
+        content = (ev.get("message") or {}).get("content") if isinstance(ev.get("message"), dict) else None
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error"):
+                text = block.get("content")
+                if isinstance(text, list):
+                    text = " ".join(str(b.get("text") or "") for b in text if isinstance(b, dict))
+                text = " ".join(str(text or "").split())
+                if REFUSAL.search(text):
+                    out.append(text[:200])
+    return out
+
+
 def render_event(line: str) -> list[str] | None:
     """The readable lines of one stream-json event of Claude Code; None when the line is not such an event (it is
     then shown as it is). Tolerant on purpose: an unknown event shows nothing rather than break the run."""
@@ -153,6 +187,8 @@ def render_event(line: str) -> list[str] | None:
                 detail = detail.replace("\n", " ")
                 out.append(f"> {block.get('name')}" + (f" {detail[:200]}{'…' if len(detail) > 200 else ''}"
                                                        if detail else ""))
+    elif ev["type"] == "user":
+        out += [f"! refused: {r}" for r in refusals(line)]
     elif ev["type"] == "result":
         if ev.get("is_error") or ev.get("subtype") not in (None, "success"):
             out += str(ev.get("result") or "").strip().splitlines()    # otherwise the last assistant text said it
@@ -174,6 +210,7 @@ class Run:
         self.finished: str | None = None
         self.tail: collections.deque[str] = collections.deque(maxlen=TAIL)
         self.lines = 0
+        self.refused: list[str] = []         # the tool uses Claude Code refused (refusals), redacted
         self.proc: subprocess.Popen | None = None
         self.stop_requested: str | None = None
         self.timer: threading.Timer | None = None
@@ -182,7 +219,7 @@ class Run:
     def public(self) -> dict:
         return {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state, "reason": self.reason,
                 "code": self.code, "started": self.started, "finished": self.finished, "batch": self.batch,
-                "report": self.report, "lines": self.lines, "tail": list(self.tail)}
+                "report": self.report, "lines": self.lines, "tail": list(self.tail), "refused": list(self.refused)}
 
 
 class Runner:
@@ -249,6 +286,11 @@ class Runner:
             for raw in proc.stdout:
                 raw = raw.rstrip("\r\n")
                 shown = render_event(raw) if render else None
+                if render:
+                    for r in refusals(raw):
+                        r = redactor.text(r)
+                        if len(run.refused) < MAX_REFUSED and not any(r in x or x in r for x in run.refused):
+                            run.refused.append(r)
                 for line in ([raw] if shown is None else shown):
                     line = redactor.text(line)
                     log.write(line + "\n")
@@ -306,8 +348,8 @@ class Runner:
                 raise Refused(str(e)) from None
             module = batch.get("module")
             if module not in MODULES:
-                raise Refused(f"batches/{name}.yaml has no `module:` of the list {list(MODULES)}: plan it in the "
-                              "interface, or add the key")
+                raise Refused(f"batches/{name}.yaml has no `module:` of the list {list(MODULES)}: choose it in "
+                              "Planned batches, or add the key")
             if module not in (proj.get("modules") or []):
                 raise Refused(f"`{module}` is not in `modules:` of project.yaml (methodology 4.1)")
             claude = self.claude()

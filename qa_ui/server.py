@@ -155,6 +155,10 @@ class App:
             if body.get("confirm") is not None:
                 return self.runner.new_cases(proj, confirm=str(body["confirm"]))
             return self.runner.new_cases(proj, clean_cases(body.get("cases")))
+        if rest[:1] == ["batches"] and len(rest) == 3 and rest[2] == "module" and method == "POST":
+            if not isinstance(body.get("module"), str):
+                raise BadRequest("`module` (an active module of project.yaml) is needed")
+            return workspace.set_batch_module(self.ws, proj, rest[1], body["module"])
         if rest[:1] == ["runs"]:
             if method == "POST" and len(rest) == 1:
                 if body.get("audit") is not None:

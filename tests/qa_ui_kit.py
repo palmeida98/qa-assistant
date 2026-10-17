@@ -122,6 +122,14 @@ say("Reading the workspace. The password is fictional-value-555.")
 if mode == "fail":
     print("a line that is not an event", flush=True)
     sys.exit(3)
+if mode == "refused":                              # the batch's tools do not cover what the agent needs
+    tool("Bash", command="adb devices")
+    emit({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True, "content":
+          "Claude requested permissions to use Bash, but you haven't granted it yet."}]}})
+    say("I could not run any case: the shell was refused.")
+    emit({"type": "result", "subtype": "success", "result": "none run", "num_turns": 3, "duration_ms": 900,
+          "permission_denials": [{"tool_name": "Bash", "tool_use_id": "t1", "tool_input": {"command": "adb devices"}}]})
+    sys.exit(0)
 if mode in ("slow", "stubborn"):
     if mode == "stubborn":
         signal.signal(signal.SIGINT, signal.SIG_IGN)

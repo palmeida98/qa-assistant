@@ -239,6 +239,16 @@ Nobody answers the agent during the run, so the rules of a remote run hold (meth
 
 The page reads the run log every two seconds while a run is `running`: it is the only source of the results.
 
+A batch gets only the tools of its module, and Claude Code refuses anything else without asking (`dontAsk`). Each
+refusal — a tool result that is a permission error, and the `permission_denials` of the final event — is shown as
+`! refused: …` in the output and listed under "Refused tools" on the run's screen, with what to check (the batch's
+module and the project's modules): a batch that ends with no result because a tool was refused says so, instead of
+only "This run log has no result".
+
+A planned batch without `module:` (a batch written by hand, or before the key existed) cannot start; its line in
+"Planned batches" offers the project's active modules instead of Start, and the choice adds one line `module: …` to
+the file (its comments and order kept).
+
 ### 8.2 The automated runs
 
 | Card | Command | What is kept |
@@ -294,6 +304,7 @@ JSON in and out; every route needs the token (§2). An error is `{"error": "<tex
 | `POST /api/ask-claude` | `{"cases", "notes", "proposals"}` → Claude's reading (§5.3) |
 | `POST /api/plan` | `{"cases", "assignments", "cards"}` → the batches and the cases listed apart; with `"save": true` writes them |
 | `POST /api/cases` | `{"cases"}` → the dry run of §7; with `"confirm": "<file>"` the real run |
+| `POST /api/batches/<name>/module` | `{"module"}` → adds `module:` to a planned batch that has none (an active module; the file's comments kept) |
 | `POST /api/runs` | `{"batch", "environment", "build"}` or `{"audit": "a11y" \| "site"}` → starts a run |
 | `GET /api/runs/<id>` | its state, the tail of its output, the run log |
 | `POST /api/runs/<id>/stop` | §8.3 |

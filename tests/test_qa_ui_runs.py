@@ -455,6 +455,54 @@ class MobileProject(Base):
         self.assertEqual(rn.allowed_tools("exploratory", "/qa", ["playwright"], on_app=True),
                          rn.allowed_tools("mobile", "/qa", ["playwright"]))
 
+class Refusals(Base):
+    def test_the_tools_claude_code_refused_are_listed_and_shown(self):
+        self.batch()
+        with mock.patch.dict(os.environ, {"QA_FAKE_CLAUDE": "refused"}):
+            out = self.wait(self.runner.start_batch(self.proj, "b1"))
+        self.assertEqual(out["state"], "finished")
+        self.assertEqual(out["refused"], ["Claude requested permissions to use Bash, but you haven't granted it yet.",
+                                          "Bash: adb devices"])
+        self.assertIn("! refused: Claude requested permissions to use Bash, but you haven't granted it yet.",
+                      out["tail"])
+
+    def test_refusals_reads_only_permission_errors(self):
+        ok = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True,
+                                                                  "content": "No such file or directory"}]}})
+        self.assertEqual(rn.refusals(ok), [])
+        self.assertEqual(rn.refusals("not json"), [])
+        listed = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True,
+                             "content": [{"type": "text", "text": "Permission to use PowerShell was denied"}]}]}})
+        self.assertEqual(rn.refusals(listed), ["Permission to use PowerShell was denied"])
+
+
+class PlannedBatchModule(Base):
+    def test_a_batch_without_a_module_gets_one_line_and_keeps_its_comments(self):
+        path = os.path.join(self.ws, "batches", "old.yaml")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write("# a pilot batch\r\ncases: [TC-SHOP-001]")             # no newline at the end, CRLF
+        with self.assertRaises(rn.Refused) as e:
+            self.runner.start_batch(self.proj, "old")
+        self.assertIn("choose it in Planned batches", str(e.exception))
+        out = wk.set_batch_module(self.ws, self.proj, "old", "api")
+        self.assertEqual(out["module"], "api")
+        with open(path, encoding="utf-8", newline="") as f:
+            self.assertEqual(f.read(), "# a pilot batch\r\ncases: [TC-SHOP-001]\r\nmodule: api\r\n")
+
+    def test_only_an_active_module_and_never_over_one_that_is_set(self):
+        self.batch("b1")
+        with self.assertRaises(wk.Refused):
+            wk.set_batch_module(self.ws, self.proj, "b1", "api")             # it has functional-web already
+        path = os.path.join(self.ws, "batches", "b2.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("cases: [TC-SHOP-001]\n")
+        for module in ("mobile", "smoke"):
+            with self.subTest(module=module), self.assertRaises(wk.Refused):
+                wk.set_batch_module(self.ws, self.proj, "b2", module)
+        with self.assertRaises(wk.NotFound):
+            wk.set_batch_module(self.ws, self.proj, "nope", "api")
+
 
 if __name__ == "__main__":
     unittest.main()
