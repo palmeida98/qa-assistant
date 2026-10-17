@@ -72,6 +72,14 @@ excel:
       actual_result: "Actual Result"
       notes: "Notes"
     statuses: ["Not run", "Pass", "Fail", "Blocked", "N/A"]
+    fields:
+      title: "Title"
+      role: "Role"
+      technique: "Technique"
+      priority: "Priority"
+      preconditions: "Preconditions"
+      steps: "Steps"
+      expected: "Expected Result"
 
   defects:
     sheet: "Defects"

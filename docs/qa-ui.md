@@ -71,7 +71,7 @@ Three sources, which can be combined (a case ID given twice is flagged, the firs
 
 | Source | How it is read |
 |---|---|
-| The workspace's library | `tracker: excel` — the workbook through the Excel adapter (read only): ID, the columns of `excel.cases.fields` when set, otherwise the headers `Title`, `Preconditions`, `Steps`, `Expected Result`, `Role`, `Platform`, `Priority` when the sheet has them; the area is the sheet; the last status is the status column. `jira` / `azure-devops` — `tracker/cases.json` as `import-cases` wrote it (never refreshed by the interface: it says how old the file is) |
+| The workspace's library | `tracker: excel` — the workbook through the Excel adapter (read only): ID, the columns of `excel.cases.fields` first, then any other column whose header is recognised (`adapters/case_headers.py`: `Title`, `Preconditions`, `Steps`, `Expected Result`, `Role`, `Platform`, `Priority`… and the same names in Portuguese, Spanish, French, German and Italian, compared without case or accents); the area is the sheet; the last status is the status column. `jira` / `azure-devops` — `tracker/cases.json` as `import-cases` wrote it (never refreshed by the interface: it says how old the file is) |
 | Pasted text | One case per line: `<ID> <title> → <expected result>` (also `->` and `=>`), or cells separated by a tab or `\|` in the order ID, title, expected result; a first line of headers (`id`, `title`, `expected`, `steps`, `preconditions`, `role`, `platform`, `area`, `priority`, in any order) names the cells instead. A Markdown table is the `\|` form |
 | A file | `.csv` and `.tsv` (headers as above), `.txt` and `.md` (as pasted text), `.xlsx` (every sheet with a header row that has an ID and a title column; the area is the sheet), `.docx` (its paragraphs and table rows, then as pasted text). Up to 5 MB. `.pdf` is not read (§13) |
 
@@ -79,6 +79,11 @@ An ID is letters, digits, `.`, `_` and `-`, starting with a letter and holding a
 `TC-LOGIN-001`), or exactly an ID of the workspace's library, whatever its form (an Azure DevOps work item number
 such as `4712`). A line without an ID is a **note**: it is kept as context for the rules and for Claude, and never
 becomes a case.
+
+The library is warned about, on the Suggestion screen and in "What was understood", when some of its cases have no
+title or no expected result: a run marks such a case `Question`, and the usual cause is a column the project does not
+map (`excel.cases.fields`; `validate_project.py` warns about it too, and `adapters.excel.inspect` proposes the mapping
+from the headers at the onboarding).
 
 A case of the input that is in the library gets from the library the fields the input did not give (a list of IDs
 and titles is a way of selecting cases); what the input gave is kept.

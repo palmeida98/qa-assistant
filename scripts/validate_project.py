@@ -456,6 +456,11 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
             cc = ad.cross_check()
             if cc:
                 warnings.append(f"excel: the workbook has {len(cc)} cross-check problem(s) (e.g. {cc[0]})")
+            unmapped = [f for f in ("title", "expected") if not (ad.cfg["cases"].get("fields") or {}).get(f)]
+            if unmapped:
+                warnings.append(f"excel.cases.fields does not map {' nor '.join(unmapped)}: add-cases cannot find "
+                                "duplicates without the title, and the interface (qa-ui) and the runs read these "
+                                "columns only when their header is recognised (technique-excel.md 4.1)")
             import build_dashboard
             try:
                 types = build_dashboard.status_types(list(ad.cfg["cases"]["statuses"]), proj.get("dashboard"))

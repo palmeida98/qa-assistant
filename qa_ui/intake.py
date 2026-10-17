@@ -20,26 +20,18 @@ import re
 import zipfile
 from xml.etree import ElementTree
 
+from adapters.case_headers import (  # noqa: F401 (HEADERS: shared with the inspection)
+    _HEADER_OF,
+    HEADERS,
+    norm,
+)
+
 MAX_FILE = 5 * 1024 * 1024          # an uploaded file (docs/qa-ui.md section 4)
 MAX_XML = 40 * 1024 * 1024          # the document inside a .docx, once unzipped
 MAX_ROWS = 20000
 
 FIELDS = ("id", "title", "expected", "steps", "preconditions", "role", "platform", "area", "priority", "module",
           "technique")
-HEADERS = {
-    "id": ("id", "case", "case id", "test case id", "test id", "tc", "key"),
-    "title": ("title", "name", "summary", "test case", "case title"),
-    "expected": ("expected", "expected result", "expected results"),
-    "steps": ("steps", "step", "test steps", "action", "actions"),
-    "preconditions": ("preconditions", "precondition", "pre conditions", "pre condition"),
-    "role": ("role", "profile", "user role"),
-    "platform": ("platform",),
-    "area": ("area", "feature"),
-    "priority": ("priority",),
-    "module": ("module", "test module"),
-    "technique": ("technique", "design technique"),
-}
-_HEADER_OF = {name: field for field, names in HEADERS.items() for name in names}
 DEFAULT_ORDER = {0: "id", 1: "title", 2: "expected"}
 
 ID = re.compile(r"[A-Za-z][A-Za-z0-9._-]*")
@@ -60,10 +52,6 @@ class IntakeError(ValueError):
 # ---------------------------------------------------------------------------
 # One case
 # ---------------------------------------------------------------------------
-
-
-def norm(header) -> str:
-    return re.sub(r"[\s_-]+", " ", str(header or "")).strip().lower()
 
 
 def is_id(token: str, known=frozenset()) -> bool:
@@ -334,8 +322,33 @@ def read_file(name: str, data: str, known=frozenset()) -> tuple[list[dict], list
 
 
 def load_library(workspace: str, proj: dict) -> dict:
-    """{"source", "cases", "detail", "error"}: the cases the project already has. Excel: the workbook through the
-    adapter (read only). Jira / Azure DevOps: tracker/cases.json as import-cases wrote it (never refreshed here)."""
+    """{"source", "cases", "detail", "error", "warning"}: the cases the project already has. Excel: the workbook
+    through the adapter (read only). Jira / Azure DevOps: tracker/cases.json as import-cases wrote it (never refreshed
+    here). The warning names the cases that came without a title or an expected result: a run would mark them
+    Question, and the usual cause is a column the project does not map (excel.cases.fields)."""
+    lib = _load_library(workspace, proj)
+    lib["warning"] = library_warning(lib["cases"], proj) if not lib["error"] else None
+    return lib
+
+
+def library_warning(cases: list[dict], proj: dict) -> str | None:
+    no_title = [c["id"] for c in cases if c["id"] and not c["title"]]
+    no_expected = [c["id"] for c in cases if c["id"] and not c["expected"]]
+    if not no_title and not no_expected:
+        return None
+    parts = []
+    for ids, what in ((no_title, "a title"), (no_expected, "an expected result")):
+        if ids:
+            parts.append(f"{len(ids)} without {what} ({', '.join(ids[:3])}{', …' if len(ids) > 3 else ''})")
+    where = ("map the columns in excel.cases.fields of project.yaml (title, expected, steps, preconditions, role; "
+             "docs/technique-excel.md section 4.1)" if proj.get("tracker") == "excel" else
+             "check the fields of the tracker's cases (tracker/cases.json)")
+    share = len(set(no_title) | set(no_expected))
+    return (f"{share} of {len(cases)} library case(s) cannot be judged: {'; '.join(parts)}. A run marks them Question;"
+            f" if the workbook has these columns, {where}.")
+
+
+def _load_library(workspace: str, proj: dict) -> dict:
     tracker = proj.get("tracker")
     if tracker == "excel":
         from adapters.excel import ExcelAdapter
@@ -348,13 +361,21 @@ def load_library(workspace: str, proj: dict) -> dict:
             for sheet, rows in ad.case_rows().items():
                 for row in rows:
                     values = {}
-                    for header, value in row.items():
-                        if header in (None, "_row"):
-                            continue
-                        field = ("id" if header == cfg["columns"]["id"] else
-                                 by_header.get(str(header)) or _HEADER_OF.get(norm(header)))
-                        if field and field not in values:
-                            values[field] = value
+                    # the project's mapping first (excel.cases.fields), then a header recognised by its name
+                    for mapped in (True, False):
+                        for header, value in row.items():
+                            if header in (None, "_row"):
+                                continue
+                            if header == cfg["columns"]["id"]:
+                                field = "id"
+                            elif mapped:
+                                field = by_header.get(str(header))
+                            elif str(header) in by_header or header in cfg["columns"].values():
+                                continue
+                            else:
+                                field = _HEADER_OF.get(norm(header))
+                            if field and field not in values:
+                                values[field] = value
                     values.update(area=sheet, last_status=row.get(cfg["columns"]["status"]))
                     cases.append(new_case(values, "library"))
             return {"source": "workbook", "cases": cases, "error": None,
@@ -435,4 +456,4 @@ def intake(workspace: str, proj: dict, text: str | None = None, file: dict | Non
     annotate(cases, lib)
     return {"cases": cases, "notes": notes, "dropped": dropped,
             "library": {"source": lib["source"], "count": len(lib["cases"]), "detail": lib["detail"],
-                        "error": lib["error"]}}
+                        "warning": lib["warning"], "error": lib["error"]}}

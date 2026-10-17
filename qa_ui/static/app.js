@@ -334,6 +334,11 @@ function listsPanel() {
       : h('p', { class: 'note', text: 'No run log yet.' }));
 }
 
+function libraryWarning() {
+  if (!S.library || !S.library.warning) return null;
+  return h('ul', { class: 'problems', role: 'status' }, h('li', { text: `Library: ${S.library.warning}` }));
+}
+
 function understoodPanel() {
   if (!S.analysed) return null;
   const areas = {};
@@ -347,7 +352,8 @@ function understoodPanel() {
     h('dl', { class: 'kv' },
       h('dt', { text: 'Notes' }), h('dd', { text: plural(S.notes.length, 'line') + ' kept as context' }),
       h('dt', { text: 'Flagged' }), h('dd', { text: plural(flagged.length, 'case') }),
-      h('dt', { text: 'Library' }), h('dd', { text: S.library ? (S.library.error || S.library.detail) : '' })));
+      h('dt', { text: 'Library' }), h('dd', { text: S.library ? (S.library.error || S.library.detail) : '' })),
+    libraryWarning());
 }
 
 function renderIntake() {
@@ -604,6 +610,7 @@ function renderSuggest() {
     h('h1', { id: 'h-suggest', text: 'Suggested tests' }),
     h('p', { class: 'lead', text: `From ${plural(S.cases.length, 'case')} and ${plural(S.notes.length, 'note')}. `
       + 'Tick what runs; open a card to see why each case is there and move it.' }),
+    libraryWarning(),
     h('div', { class: 'cols' },
       h('div', { class: 'col-main' }, S.sug.cards.map(suggestionCard)),
       h('div', { class: 'col-side' }, planPanel(), newCasesPanel(), gapsPanel(), claudePanel())),

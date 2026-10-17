@@ -86,8 +86,11 @@ excel:
       actual_result: ""        # (opt.) only used in the sheets where it exists
       notes: ""                # (opt.) session notes; only used in the sheets where it exists
     statuses: []               # (req.) valid case statuses, exactly as in the workbook
-    fields: {}                 # (opt.) model field -> column, for add-cases (technique-excel.md 4.1); title is required
-                               #   there, e.g. {title: "Title", steps: "Steps", expected: "Expected Result"}
+    fields: {}                 # (rec.) model field -> column: add-cases (technique-excel.md 4.1; title required there),
+                               #   qa-ui's library and the runs (title, expected, steps, preconditions, role, ...), e.g.
+                               #   {title: "Title", steps: "Steps", expected: "Expected Result"}; the column names stay
+                               #   in the workbook's language. Unmapped, only a recognised header is read
+                               #   (adapters/case_headers.py); validate_project.py warns without title and expected
     new_status: ""             # (opt.) status of a case added by add-cases (default: the 1st of statuses)
 
   defects:

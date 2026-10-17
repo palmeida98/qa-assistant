@@ -73,6 +73,21 @@ class Validate(unittest.TestCase):
     def test_base_is_valid(self):
         self.assertEqual(self.with_(), ([], []))
 
+    def test_excel_cases_fields_without_title_or_expected_is_warned(self):
+        # the first real batch of qa-ui: a workbook in another language, its title and expected columns unmapped,
+        # reached the agent empty and every case came back Question
+        import qa_ui_kit as kit
+        tmp = kit.workspace()
+        self.addCleanup(tmp.cleanup)
+        _, warnings = vp.validate(tmp.name)
+        self.assertTrue(any("excel.cases.fields does not map expected:" in w for w in warnings), warnings)
+        with open(os.path.join(tmp.name, "project.yaml"), encoding="utf-8") as f:
+            proj = yaml.safe_load(f)
+        proj["excel"]["cases"]["fields"] = {"title": "Title", "expected": "Notes"}
+        kit.write_project(tmp.name, proj)
+        _, warnings = vp.validate(tmp.name)
+        self.assertFalse(any("excel.cases.fields" in w for w in warnings), warnings)
+
     def test_the_old_rebuild_rule_is_warned(self):
         # plan 10.6: "rebuild the workbook with rebuild_workbook.py" only holds for the demo, which has its own script
         ws = self.tmp.name
