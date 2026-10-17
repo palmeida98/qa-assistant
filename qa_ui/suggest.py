@@ -17,6 +17,9 @@ from . import MODULES
 
 TIE = ("api", "mobile", "accessibility", "exploratory")     # a tie goes to the first of these
 DEFAULT = "functional-web"
+# the default of a project without functional-web: its first active module of this order (exploratory last: a charter
+# is a choice, not a fallback)
+DEFAULT_ORDER = ("functional-web", "mobile", "api", "accessibility", "exploratory")
 
 SKILLS = {"functional-web": "/run-batch", "exploratory": "/run-batch", "api": "/test-api",
           "accessibility": "/audit-accessibility", "mobile": "/test-mobile"}
@@ -82,9 +85,19 @@ def signals(case: dict) -> list[dict]:
     return out
 
 
-def assign(case: dict) -> dict:
+def default_module(active=None) -> str:
+    """The module of a case with no signal: functional-web, or, in a project that does not have it, its first active
+    module of DEFAULT_ORDER (a mobile-only project: mobile)."""
+    if not active:
+        return DEFAULT
+    return next((m for m in DEFAULT_ORDER if m in active), DEFAULT)
+
+
+def assign(case: dict, active=None) -> dict:
     """The module of one case. A valid `module` field is kept; otherwise the highest total of signals wins, a tie
-    goes to the first of TIE, and a case with no signal is functional-web."""
+    goes to the first of TIE, and a case with no signal gets the default. With `active` (the project's modules),
+    only those are chosen by the rules: the signals of an inactive module are named in the reason, never followed,
+    and the default is the project's (default_module)."""
     given = str(case.get("module") or "").strip().lower()
     if given in MODULES:
         return {"module": given, "signals": [{"module": given, "signal": "the case's own module field", "weight": 0}],
@@ -93,14 +106,19 @@ def assign(case: dict) -> dict:
     totals = dict.fromkeys(MODULES, 0)
     for s in found:
         totals[s["module"]] += s["weight"]
-    best = max(totals.values())
+    allowed = [m for m in MODULES if not active or m in active] or list(MODULES)
+    ignored = sorted({m for m in MODULES if totals[m] and m not in allowed})
+    note = f" (signals of {', '.join(ignored)}, not active in project.yaml)" if ignored else ""
+    best = max(totals[m] for m in allowed)
     if best == 0:
-        return {"module": DEFAULT, "signals": [], "why": "no signal: the default"}
-    top = [m for m in MODULES if totals[m] == best]
+        module = default_module(active)
+        why = "no signal: the default" if module == DEFAULT else f"no signal: the project's default ({module})"
+        return {"module": module, "signals": found, "why": why + note}
+    top = [m for m in allowed if totals[m] == best]
     module = next((m for m in TIE if m in top), top[0])
     mine = [s["signal"] for s in found if s["module"] == module]
     why = ", ".join(mine) + (f" (a tie with {', '.join(m for m in top if m != module)})" if len(top) > 1 else "")
-    return {"module": module, "signals": found, "why": why}
+    return {"module": module, "signals": found, "why": why + note}
 
 
 def find_test_environment(proj: dict) -> tuple[str | None, str]:
@@ -186,8 +204,9 @@ def suggest(cases: list[dict], proj: dict, checks, claude: str | None, moved: di
     """The module of each case and the cards. `moved` is {case ID: module} chosen by the user: it wins, and the
     assignment says so."""
     assignments = {}
+    active = set(proj.get("modules") or [])
     for case in cases:
-        a = assign(case)
+        a = assign(case, active)
         target = (moved or {}).get(case["id"])
         if target in MODULES and target != a["module"]:
             a = {**a, "module": target, "why": f"moved by the user (the rules said {a['module']})", "moved": True}

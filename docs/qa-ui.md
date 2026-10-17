@@ -106,7 +106,12 @@ Each case carries the fields of the model the source gave (methodology §2) and 
 Each case gets **one** module of the closed list of the methodology (§4.1): `functional-web`, `exploratory`, `api`,
 `accessibility`, `mobile`. A case with a `module` field keeps it. Otherwise each signal found in the case's ID,
 title, steps, expected result and platform adds its weight to a module, and the highest total wins; a tie goes to
-the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no signal is `functional-web`.
+the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no signal gets the project's default.
+Only the modules of `modules:` in `project.yaml` are chosen by the rules: the signals of an inactive module are named
+in the reason ("signals of functional-web, not active in project.yaml") and never followed. The default is
+`functional-web` when it is active, otherwise the first active module of `mobile`, `api`, `accessibility`,
+`exploratory` (a mobile-only project: `mobile`). A case whose own `module` field, or the user's move, names an
+inactive module keeps it, and its card says why it cannot start.
 
 | Module | Signals (weight) |
 |---|---|

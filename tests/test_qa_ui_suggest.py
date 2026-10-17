@@ -94,6 +94,39 @@ class Rules(unittest.TestCase):
         self.assertNotIn("moved", out["assignments"]["API-002"])
 
 
+class ActiveModules(unittest.TestCase):
+    """The first real batch: a mobile-only project got every case suggested as functional-web (not active), and the
+    batch could not start. The rules choose among the project's modules."""
+
+    def test_a_case_with_no_signal_gets_the_projects_default(self):
+        for active, expected in ((None, "functional-web"), ({"functional-web", "api"}, "functional-web"),
+                                 ({"mobile", "exploratory"}, "mobile"), ({"api"}, "api"),
+                                 ({"exploratory"}, "exploratory")):
+            with self.subTest(active=active):
+                a = sg.assign(case("CHK-012", "Pay with a refused card"), active)
+                self.assertEqual(a["module"], expected)
+        self.assertEqual(sg.assign(case("CHK-012", "Pay with a refused card"), {"mobile"})["why"],
+                         "no signal: the project's default (mobile)")
+
+    def test_the_signals_of_an_inactive_module_are_named_but_not_followed(self):
+        a = sg.assign(case("CHK-011", "Click the Pay button on the checkout page"), {"mobile", "exploratory"})
+        self.assertEqual(a["module"], "mobile")
+        self.assertIn("signals of functional-web, not active in project.yaml", a["why"])
+        a = sg.assign(case("ORD-009", "Tap to send the request"), {"mobile"})     # api 1, mobile 1: api is inactive
+        self.assertEqual(a["module"], "mobile")
+        self.assertIn("not active", a["why"])
+
+    def test_an_active_module_still_wins_by_its_signals(self):
+        self.assertEqual(sg.assign(case("EXP-001", "The new checkout"), {"mobile", "exploratory"})["module"],
+                         "exploratory")
+
+    def test_suggest_uses_the_projects_modules(self):
+        proj = dict(kit.PROJECT, modules=["mobile"])
+        out = sg.suggest([case("CHK-012", "Pay with a refused card")], proj, READY, "claude")
+        self.assertEqual(out["assignments"]["CHK-012"]["module"], "mobile")
+        self.assertEqual({c["key"]: c["level"] for c in out["cards"]}["functional-web"], "not-suggested")
+
+
 class Cards(unittest.TestCase):
     def cards(self, cases, proj=None, checks=READY, claude="claude") -> dict:
         out = sg.suggest(cases, proj or kit.PROJECT, checks, claude)
@@ -132,7 +165,9 @@ class Cards(unittest.TestCase):
         self.assertIn("accessibility.pages", " ".join(self.cards(form, empty)["audit-a11y"]["blockers"]))
 
     def test_a_module_that_is_not_active_is_never_ready(self):
-        card = self.cards([case("MOB-001", "Pay in the app")])["mobile"]
+        # the rules never choose an inactive module (ActiveModules); a case that names its module still can
+        self.assertEqual(self.cards([case("MOB-001", "Pay in the app")])["mobile"]["level"], "not-suggested")
+        card = self.cards([case("MOB-001", "Pay in the app", module="mobile")])["mobile"]
         self.assertEqual((card["level"], card["active"], card["ready"]), ("recommended", False, False))
         self.assertIn("`mobile` is not in `modules:`", card["blockers"][0])
 
