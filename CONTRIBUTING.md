@@ -1,6 +1,6 @@
 # Contributing
 
-This repository is private and proprietary (see `LICENSE`). These are the rules for changing it.
+This repository is public but proprietary (see `LICENSE`). These are the rules for changing it.
 
 ## Before you change anything
 

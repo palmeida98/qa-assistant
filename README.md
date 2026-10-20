@@ -130,7 +130,7 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 | 3 · API, accessibility and mobile modules | Done |
 | 4 · The framework's CI | Done |
 | 5 · Dashboard per workspace | Done |
-| 6 · Portfolio (README, demo, visibility: private) | Done |
+| 6 · Portfolio (README, demo, visibility: public) | Done |
 | 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
 | 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
 | 12 · `qa-ui`, the local web interface | Built and tested against fakes (08.10.2026); the first batch with a real Claude Code session and a real site is still to run |

@@ -31,7 +31,7 @@
 | 3 | New technique modules: API, accessibility, mobile | Done |
 | 4 | The framework's own CI | Done |
 | 5 | Interface: progress dashboard per workspace | Done |
-| 6 | Portfolio: README, demo, decision on the repository's visibility | Done (the repository stays private by the user's decision, 24.09.2026) |
+| 6 | Portfolio: README, demo, decision on the repository's visibility | Done (the repository public by the user's decision, 20.10.2026; private before) |
 | 7 | Closing: CI on Linux, pilot, real golden, protected history, fixed versions, reproducible demo, scope decisions, v1.0 | Done: **v1.0** (25.09.2026) |
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
@@ -349,7 +349,7 @@ Notes: `README.md` with the four layers, the privacy boundary and the guards, th
 Decide whether the repository becomes public. Before that, required:
 - [x] Sweep **the whole history** with detect-secrets and with the denylist (not only the current state), because the first commits were made before the guards existed.
 - [x] Review `examples/demo/` looking for any non-fictional data.
-- [x] The user's decision on the visibility: **it stays private for now** (user, 24.09.2026). To review when the portfolio goes to public use.
+- [x] The user's decision on the visibility: **public** (user, 20.10.2026; before, private since 24.09.2026).
 
 Checks (24.09.2026, 52 commits, 219 file versions extracted from every branch):
 - detect-secrets on every version, **redone in UTF-8 mode** (the 1st sweep, in cp1252, skipped files with certain characters — see the log of 24.09): 1 finding, the line with the variable name of the demo's booker password in the old version of the demo's `project.yaml`, which is the name of a variable and not a secret (apart from the integrity hashes of the `package-lock.json` files, excluded). Confirmed that the sweep reads the files, with a planted secret (caught).
@@ -358,6 +358,8 @@ Checks (24.09.2026, 52 commits, 219 file versions extracted from every branch):
 - `examples/demo/`: only public practice sites (saucedemo.com, restful-booker), demo accounts published by the sites themselves referred to by the variable's name, test data with the `QA-AUTO-` prefix, bugs of the practice sites.
 
 Re-check (14.10.2026, 222 commits of every branch, contents and messages): the denylist 0 hits; one variable name of a real workspace in a change-log row of 13.10.2026 (fixed in the current state, kept by the history and removed from the pull request's body). Decision (assistant, by the user's delegation of 14.10.2026): **still private** — making it public would need that history rewritten (a force-push of `main`), and the Actions minutes are handled by the CI running once per branch (#24) and the monthly reset. The personal denylist got exact entries for that project.
+
+Public (20.10.2026): the user made the repository public; the denylist swept over the whole history again (18 terms, contents, messages and names) found only the variable name of 13.10.2026. By the user's decision the history was rewritten (`git filter-repo --replace-text`, the name replaced by the generic wording already in the current state) and `main` force-pushed with a lease: 233 → 231 commits (the commit that had removed the name, and its merge, became empty), the final tree identical, 0 hits after; the tags predate the change and kept their commits. What the repository's owner cannot remove: the read-only `refs/pull/*` of pull requests #18 and #29 keep the old commits, until GitHub Support purges them (asked by the user). A mirror of the history before the rewrite stays outside the repository, on the user's computer, until that purge.
 
 ---
 
@@ -1692,6 +1694,7 @@ all fixed for any project:
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | 6.2: the repository made public by the user; the history rewritten to remove a real workspace's variable name (filter-repo, force-push of `main` with a lease, tree identical, denylist 0 hits); pull requests #18 and #29 still hold the old commits until GitHub Support purges them. |
 | 2026-10-17 | 12.6: the first real batches from `qa-ui` (a mobile workspace, a real phone, Windows) and the five gaps they showed, fixed for any project: library headers in other languages and the warning, only active modules suggested, exploratory charters on the app of a mobile project (methodology v2.6, technique-mobile v1.6), the module of a planned batch chosen in the page, the refused tools shown. 19 new tests (817 → 836). |
 | 2026-10-14 | 11.8, the agent step reproduced on this computer (the runner's flags, `login: skip`, 25 turns): `launch`, the notifications dialog, the onboarding, the 5 cases Bloqueado with evidence, the summary and `context.md`; `post-check` safe and `pr-body` right. Fixed from it: `workspace_ci.py prompt` gives forward-slash paths (on Windows the tool rules refused the backslash form; `qa-ui` already did so), and `post-check` counts only the files the run adds or changes (git status), not the whole history. |
 | 2026-10-14 | 11.8, local reproduction of the agent step: the local emulator stopped booting — after emulators stopped by force it waited for its crash-report consent dialog on the desktop. `setup_emulator.py` now sees "Showing crashdialog" in the emulator's output and stops at once with what to do (technique-mobile.md §1.1). |
