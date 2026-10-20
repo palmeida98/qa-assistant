@@ -205,6 +205,21 @@ class Library(unittest.TestCase):
                          (True, "Add item", "Shop", "Pass"))
         self.assertEqual((new["in_library"], new["flags"]), (False, ["not-in-library"]))
 
+    def test_a_list_of_ids_alone_selects_those_cases_of_the_library(self):
+        # pasting only IDs is how a few cases of the library are run (plan 12.7)
+        out = it.intake(self.ws, self.proj, text="TC-SHOP-002\nTC-ADMIN-001:\n- TC-SHOP-004\nCHK-999\nv2")
+        self.assertEqual([(c["id"], c["in_library"], c["area"]) for c in out["cases"]],
+                         [("TC-SHOP-002", True, "Shop"), ("TC-ADMIN-001", True, "Admin"),
+                          ("TC-SHOP-004", True, "Shop")])
+        self.assertTrue(all(c["title"] for c in out["cases"]))         # the text comes from the library
+        self.assertEqual(out["notes"], ["CHK-999", "v2"])                # an ID alone not in the library: a note
+        csv = it.intake(self.ws, self.proj, file={"name": "pick.csv", "data": b64(b"TC-SHOP-003\nCHK-998\n")})
+        self.assertEqual([c["id"] for c in csv["cases"]], ["TC-SHOP-003"])
+        self.assertEqual(csv["notes"], ["CHK-998"])
+        table = it.intake(self.ws, self.proj, text="| TC-SHOP-001 | |\n| CHK-997 | |")   # a table row with only an ID
+        self.assertEqual([(c["id"], bool(c["title"])) for c in table["cases"]], [("TC-SHOP-001", True)])
+        self.assertEqual(table["notes"], ["CHK-997"])
+
     def test_text_and_library_together_do_not_duplicate(self):
         out = it.intake(self.ws, self.proj, text="TC-SHOP-001 Add item → the cart shows 1", library=True)
         self.assertEqual(len(out["cases"]), 12)

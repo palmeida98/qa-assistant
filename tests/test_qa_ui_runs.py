@@ -88,7 +88,7 @@ class Batch(Base):
         self.assertEqual(os.path.realpath(rec["cwd"]), os.path.realpath(self.ws))
         self.assertEqual(args[:9], ["-p", "--max-turns", "40", "--permission-mode", "dontAsk", "--output-format",
                                     "stream-json", "--verbose", "--add-dir"])
-        self.assertEqual(args[args.index("--disallowedTools") + 1], "WebFetch,WebSearch")
+        self.assertEqual(args[args.index("--disallowedTools") + 1], "WebFetch,WebSearch,PowerShell")
         qa = rn.posix(ROOT)
         self.assertEqual(args[args.index("--allowedTools") + 1].split(","), [
             "Read", "Glob", "Grep", "Skill", f"Bash(python {qa}/scripts/run_log.py *)", "Write(runs/**)",
@@ -110,6 +110,30 @@ class Batch(Base):
         self.assertIn('`"proposed": true`', prompt)
         self.assertNotIn("{{", prompt)
         self.assertNotIn(kit.SECRET, prompt)
+
+    def test_the_prompt_names_the_one_command_forms_the_run_allows(self):
+        # a mobile batch was refused a compound Bash command and PowerShell, and gave up (plan 12.7)
+        qa = rn.posix(ROOT)
+        self.batch()
+        self.wait(self.runner.start_batch(self.proj, "b1"))
+        prompt = self.recorded()["prompt"]
+        self.assertIn("Tools: Bash for the scripts; no browser.", prompt)    # this workspace has no .mcp.json
+        self.assertIn(f"Each Bash call is ONE command, exactly one of `python {qa}/scripts/run_log.py ...`:", prompt)
+        self.assertIn("no `cd`, `;`, `&&`, `|`,", prompt)
+        self.assertIn("a refused command is sent again as one allowed command", prompt)
+        self.assertEqual(rn.prompt_tools("mobile", "/qa", []), {
+            "tools": "Bash for the scripts; no browser.",
+            "commands": "`python /qa/scripts/run_log.py ...`, `python /qa/scripts/device.py ...`, "
+                        "`python /qa/scripts/run_mobile.py ...`"})
+        self.assertEqual(rn.prompt_tools("exploratory", "/qa", ["playwright"], on_app=True), rn.prompt_tools("mobile", "/qa", []))
+        self.assertEqual(rn.prompt_tools("api", "/qa", [])["commands"],
+                         "`python /qa/scripts/run_log.py ...`, `python /qa/scripts/api_request.py ...`")
+        for module in rn.MODULE_SCRIPTS:        # the prompt's commands are exactly the Bash rules of the command
+            bash = [t[len("Bash("):-len(" *)")] for t in rn.allowed_tools(module, "/qa", []) if t.startswith("Bash(")]
+            self.assertEqual(["`" + b + " ...`" for b in bash], rn.prompt_tools(module, "/qa", [])["commands"].split(", "))
+        # the browser is promised only when the allowed tools give it: a workspace whose .mcp.json names no server
+        self.assertEqual(rn.prompt_tools("functional-web", "/qa", [])["tools"], "Bash for the scripts; no browser.")
+        self.assertIn("Playwright MCP", rn.prompt_tools("functional-web", "/qa", ["playwright"])["tools"])
 
     def test_each_module_gets_its_skill_its_scripts_and_the_mcp(self):
         with open(os.path.join(self.ws, ".mcp.json"), "w", encoding="utf-8") as f:
@@ -311,7 +335,7 @@ class Ask(Base):
         self.runner.ask_claude(list(self.CASES), [])
         rec = self.recorded()
         self.assertEqual(rec["args"], ["-p", "--max-turns", "2", "--permission-mode", "dontAsk", "--output-format",
-                                       "json", "--disallowedTools", "WebFetch,WebSearch"])
+                                       "json", "--disallowedTools", "WebFetch,WebSearch,PowerShell"])
         self.assertNotIn("--allowedTools", rec["args"])
         self.assertIn('"id": "CHK-011"', rec["prompt"])
         self.assertIn('The user did not ask for new cases: "proposals" is an empty list.', rec["prompt"])

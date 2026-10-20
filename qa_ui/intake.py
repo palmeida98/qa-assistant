@@ -152,7 +152,7 @@ def rows_to_cases(rows, known=frozenset(), source: str = "file", area: str | Non
         if mapping is None and need_header:
             continue
         values = _row_values(cells, mapping or DEFAULT_ORDER)
-        if is_id(str(values.get("id", "")), known) and values.get("title"):
+        if is_id(str(values.get("id", "")), known) and (values.get("title") or str(values.get("id")) in known):
             cases.append(new_case(values, source, area))
         elif not need_header:
             notes.append(" | ".join(c for c in cells if c))
@@ -161,7 +161,8 @@ def rows_to_cases(rows, known=frozenset(), source: str = "file", area: str | Non
 
 def parse_text(text: str, known=frozenset(), source: str = "text") -> tuple[list[dict], list[str]]:
     """One case per line: `<ID> <title> → <expected>` (also -> and =>), or cells separated by a tab or '|', with an
-    optional header line. A line without an ID is a note."""
+    optional header line. A line without an ID is a note; a line that is only an ID of the library is that case
+    (a list of IDs selects cases: the library gives their text)."""
     cases, notes = [], []
     mapping = None
     for raw in str(text or "").splitlines():
@@ -177,7 +178,7 @@ def parse_text(text: str, known=frozenset(), source: str = "text") -> tuple[list
                 mapping = header
                 continue
             values = _row_values(cells, mapping or DEFAULT_ORDER)
-            if is_id(values.get("id", ""), known) and values.get("title"):
+            if is_id(values.get("id", ""), known) and (values.get("title") or values.get("id") in known):
                 cases.append(new_case(values, source))
             else:
                 notes.append(" | ".join(c for c in cells if c))
@@ -185,6 +186,9 @@ def parse_text(text: str, known=frozenset(), source: str = "text") -> tuple[list
         line = BULLET.sub("", line, count=1) if BULLET.match(line) else line
         token, _, rest = line.partition(" ")
         token, rest = token.rstrip(":"), rest.strip()
+        if not rest and token in known:
+            cases.append(new_case({"id": token}, source))  # an ID of the library alone selects that case
+            continue
         if is_id(token, known) and rest:
             parts = ARROW.split(rest, maxsplit=1)
             title = parts[0].strip(" -–—:")

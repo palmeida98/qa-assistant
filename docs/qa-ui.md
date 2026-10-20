@@ -86,7 +86,9 @@ map (`excel.cases.fields`; `validate_project.py` warns about it too, and `adapte
 from the headers at the onboarding).
 
 A case of the input that is in the library gets from the library the fields the input did not give (a list of IDs
-and titles is a way of selecting cases); what the input gave is kept.
+and titles is a way of selecting cases); what the input gave is kept. A line, or a row of a file, that holds only an
+ID of the library is that case, so a list of IDs alone is enough to run just those cases; an ID alone that is not in
+the library stays a note.
 
 Each case carries the fields of the model the source gave (methodology §2) and these flags, never silent fixes
 (methodology §11):
@@ -123,7 +125,8 @@ inactive module keeps it, and its card says why it cannot start.
 
 An ID part is what `-`, `_` and `.` separate (`ACC` is not a signal: it is as often an account as accessibility).
 The words are matched whole, without case, and each one counts once per case. The signals of a case are shown next
-to it, and the user can move a case to another module before planning; a moved case says so.
+to it, and the user can move a case to another module before planning; a moved case says so, and the card it
+moved to is ticked (a case moved by hand is meant to run).
 
 ### 5.2 The cards
 
@@ -220,11 +223,16 @@ In a project with `mobile` and without `functional-web` among its modules there 
 prompt says so (methodology §4.1; technique-mobile.md §4.2). The card of the module shows that tool and depends on
 the mobile checks.
 
-`--permission-mode dontAsk`, `--max-turns` (default 150), no web tools, and the time limit of `--timeout-minutes`
+`--permission-mode dontAsk`, `--max-turns` (default 150), no web tools nor PowerShell (Claude Code's other shell on
+Windows: the scripts are allowed only as Bash commands), and the time limit of `--timeout-minutes`
 (default 60), after which the run is interrupted and what was written is kept. The run log `runs/batch_<name>.json`
 is created first, with the `run` block (the environment and the build the user gave when starting; both are
 required with `jira` and `azure-devops`, whose adapters need them). The scripts are allowed by their absolute path
-with forward slashes (`python <qa>/scripts/<script>.py …`), the way the prompt tells the agent to call them. The
+with forward slashes (`python <qa>/scripts/<script>.py …`), the way the prompt tells the agent to call them: the
+prompt names exactly those commands (and the browser only when the workspace's `.mcp.json` names an MCP server,
+as the allowed tools do) and says that each Bash call is one of them, with no `cd`, `;`, `&&`, `|`,
+redirection or variable (`dontAsk` refuses a compound command even when each part is allowed, and a batch that met
+that refusal gave up instead of sending the command again on its own). The
 output is Claude Code's stream of events (`--output-format stream-json`), shown as the agent's text and one line
 per tool it used; an event the interface does not know shows nothing.
 
@@ -271,7 +279,7 @@ Read from the run log, never kept apart:
 | Item | Actions, each one an edit of that item in the run log |
 |---|---|
 | A `new_defect` with `"proposed"` | **Approve** (the key `proposed` is removed); **Edit** (its text fields); **Link an existing bug** (`"bug": "<id>"` replaces the `new_defect`); **Drop** (the `new_defect` is removed, the result stays) |
-| A result in `Question` | **Answer**: the final status, of the project's vocabulary, and what was observed; the question stays in the item's `question` key (the adapters ignore it) |
+| A result in `Question` | **Answer**: the final status, of the project's vocabulary (none is chosen for the user), and what was observed; the question stays in the item's `question` key (the adapters ignore it) |
 
 An edit is refused when the batch was already applied (`scripts/run_log.py`: the correction goes to a new batch),
 and the file is written whole and atomically, as that script does.

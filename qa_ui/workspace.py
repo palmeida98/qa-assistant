@@ -251,7 +251,9 @@ def edit_item(workspace: str, proj: dict, name: str, case: str, action: str, dat
         status = str(data.get("status") or "").strip()
         actual = str(data.get("actual_result") or "").strip()
         vocabulary = run_log.vocabulary(proj)
-        if is_question(status) or not status or (vocabulary and status not in vocabulary):
+        if not status:
+            raise Refused(f"choose the final status of {case}: one of the project's vocabulary {vocabulary}")
+        if is_question(status) or (vocabulary and status not in vocabulary):
             raise Refused(f"status {status!r} is not in the project's vocabulary {vocabulary}")
         if not actual:
             raise Refused("an answer needs what was observed (actual_result)")

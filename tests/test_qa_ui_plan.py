@@ -257,6 +257,8 @@ class RunLogs(unittest.TestCase):
                      {"status": "Pass", "actual_result": " "}, {"status": "", "actual_result": "x"}):
             with self.subTest(data=data), self.assertRaises(wk.Refused):
                 self.edit("TC-SHOP-003", "answer", **data)
+        with self.assertRaisesRegex(wk.Refused, r"choose the final status of TC-SHOP-003"):    # the page's default
+            self.edit("TC-SHOP-003", "answer", status="", actual_result="x")
         out = self.edit("TC-SHOP-003", "answer", status="Pass", actual_result="The same message for both fields")
         self.assertEqual(self.item("TC-SHOP-003"), {
             "tc": "TC-SHOP-003", "status": "Pass", "actual_result": "The same message for both fields",

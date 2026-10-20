@@ -6,6 +6,10 @@ the user waits for the interface's review (methodology 9.4).
 
 - Workspace: {{workspace}} (the current folder). qa-assistant: {{qa}}. Run its scripts from anywhere as
   `python {{qa}}/scripts/<script>.py {{workspace}} ...` (absolute paths, forward slashes).
+- Tools: {{tools}} Each Bash call is ONE command, exactly one of {{commands}}: no `cd`, `;`, `&&`, `|`,
+  redirections, variables, `sleep` nor `adb`, and there is no other shell. Anything else is refused in this run
+  and nobody can allow it: a refused command is sent again as one allowed command, never given up on. Files are
+  read with Read, Glob and Grep, and written with Write or Edit, only in runs/ and evidence/.
 - Module: {{module}}. The plan is this batch, already approved: do not plan again and do not wait for a
   confirmation.
 - Cases, in this order: {{cases}}

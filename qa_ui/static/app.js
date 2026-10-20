@@ -385,7 +385,8 @@ function renderIntake() {
           h('div', { class: 'panel-body' },
             field('Test cases, requirements or notes', textarea, 'in-text'),
             h('p', { class: 'note', text: 'One case per line: an ID, the title, then → and the expected result. '
-              + 'Cells separated by a tab or | also work, with an optional header line. A line without an ID is kept as a note.' }),
+              + 'Cells separated by a tab or | also work, with an optional header line. A line without an ID is kept as a note. '
+              + 'To run only some cases of the library, paste just their IDs, one per line: their text comes from the library.' }),
             field('Or a file (.csv, .tsv, .txt, .md, .xlsx, .docx; up to 5 MB, read in memory and never stored)', fileInput, 'in-file'),
             h('label', { class: 'check', for: 'in-library' }, lib,
               h('span', { text: `Include the project's library${libraryCount}: the cases the workbook or the tracker already has` }))),
@@ -419,6 +420,7 @@ function caseLine(id) {
   const a = S.sug.assignments[id];
   const select = h('select', { 'aria-label': `Type of test of ${id}`, disabled: !!S.busy, onchange: (e) => {
     S.moved[id] = e.target.value;
+    S.ticked.add(e.target.value);       // a case moved by hand is meant to run: its new card is ticked
     act('Applying the rules…', () => refreshSuggestion(false));
   } }, MODULES.map((m) => h('option', { value: m, selected: m === a.module, text: m })));
   return h('div', { class: 'caseline' },
@@ -686,7 +688,9 @@ function defectCard(need) {
 }
 
 function questionCard(need, statuses) {
-  const select = h('select', {}, statuses.map((s) => h('option', { value: s, text: s })));
+  // no status chosen for the user: the first of the vocabulary is often the one of a case not run yet
+  const select = h('select', {}, h('option', { value: '', text: 'Choose the final status' }),
+    statuses.map((s) => h('option', { value: s, text: s })));
   const observed = h('textarea', {});
   return h('section', { class: 'panel stack' },
     h('div', { class: 'row' }, h('span', { class: 'chip ask', text: 'Question' }), h('span', { class: 'mono small', text: need.tc })),
@@ -775,7 +779,7 @@ function renderRun() {
     head.push(h('p', { class: 'lead mono', text: log.name
       + (log.run && (log.run.environment || log.run.build) ? ` · ${log.run.environment || ''} ${log.run.build || ''}` : '') }));
   } else {
-    head.push(h('p', { class: 'lead', text: 'Start a planned batch, or open a run log, from the lists on the right.' }));
+    head.push(h('p', { class: 'lead', text: 'Start a planned batch, or open a run log, from Planned batches or Run logs.' }));
   }
   const main = [];
   if (running) {
