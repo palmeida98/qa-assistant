@@ -37,7 +37,7 @@
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026); its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
-| 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated only against a fake `claude` and the fictional fixture; the first batch with a real session and a real site is the user's to run |
+| 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1653,8 +1653,8 @@ Constraints written down now:
 - [x] The whole suite (766 tests, 100 of them new), `ruff check .` and the fictional golden pass; `python -m qa_ui
   examples/demo` started and answered with the demo's state and its 38 cases; the page looked at in a headless
   browser against a fictional workspace (note of 12.4).
-- [ ] A real batch from the interface (a real `claude`, a real site) is the user's to run first: recorded here
-  when done, with what it changed. Until then the interface is validated only against a fake `claude`, like phases
+- [x] A real batch from the interface (a real `claude`) — done 17.10.2026 on a mobile workspace (a conversational
+  app on a real phone through the driver, Windows): recorded in 12.6 with what it changed. Until then the interface is validated only against a fake `claude`, like phases
   10 and 11 against their fakes. To check then: the skills in sync (`python scripts/sync_skills.py --apply`), the
   Playwright MCP loaded from the workspace's `.mcp.json` in headless mode, the permission patterns of the scripts
   on Windows (absolute paths with forward slashes), stopping a run on Windows, and whether 150 turns and 60 minutes
@@ -1663,10 +1663,36 @@ Constraints written down now:
   checks were run by hand: ruff, the tests, the golden, detect-secrets against the baseline) and the personal
   denylist, which exists only on the user's computer — run `pre-commit run --all-files` there before the merge.
 
+### 12.6 Fixes from the first real batch — done 17.10.2026 (branch `fix/qa-ui-first-real-batch`)
+The first batches from the interface on a real workspace (a mobile-only project whose workbook is not in English)
+ran end to end — start, the agent on the phone, the questions answered in the page, apply — and showed five gaps,
+all fixed for any project:
+- [x] The library lost the title and the expected result of every case (headers in the workbook's language, not
+  mapped in `excel.cases.fields`), so every case came back `Question`. `adapters/case_headers.py`: the headers of
+  the case model in English, Portuguese, Spanish, French, German and Italian, compared without case, accents or
+  separators; the project's mapping first, then a recognised header; a library warning on the Suggestion screen;
+  `validate_project.py` warns when `cases.fields` maps neither `title` nor `expected`; `adapters.excel.inspect`
+  proposes `cases.fields`; the demo maps its fields (`3486ecd`).
+- [x] The rules suggested `functional-web` for every case of a project without it, so no batch could start: only
+  the active modules are chosen, the signals of an inactive one are named, the default is the project's (`4019bcf`).
+- [x] Exploratory charters of a mobile project got only the browser's tools and the agent was refused the device:
+  in a project with `mobile` and without `functional-web` they run on the app with `/test-mobile` and the mobile
+  scripts; methodology v2.6 §4.1, technique-mobile v1.6 §4.2, `/test-mobile` step 2 (`b625aff`).
+- [x] A planned batch without `module:` could not start, and the message named a control the page did not have:
+  the line offers the active modules and adds `module:` to the file (`POST /api/batches/<name>/module`); the tools
+  Claude Code refused are shown as `! refused:` and under "Refused tools" (`9c8aa95`).
+- Checked: the whole suite (836 tests, 19 new), `ruff` 0.16.8, the golden, detect-secrets, `node --check` of the
+  page. The hooks were run directly, not through `pre-commit` (it could not fetch its repositories from the session's
+  machine), and the personal denylist was not reachable: `pre-commit run --all-files` on the user's computer before
+  the merge, and `python scripts/sync_skills.py --apply` for `/test-mobile`.
+- Still the user's: a batch on a web site (the Playwright MCP from the interface), stopping a run on Windows, and
+  whether 150 turns and 60 minutes fit a batch of 20 cases (12.5).
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-10-17 | 12.6: the first real batches from `qa-ui` (a mobile workspace, a real phone, Windows) and the five gaps they showed, fixed for any project: library headers in other languages and the warning, only active modules suggested, exploratory charters on the app of a mobile project (methodology v2.6, technique-mobile v1.6), the module of a planned batch chosen in the page, the refused tools shown. 19 new tests (817 → 836). |
 | 2026-10-14 | 11.8, the agent step reproduced on this computer (the runner's flags, `login: skip`, 25 turns): `launch`, the notifications dialog, the onboarding, the 5 cases Bloqueado with evidence, the summary and `context.md`; `post-check` safe and `pr-body` right. Fixed from it: `workspace_ci.py prompt` gives forward-slash paths (on Windows the tool rules refused the backslash form; `qa-ui` already did so), and `post-check` counts only the files the run adds or changes (git status), not the whole history. |
 | 2026-10-14 | 11.8, local reproduction of the agent step: the local emulator stopped booting — after emulators stopped by force it waited for its crash-report consent dialog on the desktop. `setup_emulator.py` now sees "Showing crashdialog" in the emulator's output and stops at once with what to do (technique-mobile.md §1.1). |
 | 2026-10-14 | 11.8, 14th run: not started — the month's Actions minutes ran out (the spending limit at 0 stopped it, as intended), together with the framework's own CI. The framework's CI now runs once per branch (its pull request; `push` only on main) and cancels a superseded run; the CI README says how the minutes are shared. Merges without CI are checked locally (unit tests and the fictional golden). |

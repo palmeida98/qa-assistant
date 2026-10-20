@@ -144,7 +144,7 @@ class App:
             if not isinstance(assignments, dict) or not isinstance(cards, list):
                 raise BadRequest("`assignments` must be an object and `cards` a list")
             assignments = {str(k): {"module": v.get("module")} for k, v in assignments.items() if isinstance(v, dict)}
-            out = plan.build(self.ws, cases, assignments, [str(c) for c in cards])
+            out = plan.build(self.ws, cases, assignments, [str(c) for c in cards], proj=proj)
             if body.get("save"):
                 if not out["batches"]:
                     raise plan.PlanError("there is no batch to save")
@@ -155,6 +155,10 @@ class App:
             if body.get("confirm") is not None:
                 return self.runner.new_cases(proj, confirm=str(body["confirm"]))
             return self.runner.new_cases(proj, clean_cases(body.get("cases")))
+        if rest[:1] == ["batches"] and len(rest) == 3 and rest[2] == "module" and method == "POST":
+            if not isinstance(body.get("module"), str):
+                raise BadRequest("`module` (an active module of project.yaml) is needed")
+            return workspace.set_batch_module(self.ws, proj, rest[1], body["module"])
         if rest[:1] == ["runs"]:
             if method == "POST" and len(rest) == 1:
                 if body.get("audit") is not None:

@@ -24,9 +24,10 @@ WORDS = re.compile(
     re.IGNORECASE)
 TEXT = (".md", ".py", ".yaml", ".yml", ".json", ".ts", ".toml", ".txt", ".ps1", ".sh", ".cfg", ".html", ".xml")
 SKIP = ("src/qa_audit/modules/accessibility/vendor/", "examples/demo/e2e/package-lock.json", ".secrets.baseline")
-# files whose job is the old vocabulary: the conversion itself, its test, and the list of retired skill names
+# files whose job is the old vocabulary: the conversion itself, its test, and the list of retired skill names; and
+# the headers of test cases recognised in other languages (a workbook's columns stay in its own language)
 LEGACY_FILES = ("scripts/migrate_workspace.py", "tests/test_migrate_workspace.py", "scripts/sync_skills.py",
-                "tests/test_sync_skills.py", "tests/test_language.py")
+                "tests/test_sync_skills.py", "tests/test_language.py", "adapters/case_headers.py")
 
 
 def legacy_tokens() -> list[str]:

@@ -71,7 +71,7 @@ Three sources, which can be combined (a case ID given twice is flagged, the firs
 
 | Source | How it is read |
 |---|---|
-| The workspace's library | `tracker: excel` — the workbook through the Excel adapter (read only): ID, the columns of `excel.cases.fields` when set, otherwise the headers `Title`, `Preconditions`, `Steps`, `Expected Result`, `Role`, `Platform`, `Priority` when the sheet has them; the area is the sheet; the last status is the status column. `jira` / `azure-devops` — `tracker/cases.json` as `import-cases` wrote it (never refreshed by the interface: it says how old the file is) |
+| The workspace's library | `tracker: excel` — the workbook through the Excel adapter (read only): ID, the columns of `excel.cases.fields` first, then any other column whose header is recognised (`adapters/case_headers.py`: `Title`, `Preconditions`, `Steps`, `Expected Result`, `Role`, `Platform`, `Priority`… and the same names in Portuguese, Spanish, French, German and Italian, compared without case or accents); the area is the sheet; the last status is the status column. `jira` / `azure-devops` — `tracker/cases.json` as `import-cases` wrote it (never refreshed by the interface: it says how old the file is) |
 | Pasted text | One case per line: `<ID> <title> → <expected result>` (also `->` and `=>`), or cells separated by a tab or `\|` in the order ID, title, expected result; a first line of headers (`id`, `title`, `expected`, `steps`, `preconditions`, `role`, `platform`, `area`, `priority`, in any order) names the cells instead. A Markdown table is the `\|` form |
 | A file | `.csv` and `.tsv` (headers as above), `.txt` and `.md` (as pasted text), `.xlsx` (every sheet with a header row that has an ID and a title column; the area is the sheet), `.docx` (its paragraphs and table rows, then as pasted text). Up to 5 MB. `.pdf` is not read (§13) |
 
@@ -80,8 +80,15 @@ An ID is letters, digits, `.`, `_` and `-`, starting with a letter and holding a
 such as `4712`). A line without an ID is a **note**: it is kept as context for the rules and for Claude, and never
 becomes a case.
 
+The library is warned about, on the Suggestion screen and in "What was understood", when some of its cases have no
+title or no expected result: a run marks such a case `Question`, and the usual cause is a column the project does not
+map (`excel.cases.fields`; `validate_project.py` warns about it too, and `adapters.excel.inspect` proposes the mapping
+from the headers at the onboarding).
+
 A case of the input that is in the library gets from the library the fields the input did not give (a list of IDs
-and titles is a way of selecting cases); what the input gave is kept.
+and titles is a way of selecting cases); what the input gave is kept. A line, or a row of a file, that holds only an
+ID of the library is that case, so a list of IDs alone is enough to run just those cases; an ID alone that is not in
+the library stays a note.
 
 Each case carries the fields of the model the source gave (methodology §2) and these flags, never silent fixes
 (methodology §11):
@@ -101,7 +108,12 @@ Each case carries the fields of the model the source gave (methodology §2) and 
 Each case gets **one** module of the closed list of the methodology (§4.1): `functional-web`, `exploratory`, `api`,
 `accessibility`, `mobile`. A case with a `module` field keeps it. Otherwise each signal found in the case's ID,
 title, steps, expected result and platform adds its weight to a module, and the highest total wins; a tie goes to
-the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no signal is `functional-web`.
+the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no signal gets the project's default.
+Only the modules of `modules:` in `project.yaml` are chosen by the rules: the signals of an inactive module are named
+in the reason ("signals of functional-web, not active in project.yaml") and never followed. The default is
+`functional-web` when it is active, otherwise the first active module of `mobile`, `api`, `accessibility`,
+`exploratory` (a mobile-only project: `mobile`). A case whose own `module` field, or the user's move, names an
+inactive module keeps it, and its card says why it cannot start.
 
 | Module | Signals (weight) |
 |---|---|
@@ -113,7 +125,8 @@ the first of `api`, `mobile`, `accessibility`, `exploratory`; a case with no sig
 
 An ID part is what `-`, `_` and `.` separate (`ACC` is not a signal: it is as often an account as accessibility).
 The words are matched whole, without case, and each one counts once per case. The signals of a case are shown next
-to it, and the user can move a case to another module before planning; a moved case says so.
+to it, and the user can move a case to another module before planning; a moved case says so, and the card it
+moved to is ticked (a case moved by hand is meant to run).
 
 ### 5.2 The cards
 
@@ -205,11 +218,21 @@ prompt goes through the command's standard input, never its command line.
 | `accessibility` | `/audit-accessibility` | `scripts/audit_a11y.py` and the Playwright MCP |
 | `mobile` | `/test-mobile` | `scripts/device.py`, `scripts/run_mobile.py` |
 
-`--permission-mode dontAsk`, `--max-turns` (default 150), no web tools, and the time limit of `--timeout-minutes`
+In a project with `mobile` and without `functional-web` among its modules there is no web site to explore: its
+`exploratory` charters run on the app, with `/test-mobile` and the tools of `mobile` (no Playwright MCP), and the
+prompt says so (methodology §4.1; technique-mobile.md §4.2). The card of the module shows that tool and depends on
+the mobile checks.
+
+`--permission-mode dontAsk`, `--max-turns` (default 150), no web tools nor PowerShell (Claude Code's other shell on
+Windows: the scripts are allowed only as Bash commands), and the time limit of `--timeout-minutes`
 (default 60), after which the run is interrupted and what was written is kept. The run log `runs/batch_<name>.json`
 is created first, with the `run` block (the environment and the build the user gave when starting; both are
 required with `jira` and `azure-devops`, whose adapters need them). The scripts are allowed by their absolute path
-with forward slashes (`python <qa>/scripts/<script>.py …`), the way the prompt tells the agent to call them. The
+with forward slashes (`python <qa>/scripts/<script>.py …`), the way the prompt tells the agent to call them: the
+prompt names exactly those commands (and the browser only when the workspace's `.mcp.json` names an MCP server,
+as the allowed tools do) and says that each Bash call is one of them, with no `cd`, `;`, `&&`, `|`,
+redirection or variable (`dontAsk` refuses a compound command even when each part is allowed, and a batch that met
+that refusal gave up instead of sending the command again on its own). The
 output is Claude Code's stream of events (`--output-format stream-json`), shown as the agent's text and one line
 per tool it used; an event the interface does not know shows nothing.
 
@@ -223,6 +246,16 @@ Nobody answers the agent during the run, so the rules of a remote run hold (meth
 - nothing is applied nor sent, no git, no value of `.env` typed or printed.
 
 The page reads the run log every two seconds while a run is `running`: it is the only source of the results.
+
+A batch gets only the tools of its module, and Claude Code refuses anything else without asking (`dontAsk`). Each
+refusal — a tool result that is a permission error, and the `permission_denials` of the final event — is shown as
+`! refused: …` in the output and listed under "Refused tools" on the run's screen, with what to check (the batch's
+module and the project's modules): a batch that ends with no result because a tool was refused says so, instead of
+only "This run log has no result".
+
+A planned batch without `module:` (a batch written by hand, or before the key existed) cannot start; its line in
+"Planned batches" offers the project's active modules instead of Start, and the choice adds one line `module: …` to
+the file (its comments and order kept).
 
 ### 8.2 The automated runs
 
@@ -246,7 +279,7 @@ Read from the run log, never kept apart:
 | Item | Actions, each one an edit of that item in the run log |
 |---|---|
 | A `new_defect` with `"proposed"` | **Approve** (the key `proposed` is removed); **Edit** (its text fields); **Link an existing bug** (`"bug": "<id>"` replaces the `new_defect`); **Drop** (the `new_defect` is removed, the result stays) |
-| A result in `Question` | **Answer**: the final status, of the project's vocabulary, and what was observed; the question stays in the item's `question` key (the adapters ignore it) |
+| A result in `Question` | **Answer**: the final status, of the project's vocabulary (none is chosen for the user), and what was observed; the question stays in the item's `question` key (the adapters ignore it) |
 
 An edit is refused when the batch was already applied (`scripts/run_log.py`: the correction goes to a new batch),
 and the file is written whole and atomically, as that script does.
@@ -279,6 +312,7 @@ JSON in and out; every route needs the token (§2). An error is `{"error": "<tex
 | `POST /api/ask-claude` | `{"cases", "notes", "proposals"}` → Claude's reading (§5.3) |
 | `POST /api/plan` | `{"cases", "assignments", "cards"}` → the batches and the cases listed apart; with `"save": true` writes them |
 | `POST /api/cases` | `{"cases"}` → the dry run of §7; with `"confirm": "<file>"` the real run |
+| `POST /api/batches/<name>/module` | `{"module"}` → adds `module:` to a planned batch that has none (an active module; the file's comments kept) |
 | `POST /api/runs` | `{"batch", "environment", "build"}` or `{"audit": "a11y" \| "site"}` → starts a run |
 | `GET /api/runs/<id>` | its state, the tail of its output, the run log |
 | `POST /api/runs/<id>/stop` | §8.3 |

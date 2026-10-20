@@ -68,6 +68,14 @@ class Plan(unittest.TestCase):
         self.assertEqual((out["selected"], out["planned"], out["apart"]), (6, 6, []))
         self.assertEqual(out["batches"][0]["skill"], "/run-batch")
 
+    def test_the_skill_of_exploratory_charters_follows_the_project(self):
+        cases = [case("EXP-001", area="Chat")]
+        asg = assignments(cases, "exploratory")
+        self.assertEqual(pl.build(self.ws, cases, asg, ["exploratory"], TODAY)["batches"][0]["skill"], "/run-batch")
+        mobile = dict(kit.PROJECT, modules=["mobile", "exploratory"])
+        out = pl.build(self.ws, cases, asg, ["exploratory"], TODAY, proj=mobile)
+        self.assertEqual(out["batches"][0]["skill"], "/test-mobile")
+
     def test_the_area_falls_back_to_the_id_up_to_its_last_dash(self):
         self.assertEqual([pl.area_of(case(i)) for i in ("TC-LOGIN-001", "CHK-7", "X1")], ["TC-LOGIN", "CHK", "X1"])
         self.assertEqual(pl.area_of(case("CHK-7", area="Checkout")), "Checkout")
@@ -249,6 +257,8 @@ class RunLogs(unittest.TestCase):
                      {"status": "Pass", "actual_result": " "}, {"status": "", "actual_result": "x"}):
             with self.subTest(data=data), self.assertRaises(wk.Refused):
                 self.edit("TC-SHOP-003", "answer", **data)
+        with self.assertRaisesRegex(wk.Refused, r"choose the final status of TC-SHOP-003"):    # the page's default
+            self.edit("TC-SHOP-003", "answer", status="", actual_result="x")
         out = self.edit("TC-SHOP-003", "answer", status="Pass", actual_result="The same message for both fields")
         self.assertEqual(self.item("TC-SHOP-003"), {
             "tc": "TC-SHOP-003", "status": "Pass", "actual_result": "The same message for both fields",

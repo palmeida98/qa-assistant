@@ -90,6 +90,27 @@ def batch(workspace: str, name: str) -> dict:
     return found
 
 
+def set_batch_module(workspace: str, proj: dict, name: str, module: str) -> dict:
+    """Adds `module: <module>` to a planned batch that has none (one line at the end: the file's comments and order
+    are kept). Only an active module of project.yaml; a batch that names one already is changed in its file."""
+    from . import MODULES
+    found = batch(workspace, name)
+    if found["module"]:
+        raise Refused(f"batches/{name}.yaml already has module: {found['module']} (change it in the file)")
+    if module not in MODULES:
+        raise Refused(f"{module!r} is not a module of the list {list(MODULES)}")
+    if module not in (proj.get("modules") or []):
+        raise Refused(f"`{module}` is not in `modules:` of project.yaml (methodology 4.1)")
+    path = os.path.join(workspace, "batches", f"{name}.yaml")
+    with open(path, "rb") as f:
+        raw = f.read()
+    nl = b"\r\n" if b"\r\n" in raw else b"\n"
+    tail = b"" if not raw or raw.endswith(b"\n") else nl
+    with open(path, "ab") as f:
+        f.write(tail + f"module: {module}".encode() + nl)
+    return batch(workspace, name)
+
+
 def describe(doc: dict, vocabulary: list[str]) -> dict:
     """What the page shows of a run log: the items, the count per status and what needs the user."""
     items, needs = [], []
@@ -230,7 +251,9 @@ def edit_item(workspace: str, proj: dict, name: str, case: str, action: str, dat
         status = str(data.get("status") or "").strip()
         actual = str(data.get("actual_result") or "").strip()
         vocabulary = run_log.vocabulary(proj)
-        if is_question(status) or not status or (vocabulary and status not in vocabulary):
+        if not status:
+            raise Refused(f"choose the final status of {case}: one of the project's vocabulary {vocabulary}")
+        if is_question(status) or (vocabulary and status not in vocabulary):
             raise Refused(f"status {status!r} is not in the project's vocabulary {vocabulary}")
         if not actual:
             raise Refused("an answer needs what was observed (actual_result)")

@@ -34,6 +34,23 @@ def _cfm(msg: str, options=None) -> str:
     return f"CONFIRM: {msg}" + (f" -- options: {options}" if options else "")
 
 
+def case_fields(profiles: list[dict], taken: set) -> dict:
+    """cases.fields: each field of the case model whose column is recognised by its header (adapters.case_headers,
+    in the common languages) in the case sheets. A header that differs between sheets stays CONFIRM. The ID and the
+    status columns are not fields (cases.columns)."""
+    from adapters.case_headers import field_of
+    found: dict[str, set] = {}
+    for p in profiles:
+        for c in p["columns"]:
+            field = field_of(c["name"])
+            if field and field != "id" and c["name"] not in taken:
+                found.setdefault(field, set()).add(c["name"])
+    order = ("title", "expected", "steps", "preconditions", "role", "priority", "technique", "platform", "area",
+             "module")
+    return {f: (next(iter(found[f])) if len(found[f]) == 1 else _cfm(f"{f} column", sorted(found[f])))
+            for f in order if f in found}
+
+
 def detect_header_row(ws) -> int | None:
     """Row (among the first 15) with the most short text cells, preferably
     followed by data; in a sheet with headers only (a project just starting),
@@ -252,6 +269,9 @@ def propose(path: str) -> tuple[dict, list[str]]:
         },
         "statuses": case_statuses or [_cfm("valid case statuses (values of the status column)")],
     }
+    fields = case_fields(cls["cases"], set(cases["columns"].values()))
+    if fields:
+        cases["fields"] = fields
 
     # ---- defects
     defects = {"sheet": _cfm("defects sheet", [p["sheet"] for p in cls["defects"]])}

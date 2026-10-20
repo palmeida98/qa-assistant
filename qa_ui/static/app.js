@@ -321,8 +321,17 @@ function listsPanel() {
     pending.length ? h('ul', { class: 'plain' }, pending.slice(0, 8).map((b) => h('li', { class: 'item' },
       h('span', {}, h('span', { class: 'mono', text: b.name }), ' ',
         h('span', { class: 'muted small', text: `${b.module || 'no module'} · ${plural(b.cases.length, 'case')}` })),
-      h('button', { type: 'button', class: 'btn small', disabled: !!S.busy || !!info.run,
-        onclick: () => act('Starting the batch…', () => startBatch(b.name)) }, 'Start'))))
+      b.module ? h('button', { type: 'button', class: 'btn small', disabled: !!S.busy || !!info.run,
+        onclick: () => act('Starting the batch…', () => startBatch(b.name)) }, 'Start')
+        : h('select', { 'aria-label': `Module of ${b.name}`, disabled: !!S.busy, onchange: (e) => {
+          const module = e.target.value;
+          if (!module) return;
+          act('Setting the module…', async () => {
+            await api('POST', `/api/batches/${encodeURIComponent(b.name)}/module`, { module });
+            await refreshState();
+          });
+        } }, h('option', { value: '', text: 'Choose its module…' }),
+        info.project.modules.map((m) => h('option', { value: m, text: m }))))))
       : h('p', { class: 'note', text: 'None waiting to run.' }),
     h('h2', { text: 'Run logs' }),
     info.run_logs.length ? h('ul', { class: 'plain' }, info.run_logs.slice(0, 8).map((r) => h('li', { class: 'item' },
@@ -332,6 +341,11 @@ function listsPanel() {
       h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
         onclick: () => act('Opening the run log…', async () => { await openLog(r.batch); go('run'); }) }, 'Open'))))
       : h('p', { class: 'note', text: 'No run log yet.' }));
+}
+
+function libraryWarning() {
+  if (!S.library || !S.library.warning) return null;
+  return h('ul', { class: 'problems', role: 'status' }, h('li', { text: `Library: ${S.library.warning}` }));
 }
 
 function understoodPanel() {
@@ -347,7 +361,8 @@ function understoodPanel() {
     h('dl', { class: 'kv' },
       h('dt', { text: 'Notes' }), h('dd', { text: plural(S.notes.length, 'line') + ' kept as context' }),
       h('dt', { text: 'Flagged' }), h('dd', { text: plural(flagged.length, 'case') }),
-      h('dt', { text: 'Library' }), h('dd', { text: S.library ? (S.library.error || S.library.detail) : '' })));
+      h('dt', { text: 'Library' }), h('dd', { text: S.library ? (S.library.error || S.library.detail) : '' })),
+    libraryWarning());
 }
 
 function renderIntake() {
@@ -370,7 +385,8 @@ function renderIntake() {
           h('div', { class: 'panel-body' },
             field('Test cases, requirements or notes', textarea, 'in-text'),
             h('p', { class: 'note', text: 'One case per line: an ID, the title, then → and the expected result. '
-              + 'Cells separated by a tab or | also work, with an optional header line. A line without an ID is kept as a note.' }),
+              + 'Cells separated by a tab or | also work, with an optional header line. A line without an ID is kept as a note. '
+              + 'To run only some cases of the library, paste just their IDs, one per line: their text comes from the library.' }),
             field('Or a file (.csv, .tsv, .txt, .md, .xlsx, .docx; up to 5 MB, read in memory and never stored)', fileInput, 'in-file'),
             h('label', { class: 'check', for: 'in-library' }, lib,
               h('span', { text: `Include the project's library${libraryCount}: the cases the workbook or the tracker already has` }))),
@@ -404,6 +420,7 @@ function caseLine(id) {
   const a = S.sug.assignments[id];
   const select = h('select', { 'aria-label': `Type of test of ${id}`, disabled: !!S.busy, onchange: (e) => {
     S.moved[id] = e.target.value;
+    S.ticked.add(e.target.value);       // a case moved by hand is meant to run: its new card is ticked
     act('Applying the rules…', () => refreshSuggestion(false));
   } }, MODULES.map((m) => h('option', { value: m, selected: m === a.module, text: m })));
   return h('div', { class: 'caseline' },
@@ -604,6 +621,7 @@ function renderSuggest() {
     h('h1', { id: 'h-suggest', text: 'Suggested tests' }),
     h('p', { class: 'lead', text: `From ${plural(S.cases.length, 'case')} and ${plural(S.notes.length, 'note')}. `
       + 'Tick what runs; open a card to see why each case is there and move it.' }),
+    libraryWarning(),
     h('div', { class: 'cols' },
       h('div', { class: 'col-main' }, S.sug.cards.map(suggestionCard)),
       h('div', { class: 'col-side' }, planPanel(), newCasesPanel(), gapsPanel(), claudePanel())),
@@ -670,7 +688,9 @@ function defectCard(need) {
 }
 
 function questionCard(need, statuses) {
-  const select = h('select', {}, statuses.map((s) => h('option', { value: s, text: s })));
+  // no status chosen for the user: the first of the vocabulary is often the one of a case not run yet
+  const select = h('select', {}, h('option', { value: '', text: 'Choose the final status' }),
+    statuses.map((s) => h('option', { value: s, text: s })));
   const observed = h('textarea', {});
   return h('section', { class: 'panel stack' },
     h('div', { class: 'row' }, h('span', { class: 'chip ask', text: 'Question' }), h('span', { class: 'mono small', text: need.tc })),
@@ -759,7 +779,7 @@ function renderRun() {
     head.push(h('p', { class: 'lead mono', text: log.name
       + (log.run && (log.run.environment || log.run.build) ? ` · ${log.run.environment || ''} ${log.run.build || ''}` : '') }));
   } else {
-    head.push(h('p', { class: 'lead', text: 'Start a planned batch, or open a run log, from the lists on the right.' }));
+    head.push(h('p', { class: 'lead', text: 'Start a planned batch, or open a run log, from Planned batches or Run logs.' }));
   }
   const main = [];
   if (running) {
@@ -774,6 +794,12 @@ function renderRun() {
       ? log.counts.map((c) => h('div', { class: 'tile' }, h('div', {}, statusChip(c.status)), h('div', { class: 'n', text: String(c.n) })))
       : h('p', { class: 'note', text: running ? 'No result written yet.' : 'This run log has no result.' })));
     main.push(resultsTable(log));
+  }
+  if (run && run.refused && run.refused.length) {
+    main.push(h('section', { role: 'status' }, h('h2', { text: `Refused tools · ${run.refused.length}` }),
+      h('p', { class: 'note', text: 'Claude Code refused these uses: a batch gets only the tools of its module '
+        + '(docs/qa-ui.md 8.1). Check the batch\'s module and the project\'s modules; the cases it could not run stay Not run.' }),
+      h('ul', { class: 'problems' }, run.refused.map((r) => h('li', { class: 'mono small', text: r })))));
   }
   if (run) {
     main.push(h('section', {}, h('h2', { text: `Output (${plural(run.lines, 'line')}, redacted)` }),

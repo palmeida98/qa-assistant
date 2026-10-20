@@ -88,7 +88,7 @@ class Batch(Base):
         self.assertEqual(os.path.realpath(rec["cwd"]), os.path.realpath(self.ws))
         self.assertEqual(args[:9], ["-p", "--max-turns", "40", "--permission-mode", "dontAsk", "--output-format",
                                     "stream-json", "--verbose", "--add-dir"])
-        self.assertEqual(args[args.index("--disallowedTools") + 1], "WebFetch,WebSearch")
+        self.assertEqual(args[args.index("--disallowedTools") + 1], "WebFetch,WebSearch,PowerShell")
         qa = rn.posix(ROOT)
         self.assertEqual(args[args.index("--allowedTools") + 1].split(","), [
             "Read", "Glob", "Grep", "Skill", f"Bash(python {qa}/scripts/run_log.py *)", "Write(runs/**)",
@@ -110,6 +110,30 @@ class Batch(Base):
         self.assertIn('`"proposed": true`', prompt)
         self.assertNotIn("{{", prompt)
         self.assertNotIn(kit.SECRET, prompt)
+
+    def test_the_prompt_names_the_one_command_forms_the_run_allows(self):
+        # a mobile batch was refused a compound Bash command and PowerShell, and gave up (plan 12.7)
+        qa = rn.posix(ROOT)
+        self.batch()
+        self.wait(self.runner.start_batch(self.proj, "b1"))
+        prompt = self.recorded()["prompt"]
+        self.assertIn("Tools: Bash for the scripts; no browser.", prompt)    # this workspace has no .mcp.json
+        self.assertIn(f"Each Bash call is ONE command, exactly one of `python {qa}/scripts/run_log.py ...`:", prompt)
+        self.assertIn("no `cd`, `;`, `&&`, `|`,", prompt)
+        self.assertIn("a refused command is sent again as one allowed command", prompt)
+        self.assertEqual(rn.prompt_tools("mobile", "/qa", []), {
+            "tools": "Bash for the scripts; no browser.",
+            "commands": "`python /qa/scripts/run_log.py ...`, `python /qa/scripts/device.py ...`, "
+                        "`python /qa/scripts/run_mobile.py ...`"})
+        self.assertEqual(rn.prompt_tools("exploratory", "/qa", ["playwright"], on_app=True), rn.prompt_tools("mobile", "/qa", []))
+        self.assertEqual(rn.prompt_tools("api", "/qa", [])["commands"],
+                         "`python /qa/scripts/run_log.py ...`, `python /qa/scripts/api_request.py ...`")
+        for module in rn.MODULE_SCRIPTS:        # the prompt's commands are exactly the Bash rules of the command
+            bash = [t[len("Bash("):-len(" *)")] for t in rn.allowed_tools(module, "/qa", []) if t.startswith("Bash(")]
+            self.assertEqual(["`" + b + " ...`" for b in bash], rn.prompt_tools(module, "/qa", [])["commands"].split(", "))
+        # the browser is promised only when the allowed tools give it: a workspace whose .mcp.json names no server
+        self.assertEqual(rn.prompt_tools("functional-web", "/qa", [])["tools"], "Bash for the scripts; no browser.")
+        self.assertIn("Playwright MCP", rn.prompt_tools("functional-web", "/qa", ["playwright"])["tools"])
 
     def test_each_module_gets_its_skill_its_scripts_and_the_mcp(self):
         with open(os.path.join(self.ws, ".mcp.json"), "w", encoding="utf-8") as f:
@@ -311,7 +335,7 @@ class Ask(Base):
         self.runner.ask_claude(list(self.CASES), [])
         rec = self.recorded()
         self.assertEqual(rec["args"], ["-p", "--max-turns", "2", "--permission-mode", "dontAsk", "--output-format",
-                                       "json", "--disallowedTools", "WebFetch,WebSearch"])
+                                       "json", "--disallowedTools", "WebFetch,WebSearch,PowerShell"])
         self.assertNotIn("--allowedTools", rec["args"])
         self.assertIn('"id": "CHK-011"', rec["prompt"])
         self.assertIn('The user did not ask for new cases: "proposals" is an empty list.', rec["prompt"])
@@ -429,6 +453,79 @@ class Adapters(Base):
         self.assertEqual((dry["ready"], dry["dry_run"], dry["done"], dry["meaning"]),
                          (True, True, False, "dry run: nothing sent yet"))
         self.assertEqual((real["done"], real["meaning"]), (True, "sent, or nothing to send"))
+
+class MobileProject(Base):
+    """The first real batch: exploratory charters of a mobile project ran with the browser's tools only, and the
+    agent was refused the device on its first command. They run with the mobile scripts."""
+    modules = ("mobile", "exploratory")
+
+    def test_exploratory_charters_run_on_the_app_with_the_mobile_tools(self):
+        with open(os.path.join(self.ws, ".mcp.json"), "w", encoding="utf-8") as f:
+            json.dump({"mcpServers": {"playwright": {"command": "npx", "args": ["@playwright/mcp@0.0.82"]}}}, f)
+        qa = rn.posix(ROOT)
+        self.batch("charters", module="exploratory")
+        self.wait(self.runner.start_batch(self.proj, "charters"))
+        rec = self.recorded()
+        tools = rec["args"][rec["args"].index("--allowedTools") + 1].split(",")
+        self.assertIn(f"Bash(python {qa}/scripts/device.py *)", tools)
+        self.assertNotIn("mcp__playwright", tools)
+        self.assertNotIn("--mcp-config", rec["args"])
+        self.assertTrue(rec["prompt"].startswith("/test-mobile\n"))
+        self.assertIn("Module: exploratory, charters on the mobile app", rec["prompt"])
+
+    def test_with_a_web_module_too_the_charters_stay_in_the_browser(self):
+        self.assertEqual(rn.allowed_tools("exploratory", "/qa", ["playwright"]),
+                         rn.allowed_tools("functional-web", "/qa", ["playwright"]))
+        self.assertEqual(rn.allowed_tools("exploratory", "/qa", ["playwright"], on_app=True),
+                         rn.allowed_tools("mobile", "/qa", ["playwright"]))
+
+class Refusals(Base):
+    def test_the_tools_claude_code_refused_are_listed_and_shown(self):
+        self.batch()
+        with mock.patch.dict(os.environ, {"QA_FAKE_CLAUDE": "refused"}):
+            out = self.wait(self.runner.start_batch(self.proj, "b1"))
+        self.assertEqual(out["state"], "finished")
+        self.assertEqual(out["refused"], ["Claude requested permissions to use Bash, but you haven't granted it yet.",
+                                          "Bash: adb devices"])
+        self.assertIn("! refused: Claude requested permissions to use Bash, but you haven't granted it yet.",
+                      out["tail"])
+
+    def test_refusals_reads_only_permission_errors(self):
+        ok = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True,
+                                                                  "content": "No such file or directory"}]}})
+        self.assertEqual(rn.refusals(ok), [])
+        self.assertEqual(rn.refusals("not json"), [])
+        listed = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True,
+                             "content": [{"type": "text", "text": "Permission to use PowerShell was denied"}]}]}})
+        self.assertEqual(rn.refusals(listed), ["Permission to use PowerShell was denied"])
+
+
+class PlannedBatchModule(Base):
+    def test_a_batch_without_a_module_gets_one_line_and_keeps_its_comments(self):
+        path = os.path.join(self.ws, "batches", "old.yaml")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write("# a pilot batch\r\ncases: [TC-SHOP-001]")             # no newline at the end, CRLF
+        with self.assertRaises(rn.Refused) as e:
+            self.runner.start_batch(self.proj, "old")
+        self.assertIn("choose it in Planned batches", str(e.exception))
+        out = wk.set_batch_module(self.ws, self.proj, "old", "api")
+        self.assertEqual(out["module"], "api")
+        with open(path, encoding="utf-8", newline="") as f:
+            self.assertEqual(f.read(), "# a pilot batch\r\ncases: [TC-SHOP-001]\r\nmodule: api\r\n")
+
+    def test_only_an_active_module_and_never_over_one_that_is_set(self):
+        self.batch("b1")
+        with self.assertRaises(wk.Refused):
+            wk.set_batch_module(self.ws, self.proj, "b1", "api")             # it has functional-web already
+        path = os.path.join(self.ws, "batches", "b2.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("cases: [TC-SHOP-001]\n")
+        for module in ("mobile", "smoke"):
+            with self.subTest(module=module), self.assertRaises(wk.Refused):
+                wk.set_batch_module(self.ws, self.proj, "b2", module)
+        with self.assertRaises(wk.NotFound):
+            wk.set_batch_module(self.ws, self.proj, "nope", "api")
 
 
 if __name__ == "__main__":

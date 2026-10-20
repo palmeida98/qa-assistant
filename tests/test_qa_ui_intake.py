@@ -205,6 +205,21 @@ class Library(unittest.TestCase):
                          (True, "Add item", "Shop", "Pass"))
         self.assertEqual((new["in_library"], new["flags"]), (False, ["not-in-library"]))
 
+    def test_a_list_of_ids_alone_selects_those_cases_of_the_library(self):
+        # pasting only IDs is how a few cases of the library are run (plan 12.7)
+        out = it.intake(self.ws, self.proj, text="TC-SHOP-002\nTC-ADMIN-001:\n- TC-SHOP-004\nCHK-999\nv2")
+        self.assertEqual([(c["id"], c["in_library"], c["area"]) for c in out["cases"]],
+                         [("TC-SHOP-002", True, "Shop"), ("TC-ADMIN-001", True, "Admin"),
+                          ("TC-SHOP-004", True, "Shop")])
+        self.assertTrue(all(c["title"] for c in out["cases"]))         # the text comes from the library
+        self.assertEqual(out["notes"], ["CHK-999", "v2"])                # an ID alone not in the library: a note
+        csv = it.intake(self.ws, self.proj, file={"name": "pick.csv", "data": b64(b"TC-SHOP-003\nCHK-998\n")})
+        self.assertEqual([c["id"] for c in csv["cases"]], ["TC-SHOP-003"])
+        self.assertEqual(csv["notes"], ["CHK-998"])
+        table = it.intake(self.ws, self.proj, text="| TC-SHOP-001 | |\n| CHK-997 | |")   # a table row with only an ID
+        self.assertEqual([(c["id"], bool(c["title"])) for c in table["cases"]], [("TC-SHOP-001", True)])
+        self.assertEqual(table["notes"], ["CHK-997"])
+
     def test_text_and_library_together_do_not_duplicate(self):
         out = it.intake(self.ws, self.proj, text="TC-SHOP-001 Add item → the cart shows 1", library=True)
         self.assertEqual(len(out["cases"]), 12)
@@ -216,6 +231,60 @@ class Library(unittest.TestCase):
         out = it.intake(self.ws, self.proj, text="NEW-1 A new idea → something observable")
         self.assertIn("could not be read", out["library"]["error"])
         self.assertEqual((out["cases"][0]["in_library"], out["cases"][0]["flags"]), (None, []))
+
+    def _headers(self, sheet: str, renamed: dict, added: dict | None = None) -> None:
+        """Renames headers of a sheet of the fixture workbook and adds a column (header -> one value per row)."""
+        path = os.path.join(self.ws, kit.EXCEL["file"])
+        wb = openpyxl.load_workbook(path)
+        ws = wb[sheet]
+        for cell in ws[1]:
+            if cell.value in renamed:
+                cell.value = renamed[cell.value]
+        for header, value in (added or {}).items():
+            col = ws.max_column + 1
+            ws.cell(1, col, header)
+            for r in range(2, ws.max_row + 1):
+                if ws.cell(r, 1).value:
+                    ws.cell(r, col, value)
+        wb.save(path)
+
+    def test_headers_in_another_language_are_read_without_a_mapping(self):
+        proj = dict(self.proj, excel=dict(self.proj["excel"], cases=dict(self.proj["excel"]["cases"])))
+        proj["excel"]["cases"].pop("fields", None)
+        kit.write_project(self.ws, proj)
+        self._headers("Shop", {"Title": "Título"}, {"Résultat attendu": "the cart shows the item",
+                                                    "PRÉ-CONDIÇÕES": "a customer session"})
+        lib = it.load_library(self.ws, read_project(self.ws))
+        first = lib["cases"][0]
+        self.assertEqual((first["title"], first["expected"], first["preconditions"]),
+                         ("Add item to cart", "the cart shows the item", "a customer session"))
+
+    def test_the_projects_mapping_wins_over_a_recognised_header(self):
+        proj = read_project(self.ws)
+        proj["excel"]["cases"]["fields"] = {"title": "Notes"}
+        kit.write_project(self.ws, proj)
+        ad = ExcelAdapter.from_project(self.ws)
+        ad.load()
+        row = ad.case_rows()["Shop"][0]
+        lib = it.load_library(self.ws, read_project(self.ws))
+        self.assertEqual(lib["cases"][0]["title"], it.text_of(row["Notes"]))
+
+    def test_cases_without_title_or_expected_are_warned_with_the_cause(self):
+        lib = it.load_library(self.ws, self.proj)
+        self.assertIn("12 of 12 library case(s) cannot be judged", lib["warning"])
+        self.assertIn("12 without an expected result (TC-SHOP-001, TC-SHOP-002, TC-SHOP-003, …)", lib["warning"])
+        self.assertIn("excel.cases.fields", lib["warning"])
+        self.assertEqual(it.intake(self.ws, self.proj, library=True)["library"]["warning"], lib["warning"])
+        self._headers("Shop", {}, {"Expected Result": "x"})
+        self._headers("Account", {}, {"Expected Result": "x"})
+        self._headers("Admin", {}, {"Expected Result": "x"})
+        self.assertIsNone(it.load_library(self.ws, self.proj)["warning"])
+
+    def test_headers_compare_without_case_accents_or_separators(self):
+        self.assertEqual(it.norm("  Pré-Condições_ "), "pre condicoes")
+        for header, field in (("Título", "title"), ("ERWARTETES ERGEBNIS", "expected"), ("Résultat attendu",
+                              "expected"), ("Pasos", "steps"), ("Perfil", "role"), ("Prioridade", "priority")):
+            self.assertEqual(it._HEADER_OF.get(it.norm(header)), field, header)
 
     def test_tracker_cases_json_as_import_cases_wrote_it(self):
         proj = dict(self.proj, tracker="jira")

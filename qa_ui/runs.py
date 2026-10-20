@@ -29,7 +29,12 @@ import run_log
 from common import Redactor, read_workspace_env
 
 from . import MODULES, ROOT, intake, workspace
-from .suggest import SKILLS, find_claude, find_test_environment
+from .suggest import (
+    exploratory_on_mobile,
+    find_claude,
+    find_test_environment,
+    skill_for,
+)
 
 TAIL = 400                      # lines of output kept in memory per run
 GRACE = 10                      # seconds between the interrupt and the kill (docs/qa-ui.md section 8.3)
@@ -41,6 +46,9 @@ SITE_AUDIT_TYPES = "accessibility,security,performance,functional"
 MODULE_SCRIPTS = {"functional-web": (), "exploratory": (), "api": ("api_request.py",),
                   "accessibility": ("audit_a11y.py",), "mobile": ("device.py", "run_mobile.py")}
 MODULE_MCP = {"functional-web", "exploratory", "accessibility"}     # the Playwright MCP of the workspace's .mcp.json
+# never given to a run: the web, and PowerShell (Claude Code's other shell on Windows; the scripts are allowed as Bash
+# commands only, and a batch that turned to it was refused and gave up: plan 12.7)
+DISALLOWED = "WebFetch,WebSearch,PowerShell"
 
 EXCEL_ADD = {0: "added", 2: "cross-check problems: the original workbook is untouched", 3: "the recalculation failed",
              4: "refused: an ID that exists, a candidate duplicate (same title in the sheet) or an invalid file",
@@ -99,23 +107,78 @@ def mcp_servers(ws: str) -> list[str]:
     return [str(n) for n in servers] if isinstance(servers, dict) else []
 
 
-def allowed_tools(module: str, qa: str, servers: list[str]) -> list[str]:
+def tools_of(module: str, on_app: bool = False) -> str:
+    """The module whose tools a batch gets: exploratory charters on the app (suggest.exploratory_on_mobile) use the
+    mobile scripts, not the browser."""
+    return "mobile" if module == "exploratory" and on_app else module
+
+
+def allowed_tools(module: str, qa: str, servers: list[str], on_app: bool = False) -> list[str]:
     tools = ["Read", "Glob", "Grep", "Skill", f"Bash(python {qa}/scripts/run_log.py *)", "Write(runs/**)",
              "Edit(runs/**)", "Write(evidence/**)", "Edit(evidence/**)"]
-    tools += [f"Bash(python {qa}/scripts/{script} *)" for script in MODULE_SCRIPTS[module]]
-    if module in MODULE_MCP:
+    tools += [f"Bash(python {qa}/scripts/{script} *)" for script in MODULE_SCRIPTS[tools_of(module, on_app)]]
+    if tools_of(module, on_app) in MODULE_MCP:
         tools += [f"mcp__{name}" for name in servers]
     return tools
 
 
-def batch_command(claude: str, module: str, ws: str, qa: str, max_turns: int) -> list[str]:
-    servers = mcp_servers(ws) if module in MODULE_MCP else []
+def prompt_tools(module: str, qa: str, servers: list[str], on_app: bool = False) -> dict[str, str]:
+    """What the prompt tells the agent about its tools ({{tools}} and {{commands}} of batch.md): the same list as
+    allowed_tools, so the agent never tries a form that dontAsk refuses (a compound command, another shell), nor a
+    browser it was not given (a workspace whose .mcp.json names no server)."""
+    scripts = ("run_log.py",) + MODULE_SCRIPTS[tools_of(module, on_app)]
+    browser = tools_of(module, on_app) in MODULE_MCP and bool(servers)
+    return {"tools": ("the browser through the Playwright MCP's tools, and Bash for the scripts." if browser
+                      else "Bash for the scripts; no browser."),
+            "commands": ", ".join(f"`python {qa}/scripts/{script} ...`" for script in scripts)}
+
+
+def batch_servers(module: str, ws: str, on_app: bool = False) -> list[str]:
+    return mcp_servers(ws) if tools_of(module, on_app) in MODULE_MCP else []
+
+
+def batch_command(claude: str, module: str, ws: str, qa: str, max_turns: int, on_app: bool = False) -> list[str]:
+    servers = batch_servers(module, ws, on_app)
     cmd = [claude, "-p", "--max-turns", str(max_turns), "--permission-mode", "dontAsk", "--output-format",
-           "stream-json", "--verbose", "--add-dir", qa, "--disallowedTools", "WebFetch,WebSearch",
-           "--allowedTools", ",".join(allowed_tools(module, qa, servers))]
+           "stream-json", "--verbose", "--add-dir", qa, "--disallowedTools", DISALLOWED,
+           "--allowedTools", ",".join(allowed_tools(module, qa, servers, on_app))]
     if servers:
         cmd += ["--mcp-config", os.path.join(ws, ".mcp.json")]
     return cmd
+
+
+REFUSAL = re.compile(r"permission|not allowed|haven't granted|was denied|denied by|dontAsk", re.IGNORECASE)
+MAX_REFUSED = 20
+
+
+def refusals(line: str) -> list[str]:
+    """The tool uses Claude Code refused in one stream-json event (the batch's tools are fixed: section 8.1): the
+    `permission_denials` of the result event ("Bash: adb devices"), and a tool result that is an error about a
+    permission. [] for anything else."""
+    try:
+        ev = json.loads(line)
+    except ValueError:
+        return []
+    if not isinstance(ev, dict):
+        return []
+    out = []
+    if ev.get("type") == "result":
+        for d in ev.get("permission_denials") or []:
+            if isinstance(d, dict) and d.get("tool_name"):
+                given = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+                detail = next((str(given[k]) for k in ("command", "file_path", "path", "url") if given.get(k)), "")
+                out.append(f"{d['tool_name']}" + (f": {detail[:120]}" if detail else ""))
+    elif ev.get("type") == "user":
+        content = (ev.get("message") or {}).get("content") if isinstance(ev.get("message"), dict) else None
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error"):
+                text = block.get("content")
+                if isinstance(text, list):
+                    text = " ".join(str(b.get("text") or "") for b in text if isinstance(b, dict))
+                text = " ".join(str(text or "").split())
+                if REFUSAL.search(text):
+                    out.append(text[:200])
+    return out
 
 
 def render_event(line: str) -> list[str] | None:
@@ -142,6 +205,8 @@ def render_event(line: str) -> list[str] | None:
                 detail = detail.replace("\n", " ")
                 out.append(f"> {block.get('name')}" + (f" {detail[:200]}{'…' if len(detail) > 200 else ''}"
                                                        if detail else ""))
+    elif ev["type"] == "user":
+        out += [f"! refused: {r}" for r in refusals(line)]
     elif ev["type"] == "result":
         if ev.get("is_error") or ev.get("subtype") not in (None, "success"):
             out += str(ev.get("result") or "").strip().splitlines()    # otherwise the last assistant text said it
@@ -163,6 +228,7 @@ class Run:
         self.finished: str | None = None
         self.tail: collections.deque[str] = collections.deque(maxlen=TAIL)
         self.lines = 0
+        self.refused: list[str] = []         # the tool uses Claude Code refused (refusals), redacted
         self.proc: subprocess.Popen | None = None
         self.stop_requested: str | None = None
         self.timer: threading.Timer | None = None
@@ -171,7 +237,7 @@ class Run:
     def public(self) -> dict:
         return {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state, "reason": self.reason,
                 "code": self.code, "started": self.started, "finished": self.finished, "batch": self.batch,
-                "report": self.report, "lines": self.lines, "tail": list(self.tail)}
+                "report": self.report, "lines": self.lines, "tail": list(self.tail), "refused": list(self.refused)}
 
 
 class Runner:
@@ -238,6 +304,11 @@ class Runner:
             for raw in proc.stdout:
                 raw = raw.rstrip("\r\n")
                 shown = render_event(raw) if render else None
+                if render:
+                    for r in refusals(raw):
+                        r = redactor.text(r)
+                        if len(run.refused) < MAX_REFUSED and not any(r in x or x in r for x in run.refused):
+                            run.refused.append(r)
                 for line in ([raw] if shown is None else shown):
                     line = redactor.text(line)
                     log.write(line + "\n")
@@ -295,8 +366,8 @@ class Runner:
                 raise Refused(str(e)) from None
             module = batch.get("module")
             if module not in MODULES:
-                raise Refused(f"batches/{name}.yaml has no `module:` of the list {list(MODULES)}: plan it in the "
-                              "interface, or add the key")
+                raise Refused(f"batches/{name}.yaml has no `module:` of the list {list(MODULES)}: choose it in "
+                              "Planned batches, or add the key")
             if module not in (proj.get("modules") or []):
                 raise Refused(f"`{module}` is not in `modules:` of project.yaml (methodology 4.1)")
             claude = self.claude()
@@ -322,14 +393,18 @@ class Runner:
             except workspace.Refused as e:
                 raise Refused(str(e)) from None
             ws, qa = posix(self.ws), posix(self.qa)
+            on_app = module == "exploratory" and exploratory_on_mobile(proj)
+            shown = (f"{module}, charters on the mobile app (a mobile project): explore with the device tools of "
+                     f"{skill_for(module, proj)} in conversational mode, one note per turn, and judge each charter "
+                     "by its expected result" if on_app else module)
             prompt = template("batch.md", {
-                "skill": SKILLS[module], "module": module, "workspace": ws, "qa": qa,
+                "skill": skill_for(module, proj), "module": shown, "workspace": ws, "qa": qa,
                 "run_log": run_log.batch_id(name), "cases": " ".join(batch["cases"]),
-                "max_turns": str(self.max_turns),
+                "max_turns": str(self.max_turns), **prompt_tools(module, qa, batch_servers(module, self.ws, on_app), on_app),
                 "case_text": "\n\n".join(case_block(by_id[c]) for c in batch["cases"])})
             run_id = self._new_id("batch")
             run = Run(run_id, "batch", f"{name} ({module}, {len(batch['cases'])} case(s))",
-                      batch_command(claude, module, self.ws, qa, self.max_turns),
+                      batch_command(claude, module, self.ws, qa, self.max_turns, on_app),
                       os.path.join(self.ws, ".qa-ui", "runs", run_id + ".log"), batch=run_log.batch_id(name))
             return self._spawn(run, self.ws, prompt, render=True)
 
@@ -417,7 +492,7 @@ class Runner:
                                "or of the cases untested; at most 10." if proposals else
                                'The user did not ask for new cases: "proposals" is an empty list.')})
         code, out = self._once([claude, "-p", "--max-turns", "2", "--permission-mode", "dontAsk", "--output-format",
-                                "json", "--disallowedTools", "WebFetch,WebSearch"], self.ws, ASK_TIMEOUT, prompt)
+                                "json", "--disallowedTools", DISALLOWED], self.ws, ASK_TIMEOUT, prompt)
         if code != 0:
             return {"ok": False, "text": out or f"Claude Code ended with exit code {code}", "code": code}
         parsed = parse_reading(out, {c["id"] for c in cases}, proposals)

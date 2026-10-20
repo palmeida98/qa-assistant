@@ -66,6 +66,24 @@ class Inspect(unittest.TestCase):
         self.assertEqual(cfg["cases"]["columns"]["status"], "State")
         self.assertEqual(cfg["cases"]["statuses"], STATUSES)
 
+    def test_the_case_fields_are_proposed_from_headers_in_any_language(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Chat"
+        ws.append(["ID", "Titre", "Profil", "Préconditions", "Étapes", "Résultat attendu", "État", "Remarques"])
+        for i in range(1, 7):
+            ws.append([f"TC-CHAT-{i:03d}", f"Case {i}", "user", "a session", "1. Send", "it is shown",
+                       STATUSES[i % 3], None])
+        dv = DataValidation(type="list", formula1='"' + ",".join(STATUSES) + '"')
+        dv.add("G2:G200")
+        ws.add_data_validation(dv)
+        wb.save(self.path)
+        cfg, _ = propose(self.path)
+        self.assertEqual(cfg["cases"]["columns"]["status"], "État")
+        self.assertEqual(cfg["cases"]["fields"], {"title": "Titre", "expected": "Résultat attendu",
+                                                  "steps": "Étapes", "preconditions": "Préconditions",
+                                                  "role": "Profil"})
+
     def test_view_with_fewer_ids_than_the_register(self):
         defs = [("D-1", "Open", "TC-SHOP-001"), ("D-2", "Closed", "TC-SHOP-002"),
                 ("D-3", "Open", "TC-SHOP-003")]

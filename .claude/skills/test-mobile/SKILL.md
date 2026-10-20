@@ -9,7 +9,9 @@ description: Tests the current workspace's mobile app (Android/iOS) or the web i
 2. Choose the mode PER BATCH (technique section 4.1) and write it with the reason at the top of the run log
    ("mode": "flows: <why>" or "conversational: <why>"):
    - deterministic UI (the expected result can be asserted) -> flows, steps 3-5;
-   - generated content (e.g. an AI assistant's answers) -> conversational, steps 6-9.
+   - generated content (e.g. an AI assistant's answers) -> conversational, steps 6-9;
+   - exploratory charters on the app (module exploratory in a mobile project, technique section 4.2) ->
+     conversational, steps 6-9, one note per turn; each charter judged by its expected result.
    Commands run from <qa> with the ABSOLUTE path of the workspace.
 3. Flows: confirm the target and the environment (technique sections 1 and 3): test build installed or test
    URL; device/emulator connected (android: adb devices; ios: simulator). With no target, the cases are
