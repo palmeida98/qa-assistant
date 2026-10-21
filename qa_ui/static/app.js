@@ -12,7 +12,7 @@ const FLAG_TEXT = {
 };
 
 const S = {
-  token: '', info: null, screen: 'intake', busy: '',
+  token: '', mode: '', hub: null, hubTimer: null, info: null, screen: 'intake', busy: '',
   cases: [], notes: [], dropped: [], library: null, analysed: false,
   moved: {}, sug: null, ticked: new Set(), plan: null,
   reading: null, asking: false, wantProposals: false,
@@ -820,7 +820,136 @@ function renderRun() {
 
 /* ------------------------------------------------------------------ start */
 
+/* ------------------------------------------------------------------ the hub (docs/qa-ui.md section 14) */
+
+const HUB_POLL_MS = 5000;
+
+async function refreshHub() {
+  S.hub = await api('GET', '/api/hub');
+  scheduleHubPoll();
+}
+
+/* While a run is in progress somewhere, the Projects screen follows it; otherwise it is read on demand. */
+function scheduleHubPoll() {
+  if (S.hubTimer) window.clearTimeout(S.hubTimer);
+  S.hubTimer = null;
+  if (!S.hub || !S.hub.run) return;
+  S.hubTimer = window.setTimeout(async () => {
+    try {
+      await refreshHub();
+    } catch (e) {
+      banner(e.message);
+    }
+    render();
+  }, HUB_POLL_MS);
+}
+
+async function setPin(id, pinned) {
+  await api('POST', '/api/hub/pins', { id, pinned });
+  await refreshHub();
+}
+
+function renderTopHub() {
+  $('steps').hidden = true;
+  const hub = S.hub;
+  $('project').textContent = hub ? `hub · ${plural(hub.projects.length, 'project')}` : 'hub';
+  const pill = $('status');
+  if (S.busy) {
+    pill.className = 'pill busy';
+    pill.textContent = S.busy;
+  } else if (hub && hub.run) {
+    pill.className = 'pill busy';
+    pill.textContent = `Running in ${hub.run.project}: ${hub.run.label}`;
+  } else {
+    pill.className = 'pill ok';
+    pill.textContent = hub ? 'Ready' : 'Connecting…';
+  }
+}
+
+function lastRunLine(p) {
+  const last = p.last_run;
+  if (!last) return h('div', { class: 'small muted', text: 'No run log yet.' });
+  return h('div', { class: 'stack' },
+    h('div', { class: 'small' }, 'Last run: ', h('span', { class: 'mono', text: last.batch }),
+      h('span', { class: 'muted', text: ` · ${last.modified.replace('T', ' ')}` })),
+    last.error ? h('div', { class: 'small', text: `It cannot be read: ${last.error}` })
+      : h('div', { class: 'chips' }, last.counts.map((c) => {
+        const chip = statusChip(c.status);
+        chip.textContent = `${c.status} ${c.n}`;
+        return chip;
+      })));
+}
+
+function projectCard(p) {
+  const pin = h('button', { type: 'button', class: 'btn small', disabled: !!S.busy, 'aria-pressed': p.pinned ? 'true' : 'false',
+    'aria-label': `${p.pinned ? 'Unpin' : 'Pin'} ${p.id}`,
+    onclick: () => act(p.pinned ? 'Unpinning…' : 'Pinning…', () => setPin(p.id, !p.pinned)) }, p.pinned ? 'Unpin' : 'Pin');
+  const running = S.hub.run && S.hub.run.project === p.id;
+  return h('article', { class: 'panel project-card' },
+    h('div', { class: 'row between' }, h('h3', { class: 'card-title', text: p.name }), pin),
+    h('div', { class: 'mono muted small', text: p.id }),
+    p.error ? h('p', { class: 'note', text: p.error }) : h('div', { class: 'chips' },
+      h('span', { class: 'chip outline', text: p.tracker || 'no tracker' }),
+      p.modules.map((m) => h('span', { class: 'chip accent', text: m }))),
+    p.error ? null : lastRunLine(p),
+    h('div', { class: 'chips' },
+      running ? h('span', { class: 'chip accent', text: 'Running now' }) : null,
+      p.needs ? h('span', { class: 'chip ask', text: `${p.needs} need${p.needs === 1 ? 's' : ''} you` }) : null,
+      p.runs ? h('span', { class: 'chip', text: plural(p.runs, 'run log') }) : null),
+    h('div', { class: 'small muted' }, 'Open it for now with ',
+      h('code', { text: `python -m qa_ui ../qa-workspaces/${p.id}` }), ' (inside the hub with plan 13.2).'));
+}
+
+function renderHub() {
+  const root = $('screen-hub');
+  root.replaceChildren();
+  const hub = S.hub;
+  root.append(h('h1', { id: 'h-hub', text: 'Projects' }));
+  if (!hub) {
+    root.append(h('p', { class: 'lead', text: 'Reading the projects…' }));
+    return;
+  }
+  root.append(h('p', { class: 'lead' }, `${plural(hub.projects.length, 'project')} in `, h('code', { text: hub.root }),
+    '. Every folder ', h('code', { text: '<company>/<project>/' }), ' with a ', h('code', { text: 'project.yaml' }), ' is one.'));
+  root.append(h('div', { class: 'row' },
+    hub.inbox ? h('span', { class: 'chip ask', text: `Inbox: ${hub.inbox} item${hub.inbox === 1 ? '' : 's'} need you` })
+      : h('span', { class: 'chip ok', text: 'Nothing needs you' }),
+    h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
+      onclick: () => act('Reading the projects…', refreshHub) }, 'Refresh')));
+  if (hub.run) {
+    root.append(h('section', { class: 'panel group', 'aria-label': 'Run in progress' },
+      h('h2', { text: 'Run in progress' }),
+      h('p', {}, h('strong', { text: hub.run.project }), ` — ${hub.run.label}, started ${hub.run.started.replace('T', ' ')}. `,
+        'One run at a time on this computer: the others wait until it ends.')));
+  }
+  if (!hub.projects.length) {
+    root.append(h('section', { class: 'panel group' },
+      h('h2', { text: 'No project yet' }),
+      h('p', {}, 'Create the folder ', h('code', { text: 'qa-workspaces/<company>/<project>/' }), ', open ',
+        h('code', { text: 'claude' }), ' in it and run ', h('code', { text: '/project-onboarding' }),
+        '. Creating a project from this page comes with plan 13.4.')));
+    return;
+  }
+  const groups = [];
+  const pinned = hub.projects.filter((p) => p.pinned);
+  if (pinned.length) groups.push(['Pinned', pinned]);
+  const companies = [...new Set(hub.projects.map((p) => p.company))];
+  for (const company of companies) groups.push([company, hub.projects.filter((p) => p.company === company && !p.pinned)]);
+  for (const [title, list] of groups) {
+    if (!list.length) continue;
+    root.append(h('section', { class: 'group', 'aria-label': title },
+      h('h2', { text: title }), h('div', { class: 'grid' }, list.map(projectCard))));
+  }
+}
+
 function render() {
+  if (S.mode === 'hub') {
+    renderTopHub();
+    for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = true;
+    $('screen-hub').hidden = false;
+    renderHub();
+    return;
+  }
   renderTop();
   for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = screen !== S.screen;
   if (S.screen === 'intake') renderIntake();
@@ -863,7 +992,9 @@ async function start() {
     return;
   }
   try {
-    await refreshState();
+    S.mode = (await api('GET', '/api/mode')).mode;
+    if (S.mode === 'hub') await refreshHub();
+    else await refreshState();
   } catch (e) {
     banner(e.message);
   }

@@ -7,7 +7,9 @@ and out. The page and its script are files of qa_ui/static/, with no external ad
 are served without the token.
 
     App(workspace, runner, token).handle(method, path, body) -> (status, payload)     the routes, testable alone
+    HubApp(hub, token).handle(method, path, body)            -> (status, payload)     the hub's routes (section 14)
     serve(workspace, runner, port)                                 -> (server, url)   the HTTP server around them
+    serve_hub(hub, port)                                           -> (server, url)   the same, for the hub
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from urllib.parse import unquote, urlsplit
 
 import yaml
 
+from . import hub as hubmod
 from . import intake, plan, runs, suggest, workspace
 
 HOST = "127.0.0.1"
@@ -117,6 +120,8 @@ class App:
         if parts[:1] != ["api"]:
             raise workspace.NotFound("no such route")
         rest = parts[1:]
+        if method == "GET" and rest == ["mode"]:
+            return {"mode": "workspace"}
         if method == "GET" and rest == ["state"]:
             return self.state(proj, refresh="refresh=1" in query)
         if method == "POST" and rest == ["intake"]:
@@ -195,7 +200,43 @@ class App:
         raise workspace.NotFound("no such route")
 
 
-def make_handler(app: App, port_of):
+class HubApp:
+    """The routes of the hub (docs/qa-ui.md section 14.10). The routes of a project (/api/p/<id>/...) come with
+    plan 13.2."""
+
+    def __init__(self, hub: hubmod.Hub, token: str | None = None):
+        self.hub = hub
+        self.token = token or secrets.token_urlsafe(24)
+
+    def handle(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
+        body = body if isinstance(body, dict) else {}
+        url = urlsplit(path)
+        parts = [unquote(p) for p in url.path.strip("/").split("/")]
+        try:
+            return 200, self.route(method, parts, body)
+        except BadRequest as e:
+            return 400, {"error": str(e)}
+        except workspace.NotFound as e:
+            return 404, {"error": str(e)}
+        except (workspace.Refused, runs.Refused) as e:
+            return 409, {"error": str(e)}
+        except (ValueError, KeyError, TypeError, OSError, yaml.YAMLError) as e:
+            return 500, {"error": f"the request failed ({type(e).__name__}): {e}"}
+
+    def route(self, method: str, parts: list[str], body: dict) -> dict:
+        rest = parts[1:] if parts[:1] == ["api"] else None
+        if method == "GET" and rest == ["mode"]:
+            return {"mode": "hub"}
+        if method == "GET" and rest == ["hub"]:
+            return self.hub.state()
+        if method == "POST" and rest == ["hub", "pins"]:
+            if not isinstance(body.get("id"), str) or not isinstance(body.get("pinned"), bool):
+                raise BadRequest("`id` (a project's id) and `pinned` (true or false) are needed")
+            return self.hub.pin(body["id"], body["pinned"])
+        raise workspace.NotFound("no such route")
+
+
+def make_handler(app, port_of):
     static = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
     class Handler(BaseHTTPRequestHandler):
@@ -284,7 +325,15 @@ class _Server(ThreadingHTTPServer):
 def serve(ws: str, runner: runs.Runner, port: int = 8765, token: str | None = None) -> tuple[ThreadingHTTPServer, str]:
     """The server bound to the loopback address (port 0: a free one) and the address to open. OSError when the
     port is taken."""
-    app = App(ws, runner, token)
+    return serve_app(App(ws, runner, token), port)
+
+
+def serve_hub(hub: hubmod.Hub, port: int = 8765, token: str | None = None) -> tuple[ThreadingHTTPServer, str]:
+    """The hub's server (docs/qa-ui.md section 14), with the same loopback, token and Host rules."""
+    return serve_app(HubApp(hub, token), port)
+
+
+def serve_app(app, port: int) -> tuple[ThreadingHTTPServer, str]:
     box = {}
     server = _Server((HOST, port), make_handler(app, lambda: box["port"]))
     server.daemon_threads = True

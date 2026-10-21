@@ -1690,10 +1690,71 @@ all fixed for any project:
 - Still the user's: a batch on a web site (the Playwright MCP from the interface), stopping a run on Windows, and
   whether 150 turns and 60 minutes fit a batch of 20 cases (12.5).
 
+## Phase 13 — The hub: every project in `qa-ui`
+
+Why: `qa-ui` opens one workspace, given on the command line, and what a project is (its environments, its
+credentials, its history, what the user knows about it) is spread over files the user opens by hand. The user asked
+(21.10.2026) for one interface to do the different types of test, keep the projects and their information, and
+come back to them: the platform of the user's daily QA work. A demo video of the current cycle was the reference.
+This phase puts every project of `qa-workspaces/` behind the same page; it adds no method, and the screens of phase
+12 stay as they are inside each project.
+
+Decisions of the user (21.10.2026):
+- **Where the projects live:** always `qa-workspaces/<company>/<project>/`, next to this repository; nothing else is
+  registered.
+- **Credentials:** left to the framework's completion; decided here as **typed in the page, write-only**: the value
+  goes only to the workspace's `.env`, never back to the page, a log or another file; `.env.example` keeps the
+  names (`docs/qa-ui.md` §14.6). Filling `.env` by hand keeps working.
+- **Runs:** one at a time on the whole computer, not one per workspace (§14.3).
+- **Pace:** one task at a time on the branch `plan/qa-hub`, one commit per task, nothing pushed until the user says
+  so.
+
+Constraints written down now: the privacy of §2 holds for every project; a project in a route is looked up in the
+discovered list, never joined as a path; the hub writes nothing in this repository; Python's standard library
+only, like phase 12; the interface in English; the tests never start a real Claude session, a browser or a site.
+
+### 13.0 Specification first (methodology §15) — done 21.10.2026
+- [x] `docs/qa-ui.md` v1.1, §14: starting, discovery, one run on the computer, the screens, a new project, the
+  overview and the write-only credentials, notes, library, history, the routes, privacy, tests, what is not done.
+
+### 13.1 Discovery and the Projects screen (`qa_ui/hub.py`) — done 21.10.2026
+- [x] The discovery of §14.2 (two levels, names, no link or junction followed, an id looked up and never joined) and
+      the summaries of §14.4 (tracker, modules, the last run log and its counts, what needs the user in the run logs
+      not yet applied; a broken `project.yaml` is said on its card, relative to the project); `GET /api/hub`,
+      `POST /api/hub/pins` (`~/.qa-assistant/qa-ui.json`, ids only) and `GET /api/mode` in both modes.
+- [x] `python -m qa_ui` without a workspace starts the hub over the root (created empty when missing, exit 2 when it
+      cannot be); with one, unchanged.
+- [x] One run at a time on the computer (§14.3): `runs.Gate`, shared by the hub's runners; a runner alone keeps
+      its own (one run per workspace, as before). The refusal names the project, the run and when it started.
+- [x] The Projects screen: cards grouped by company, pinned first, the run in progress, the inbox's count; a
+      project opens for now with `python -m qa_ui <workspace>` (inside the hub with 13.2).
+- [x] Tests (`tests/test_qa_ui_hub.py`, 19; 838 → 857): a fictional root (discovery, refusals, a link, summaries, an applied
+      run log, a broken `project.yaml`, no `.env` value), the pins, the shared Gate, the routes over HTTP, the
+      command line. Checked by hand: the user's two real workspaces discovered in 0.3 s; the page at 1280 and 390
+      px wide with a fictional root, no console error and no horizontal scroll.
+
+### 13.2 The projects' routes and the Test screen inside a project
+- [ ] `/api/p/<company>/<project>/…` to the routes of §11, an `App` and a `Runner` per project, created when first
+      used; the page's address `#/p/<id>/<screen>`; switching project without restarting.
+
+### 13.3 Overview, credentials and notes (§14.6, §14.7)
+
+### 13.4 New project (§14.5)
+
+### 13.5 Library, History and Inbox (§14.8, §14.9, §14.4)
+
+### 13.6 Settings (§14.4)
+
+### 13.7 Documentation, the whole suite and the pilot on the user's workspaces
+- [ ] `README.md`, `CLAUDE.md` (`Scripts`), the skill `/project-onboarding` (it continues a project the hub
+      created); the pilot on the user's computer with the real workspaces.
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-10-21 | 13.1: the hub's discovery, the Projects screen, the pins and one run at a time on the computer (`runs.Gate`); 19 new tests (838 → 857). |
+| 2026-10-21 | Phase 13 (the hub) added by the user's decision: every project of `qa-workspaces/` in `qa-ui`, one run at a time on the computer, credentials typed write-only; 13.0 done (`docs/qa-ui.md` v1.1 §14). |
 | 2026-10-20 | 6.2: the repository made public by the user; the history rewritten to remove a real workspace's variable name (filter-repo, force-push of `main` with a lease, tree identical, denylist 0 hits); pull requests #18 and #29 still hold the old commits until GitHub Support purges them. |
 | 2026-10-17 | 12.6: the first real batches from `qa-ui` (a mobile workspace, a real phone, Windows) and the five gaps they showed, fixed for any project: library headers in other languages and the warning, only active modules suggested, exploratory charters on the app of a mobile project (methodology v2.6, technique-mobile v1.6), the module of a planned batch chosen in the page, the refused tools shown. 19 new tests (817 → 836). |
 | 2026-10-14 | 11.8, the agent step reproduced on this computer (the runner's flags, `login: skip`, 25 turns): `launch`, the notifications dialog, the onboarding, the 5 cases Bloqueado with evidence, the summary and `context.md`; `post-check` safe and `pr-body` right. Fixed from it: `workspace_ci.py prompt` gives forward-slash paths (on Windows the tool rules refused the backslash form; `qa-ui` already did so), and `post-check` counts only the files the run adds or changes (git status), not the whole history. |

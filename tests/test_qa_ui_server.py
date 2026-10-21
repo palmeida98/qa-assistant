@@ -270,8 +270,10 @@ class Page(unittest.TestCase):
     def test_the_page_calls_only_routes_the_server_has(self):
         called = set(re.findall(r"'(/api/[a-z-]+)", self.read("app.js"))) | \
             set(re.findall(r"`(/api/[a-z-]+)", self.read("app.js")))
+        # /api/mode is in both modes; /api/hub is the hub's (tests/test_qa_ui_hub.py)
         self.assertEqual(called, {"/api/state", "/api/intake", "/api/suggest", "/api/plan", "/api/cases",
-                                  "/api/ask-claude", "/api/runs", "/api/runlogs", "/api/batches"})
+                                  "/api/ask-claude", "/api/runs", "/api/runlogs", "/api/batches", "/api/mode",
+                                  "/api/hub"})
 
 
 class CommandLine(unittest.TestCase):
