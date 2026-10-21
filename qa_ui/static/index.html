@@ -15,7 +15,7 @@
     <span class="brand-name">qa-assistant</span>
     <span id="project" class="project"></span>
   </div>
-  <nav aria-label="Steps">
+  <nav id="steps" aria-label="Steps">
     <ol class="steps">
       <li><button type="button" class="step" data-screen="intake"><span class="num">1</span>Intake</button></li>
       <li><button type="button" class="step" data-screen="suggest"><span class="num">2</span>Suggestion</button></li>
@@ -26,6 +26,7 @@
 </header>
 <div id="banner" class="banner" role="alert" hidden></div>
 <main id="main" tabindex="-1">
+  <section id="screen-hub" aria-labelledby="h-hub" hidden></section>
   <section id="screen-intake" aria-labelledby="h-intake"></section>
   <section id="screen-suggest" aria-labelledby="h-suggest" hidden></section>
   <section id="screen-run" aria-labelledby="h-run" hidden></section>

@@ -8,7 +8,8 @@ The runs the interface starts (docs/qa-ui.md sections 5.3, 7, 8 and 10).
 - Asking Claude for a reading of the cases (no tool allowed), new cases through the project's adapter, and applying
   a run log: a dry run first, the real run only with the user's confirmation.
 
-One run at a time per workspace. The output of a run is redacted with the values of .env before it is stored
+One run at a time per workspace, or on the whole computer when the runners share a Gate (the hub, docs/qa-ui.md
+section 14.3). The output of a run is redacted with the values of .env before it is stored
 (.qa-ui/runs/<id>.log) or shown. Nothing here classifies a result: the run log is the only source.
 """
 
@@ -240,16 +241,36 @@ class Run:
                 "report": self.report, "lines": self.lines, "tail": list(self.tail), "refused": list(self.refused)}
 
 
+class Gate:
+    """What decides that a run may start: one run at a time among the runners that share it. A runner alone has its
+    own (one run per workspace, docs/qa-ui.md section 13); the hub gives one Gate to the runners of every project,
+    so there is one run at a time on the computer (section 14.3)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.runners: list[Runner] = []
+
+    def current(self) -> tuple[Runner, Run] | None:
+        """The runner and its run in progress, if any."""
+        for runner in list(self.runners):
+            run = runner.current()
+            if run:
+                return runner, run
+        return None
+
+
 class Runner:
     """One per served workspace: starts the runs, one at a time, and keeps those of this session."""
 
     def __init__(self, ws: str, claude: str | None = None, max_turns: int = 150, timeout_minutes: float = 60,
-                 qa: str = ROOT, grace: float = GRACE):
+                 qa: str = ROOT, grace: float = GRACE, gate: Gate | None = None, name: str | None = None):
         self.ws = os.path.abspath(ws)
+        self.name = name or os.path.basename(self.ws)         # how a refusal names this project (the hub's id)
+        self.gate = gate or Gate()
+        self.gate.runners.append(self)
         self.claude_path = claude
         self.max_turns, self.timeout_minutes, self.qa, self.grace = int(max_turns), timeout_minutes, qa, grace
         self.runs: dict[str, Run] = {}
-        self.lock = threading.Lock()
         self.pending_cases: str | None = None      # the new-cases file of a dry run not confirmed yet
 
     # ------------------------------------------------------------------ helpers
@@ -262,6 +283,18 @@ class Runner:
 
     def current(self) -> Run | None:
         return next((r for r in self.runs.values() if r.state == "running"), None)
+
+    def _refuse_if_busy(self) -> None:
+        """Refused while a run is in progress here or, with a shared Gate, in another project. Called holding the
+        Gate's lock."""
+        busy = self.gate.current()
+        if not busy:
+            return
+        runner, run = busy
+        if runner is self:
+            raise Refused(f"a run is in progress ({run.label}): one run at a time per workspace")
+        raise Refused(f"a run is in progress in {runner.name} ({run.label}, started {run.started}): one run at a "
+                      "time on this computer")
 
     def _new_id(self, kind: str) -> str:
         stem = f"{datetime.now():%Y%m%dT%H%M%S}-{kind}"
@@ -354,10 +387,8 @@ class Runner:
 
     def start_batch(self, proj: dict, name: str, environment: str | None = None, build: str | None = None) -> Run:
         """A planned batch (batches/<name>.yaml) through its module's skill in Claude Code headless."""
-        with self.lock:
-            busy = self.current()
-            if busy:
-                raise Refused(f"a run is in progress ({busy.label}): one run at a time per workspace")
+        with self.gate.lock:
+            self._refuse_if_busy()
             try:
                 batch = workspace.batch(self.ws, name)
             except workspace.NotFound as e:
@@ -410,10 +441,8 @@ class Runner:
 
     def start_audit(self, proj: dict, kind: str) -> Run:
         """The automated accessibility audit (a11y) or the automated site audit (site): docs/qa-ui.md 8.2."""
-        with self.lock:
-            busy = self.current()
-            if busy:
-                raise Refused(f"a run is in progress ({busy.label}): one run at a time per workspace")
+        with self.gate.lock:
+            self._refuse_if_busy()
             run_id = self._new_id(f"audit-{kind}")
             log = os.path.join(self.ws, ".qa-ui", "runs", run_id + ".log")
             if kind == "a11y":

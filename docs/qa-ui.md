@@ -1,10 +1,11 @@
 # qa-ui — local web interface
 
-> Version 1.0 · 2026-10-08 · Plan, phase 12 (specification first, methodology §15).
+> Version 1.1 · 2026-10-21 · Plan, phases 12 and 13 (specification first, methodology §15). 1.1: the hub (§14).
 >
 > Universal: nothing of a real project enters this document. The examples use the fictional Demo Shop.
 
-`qa-ui` is a web page served by this computer, for one workspace at a time. The user gives it test cases (pasted,
+`qa-ui` is a web page served by this computer, for one workspace at a time, or for every project of
+`qa-workspaces/` in the hub (§14). The user gives it test cases (pasted,
 in a file, or already in the project's library); it suggests which type of test fits each case, plans the batches,
 starts them, shows the results as they are written and collects the user's approvals. It is a front of the work
 cycle of the methodology (§3), not a new method: every step it starts is an existing skill, script or adapter.
@@ -332,8 +333,173 @@ The demo workspace (`examples/demo`) is the fixture of the library and of the st
 ## 13. What is not done
 
 - `.pdf` and images as a source (no parser without a new dependency; export to `.docx`, `.xlsx` or text).
-- Several runs at once, or a queue: one run, then the next.
+- Several runs at once, or a queue: one run, then the next (in the hub, one on the whole computer, §14.3).
 - Starting a remote run in the workspace's CI (`scripts/workspace_ci.py`): it stays a `gh workflow run`.
 - Editing a case of the library, or its steps: proposed to the user and done in the workbook or the tracker.
 - The dashboard: `/dashboard` and `scripts/build_dashboard.py` stay as they are (Excel only).
 - Any access control beyond the loopback address and the token: the interface is one user's, on their computer.
+
+## 14. The hub: every project in one interface (plan phase 13)
+
+Until phase 12 the interface opened one workspace, given on the command line. The hub is the same interface over
+**every** project of `qa-workspaces/`: the user chooses, creates and looks after projects in the page, and each
+project has the screens of §3 plus its information, library, history and notes. It adds no method: a project is
+still a workspace as the methodology defines it (§4), and everything the hub writes is a file a session would also
+have written.
+
+### 14.1 Starting
+
+```
+python -m qa_ui                 # the hub, over <qa-assistant>/../qa-workspaces
+python -m qa_ui <workspace>     # one workspace, as in §1 to §13 (unchanged)
+```
+
+The root is fixed: `qa-workspaces/` next to this repository (user decision, 21.10.2026), where the methodology
+already keeps the workspaces (`CLAUDE.md`, "Environment"). No other folder is registered or searched. A root that
+does not exist is created empty on the first start, after saying so. The options of §1 (`--port`, `--no-open`,
+`--claude`, `--max-turns`, `--timeout-minutes`) are the same; exit code 2 also when the root cannot be created.
+
+### 14.2 Discovery
+
+A project is a folder `<root>/<company>/<project>/` that holds a `project.yaml`: exactly two levels, each name of
+letters, digits, `.`, `_` and `-`, not starting with `.` or `_`; symbolic links are not followed; anything else in
+the root is ignored. Its id is `<company>/<project>`. The list is read again on each request that needs it (nothing
+is kept that the root does not have), sorted by company and project.
+
+A route that names a project takes its id from the request and **looks it up in that list**: a path is never joined
+from what the request gave, so `..`, an absolute path or a project that is not discovered is a 404.
+
+A `project.yaml` that cannot be read (not valid YAML, not a mapping) does not stop the hub: that project's card says
+so and offers nothing but its Overview, with the error.
+
+### 14.3 One run at a time on the computer
+
+Batches and automated audits use the browser, the emulator or the device, and a login of the project: two at once
+would compete for them. So the hub runs **one run at a time on the whole computer** (user decision, 21.10.2026),
+not one per workspace: starting a run while another project's run is in progress is refused (409) with the project,
+the batch or audit and the time it started. **Ask Claude** (§5.3), the dry runs of the adapters (§7, §10) and the
+readiness checks are not runs: they use no browser and can be used while a run goes on. The run in progress is shown
+on every screen of the hub, with its project.
+
+### 14.4 The screens
+
+| Screen | What it shows | Read from |
+|---|---|---|
+| **Projects** (the start) | A card per project, grouped by company: name, tracker, active modules, the last run log (name, date, counts per status), how many items need the user, the run in progress. Pinned projects first | `project.yaml`, `runs/` |
+| **Inbox** | What needs the user in every project (§9): each proposed bug and each `Question`, with its project and run log, opening that run log | the run logs not yet applied |
+| **New project** | §14.5 | — |
+| **Settings** | The root, the Claude Code executable and the limits given at the start, the readiness of this computer that does not depend on a project (Python, Node.js, `qa-audit`, Maestro, `adb`), and whether the global skills are in sync (`scripts/sync_skills.py` without `--apply`) | the start, the scripts |
+
+Inside a project, a bar with: **Overview** (§14.6), **Test** (the three screens of §3, exactly as in one-workspace
+mode), **Library** (§14.8), **History** (§14.9), **Notes** (§14.7). The page's address names the project and the
+screen (`#/p/<company>/<project>/test`), so a reload or a bookmark opens the same place.
+
+### 14.5 New project
+
+A form for what `/project-onboarding` asks first (its step 2): company, project, environments (key and URL; one of
+them `test` or the only one), roles (name, and the names of the `.env` variables of its user and password),
+tracker (`excel`, `jira`, `azure-devops`), active modules, bug format and evidence. Nothing is written until the
+user confirms what will be created, shown as a list of files. Then, in `<root>/<company>/<project>/`:
+
+| File | From |
+|---|---|
+| `project.yaml` | `docs/project.yaml` with the answers; the sections of the active modules kept, those of the inactive ones left out |
+| `CLAUDE.md` | `docs/context-template.md` with the `@` imports pointing to this repository, as the skill's step 1 does |
+| `.claude/settings.json` | `docs/workspace/settings.json` (protection of `history/`, methodology §13) |
+| `.gitignore` | `docs/workspace/gitignore` |
+| `.env.example` | the names of the variables `project.yaml` refers to, without values |
+| `.env` | only the values the user typed (§14.6), never shown again |
+| `runs/`, `evidence/`, `batches/`, `history/`, `notes/` | empty folders |
+
+A folder that already exists is refused (409): the hub never writes over a project. After writing, it runs
+`python scripts/validate_project.py <workspace>` and shows its output and exit code. What needs reading or a
+tracker stays in a Claude Code session and the page says so, with the command to type: **`/project-onboarding`**
+in the new folder continues from the files already there (inspecting the workbook, `check` and `import-cases` of a
+tracker, registering the Playwright MCP, `workspace_git.py init`).
+
+### 14.6 Overview and the credentials
+
+The project as the files say: its `project.yaml` (environments, roles, tracker, modules, and each module's section),
+the readiness of this computer for it (§5.2, the same checks), the git state of the workspace
+(`scripts/workspace_git.py <workspace> status`: a repository or not, uncommitted files, the remote and whether it
+is private), `context.md` as text, and the `.env` variables that `project.yaml` refers to, each **set** or
+**missing**.
+
+A missing (or wrong) credential can be typed in the page, **write-only**: the value goes in one request, is written
+to `.env` (the line of that name replaced, or added; the file's other lines kept; on POSIX with mode `600`), and is
+never sent back, logged, put in a run's output or in a file other than `.env`. The page clears the field and shows
+only "set". Only a name that `project.yaml` refers to, or that `.env.example` lists, can be written; a value with a
+line break is refused. This is the same `.env` the user fills in by hand: nothing else changes in how the scripts
+read it (`scripts/common.py`).
+
+### 14.7 Notes
+
+Free text of the project, the user's: decisions, links (designs, boards, documentation), contacts by role, what to
+remember. One Markdown file per note in `<workspace>/notes/` (a name of letters, digits, `-` and `_`; at most 200
+KB), listed, opened, edited and created in the page, always written and shown as text, never as HTML. A note never
+holds a credential (that is `.env`): the page warns when a note contains the value of a `.env` variable and refuses
+to save it. The `CLAUDE.md` of a new project imports nothing from `notes/`; it says that `notes/` exists and that a
+session reads it when the user's request needs it.
+
+### 14.8 Library
+
+The project's cases as the intake reads the library (§4), with the last status, the area, the role, the module
+of the case when it has one, and the flags of §4, filtered by text, area, status and flag. **Send to Test** puts the
+selected IDs in the intake of the Test screen (a list of IDs selects cases, §4). The library is never edited here
+(§13).
+
+### 14.9 History
+
+Every run log of `runs/` (applied or not, with its counts and its date), every automated audit
+(`runs/a11y_*.json`, `qa-output/<timestamp>/`) and the outputs in `.qa-ui/runs/`, newest first. A run log opens on
+the Execution screen; an audit opens its `report.md` as text, or its `report.html` in a new tab served by the hub
+with the same token rule and a policy that runs no script. With `tracker: excel`, **Build dashboard** runs
+`python scripts/build_dashboard.py <workspace>` and opens the result the same way.
+
+### 14.10 The HTTP interface of the hub
+
+The routes of §11 stay as they are in one-workspace mode. In the hub, the same routes live under a project:
+`/api/p/<company>/<project>/<route of §11>` (for example `GET /api/p/demo/shop/state`). Added:
+
+| Route | Does |
+|---|---|
+| `GET /api/mode` | `{"mode": "hub"}`; in one-workspace mode the same route gives `{"mode": "workspace"}`, so the one page knows which interface it is in |
+| `GET /api/hub` | the projects with the summary of §14.4, the pinned ids, the run in progress, the count of the inbox |
+| `POST /api/hub/pins` | `{"id", "pinned"}`: the pinned projects, kept in `~/.qa-assistant/qa-ui.json` (ids only) |
+| `GET /api/inbox` | the items of §14.4 across the projects |
+| `GET /api/settings` | §14.4 |
+| `POST /api/projects` | `{…the form of §14.5}` → the files that would be written; with `"confirm": true` writes them and runs the validation |
+| `GET /api/p/<id>/overview` | §14.6, without any value of `.env` |
+| `POST /api/p/<id>/env` | `{"name", "value"}` → `{"name", "set": true}` (§14.6) |
+| `GET /api/p/<id>/notes` · `GET` / `POST /api/p/<id>/notes/<name>` | §14.7 |
+| `GET /api/p/<id>/library` | §14.8 |
+| `GET /api/p/<id>/history` | §14.9 |
+| `POST /api/p/<id>/dashboard` | builds it (§14.9) |
+| `GET /p/<id>/reports/<path>` | an audit's `report.html` or the `dashboard.html`, only those names, only under the project (§14.9) |
+
+The token, the `Host` check and the status codes are those of §2 and §11.
+
+### 14.11 Privacy, as in §2
+
+The hub shows the data of every project, so §2 holds for all of it: loopback only, a token per start, no external
+request, nothing written in this repository. It writes only inside the root: the files of §14.5 in a new project,
+`.env` and `notes/` (§14.6, §14.7), and what one-workspace mode writes. Outside the root it writes only
+`~/.qa-assistant/qa-ui.json`, with the pinned ids. It never reads above the root nor follows a link out of it.
+
+### 14.12 Tests
+
+As §12, with a fictional root built by the test (companies and projects copied from `examples/demo`, one with a
+broken `project.yaml`): the discovery and its refusals (`..`, a link, a name with `.` first, three levels), the
+summaries, a run in one project refusing a run in another, the routes under `/api/p/…`, the creation of a project
+and its refusal over an existing folder, the write-only `.env` (the value never in any response, any log or any
+other file), the notes (names, size, a credential refused), and the report routes (only those files, only under
+the project).
+
+### 14.13 What the hub does not do
+
+- Projects outside `qa-workspaces/` (user decision, 21.10.2026), or moving and deleting a project.
+- Several runs at once, also across projects (§14.3), or a queue.
+- Editing `project.yaml` after the creation: that is `/project-onboarding` or a session, where the validation and
+  the methodology's questions are.
+- The parts of the onboarding that need reading or a tracker (§14.5): they stay in Claude Code.
+- Showing a credential, even to its owner: `.env` is opened by hand to read one.
