@@ -11,15 +11,20 @@ const FLAG_TEXT = {
   'not-in-library': 'not in the library: add it before planning',
 };
 
-const S = {
-  token: '', mode: '', hub: null, hubTimer: null, info: null, screen: 'intake', busy: '',
-  cases: [], notes: [], dropped: [], library: null, analysed: false,
-  moved: {}, sug: null, ticked: new Set(), plan: null,
-  reading: null, asking: false, wantProposals: false,
-  newIds: {}, newTicked: new Set(), casesDry: null, casesDone: null,
-  runId: null, run: null, logName: null, log: null, applyOut: null, timer: null,
-  environment: '', build: '', editing: null,
-};
+/* What the screens of one project hold: set again when the hub opens another project. */
+function projectState() {
+  return {
+    info: null, screen: 'intake',
+    cases: [], notes: [], dropped: [], library: null, analysed: false,
+    moved: {}, sug: null, ticked: new Set(), plan: null,
+    reading: null, asking: false, wantProposals: false,
+    newIds: {}, newTicked: new Set(), casesDry: null, casesDone: null,
+    runId: null, run: null, logName: null, log: null, applyOut: null, timer: null,
+    environment: '', build: '', editing: null,
+  };
+}
+
+const S = Object.assign({ token: '', mode: '', hub: null, hubTimer: null, project: null, busy: '' }, projectState());
 
 /* ------------------------------------------------------------------ small helpers */
 
@@ -49,7 +54,16 @@ function banner(message) {
   el.hidden = !message;
 }
 
+/* In the hub, a project's routes live under /api/p/<company>/<project>/ (docs/qa-ui.md section 14.10). */
+const HUB_ROUTES = ['/api/mode', '/api/hub'];
+
+function projectPath(path) {
+  if (S.mode !== 'hub' || !S.project || HUB_ROUTES.some((r) => path === r || path.startsWith(r + '/'))) return path;
+  return `/api/p/${S.project.split('/').map(encodeURIComponent).join('/')}/${path.slice('/api/'.length)}`;
+}
+
 async function api(method, path, body) {
+  path = projectPath(path);
   const options = { method, headers: { 'X-QA-Token': S.token } };
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
@@ -257,7 +271,10 @@ function go(screen) {
 
 function renderTop() {
   const info = S.info;
-  $('project').textContent = info ? `${info.project.name || 'workspace'} · ${info.project.tracker || 'no tracker'}` : '';
+  $('steps').hidden = false;
+  $('back').hidden = S.mode !== 'hub';
+  $('project').textContent = info ? `${info.project.name || 'workspace'} · ${info.project.tracker || 'no tracker'}`
+    : (S.project || '');
   for (const button of document.querySelectorAll('.step')) {
     const screen = button.dataset.screen;
     if (screen === S.screen) button.setAttribute('aria-current', 'step');
@@ -271,6 +288,9 @@ function renderTop() {
   } else if (info && info.run) {
     pill.className = 'pill busy';
     pill.textContent = `Running: ${info.run.label}`;
+  } else if (info && info.run_elsewhere) {
+    pill.className = 'pill busy';
+    pill.textContent = `Running in ${info.run_elsewhere.project}: ${info.run_elsewhere.label}`;
   } else if (info && !info.claude) {
     pill.className = 'pill warn';
     pill.textContent = 'Claude Code not found';
@@ -851,6 +871,7 @@ async function setPin(id, pinned) {
 
 function renderTopHub() {
   $('steps').hidden = true;
+  $('back').hidden = true;
   const hub = S.hub;
   $('project').textContent = hub ? `hub · ${plural(hub.projects.length, 'project')}` : 'hub';
   const pill = $('status');
@@ -896,8 +917,9 @@ function projectCard(p) {
       running ? h('span', { class: 'chip accent', text: 'Running now' }) : null,
       p.needs ? h('span', { class: 'chip ask', text: `${p.needs} need${p.needs === 1 ? 's' : ''} you` }) : null,
       p.runs ? h('span', { class: 'chip', text: plural(p.runs, 'run log') }) : null),
-    h('div', { class: 'small muted' }, 'Open it for now with ',
-      h('code', { text: `python -m qa_ui ../qa-workspaces/${p.id}` }), ' (inside the hub with plan 13.2).'));
+    p.error ? h('div', { class: 'small muted', text: 'Fix its project.yaml to open it.' })
+      : h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: projectHash(p.id, 'test'),
+        'aria-label': `Open ${p.id}` }, 'Open')));
 }
 
 function renderHub() {
@@ -942,8 +964,44 @@ function renderHub() {
   }
 }
 
+/* ------------------------------------------------------------------ the page's address (section 14.4) */
+
+function projectHash(id, screen) {
+  return `#/p/${id}/${screen}`;
+}
+
+/* #/p/<company>/<project>/<screen> opens a project; anything else is the Projects screen. The id is the server's
+   to look up: a project that is not discovered answers 404 and the page goes back to the Projects screen. */
+function readHash() {
+  const m = /^#\/p\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/.exec(window.location.hash);
+  return m ? `${decodeURIComponent(m[1])}/${decodeURIComponent(m[2])}` : null;
+}
+
+async function followHash(first) {
+  const id = readHash();
+  if (id === S.project && first !== true) return;
+  stopPolling();
+  if (S.hubTimer) window.clearTimeout(S.hubTimer);
+  S.hubTimer = null;
+  Object.assign(S, projectState(), { project: id });
+  banner('');
+  render();
+  try {
+    if (id) await refreshState();
+    else await refreshHub();
+  } catch (e) {
+    if (id) {
+      S.project = null;
+      window.location.hash = '#/';          // the hashchange finds no project to open: the hub is read here
+      try { await refreshHub(); } catch (e2) { /* the first error is the one said */ }
+    }
+    banner(e.message);
+  }
+  render();
+}
+
 function render() {
-  if (S.mode === 'hub') {
+  if (S.mode === 'hub' && !S.project) {
     renderTopHub();
     for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = true;
     $('screen-hub').hidden = false;
@@ -951,6 +1009,7 @@ function render() {
     return;
   }
   renderTop();
+  $('screen-hub').hidden = true;
   for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = screen !== S.screen;
   if (S.screen === 'intake') renderIntake();
   if (S.screen === 'suggest') renderSuggest();
@@ -986,6 +1045,7 @@ async function start() {
     window.history.replaceState(null, '', window.location.pathname);
   }
   for (const button of document.querySelectorAll('.step')) button.addEventListener('click', () => go(button.dataset.screen));
+  $('back').addEventListener('click', () => { window.location.hash = '#/'; });
   render();
   if (!S.token) {
     banner('Open the address `python -m qa_ui` printed: it holds the token of this start.');
@@ -993,8 +1053,10 @@ async function start() {
   }
   try {
     S.mode = (await api('GET', '/api/mode')).mode;
-    if (S.mode === 'hub') await refreshHub();
-    else await refreshState();
+    if (S.mode === 'hub') {
+      window.addEventListener('hashchange', () => followHash());
+      await followHash(true);
+    } else await refreshState();
   } catch (e) {
     banner(e.message);
   }

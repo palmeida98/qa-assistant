@@ -136,7 +136,8 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); min-
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .group { margin-top: 28px; }
 .project-card { display: flex; flex-direction: column; gap: 10px; }
-.project-card .card-title, .project-card .note, .project-card code { overflow-wrap: anywhere; }
+a.btn { text-decoration: none; }
+.project-card .card-title, .project-card .note, .project-card code, #screen-hub .lead code { overflow-wrap: anywhere; }
 .tiles { display: flex; flex-wrap: wrap; gap: 12px; }
 .tile { flex: 1 1 130px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .tile .n { font-size: 30px; line-height: 1.2; font-weight: 600; }

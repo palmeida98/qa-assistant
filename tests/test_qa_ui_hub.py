@@ -1,5 +1,6 @@
 """qa-ui hub (docs/qa-ui.md section 14; plan 13.1): the discovery of the projects and its refusals, the summaries of
-the Projects screen, the pins, one run at a time on the computer, the hub's routes and its command line. A fictional
+the Projects screen, the pins, one run at a time on the computer, the hub's routes, a project's routes under
+/api/p/<id>/ (plan 13.2) and its command line. A fictional
 root built by the test; Demo Shop data only.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
@@ -213,7 +214,51 @@ class Routes(Root):
         self.assertEqual(self.app.handle("POST", "/api/hub/pins", {"id": "acme/api"})[0], 400)
         self.assertEqual(self.app.handle("POST", "/api/hub/pins", {"id": "../x", "pinned": True})[0], 404)
         self.assertEqual(self.app.handle("GET", "/api/state")[0], 404)
-        self.assertEqual(self.app.handle("GET", "/api/p/demo/shop/state")[0], 404)       # plan 13.2
+
+
+class ProjectRoutes(Root):
+    """Plan 13.2: the routes of section 11 under /api/p/<company>/<project>/, an App and a Runner per project."""
+
+    def setUp(self):
+        super().setUp()
+        self.app = server.HubApp(self.hub)
+
+    def test_a_projects_routes_under_its_id(self):
+        status, state = self.app.handle("GET", "/api/p/demo/shop/state")
+        self.assertEqual((status, state["project"]["name"]), (200, "demo-shop"))
+        self.assertEqual(self.app.handle("GET", "/api/p/acme/api/state")[1]["project"]["tracker"], "jira")
+        shop = self.app.apps["demo/shop"]
+        self.app.handle("GET", "/api/p/demo/shop/state")
+        self.assertIs(self.app.apps["demo/shop"], shop)                       # created once, kept
+        self.assertEqual(shop.runner.name, "demo/shop")
+        self.assertIs(shop.runner.gate, self.hub.gate)
+        self.assertEqual(shop.ws, hub.find(self.root, "demo/shop").path)
+        self.assertEqual(self.app.handle("GET", "/api/p/demo/shop/runlogs/missing")[0], 404)
+
+    def test_an_id_that_is_not_discovered_is_404(self):
+        for path in ("/api/p/../demo/state", "/api/p/demo/empty/state", "/api/p/.hidden/shop/state",
+                     "/api/p/demo/shop%2Fdeeper/x/state", "/api/p/demo/shop", "/api/p/%2E%2E/demo/state"):
+            self.assertEqual(self.app.handle("GET", path)[0], 404, path)
+        self.assertEqual(self.app.apps, {})
+        self.assertEqual(self.app.handle("GET", "/api/p/demo/shop/deeper/state")[0], 404)   # no such route
+
+    def test_a_broken_project_yaml_is_said(self):
+        status, out = self.app.handle("GET", "/api/p/demo/broken/state")
+        self.assertEqual(status, 500)
+        self.assertIn("project.yaml", out["error"])                            # said, never a dropped connection
+
+    def test_a_run_in_another_project_is_shown_and_refuses(self):
+        self.app.handle("GET", "/api/p/acme/api/state")
+        busy = runs.Run("r1", "audit", "accessibility audit", [], "r1.log")
+        self.app.apps["acme/api"].runner.runs[busy.id] = busy
+        state = self.app.handle("GET", "/api/p/demo/shop/state")[1]
+        self.assertIsNone(state["run"])
+        self.assertEqual((state["run_elsewhere"]["project"], state["run_elsewhere"]["id"]), ("acme/api", "r1"))
+        self.assertIsNone(self.app.handle("GET", "/api/p/acme/api/state")[1]["run_elsewhere"])
+        status, out = self.app.handle("POST", "/api/p/demo/shop/runs", {"audit": "a11y"})
+        self.assertEqual(status, 409)
+        self.assertIn("acme/api", out["error"])
+        self.assertEqual(self.app.handle("GET", "/api/hub")[1]["run"]["project"], "acme/api")
 
 
 class Http(Root):
@@ -250,6 +295,10 @@ class Http(Root):
         self.assertEqual(self.call("POST", "/api/hub/pins", {"id": "demo/shop", "pinned": True})[0], 200)
         with urllib.request.urlopen(self.base + "/", timeout=60) as r:
             self.assertIn('id="screen-hub"', r.read().decode("utf-8"))
+        status, state = self.call("GET", "/api/p/demo/shop/state")
+        self.assertEqual((status, state["project"]["name"]), (200, "demo-shop"))
+        self.assertEqual(self.call("GET", "/api/p/demo/shop/state", token="wrong")[0], 403)
+        self.assertEqual(self.call("GET", "/api/p/demo/../acme/api/state")[0], 404)
 
 
 class CommandLine(unittest.TestCase):

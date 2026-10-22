@@ -160,7 +160,7 @@ class Hub:
 
     def __init__(self, root: str, prefs: Prefs | None = None, gate: Gate | None = None, **runner_options):
         self.root = os.path.abspath(root)
-        self.runner_options = runner_options                    # claude, max_turns, timeout_minutes (plan 13.2)
+        self.runner_options = runner_options                    # claude, max_turns, timeout_minutes: each project's Runner
         self.prefs = prefs or Prefs()
         self.gate = gate or Gate()
 

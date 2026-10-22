@@ -1733,9 +1733,18 @@ only, like phase 12; the interface in English; the tests never start a real Clau
       command line. Checked by hand: the user's two real workspaces discovered in 0.3 s; the page at 1280 and 390
       px wide with a fictional root, no console error and no horizontal scroll.
 
-### 13.2 The projects' routes and the Test screen inside a project
-- [ ] `/api/p/<company>/<project>/…` to the routes of §11, an `App` and a `Runner` per project, created when first
-      used; the page's address `#/p/<id>/<screen>`; switching project without restarting.
+### 13.2 The projects' routes and the Test screen inside a project — done 22.10.2026
+- [x] `/api/p/<company>/<project>/…` to the routes of §11, an `App` and a `Runner` per project, created when first
+      used and sharing the hub's Gate (the id looked up in the discovery, never joined); the project's state says a
+      run in another project (`run_elsewhere`), shown in the top bar.
+- [x] The page's address `#/p/<id>/<screen>` (`test` for now), a reload or a bookmark opening the same place; the
+      card's **Open**; switching project without restarting (the screens of the previous project set again); a
+      project that is not discovered goes back to the Projects screen with the error.
+- [x] Tests (`tests/test_qa_ui_hub.py`, 4 new; 857 → 861): the routes under an id, the App kept, the refusals (`..`,
+      encoded, not discovered, a third level), a broken `project.yaml` said, a run in another project shown and
+      refusing. Checked with Playwright and the installed Chrome over a fictional root at 1280 and 390 px: open,
+      reload, switch, an unknown id, back; no console error but the expected 404, no horizontal scroll (the root's
+      path in the Projects screen now wraps).
 
 ### 13.3 Overview, credentials and notes (§14.6, §14.7)
 
@@ -1753,6 +1762,7 @@ only, like phase 12; the interface in English; the tests never start a real Clau
 
 | Date | Change |
 |---|---|
+| 2026-10-22 | 13.2: a project's routes under `/api/p/<id>/` (an App and a Runner per project, one Gate), the page's address `#/p/<id>/test`, switching project; 4 new tests (857 → 861). |
 | 2026-10-21 | 13.1: the hub's discovery, the Projects screen, the pins and one run at a time on the computer (`runs.Gate`); 19 new tests (838 → 857). |
 | 2026-10-21 | Phase 13 (the hub) added by the user's decision: every project of `qa-workspaces/` in `qa-ui`, one run at a time on the computer, credentials typed write-only; 13.0 done (`docs/qa-ui.md` v1.1 §14). |
 | 2026-10-20 | 6.2: the repository made public by the user; the history rewritten to remove a real workspace's variable name (filter-repo, force-push of `main` with a lease, tree identical, denylist 0 hits); pull requests #18 and #29 still hold the old commits until GitHub Support purges them. |
