@@ -1,7 +1,7 @@
 # Changelog
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of the `qa-audit` engine
-(`pyproject.toml`). The workspace layer is tracked in `docs/plano-desenvolvimento.md`.
+(`pyproject.toml`). The workspace layer is tracked in [`docs/development-plan.md`](docs/development-plan.md).
 
 ## [Unreleased]
 
