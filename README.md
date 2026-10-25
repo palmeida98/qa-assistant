@@ -1,10 +1,34 @@
-# qa-assistant
+# QA Assistant — AI-Assisted Quality Engineering Framework
 
 [![CI](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml)
 
-A QA framework for working with [Claude Code](https://claude.com/claude-code): the methodology, the test techniques and the tools live here, and each real project lives in a separate **workspace**, outside this repository. The assistant follows the methodology through skills (`/project-onboarding`, `/run-batch`, `/checkpoint`, …) and writes the results into the project's tracker through adapters checked by tests.
+**Active development · Python 3.12+ · Claude Code · Playwright · QA automation**
 
-Everything is in English (plan 8.11). A workspace created before the translation is converted once with `python scripts/migrate_workspace.py <workspace>`.
+QA Assistant is a personal framework for planning, executing and reviewing quality-assurance work. It combines **Claude Code-assisted testing workflows**, a standalone **website audit engine (`qa-audit`)**, and a **local QA interface (`qa-ui`)**. The aim is repeatable test execution with traceable evidence and explicit human approval for decisions and tracker updates.
+
+Built as a practical quality-engineering project: **source code, tests, a fictional demo, CI and technical documentation are included**. Real client workspaces, credentials, reports and evidence are intentionally kept outside this public repository.
+
+> **Development status (October 2026):** This is an actively evolving project, **not a finished commercial product**. The workspace layer reached v1.0 after a controlled pilot; `qa-audit` has its own v0.2.0 release; the one-workspace UI exists, while the multi-project hub is being delivered in phases. The last verified main-branch CI run before this documentation change was successful on 21 October 2026. See [development status](#state) and the [development plan](docs/development-plan.md) for limitations.
+
+> **License:** Publicly viewable **proprietary source**, not an open-source project. See [LICENSE](LICENSE) before copying, adapting or redistributing any part of it. Third-party components retain their own licences.
+
+## At a glance
+
+| Component | What it offers | Current evidence / boundary |
+| --- | --- | --- |
+| **QA workspaces** | Claude Code skills for analysis, test cases, batches, run logs, checkpoints and dashboards | Versioned methodology and a documented public-site pilot; client data remains in separate workspaces |
+| **`qa-audit` CLI** | Browser-based accessibility, passive security, functional, performance and opt-in visual checks | Python implementation, example configuration and browser integration tests in CI; not a security penetration test or accessibility certification |
+| **`qa-ui`** | Local intake, test suggestions, batch execution, approval flows and results | One-workspace mode implemented; new Projects hub supports discovery and pinning, with other multi-project screens still planned |
+| **Trackers** | Excel, Jira/Xray and Azure DevOps adapters | Unit tests, fakes and golden fixtures; real pilots of the remote tracker adapters are still pending |
+| **Mobile / remote execution** | Mobile workflows and GitHub Actions workspace templates | Implemented tooling and tests; a full runner-based mobile pilot remains pending |
+
+## Start here
+
+- **Try `qa-audit`:** Follow the [installation and user guide](docs/qa-audit-guide.md) and run only against sites you own or are authorised to test.
+- **See an example:** Explore the [fictional demo workspace](examples/demo/) and its [Playwright specs](examples/demo/e2e/specs/).
+- **Understand the design:** Read the [methodology](docs/methodology.md), [architecture](#layered-architecture), [interface specification](docs/qa-ui.md), and [development plan](docs/development-plan.md).
+- **Inspect quality controls:** [GitHub Actions CI](.github/workflows/ci.yml), [tests](tests/), [privacy and secret guards](#privacy-boundary), and [changelog](CHANGELOG.md).
+
 
 ---
 
@@ -73,17 +97,16 @@ The generated cases are proposals until the user approves them; a bug is only cr
 
 ### The local interface (`qa-ui`)
 
+`qa-ui` is a **local-only interface** for planning and supervising QA work, with user approval before changes are applied to the project's tracker. In the current single-workspace mode, it supports case intake, test-module suggestions, batch planning, runs, review of proposed bugs/questions and applying approved results through the configured adapter.
+
 ```bash
-python -m qa_ui ../qa-workspaces/<company>/<project>      # opens http://127.0.0.1:8765/?token=…
+python -m qa_ui ../qa-workspaces/<company>/<project>  # One workspace: complete existing flow
+python -m qa_ui                                   # Multi-project hub: Projects view and pinning
 ```
 
-The same cycle as a page on this computer, for one workspace: paste cases (or give a `.csv`, `.xlsx`, `.docx`, or load
-the project's library), see which type of test the rules suggest for each case and why, plan the batches, start one
-(the module's skill in Claude Code headless, with your subscription) and follow the run log as it grows. What needs
-you waits in the page: a proposed bug to approve, edit, link or drop, a `Question` to answer. An approved run log is
-applied through the project's adapter after a confirmation. Loopback only, a token per start, no request to any
-other address, nothing written in this repository; it never commits (`/checkpoint` still does). A batch started here
-is unattended, so the rules of a remote run hold (methodology §9.4). Specification: [`docs/qa-ui.md`](docs/qa-ui.md).
+The interface binds to `127.0.0.1` and uses a per-start token. Workspaces and any sensitive project data remain outside this repository. Run logs and tracker updates are controlled by the workflow's approval rules; `qa-ui` does not commit project history.
+
+**Multi-project hub — work in progress (phase 13):** Project discovery, the Projects screen, pinning and a shared one-run-at-a-time guard are implemented. As of 21 October 2026, opening a project from the hub still uses its single-workspace view; integrated navigation, project creation and the remaining management screens are planned, **not yet presented as completed**. See [the hub specification](docs/qa-ui.md#14-the-hub-every-project-in-one-interface-plan-phase-13) and [phase 13 of the development plan](docs/development-plan.md#phase-13--the-hub-every-project-in-qa-ui).
 
 ### Starting a new project
 
@@ -121,7 +144,7 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 
 ## State
 
-**v1.0** (25.09.2026): the workspace layer — methodology, techniques, skills, Excel adapter, dashboard and a project's full flow — is done and validated end to end in a pilot. The `qa-audit` engine (above) has its own version (0.2.0, see [`CHANGELOG.md`](CHANGELOG.md)). The detail of each task, with criteria and commits, is in [`docs/development-plan.md`](docs/development-plan.md).
+**Active development (October 2026).** The workspace workflow has a v1.0 milestone (25 September 2026) and `qa-audit` is separately versioned at v0.2.0. The local `qa-ui` work and the multi-project hub are newer and ongoing. Completed items in the plan are not a claim that every adapter has been piloted against a live external tracker or that every multi-project UI feature is already implemented.
 
 | Phase | State |
 |---|---|
@@ -133,7 +156,8 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 | 6 · Portfolio (README, demo, visibility: public) | Done |
 | 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
 | 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
-| 12 · `qa-ui`, the local web interface | Built and tested against fakes (08.10.2026); the first batch with a real Claude Code session and a real site is still to run |
+| 12 · `qa-ui` single-workspace interface | Implemented and tested with fixtures; a mobile-workspace pilot was recorded in October; a web-site pilot is still pending |
+| 13 · `qa-ui` multi-project hub | Projects discovery, pinning and single-run guard implemented; in-hub navigation, project creation and other management screens remain planned |
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
 

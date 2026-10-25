@@ -1,6 +1,6 @@
 # Development plan — qa-assistant
 
-> Source of truth of the framework's roadmap. Version 1.1 · 2026-09-26 (in English since plan 8.11).
+> Source of truth of the framework's roadmap. Version 1.1 · updated 2026-10-21 (in English since plan 8.11).
 >
 > Universal: no name of a real client, company, environment or project enters here. The state of each real pilot lives in the `context.md` of its workspace (`qa-workspaces/<company>/<project>/`), never in this file.
 >
@@ -38,6 +38,7 @@
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026); its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
+| 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | 13.0–13.1 done (21.10.2026); 13.2–13.7 not yet completed |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 

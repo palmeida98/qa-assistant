@@ -32,7 +32,7 @@ replacement for designed test cases. Every finding carries evidence; what the en
 Requirements: Python 3.12+, Git. The browsers are downloaded once, at install time.
 
 ```bash
-git clone <qa-assistant repository>
+git clone https://github.com/palmeida98/qa-assistant.git
 cd qa-assistant
 ./scripts/install.sh                 # Linux / macOS: .venv + package + Chromium, then qa-audit doctor
 .\scripts\install.ps1                # Windows PowerShell
