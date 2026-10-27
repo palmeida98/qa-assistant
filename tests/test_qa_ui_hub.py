@@ -1,6 +1,6 @@
 """qa-ui hub (docs/qa-ui.md section 14; plan 13.1): the discovery of the projects and its refusals, the summaries of
 the Projects screen, the pins, one run at a time on the computer, the hub's routes, a project's routes under
-/api/p/<id>/ (plan 13.2) and its command line. A fictional
+/api/p/<id>/ (plan 13.2), the Overview, the write-only credentials and the notes (plan 13.3) and its command line. A fictional
 root built by the test; Demo Shop data only.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
@@ -25,6 +25,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abs
 
 import qa_ui_kit as kit
 import run_log
+from common import read_workspace_env
 
 from qa_ui import __main__ as cli
 from qa_ui import hub, runs, server
@@ -259,6 +260,117 @@ class ProjectRoutes(Root):
         self.assertEqual(status, 409)
         self.assertIn("acme/api", out["error"])
         self.assertEqual(self.app.handle("GET", "/api/hub")[1]["run"]["project"], "acme/api")
+
+
+class OverviewCredentialsNotes(Root):
+    """Plan 13.3: the Overview (section 14.6), the write-only credentials and the notes (14.7)."""
+
+    SECRET = kit.SECRET
+
+    def setUp(self):
+        super().setUp()
+        self.app = server.HubApp(self.hub)
+
+    def get(self, path):
+        return self.app.handle("GET", "/api/p/demo/shop/" + path)
+
+    def post(self, path, body):
+        return self.app.handle("POST", "/api/p/demo/shop/" + path, body)
+
+    def everything_written(self):
+        """Every file under the root except .env, and what the hub keeps in memory of the project."""
+        out = []
+        for folder, _, files in os.walk(self.root):
+            for name in files:
+                if name != ".env":
+                    with open(os.path.join(folder, name), "rb") as f:
+                        out.append(f.read().decode("utf-8", "replace"))
+        return "\n".join(out)
+
+    def test_the_overview_says_the_project_without_a_value(self):
+        with open(os.path.join(self.shop, ".env"), "w", encoding="utf-8") as f:
+            f.write(f"SHOP_USER={self.SECRET}\n")
+        with open(os.path.join(self.shop, "context.md"), "w", encoding="utf-8") as f:
+            f.write("# Session context — demo-shop\n")
+        status, ov = self.get("overview")
+        self.assertEqual(status, 200)
+        self.assertIsNone(ov["error"])
+        self.assertEqual(ov["project"]["name"], "demo-shop")
+        self.assertEqual(ov["project"]["environments"][0]["key"], "test")
+        self.assertEqual({v["name"]: v["set"] for v in ov["env"]}, {"SHOP_USER": True, "SHOP_PASSWORD": False})
+        self.assertIn("Session context", ov["context"])
+        self.assertIn("project:", ov["yaml"])
+        self.assertNotEqual(ov["git"]["code"], 0)                    # not a repository yet: said, not hidden
+        self.assertTrue(ov["checks"])
+        self.assertNotIn(self.SECRET, json.dumps(ov))
+
+    def test_a_broken_project_yaml_keeps_its_overview(self):
+        status, ov = self.app.handle("GET", "/api/p/demo/broken/overview")
+        self.assertEqual(status, 200)
+        self.assertIn("project.yaml cannot be read", ov["error"])
+        self.assertNotIn(self.root, ov["error"])                     # relative to the project
+        self.assertIsNone(ov["project"])
+        self.assertEqual(self.app.handle("GET", "/api/p/demo/broken/notes")[0], 500)
+
+    def test_a_credential_is_written_to_env_only(self):
+        env = os.path.join(self.shop, ".env")
+        with open(env, "w", encoding="utf-8") as f:
+            f.write("# kept\nOTHER=1\nSHOP_PASSWORD=old\n")
+        value = f" {self.SECRET} "                                    # outer spaces: kept by the quotes
+        status, out = self.post("env", {"name": "SHOP_PASSWORD", "value": value})
+        self.assertEqual((status, out), (200, {"name": "SHOP_PASSWORD", "set": True}))
+        self.assertEqual(read_workspace_env(self.shop)["SHOP_PASSWORD"], value)
+        with open(env, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines[:2], ["# kept", "OTHER=1"])
+        self.assertEqual(sum(line.startswith("SHOP_PASSWORD=") for line in lines), 1)
+        self.assertEqual(self.post("env", {"name": "SHOP_USER", "value": "pat"})[0], 200)
+        self.assertEqual(read_workspace_env(self.shop)["SHOP_USER"], "pat")
+        if os.name != "nt":
+            self.assertEqual(os.stat(env).st_mode & 0o777, 0o600)
+        for path in ("overview", "state"):
+            self.assertNotIn(self.SECRET, json.dumps(self.get(path)[1]))
+        self.assertNotIn(self.SECRET, self.everything_written())
+
+    def test_what_a_credential_refuses(self):
+        refused = [{"name": "PATH", "value": "x"},                   # not referred to by project.yaml
+                   {"name": "SHOP_USER", "value": "a\nB=1"},          # a line break would add a variable
+                   {"name": "SHOP_USER", "value": ""}, {"name": "SHOP_USER"}, {"value": "x"}]
+        for body in refused:
+            status, out = self.post("env", body)
+            self.assertEqual(status, 400, body)
+            self.assertNotIn("a\nB=1", out["error"])
+        self.assertFalse(os.path.exists(os.path.join(self.shop, ".env")))
+        with open(os.path.join(self.shop, ".env.example"), "w", encoding="utf-8") as f:
+            f.write("EXTRA_TOKEN=\n")
+        self.assertEqual(self.post("env", {"name": "EXTRA_TOKEN", "value": "t0k3n"})[0], 200)
+        names = {v["name"]: v for v in self.get("overview")[1]["env"]}
+        self.assertEqual((names["EXTRA_TOKEN"]["set"], names["EXTRA_TOKEN"]["in_project"]), (True, False))
+
+    def test_notes(self):
+        self.assertEqual(self.get("notes")[1]["notes"], [])
+        self.assertEqual(self.post("notes/decisions", {"text": "# Decisions\n<b>kept as text</b>\n", "new": True}),
+                         (200, {"name": "decisions", "saved": True}))
+        self.assertEqual(self.post("notes/decisions", {"text": "again", "new": True})[0], 409)
+        self.assertEqual(self.post("notes/decisions", {"text": "# Decisions\nedited\n"})[0], 200)
+        self.assertEqual(self.get("notes/decisions")[1]["text"], "# Decisions\nedited\n")
+        self.assertEqual([n["name"] for n in self.get("notes")[1]["notes"]], ["decisions"])
+        self.assertEqual(self.get("notes/missing")[0], 404)
+        for name in ("..", "a.b", "a%2Fb", "x" * 81, "%2E%2E"):
+            self.assertEqual(self.post(f"notes/{name}", {"text": "x"})[0], 400, name)
+        self.assertEqual(self.post("notes/big", {"text": "x" * (200 * 1024 + 1)})[0], 400)
+        self.assertEqual(self.post("notes/empty", {})[0], 400)
+        self.assertEqual(sorted(os.listdir(os.path.join(self.shop, "notes"))), ["decisions.md"])
+
+    def test_a_note_never_holds_a_credential(self):
+        with open(os.path.join(self.shop, ".env"), "w", encoding="utf-8") as f:
+            f.write(f"SHOP_PASSWORD={self.SECRET}\nFLAG=1\n")
+        status, out = self.post("notes/contacts", {"text": f"the admin's password is {self.SECRET}"})
+        self.assertEqual(status, 400)
+        self.assertIn("SHOP_PASSWORD", out["error"])
+        self.assertNotIn(self.SECRET, out["error"])
+        self.assertFalse(os.path.exists(os.path.join(self.shop, "notes", "contacts.md")))
+        self.assertEqual(self.post("notes/contacts", {"text": "1 admin, 1 customer"})[0], 200)   # a short value is not looked for
 
 
 class Http(Root):

@@ -471,13 +471,15 @@ The routes of §11 stay as they are in one-workspace mode. In the hub, the same 
 | `POST /api/projects` | `{…the form of §14.5}` → the files that would be written; with `"confirm": true` writes them and runs the validation |
 | `GET /api/p/<id>/overview` | §14.6, without any value of `.env` |
 | `POST /api/p/<id>/env` | `{"name", "value"}` → `{"name", "set": true}` (§14.6) |
-| `GET /api/p/<id>/notes` · `GET` / `POST /api/p/<id>/notes/<name>` | §14.7 |
+| `GET /api/p/<id>/notes` · `GET` / `POST /api/p/<id>/notes/<name>` | §14.7; the POST takes `{"text", "new"}`, and with `"new": true` an existing note is refused (409) |
 | `GET /api/p/<id>/library` | §14.8 |
 | `GET /api/p/<id>/history` | §14.9 |
 | `POST /api/p/<id>/dashboard` | builds it (§14.9) |
 | `GET /p/<id>/reports/<path>` | an audit's `report.html` or the `dashboard.html`, only those names, only under the project (§14.9) |
 
-The token, the `Host` check and the status codes are those of §2 and §11.
+The token, the `Host` check and the status codes are those of §2 and §11. `overview`, `env` and `notes` are routes
+of a project like those of §11, so one-workspace mode answers them too (`/api/overview`…), though its page does not
+show them; `overview` is answered even when `project.yaml` cannot be read (§14.2), with the error in it.
 
 ### 14.11 Privacy, as in §2
 

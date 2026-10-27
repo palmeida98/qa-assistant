@@ -1746,7 +1746,23 @@ only, like phase 12; the interface in English; the tests never start a real Clau
       reload, switch, an unknown id, back; no console error but the expected 404, no horizontal scroll (the root's
       path in the Projects screen now wraps).
 
-### 13.3 Overview, credentials and notes (§14.6, §14.7)
+### 13.3 Overview, credentials and notes (§14.6, §14.7) — done 22.10.2026
+- [x] `qa_ui/overview.py`: the Overview (`project.yaml` as text and its main keys, the readiness, `workspace_git.py
+      status` with its exit code, `context.md`, each `.env` variable set or missing), answered also when
+      `project.yaml` cannot be read; the card of such a project opens it.
+- [x] Credentials write-only: a name `project.yaml` refers to or `.env.example` lists, no line break, no empty value;
+      the line replaced or added, the other lines kept, quoted when `read_env` would change it, mode 600 on POSIX;
+      the answer is `{"name", "set": true}`, the page empties the field whatever happens.
+- [x] Notes in `notes/<name>.md` (letters, digits, `-`, `_`; 200 KB), listed, opened, edited and created as text;
+      `"new": true` refuses an existing note; a note holding a `.env` value of 4 characters or more is refused, the
+      error naming the variable, never the value; a `notes/` or a note that is a link is refused.
+- [x] The project's bar (Overview, Test, Notes) and `#/p/<id>/<overview|test|notes>`; the steps of the Test screen
+      no longer catch the bar's links.
+- [x] Tests (`tests/test_qa_ui_hub.py`, 6 new; 861 → 867): the Overview without a value, a broken `project.yaml`, a
+      credential written to `.env` only (no other file under the root, no response), its refusals, the notes and a
+      note refused for a credential. Checked with Playwright and the installed Chrome at 1280 and 390 px: a
+      credential typed and saved (the field emptied, the value in no response and nowhere in the page), a note
+      created and one refused, the bar, a reload, a broken project's Overview; no horizontal scroll.
 
 ### 13.4 New project (§14.5)
 
@@ -1762,6 +1778,7 @@ only, like phase 12; the interface in English; the tests never start a real Clau
 
 | Date | Change |
 |---|---|
+| 2026-10-22 | 13.3: a project's Overview, credentials typed write-only into `.env`, notes in `notes/`; 6 new tests (861 → 867). |
 | 2026-10-22 | 13.2: a project's routes under `/api/p/<id>/` (an App and a Runner per project, one Gate), the page's address `#/p/<id>/test`, switching project; 4 new tests (857 → 861). |
 | 2026-10-21 | 13.1: the hub's discovery, the Projects screen, the pins and one run at a time on the computer (`runs.Gate`); 19 new tests (838 → 857). |
 | 2026-10-21 | Phase 13 (the hub) added by the user's decision: every project of `qa-workspaces/` in `qa-ui`, one run at a time on the computer, credentials typed write-only; 13.0 done (`docs/qa-ui.md` v1.1 §14). |

@@ -16,6 +16,13 @@
     <span class="brand-name">qa-assistant</span>
     <span id="project" class="project"></span>
   </div>
+  <nav id="areas" aria-label="Project" hidden>
+    <ul class="steps">
+      <li><a class="step" data-area="overview" href="#/">Overview</a></li>
+      <li><a class="step" data-area="test" href="#/">Test</a></li>
+      <li><a class="step" data-area="notes" href="#/">Notes</a></li>
+    </ul>
+  </nav>
   <nav id="steps" aria-label="Steps">
     <ol class="steps">
       <li><button type="button" class="step" data-screen="intake"><span class="num">1</span>Intake</button></li>
@@ -28,6 +35,8 @@
 <div id="banner" class="banner" role="alert" hidden></div>
 <main id="main" tabindex="-1">
   <section id="screen-hub" aria-labelledby="h-hub" hidden></section>
+  <section id="screen-overview" aria-labelledby="h-overview" hidden></section>
+  <section id="screen-notes" aria-labelledby="h-notes" hidden></section>
   <section id="screen-intake" aria-labelledby="h-intake"></section>
   <section id="screen-suggest" aria-labelledby="h-suggest" hidden></section>
   <section id="screen-run" aria-labelledby="h-run" hidden></section>

@@ -28,7 +28,7 @@ from urllib.parse import unquote, urlsplit
 import yaml
 
 from . import hub as hubmod
-from . import intake, plan, runs, suggest, workspace
+from . import intake, overview, plan, runs, suggest, workspace
 
 HOST = "127.0.0.1"
 MAX_BODY = 12 * 1024 * 1024         # a 5 MB file in base64, with room
@@ -110,9 +110,12 @@ class App:
         """handle() with the path already split: the hub gives a project's route without its /p/<id>/."""
         body = body if isinstance(body, dict) else {}
         try:
+            if method == "GET" and parts == ["api", "overview"]:
+                # before project.yaml is read: a project whose project.yaml is broken keeps its Overview (14.2)
+                return 200, overview.overview(self.ws, self.checks)
             proj = workspace.project(self.ws)
             return 200, self.route(method, parts, query, body, proj)
-        except (BadRequest, intake.IntakeError) as e:
+        except (BadRequest, intake.IntakeError, overview.BadValue) as e:
             return 400, {"error": str(e)}
         except (workspace.NotFound, runs.NotFound) as e:
             return 404, {"error": str(e)}
@@ -190,6 +193,15 @@ class App:
                 return out
             if method == "POST" and len(rest) == 3 and rest[2] == "stop":
                 return self.runner.stop(rest[1])
+        if method == "POST" and rest == ["env"]:
+            return overview.write_env(self.ws, proj, body.get("name"), body.get("value"))
+        if rest[:1] == ["notes"]:
+            if method == "GET" and len(rest) == 1:
+                return overview.notes(self.ws)
+            if method == "GET" and len(rest) == 2:
+                return overview.read_note(self.ws, rest[1])
+            if method == "POST" and len(rest) == 2:
+                return overview.save_note(self.ws, rest[1], body.get("text"), new=body.get("new") is True)
         if rest[:1] == ["runlogs"] and len(rest) >= 2:
             name = rest[1]
             if method == "GET" and len(rest) == 2:
