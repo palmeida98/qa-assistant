@@ -81,11 +81,19 @@ main:focus { outline: none; }
 
 label, .label { font-size: 14px; font-weight: 500; }
 .field { display: flex; flex-direction: column; gap: 6px; }
-textarea, input[type="text"], select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px;
+textarea, input[type="text"], input[type="password"], select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px;
   background: var(--soft); color: var(--ink); font: inherit; }
 textarea { min-height: 96px; resize: vertical; }
 textarea.cases { min-height: 220px; font: 13px/1.7 var(--mono); }
-select, input[type="text"] { min-height: 44px; }
+select, input[type="text"], input[type="password"] { min-height: 44px; }
+textarea.note-text { min-height: 360px; font: 13px/1.6 var(--mono); }
+a.step { text-decoration: none; }
+a.step[aria-current="page"] { color: var(--ink); font-weight: 600; background: var(--accent-soft); }
+.envline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.envline:first-child { border-top: 0; }
+.envline .name { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.envline input { flex: 2 1 200px; width: auto; }
+.wrap { overflow-wrap: anywhere; }
 input[type="file"] { font: inherit; max-width: 100%; }
 input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); flex: 0 0 auto; }
 .check { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; }
@@ -136,7 +144,8 @@ details > summary { cursor: pointer; font-size: 13px; color: var(--accent); min-
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .group { margin-top: 28px; }
 .project-card { display: flex; flex-direction: column; gap: 10px; }
-.project-card .card-title, .project-card .note, .project-card code { overflow-wrap: anywhere; }
+a.btn { text-decoration: none; }
+.project-card .card-title, .project-card .note, .project-card code, #screen-hub .lead code { overflow-wrap: anywhere; }
 .tiles { display: flex; flex-wrap: wrap; gap: 12px; }
 .tile { flex: 1 1 130px; min-width: 0; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .tile .n { font-size: 30px; line-height: 1.2; font-weight: 600; }

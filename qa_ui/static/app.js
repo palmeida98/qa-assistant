@@ -11,15 +11,20 @@ const FLAG_TEXT = {
   'not-in-library': 'not in the library: add it before planning',
 };
 
-const S = {
-  token: '', mode: '', hub: null, hubTimer: null, info: null, screen: 'intake', busy: '',
-  cases: [], notes: [], dropped: [], library: null, analysed: false,
-  moved: {}, sug: null, ticked: new Set(), plan: null,
-  reading: null, asking: false, wantProposals: false,
-  newIds: {}, newTicked: new Set(), casesDry: null, casesDone: null,
-  runId: null, run: null, logName: null, log: null, applyOut: null, timer: null,
-  environment: '', build: '', editing: null,
-};
+/* What the screens of one project hold: set again when the hub opens another project. */
+function projectState() {
+  return {
+    info: null, screen: 'intake', area: 'overview', ov: null, notesList: null, note: null, noteNew: false,
+    cases: [], notes: [], dropped: [], library: null, analysed: false,
+    moved: {}, sug: null, ticked: new Set(), plan: null,
+    reading: null, asking: false, wantProposals: false,
+    newIds: {}, newTicked: new Set(), casesDry: null, casesDone: null,
+    runId: null, run: null, logName: null, log: null, applyOut: null, timer: null,
+    environment: '', build: '', editing: null,
+  };
+}
+
+const S = Object.assign({ token: '', mode: '', hub: null, hubTimer: null, project: null, busy: '' }, projectState());
 
 /* ------------------------------------------------------------------ small helpers */
 
@@ -49,7 +54,16 @@ function banner(message) {
   el.hidden = !message;
 }
 
+/* In the hub, a project's routes live under /api/p/<company>/<project>/ (docs/qa-ui.md section 14.10). */
+const HUB_ROUTES = ['/api/mode', '/api/hub'];
+
+function projectPath(path) {
+  if (S.mode !== 'hub' || !S.project || HUB_ROUTES.some((r) => path === r || path.startsWith(r + '/'))) return path;
+  return `/api/p/${S.project.split('/').map(encodeURIComponent).join('/')}/${path.slice('/api/'.length)}`;
+}
+
 async function api(method, path, body) {
+  path = projectPath(path);
   const options = { method, headers: { 'X-QA-Token': S.token } };
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
@@ -257,8 +271,12 @@ function go(screen) {
 
 function renderTop() {
   const info = S.info;
-  $('project').textContent = info ? `${info.project.name || 'workspace'} · ${info.project.tracker || 'no tracker'}` : '';
-  for (const button of document.querySelectorAll('.step')) {
+  $('steps').hidden = S.mode === 'hub' && S.area !== 'test';
+  $('back').hidden = S.mode !== 'hub';
+  renderAreas();
+  $('project').textContent = info ? `${info.project.name || 'workspace'} · ${info.project.tracker || 'no tracker'}`
+    : (S.project || '');
+  for (const button of document.querySelectorAll('#steps .step')) {
     const screen = button.dataset.screen;
     if (screen === S.screen) button.setAttribute('aria-current', 'step');
     else button.removeAttribute('aria-current');
@@ -271,6 +289,12 @@ function renderTop() {
   } else if (info && info.run) {
     pill.className = 'pill busy';
     pill.textContent = `Running: ${info.run.label}`;
+  } else if (info && info.run_elsewhere) {
+    pill.className = 'pill busy';
+    pill.textContent = `Running in ${info.run_elsewhere.project}: ${info.run_elsewhere.label}`;
+  } else if (!info && S.ov && S.ov.error) {
+    pill.className = 'pill warn';
+    pill.textContent = 'project.yaml cannot be read';
   } else if (info && !info.claude) {
     pill.className = 'pill warn';
     pill.textContent = 'Claude Code not found';
@@ -851,6 +875,8 @@ async function setPin(id, pinned) {
 
 function renderTopHub() {
   $('steps').hidden = true;
+  $('areas').hidden = true;
+  $('back').hidden = true;
   const hub = S.hub;
   $('project').textContent = hub ? `hub · ${plural(hub.projects.length, 'project')}` : 'hub';
   const pill = $('status');
@@ -896,8 +922,9 @@ function projectCard(p) {
       running ? h('span', { class: 'chip accent', text: 'Running now' }) : null,
       p.needs ? h('span', { class: 'chip ask', text: `${p.needs} need${p.needs === 1 ? 's' : ''} you` }) : null,
       p.runs ? h('span', { class: 'chip', text: plural(p.runs, 'run log') }) : null),
-    h('div', { class: 'small muted' }, 'Open it for now with ',
-      h('code', { text: `python -m qa_ui ../qa-workspaces/${p.id}` }), ' (inside the hub with plan 13.2).'));
+    p.error ? h('div', { class: 'small muted', text: 'Fix its project.yaml to test it.' }) : null,
+    h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: projectHash(p.id, 'overview'),
+      'aria-label': `Open ${p.id}` }, p.error ? 'Open its overview' : 'Open')));
 }
 
 function renderHub() {
@@ -942,16 +969,237 @@ function renderHub() {
   }
 }
 
+/* ------------------------------------------------------------------ a project's bar, Overview and Notes (14.4, 14.6, 14.7) */
+
+function renderAreas() {
+  const nav = $('areas');
+  nav.hidden = S.mode !== 'hub' || !S.project;
+  if (nav.hidden) return;
+  for (const link of nav.querySelectorAll('a.step')) {
+    link.setAttribute('href', projectHash(S.project, link.dataset.area));
+    if (link.dataset.area === S.area) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+async function refreshOverview() {
+  S.ov = await api('GET', '/api/overview');
+}
+
+function pre(text, label) {
+  return h('pre', { class: 'out', tabindex: '0', 'aria-label': label, text: text || '(empty)' });
+}
+
+/* A credential typed here goes in one request to .env and is never shown again: the field is emptied whatever
+   the answer, and the page keeps nothing of it. */
+async function saveEnv(name, input) {
+  const value = input.value;
+  input.value = '';
+  await api('POST', '/api/env', { name, value });
+  await refreshOverview();
+}
+
+function envPanel(ov) {
+  const missing = ov.env.filter((v) => !v.set).length;
+  return h('section', { class: 'panel' },
+    h('h2', { text: `Credentials · ${ov.env.length ? (missing ? `${missing} missing` : 'all set') : 'none referred to'}` }),
+    h('p', { class: 'note' }, 'Write-only: a value typed here is written to the project\'s ', h('code', { text: '.env' }),
+      ' and never shown again, here or anywhere. To read one, open ', h('code', { text: '.env' }), ' by hand.'),
+    ov.env.length ? h('div', {}, ov.env.map((v) => {
+      const input = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false',
+        'aria-label': `New value of ${v.name}`, placeholder: v.set ? 'replace the value' : 'type the value' });
+      return h('div', { class: 'envline' },
+        h('span', { class: 'name mono', text: v.name }),
+        h('span', { class: `chip ${v.set ? 'ok' : 'warn'}`, text: v.set ? 'set' : 'missing' }),
+        v.in_project ? null : h('span', { class: 'chip outline', text: 'only in .env.example' }),
+        input,
+        h('button', { type: 'button', class: 'btn small', disabled: !!S.busy, onclick: () => {
+          if (!input.value) { banner(`Type a value for ${v.name} first.`); return; }
+          act(`Writing ${v.name}…`, () => saveEnv(v.name, input));
+        } }, 'Save'));
+    })) : h('p', { class: 'note', text: 'project.yaml refers to no .env variable.' }));
+}
+
+function renderOverview() {
+  const root = $('screen-overview');
+  root.replaceChildren();
+  const ov = S.ov;
+  const name = ov && ov.project ? ov.project.name : S.project;
+  root.append(h('h1', { id: 'h-overview', text: name }), h('p', { class: 'lead mono', text: S.project }));
+  if (!ov) {
+    root.append(h('p', { class: 'lead', text: 'Reading the project…' }));
+    return;
+  }
+  const main = [];
+  const side = [];
+  if (ov.error) {
+    main.push(h('section', { class: 'panel' }, h('h2', { text: 'project.yaml' }), h('p', { class: 'wrap', text: ov.error }),
+      h('p', { class: 'note', text: 'Fix it by hand or in a Claude Code session (/project-onboarding); the other screens open after that.' })));
+  }
+  const p = ov.project;
+  if (p) {
+    main.push(h('section', { class: 'panel' },
+      h('h2', { text: 'Project' }),
+      h('dl', { class: 'kv' },
+        h('dt', { text: 'Company' }), h('dd', { text: p.company || '(not set)' }),
+        h('dt', { text: 'Tracker' }), h('dd', { text: p.tracker || '(not set)' }),
+        h('dt', { text: 'Modules' }), h('dd', {}, h('div', { class: 'chips' }, p.modules.map((m) => h('span', { class: 'chip accent', text: m })))),
+        h('dt', { text: 'Roles' }), h('dd', { text: p.roles.join(', ') || '(none)' }),
+        h('dt', { text: 'Evidence' }), h('dd', { text: p.evidence || '(not set)' }),
+        h('dt', { text: 'Resolved bugs' }), h('dd', { text: p.resolved_bugs || '(not set)' })),
+      h('h2', { text: 'Environments' }),
+      p.environments.length ? h('ul', { class: 'plain' }, p.environments.map((e) => h('li', { class: 'wrap' },
+        h('strong', { text: e.key }), ' ', h('span', { class: 'mono small', text: e.url }),
+        e.purpose ? h('span', { class: 'muted small', text: ` · ${e.purpose}` }) : null)))
+        : h('p', { class: 'note', text: 'No environment.' })));
+    main.push(envPanel(ov));
+  }
+  main.push(h('section', {}, h('h2', { text: 'context.md' }),
+    ov.context === null ? h('p', { class: 'note', text: 'No context.md yet: the first /checkpoint writes it.' }) : pre(ov.context, 'context.md')));
+  main.push(h('details', { class: 'panel' }, h('summary', { text: 'project.yaml as written' }), pre(ov.yaml, 'project.yaml')));
+  if (p) {
+    side.push(h('section', { class: 'panel' }, h('h2', { text: 'This computer' }),
+      h('ul', { class: 'plain' }, ov.checks.map((c) => h('li', { class: `checkline ${c.ok ? 'ok' : 'missing'}` },
+        h('span', { class: 'mark', text: c.ok ? 'ok' : 'missing' }),
+        h('span', { class: 'wrap' }, h('strong', { text: c.tool }), c.ok ? '' : ` — ${c.detail}`))))));
+  }
+  side.push(h('section', { class: 'panel' }, h('h2', { text: 'Git' }),
+    h('p', { class: 'note' }, h('code', { text: 'workspace_git.py status' }),
+      ov.git.code === 0 ? '' : ` ended with ${ov.git.code === null ? 'no exit code' : `exit code ${ov.git.code}`}`),
+    pre(ov.git.output, 'Git state')));
+  side.push(h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
+    onclick: () => act('Reading the project…', refreshOverview) }, 'Read again')));
+  root.append(h('div', { class: 'cols' }, h('div', { class: 'col-main' }, main), h('div', { class: 'col-side' }, side)));
+}
+
+async function refreshNotes() {
+  S.notesList = await api('GET', '/api/notes');
+}
+
+async function openNote(name) {
+  S.note = await api('GET', `/api/notes/${encodeURIComponent(name)}`);
+  S.noteNew = false;
+}
+
+async function saveNote(name, text, isNew) {
+  await api('POST', `/api/notes/${encodeURIComponent(name)}`, { text, new: isNew });
+  await refreshNotes();
+  await openNote(name);
+}
+
+function renderNotes() {
+  const root = $('screen-notes');
+  root.replaceChildren();
+  root.append(h('h1', { id: 'h-notes', text: 'Notes' }),
+    h('p', { class: 'lead' }, 'The project\'s own notes: decisions, links, contacts by role. One Markdown file each in ',
+      h('code', { text: 'notes/' }), ', shown as text. Never a credential: those live in ', h('code', { text: '.env' }), '.'));
+  const list = S.notesList;
+  if (!list) {
+    root.append(h('p', { class: 'lead', text: 'Reading the notes…' }));
+    return;
+  }
+  const side = h('section', { class: 'panel stack' }, h('h2', { text: plural(list.notes.length, 'note') }),
+    list.notes.length ? h('ul', { class: 'plain' }, list.notes.map((n) => h('li', { class: 'item' },
+      h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
+        'aria-current': S.note && !S.noteNew && S.note.name === n.name ? 'true' : null,
+        onclick: () => act('Opening the note…', () => openNote(n.name)) }, n.name),
+      h('span', { class: 'muted small', text: n.modified.replace('T', ' ') })))) : null,
+    h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary small', disabled: !!S.busy,
+      onclick: () => { S.note = { name: '', text: '' }; S.noteNew = true; render(); } }, 'New note')));
+  let editor = h('p', { class: 'note', text: list.notes.length ? 'Open a note, or start a new one.' : 'No note yet.' });
+  if (S.note) {
+    const nameInput = h('input', { type: 'text', value: S.note.name, placeholder: 'e.g. decisions', spellcheck: 'false' });
+    const text = h('textarea', { class: 'note-text', spellcheck: 'true' });
+    text.value = S.note.text;
+    editor = h('section', { class: 'panel stack' },
+      S.noteNew ? field('Name (letters, digits, - and _)', nameInput, 'note-name')
+        : h('h2', { class: 'mono', text: `${S.note.name}.md` }),
+      field('Text (Markdown)', text, 'note-text'),
+      h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn primary', disabled: !!S.busy, onclick: () => {
+          const name = S.noteNew ? nameInput.value.trim() : S.note.name;
+          const isNew = S.noteNew;
+          S.note = { name, text: text.value };
+          act('Saving the note…', () => saveNote(name, text.value, isNew));
+        } }, 'Save'),
+        h('span', { class: 'note', text: `At most ${Math.round(list.max_bytes / 1024)} KB. A note holding a value of .env is refused.` })));
+  }
+  root.append(h('div', { class: 'cols' }, h('div', { class: 'col-main' }, editor), h('div', { class: 'col-side' }, side)));
+}
+
+/* ------------------------------------------------------------------ the page's address (section 14.4) */
+
+function projectHash(id, screen) {
+  return `#/p/${id}/${screen}`;
+}
+
+/* #/p/<company>/<project>/<screen> opens a project; anything else is the Projects screen. The id is the server's
+   to look up: a project that is not discovered answers 404 and the page goes back to the Projects screen. */
+const AREAS = ['overview', 'test', 'notes'];
+
+function readHash() {
+  const m = /^#\/p\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/.exec(window.location.hash);
+  if (!m) return { id: null, area: 'overview' };
+  return { id: `${decodeURIComponent(m[1])}/${decodeURIComponent(m[2])}`, area: AREAS.includes(m[3]) ? m[3] : 'overview' };
+}
+
+/* What a screen of the project reads when it is opened. The project's state comes too, for the top bar (the run in
+   progress, section 14.3); on Overview and Notes a project.yaml that cannot be read is said by the screen itself. */
+async function loadArea() {
+  if (S.area === 'test') return refreshState();
+  if (S.area === 'overview') await refreshOverview();
+  else await refreshNotes();
+  try { await refreshState(); } catch (e) { /* the Overview says why */ }
+}
+
+async function followHash(first) {
+  const { id, area } = readHash();
+  if (id && id === S.project && first !== true) {
+    if (area === S.area) return;
+    S.area = area;
+    banner('');
+    render();
+    try { await loadArea(); } catch (e) { banner(e.message); }
+    render();
+    return;
+  }
+  if (id === S.project && first !== true) return;
+  stopPolling();
+  if (S.hubTimer) window.clearTimeout(S.hubTimer);
+  S.hubTimer = null;
+  Object.assign(S, projectState(), { project: id, area });
+  banner('');
+  render();
+  try {
+    if (id) await loadArea();
+    else await refreshHub();
+  } catch (e) {
+    if (id) {
+      S.project = null;
+      window.location.hash = '#/';          // the hashchange finds no project to open: the hub is read here
+      try { await refreshHub(); } catch (e2) { /* the first error is the one said */ }
+    }
+    banner(e.message);
+  }
+  render();
+}
+
 function render() {
-  if (S.mode === 'hub') {
+  if (S.mode === 'hub' && !S.project) {
     renderTopHub();
-    for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = true;
+    for (const screen of ['intake', 'suggest', 'run', 'overview', 'notes']) $(`screen-${screen}`).hidden = true;
     $('screen-hub').hidden = false;
     renderHub();
     return;
   }
   renderTop();
-  for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = screen !== S.screen;
+  $('screen-hub').hidden = true;
+  const area = S.mode === 'hub' ? S.area : 'test';
+  $('screen-overview').hidden = area !== 'overview';
+  $('screen-notes').hidden = area !== 'notes';
+  for (const screen of ['intake', 'suggest', 'run']) $(`screen-${screen}`).hidden = area !== 'test' || screen !== S.screen;
+  if (area === 'overview') return renderOverview();
+  if (area === 'notes') return renderNotes();
   if (S.screen === 'intake') renderIntake();
   if (S.screen === 'suggest') renderSuggest();
   if (S.screen === 'run') renderRun();
@@ -961,7 +1209,7 @@ function render() {
    and on the execution screen, while a field has the focus, only the output. */
 function renderFromPoll() {
   renderTop();
-  if (S.screen !== 'run') return;
+  if (S.screen !== 'run' || (S.mode === 'hub' && S.area !== 'test')) return;
   const active = document.activeElement;
   const typing = active && $('screen-run').contains(active) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
   if (!typing) {
@@ -985,7 +1233,8 @@ async function start() {
     try { window.sessionStorage.setItem('qa-ui-token', fromUrl); } catch (e) { /* the token stays in memory */ }
     window.history.replaceState(null, '', window.location.pathname);
   }
-  for (const button of document.querySelectorAll('.step')) button.addEventListener('click', () => go(button.dataset.screen));
+  for (const button of document.querySelectorAll('#steps .step')) button.addEventListener('click', () => go(button.dataset.screen));
+  $('back').addEventListener('click', () => { window.location.hash = '#/'; });
   render();
   if (!S.token) {
     banner('Open the address `python -m qa_ui` printed: it holds the token of this start.');
@@ -993,8 +1242,10 @@ async function start() {
   }
   try {
     S.mode = (await api('GET', '/api/mode')).mode;
-    if (S.mode === 'hub') await refreshHub();
-    else await refreshState();
+    if (S.mode === 'hub') {
+      window.addEventListener('hashchange', () => followHash());
+      await followHash(true);
+    } else await refreshState();
   } catch (e) {
     banner(e.message);
   }

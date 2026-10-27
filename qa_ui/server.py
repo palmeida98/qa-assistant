@@ -7,7 +7,8 @@ and out. The page and its script are files of qa_ui/static/, with no external ad
 are served without the token.
 
     App(workspace, runner, token).handle(method, path, body) -> (status, payload)     the routes, testable alone
-    HubApp(hub, token).handle(method, path, body)            -> (status, payload)     the hub's routes (section 14)
+    HubApp(hub, token).handle(method, path, body)            -> (status, payload)     the hub's routes (section 14),
+                                                                                   a project's under /api/p/<id>/
     serve(workspace, runner, port)                                 -> (server, url)   the HTTP server around them
     serve_hub(hub, port)                                           -> (server, url)   the same, for the hub
 """
@@ -19,6 +20,7 @@ import json
 import os
 import secrets
 import socket
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
@@ -26,7 +28,7 @@ from urllib.parse import unquote, urlsplit
 import yaml
 
 from . import hub as hubmod
-from . import intake, plan, runs, suggest, workspace
+from . import intake, overview, plan, runs, suggest, workspace
 
 HOST = "127.0.0.1"
 MAX_BODY = 12 * 1024 * 1024         # a 5 MB file in base64, with room
@@ -79,9 +81,12 @@ class App:
         st = workspace.state(self.ws, proj)
         current = self.runner.current()
         key, reason = suggest.find_test_environment(proj)
+        busy = self.runner.gate.current()
+        elsewhere = busy and busy[0] is not self.runner        # the hub: a run in another project (section 14.3)
         st.update(checks=[{"ok": ok, "tool": tool, "detail": detail} for ok, tool, detail in
                           self.checks(proj, refresh)],
                   claude=bool(self.runner.claude()), run=dict(current.public(), tail=[]) if current else None,
+                  run_elsewhere=dict(busy[1].public(), tail=[], project=busy[0].name) if elsewhere else None,
                   runs=self.runner.listing(), test_environment=key, test_environment_reason=reason,
                   limits={"max_turns": self.runner.max_turns, "timeout_minutes": self.runner.timeout_minutes})
         return st
@@ -98,13 +103,19 @@ class App:
 
     def handle(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         """One /api/ request, already authorised. Returns (status, JSON payload)."""
-        body = body if isinstance(body, dict) else {}
         url = urlsplit(path)
-        parts = [unquote(p) for p in url.path.strip("/").split("/")]
+        return self.handle_parts(method, [unquote(p) for p in url.path.strip("/").split("/")], url.query, body)
+
+    def handle_parts(self, method: str, parts: list[str], query: str, body: dict | None) -> tuple[int, dict]:
+        """handle() with the path already split: the hub gives a project's route without its /p/<id>/."""
+        body = body if isinstance(body, dict) else {}
         try:
+            if method == "GET" and parts == ["api", "overview"]:
+                # before project.yaml is read: a project whose project.yaml is broken keeps its Overview (14.2)
+                return 200, overview.overview(self.ws, self.checks)
             proj = workspace.project(self.ws)
-            return 200, self.route(method, parts, url.query, body, proj)
-        except (BadRequest, intake.IntakeError) as e:
+            return 200, self.route(method, parts, query, body, proj)
+        except (BadRequest, intake.IntakeError, overview.BadValue) as e:
             return 400, {"error": str(e)}
         except (workspace.NotFound, runs.NotFound) as e:
             return 404, {"error": str(e)}
@@ -182,6 +193,15 @@ class App:
                 return out
             if method == "POST" and len(rest) == 3 and rest[2] == "stop":
                 return self.runner.stop(rest[1])
+        if method == "POST" and rest == ["env"]:
+            return overview.write_env(self.ws, proj, body.get("name"), body.get("value"))
+        if rest[:1] == ["notes"]:
+            if method == "GET" and len(rest) == 1:
+                return overview.notes(self.ws)
+            if method == "GET" and len(rest) == 2:
+                return overview.read_note(self.ws, rest[1])
+            if method == "POST" and len(rest) == 2:
+                return overview.save_note(self.ws, rest[1], body.get("text"), new=body.get("new") is True)
         if rest[:1] == ["runlogs"] and len(rest) >= 2:
             name = rest[1]
             if method == "GET" and len(rest) == 2:
@@ -201,17 +221,34 @@ class App:
 
 
 class HubApp:
-    """The routes of the hub (docs/qa-ui.md section 14.10). The routes of a project (/api/p/<id>/...) come with
-    plan 13.2."""
+    """The routes of the hub (docs/qa-ui.md section 14.10), and a project's routes of section 11 under
+    /api/p/<company>/<project>/: an App and a Runner per project, created when the project is first used and sharing
+    the hub's Gate."""
 
     def __init__(self, hub: hubmod.Hub, token: str | None = None):
         self.hub = hub
         self.token = token or secrets.token_urlsafe(24)
+        self.apps: dict[str, App] = {}
+        self._lock = threading.Lock()
+
+    def app(self, project: hubmod.Project) -> App:
+        """The App of a discovered project, the same one on every request (it keeps the project's runs)."""
+        with self._lock:
+            if project.id not in self.apps:
+                runner = runs.Runner(project.path, gate=self.hub.gate, name=project.id, **self.hub.runner_options)
+                self.apps[project.id] = App(project.path, runner, self.token)
+            return self.apps[project.id]
 
     def handle(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         body = body if isinstance(body, dict) else {}
         url = urlsplit(path)
         parts = [unquote(p) for p in url.path.strip("/").split("/")]
+        if parts[:2] == ["api", "p"] and len(parts) >= 5:
+            try:
+                project = self.hub.find(f"{parts[2]}/{parts[3]}")     # looked up, never joined (section 14.2)
+            except workspace.NotFound as e:
+                return 404, {"error": str(e)}
+            return self.app(project).handle_parts(method, ["api", *parts[4:]], url.query, body)
         try:
             return 200, self.route(method, parts, body)
         except BadRequest as e:
