@@ -80,6 +80,24 @@ def variable_names(proj) -> list[str]:
 MOBILE_INPUTS = ("adb", "driver")
 SERIAL_ENV = "QA_MOBILE_SERIAL"
 INPUT_ENV = "QA_MOBILE_INPUT"
+MOBILE_PLATFORMS = ("android", "ios")
+PLATFORM_ENV = "QA_MOBILE_PLATFORM"
+WDA_URL_ENV = "QA_WDA_URL"
+WDA_URL_DEFAULT = "http://localhost:8100"
+
+
+def mobile_platform(m: dict, platform: str | None = None, environ=None) -> str:
+    """The platform `device.py` drives (technique-mobile.md §1.3): the --platform flag, the environment variable
+    QA_MOBILE_PLATFORM, mobile.platform, else android. An empty variable counts as unset. ValueError for a
+    platform outside android | ios, naming where it came from."""
+    environ = os.environ if environ is None else environ
+    for value, source in ((platform, "--platform"), (environ.get(PLATFORM_ENV, "").strip(), PLATFORM_ENV),
+                          ((m or {}).get("platform"), "mobile.platform")):
+        if value:
+            if value not in MOBILE_PLATFORMS:
+                raise ValueError(f"{source} {value!r}: android or ios (technique-mobile.md §1.3)")
+            return str(value)
+    return "android"
 
 
 def mobile_target(m: dict, serial: str | None = None, input_: str | None = None,

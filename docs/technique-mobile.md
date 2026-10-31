@@ -61,6 +61,23 @@ Limits: the driver replaces input only. Other apps are never driven nor read (th
 
 Rule: the run log and the bug **always** say where it ran (platform, OS version, model or emulator, app version). A Pass on the emulator does not count for "real device" nor the other way round, if the case distinguishes them.
 
+### 1.3 An iPhone through WebDriverAgent
+
+A real iPhone cannot be driven through `adb`. `device.py` drives it through **WebDriverAgent** (WDA, the XCUITest server of Appium): a small test runner, signed by the person's Apple team, that serves taps, swipes, text, the accessibility tree and screenshots over HTTP. The same subcommands and the same privacy rule as on Android (§4.1); Maestro is not used on a physical iPhone.
+
+**Selecting it.** `--platform ios`, else `QA_MOBILE_PLATFORM`, else `mobile.platform` of `project.yaml` (`android` by default). The section `mobile.ios` holds `app_id` (the bundle id; default `mobile.app_id`), `udid` (shown by `check`), and optionally `wda_url` (default `http://localhost:8100`; `QA_WDA_URL` overrides it). The input is always `wda`: `--input` and `mobile.input` are not read for iOS (`mobile.ios.input` is free text of the project, e.g. `assisted` until WDA is ready). An unknown platform is a configuration error (exit 2).
+
+**Preparing it (macOS with Xcode, once per iPhone and every 7 days with a free Apple account).**
+1. The iPhone is paired (USB, "Trust"), **Developer Mode** is on, and **Settings → Developer → Enable UI Automation** is on.
+2. The WDA project comes with `appium driver install xcuitest` (`~/.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent/WebDriverAgent.xcodeproj`). It is signed with the person's team and a bundle id of their own: `xcodebuild -project WebDriverAgent.xcodeproj -scheme WebDriverAgentRunner -destination 'id=<UDID>' -allowProvisioningUpdates DEVELOPMENT_TEAM=<TEAM> PRODUCT_BUNDLE_IDENTIFIER=<own id> build-for-testing`, then the same with `test-without-building` (it keeps running; the log says `ServerURLHere`).
+3. On the iPhone, the person trusts the developer certificate (Settings → General → VPN & Device Management).
+4. `iproxy 8100 8100` forwards the port over USB; `curl localhost:8100/status` answers `ready`.
+A free Apple account signs for 7 days: after that the person installs WDA again (step 2). A paid account signs for a year.
+
+**What each subcommand does.** `check`: the iOS version and the WDA state from `/status`, the foreground bundle, the installed version of the app (`xcrun devicectl device info apps`, when the UDID is known). `dump`: `/source?format=json`, one line per visible element with a size, `[x1,y1][x2,y2] text` in points; the text is the value of a text field, else the label, else the name; the same rectangle and text is listed once. `tap`, `swipe`: WDA gestures. `type`/`clear`: keys sent to the **focused** field in chunks of 300 characters (nothing focused: exit 4). `back`: iOS has no back button, so it is a swipe from the left edge. `shot`: `/screenshot`. `launch`: opens `app_id` (`--restart` terminates it first). `link` is not available yet (exit 2): the magic link is opened by the person.
+
+**Privacy.** The iPhone is the person's own. `dump`, `shot`, `send`, `tap`, `type`, `swipe`, `back` and `clear` act only when `/wda/activeAppInfo` reports `app_id` in the foreground (never `com.apple.springboard`: it also shows the person's notification banners and the app switcher, so a system alert or a banner over the app makes the command refuse, and the person answers it); otherwise exit 3 and nothing was read. Creating a WDA session happens only after that check, so a refused command never touches another app. The text refused when it holds a `.env` value is the same as on Android.
+
 ---
 
 ## 2. Execution levels

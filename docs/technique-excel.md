@@ -13,6 +13,8 @@ Covers the automation of Excel workbooks used as the source of truth for test ca
 
 The configuration lives in the `excel:` section of the workspace's `project.yaml` (fields commented in the template `docs/project.yaml`) and is read with `ExcelAdapter.from_project(<workspace>)`. At the onboarding, it is filled in by inspecting the real workbook with `python -m adapters.excel.inspect <copy.xlsx>`, which only reads the file and proposes the section: what it cannot detect safely stays as `CONFIRM: …` for the user to decide.
 
+**One workbook per platform (or per environment).** `excel.file` is the default workbook. The environment variable `QA_WORKBOOK` (or the `file` argument of `from_project`) replaces it for one command, for every script that reads the workbook (`adapters.excel.apply`, `add_cases`, `run_log`, `build_dashboard`, `validate_project`): a path relative to the workspace, or absolute. An empty variable counts as unset. Use it when the same cases are run on two targets whose results must not overwrite each other, e.g. `QA_WORKBOOK=workbook/app-ios.xlsx python -m adapters.excel.apply <workspace> <batch>`. The workbook must already exist (build it with the project's builder and the same cases).
+
 ## 1. Flow of applying a batch
 
 The pattern that works in practice, in this order, never writing row by row during the execution (methodology §7.1):

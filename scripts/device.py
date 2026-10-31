@@ -1,8 +1,8 @@
 """
-Drives an Android device or emulator through adb for the conversational mode
-(technique-mobile.md §2 and §4.1; plan, task 9.1).
+Drives an Android device or emulator through adb, or an iPhone through WebDriverAgent (--platform ios,
+technique-mobile.md §1.3), for the conversational mode (technique-mobile.md §2 and §4.1; plan, task 9.1).
 
-    python scripts/device.py <workspace> [--serial S] <subcommand> ...
+    python scripts/device.py <workspace> [--serial S] [--platform android|ios] <subcommand> ...
 
     check                                   target, OS, model, app version, foreground app
     dump [--capture NAME] [--batch B]       visible text, one line per node: [x1,y1][x2,y2] <text>
@@ -14,6 +14,7 @@ Drives an Android device or emulator through adb for the conversational mode
     shot NAME [--batch B]                   screenshot to <workspace>/evidence/<batch>/<NAME>.png
     link URL [--package P]                  opens a deep link or a login callback with `am start`
     swipe X1 Y1 X2 Y2 [--ms 300]            a swipe (e.g. to scroll a long answer)
+    hold TEXT | --xy X Y [--ms 1200]        a long press (WDA touchAndHold; driver longpress; stationary swipe)
     back                                    the system's back
     launch [--restart] [--timeout 60]       opens mobile.app_id, waits for it and prints its screen
     clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
@@ -52,6 +53,11 @@ Drives an Android device or emulator through adb for the conversational mode
   driver; with adb it moves to the end and deletes (as many characters as the
   field shows with --field, else CLEAR_KEYS).
 
+- iPhone (technique-mobile.md §1.3): with --platform ios (or $QA_MOBILE_PLATFORM, or mobile.platform) the section
+  mobile.ios gives app_id (the bundle id), udid and wda_url ($QA_WDA_URL; default http://localhost:8100). The
+  input is always WebDriverAgent (scripts/device_ios.py); the same subcommands and the same privacy rule, the
+  foreground being read from WDA. `back` is a swipe from the left edge; `link` is not available.
+
 Exit codes:
   0  ok
   2  invalid usage or configuration (e.g. no mobile.app_id, several devices
@@ -85,11 +91,16 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from common import (
     MOBILE_INPUTS,
+    SERIAL_ENV,
+    WDA_URL_DEFAULT,
+    WDA_URL_ENV,
     find_adb,
+    mobile_platform,
     mobile_target,
     read_project,
     read_workspace_env,
 )
+import device_ios as wda
 
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
 SEND_LABELS = ("Send", "Send message", "Submit")
@@ -172,11 +183,22 @@ def hide_urls(s: str) -> str:
 
 # --- configuration and target -----------------------------------------------------------------------------------
 
-def configuration(workspace: str, serial: str | None, input_: str | None = None) -> dict:
+def as_list(v) -> list[str]:
+    return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
+
+
+def configuration(workspace: str, serial: str | None, input_: str | None = None,
+                  platform: str | None = None) -> dict:
     try:
         m = read_project(workspace).get("mobile") or {}
     except FileNotFoundError as e:
         raise UsageError(str(e)) from None
+    try:
+        platform = mobile_platform(m, platform)
+    except ValueError as e:
+        raise UsageError(str(e)) from None
+    if platform == "ios":
+        return ios_configuration(workspace, m, serial)
     if not m.get("app_id"):
         raise UsageError("mobile.app_id missing in project.yaml (the app under test, e.g. com.demoshop.app)")
 
@@ -185,14 +207,42 @@ def configuration(workspace: str, serial: str | None, input_: str | None = None)
     except ValueError as e:
         raise UsageError(str(e)) from None
 
-    def as_list(v):
-        return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
-    return {"workspace": workspace, "app_id": str(m["app_id"]), "serial": serial,
+    return {"workspace": workspace, "platform": "android", "app_id": str(m["app_id"]), "serial": serial,
             "input": input_,
             "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
             "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
             "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
             "browser": m.get("browser")}
+
+
+def ios_configuration(workspace: str, m: dict, serial: str | None) -> dict:
+    """The iPhone target (technique-mobile.md §1.3): mobile.ios, the input always WebDriverAgent."""
+    section = m.get("ios") if isinstance(m.get("ios"), dict) else {}
+    app_id = section.get("app_id") or m.get("app_id")
+    if not app_id:
+        raise UsageError("mobile.ios.app_id missing in project.yaml (the bundle id of the app under test)")
+    udid = serial or os.environ.get(SERIAL_ENV, "").strip() or section.get("udid") or ""
+    return {"workspace": workspace, "platform": "ios", "app_id": str(app_id), "serial": str(udid),
+            "input": "wda",
+            "wda_url": os.environ.get(WDA_URL_ENV, "").strip() or str(section.get("wda_url") or WDA_URL_DEFAULT),
+            "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
+            "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
+            "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
+            "browser": None}
+
+
+def ios_on(cfg: dict) -> bool:
+    return cfg.get("platform") == "ios"
+
+
+def on_ios(fn, cfg: dict, *args):
+    """Calls device_ios; its errors become the exit codes of this script (no target: 3, no element: 4)."""
+    try:
+        return fn(cfg, *args)
+    except wda.Unreachable as e:
+        raise NoTarget(str(e)) from None
+    except wda.NoElement as e:
+        raise NotFound(str(e)) from None
 
 
 def resolve_serial(wanted: str | None) -> str:
@@ -220,6 +270,13 @@ def foreground(serial: str) -> str:
 
 def guard(cfg: dict, serial: str, action: str, allow_dialogs: bool = False) -> None:
     """Refuses (code 3) unless the app under test (or, when allowed, a permission dialog) is in the foreground."""
+    if ios_on(cfg):
+        bundle = on_ios(wda.foreground, cfg)
+        if bundle == cfg["app_id"] or (allow_dialogs and bundle in wda.SYSTEM_DIALOGS):
+            return
+        raise NoTarget(f"{action} refused: the foreground is {bundle or 'nothing'!r}, not {cfg['app_id']}"
+                       + (" (SpringBoard is never read: it shows notifications and the app switcher)"
+                          if bundle == "com.apple.springboard" else ""))
     window = foreground(serial)
     pkg = window.split("/")[0]
     if pkg == cfg["app_id"] or (allow_dialogs and pkg in PERMISSION_DIALOGS):
@@ -270,6 +327,8 @@ def dump_xml(serial: str, tries: int = 3) -> str:
 
 def read_screen(cfg: dict, serial: str, allow_dialogs: bool = False) -> list[Node]:
     guard(cfg, serial, "dump", allow_dialogs)
+    if ios_on(cfg):
+        return [Node(*t) for t in on_ios(wda.source, cfg)]
     return parse_nodes(dump_xml(serial))
 
 
@@ -338,21 +397,37 @@ def driver(serial: str, method: str, arg: str | None = None) -> dict:
 
 
 def tap_xy(cfg: dict, serial: str, x: int, y: int) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.tap, cfg, x, y)
+    elif cfg.get("input") == "driver":
         driver(serial, "tap", f"{x},{y}")
     else:
         adb(serial, "shell", "input", "tap", str(x), str(y))
 
 
 def swipe_xy(cfg: dict, serial: str, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.swipe, cfg, x1, y1, x2, y2, ms)
+    elif cfg.get("input") == "driver":
         driver(serial, "swipe", f"{x1},{y1},{x2},{y2},{ms}")
     else:
         adb(serial, "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
 
 
+def hold_xy(cfg: dict, serial: str, x: int, y: int, ms: int) -> None:
+    """A long press: WDA on an iPhone, the companion driver's `longpress` or a stationary `input swipe` on Android."""
+    if ios_on(cfg):
+        on_ios(wda.hold, cfg, x, y, ms)
+    elif cfg.get("input") == "driver":
+        driver(serial, "longpress", f"{x},{y},{ms}")
+    else:
+        adb(serial, "shell", "input", "swipe", str(x), str(y), str(x), str(y), str(ms))
+
+
 def press_back(cfg: dict, serial: str) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.back, cfg)
+    elif cfg.get("input") == "driver":
         driver(serial, "back")
     else:
         adb(serial, "shell", "input", "keyevent", "4")
@@ -367,6 +442,9 @@ def clear_field(cfg: dict, serial: str, field: str | None) -> str:
         known = len(node.text)
     else:
         guard(cfg, serial, "clear")
+    if ios_on(cfg):
+        on_ios(wda.clear, cfg)
+        return "wda clear"
     if cfg.get("input") == "driver":
         driver(serial, "text")                    # no argument: the empty text
         return "driver set empty text"
@@ -440,6 +518,11 @@ def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "
         tap_xy(cfg, serial, *find(read_screen(cfg, serial), field).centre)
     else:
         guard(cfg, serial, "type")
+    if ios_on(cfg):
+        if via != "auto":
+            raise UsageError(f"--via {via}: on an iPhone the text is typed through WebDriverAgent")
+        n = on_ios(wda.type_text, cfg, text)
+        return "wda keys" + (f", {n} chunks" if n > 1 else "")
     if cfg.get("input") == "driver":
         if via != "auto":
             raise UsageError(f"--via {via}: with mobile.input driver the text is set by the driver")
@@ -496,7 +579,10 @@ def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
     if not name or name != os.path.basename(name) or name in (".", ".."):
         raise UsageError(f"invalid capture name {name!r}: a file name, without folders")
     guard(cfg, serial, "screenshot")
-    png = adb(serial, "exec-out", "screencap", "-p", binary=True)
+    if ios_on(cfg):
+        png = on_ios(wda.screenshot, cfg)
+    else:
+        png = adb(serial, "exec-out", "screencap", "-p", binary=True)
     if not png.startswith(b"\x89PNG"):
         raise NoTarget("screencap returned no PNG")
     folder = os.path.join(cfg["workspace"], "evidence", batch or cfg["batch"])
@@ -525,7 +611,23 @@ def sh_quote(s: str) -> str:
 
 # --- subcommands ------------------------------------------------------------------------------------------------
 
+def cmd_check_ios(cfg, serial, a) -> int:
+    st = on_ios(wda.status, cfg)
+    if not st.get("ready", True):
+        raise NoTarget(f"WebDriverAgent is not ready ({st.get('message', 'no message')})")
+    print(f"target: {serial or 'iPhone'} · iOS {(st.get('os') or {}).get('version', '?')} · "
+          f"WebDriverAgent {(st.get('build') or {}).get('version', '?')} ready at {cfg['wda_url']}")
+    bundle = on_ios(wda.foreground, cfg)
+    print(f"foreground: {bundle or 'nothing'}")
+    version = wda.installed_version(serial, cfg["app_id"])
+    print(f"app: {cfg['app_id']} {version or '(version not read: no UDID or devicectl)'}")
+    print("input: wda")
+    return 0
+
+
 def cmd_check(cfg, serial, a) -> int:
+    if ios_on(cfg):
+        return cmd_check_ios(cfg, serial, a)
     release = adb(serial, "shell", "getprop", "ro.build.version.release").strip()
     sdk = adb(serial, "shell", "getprop", "ro.build.version.sdk").strip()
     model = adb(serial, "shell", "getprop", "ro.product.model").strip()
@@ -603,6 +705,23 @@ def cmd_send(cfg, serial, a) -> int:
     return 0
 
 
+def cmd_hold(cfg, serial, a) -> int:
+    if a.ms < 1:
+        raise UsageError("--ms must be a positive number of milliseconds")
+    if a.xy:
+        guard(cfg, serial, "hold", allow_dialogs=True)
+        x, y = a.xy
+        label = f"({x},{y})"
+    elif a.text:
+        node = find(read_screen(cfg, serial, allow_dialogs=True), a.text, a.index)
+        (x, y), label = node.centre, node.line()
+    else:
+        raise UsageError("hold needs a TEXT or --xy X Y")
+    hold_xy(cfg, serial, x, y, a.ms)
+    print(f"held: {label} for {a.ms} ms")
+    return 0
+
+
 def cmd_swipe(cfg, serial, a) -> int:
     if a.ms < 1:
         raise UsageError("--ms must be a positive number of milliseconds")
@@ -629,6 +748,19 @@ def cmd_launch(cfg, serial, a) -> int:
     prints that screen like `dump`. --restart stops it first. The agent on a runner has no other way to open the
     app (11.8 pilot: it tried `adb shell monkey` itself, outside the tools it may use)."""
     app = cfg["app_id"]
+    if ios_on(cfg):
+        on_ios(wda.launch, cfg, app, a.restart)
+        start = time.monotonic()
+        while on_ios(wda.foreground, cfg) != app:
+            if time.monotonic() - start > a.timeout:
+                raise NoTarget(f"{app} did not come to the foreground in {a.timeout:.0f} s")
+            time.sleep(1)
+        lines, stable = wait_stable(lambda: [n.line() for n in read_screen(cfg, serial, allow_dialogs=True)],
+                                    max(a.timeout - (time.monotonic() - start), SETTLE_MIN_S + POLL_S))
+        print(f"launched: {app}" + ("" if stable else " (the screen was still changing)"))
+        for line in lines:
+            print(line)
+        return 0
     if a.restart:
         adb(serial, "shell", "am", "force-stop", app)
     if a.restart or not foreground(serial).startswith(app + "/"):
@@ -669,12 +801,14 @@ def open_link(cfg: dict, serial: str, url: str, package: str | None = None) -> s
 
 
 def cmd_link(cfg, serial, a) -> int:
+    if ios_on(cfg):
+        raise UsageError("link is not available on an iPhone yet: the person opens the link (technique-mobile.md §1.3)")
     print(f"{open_link(cfg, serial, a.url, a.package)}: opened")   # never the URL: it is a one-time credential
     return 0
 
 
 COMMANDS = {"check": cmd_check, "dump": cmd_dump, "tap": cmd_tap, "type": cmd_type, "send": cmd_send,
-            "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "back": cmd_back,
+            "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "hold": cmd_hold, "back": cmd_back,
             "clear": cmd_clear, "launch": cmd_launch}
 
 
@@ -686,9 +820,13 @@ def parser() -> argparse.ArgumentParser:
                     help="device serial (default: $QA_MOBILE_SERIAL, mobile.serial, or the only device connected)")
     ap.add_argument("--input", choices=INPUTS,
                     help="adb, or the companion driver (default: $QA_MOBILE_INPUT, mobile.input, else adb)")
+    ap.add_argument("--platform", choices=("android", "ios"),
+                    help="android (adb) or ios (WebDriverAgent; default: $QA_MOBILE_PLATFORM, mobile.platform, "
+                         "else android)")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--serial", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     common.add_argument("--input", choices=INPUTS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    common.add_argument("--platform", choices=("android", "ios"), default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("check", parents=[common], help="target, OS, model, app version, foreground app")
     p = sub.add_parser("dump", parents=[common], help="visible text with bounds, one line per node")
@@ -718,6 +856,11 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("link", parents=[common], help="open a deep link / login callback (never printed)")
     p.add_argument("url")
     p.add_argument("--package", help="app that opens it (default: mobile.browser, else the system's choice)")
+    p = sub.add_parser("hold", parents=[common], help="a long press by text (exact, then contains) or by coordinates")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--index", type=int, default=0, help="which match, from 0")
+    p.add_argument("--xy", nargs=2, type=int, metavar=("X", "Y"))
+    p.add_argument("--ms", type=int, default=1200, help="duration in milliseconds (default 1200)")
     p = sub.add_parser("swipe", parents=[common], help="a swipe from (X1,Y1) to (X2,Y2)")
     for name in ("x1", "y1", "x2", "y2"):
         p.add_argument(name, type=int)
@@ -734,8 +877,8 @@ def parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     a = parser().parse_args(argv)
     try:
-        cfg = configuration(a.workspace, a.serial, a.input)
-        serial = resolve_serial(cfg["serial"])
+        cfg = configuration(a.workspace, a.serial, a.input, a.platform)
+        serial = cfg["serial"] if ios_on(cfg) else resolve_serial(cfg["serial"])
         return COMMANDS[a.command](cfg, serial, a)
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)

@@ -50,6 +50,7 @@ from openpyxl.formula.translate import Translator
 from .recalc import recalc_safe
 
 CONTROL_SHEET_DEFAULT = "_qa_batches"
+WORKBOOK_ENV = "QA_WORKBOOK"   # replaces excel.file for one command (one workbook per platform)
 _CONTROL_HEADERS = ["hash", "applied_at", "label", "items", "new_defects", "batch_id"]
 # control sheets written before the translation (plan 8.11) keep their headers: they are workbook data
 _LEGACY_CONTROL_HEADERS = {"aplicado_em": "applied_at", "etiqueta": "label", "itens": "items",
@@ -156,7 +157,7 @@ class ExcelAdapter:
         return cls(config, base_dir)
 
     @classmethod
-    def from_yaml(cls, path: str, section: str | None = None) -> ExcelAdapter:
+    def from_yaml(cls, path: str, section: str | None = None, file: str | None = None) -> ExcelAdapter:
         import yaml
 
         with open(path, encoding="utf-8-sig") as f:
@@ -165,19 +166,23 @@ class ExcelAdapter:
             if section not in data:
                 raise ConfigError(f"{path}: section '{section}' is missing")
             data = data[section]
+        if file:
+            data = {**data, "file": file}
         return cls(data, base_dir=os.path.dirname(os.path.abspath(path)))
 
     @classmethod
-    def from_project(cls, workspace: str = ".") -> ExcelAdapter:
+    def from_project(cls, workspace: str = ".", file: str | None = None) -> ExcelAdapter:
         """Reads the `excel:` section of the workspace's project.yaml (plan
-        task 1.3). The workbook path is relative to the workspace."""
+        task 1.3). The workbook path is relative to the workspace. `file`, else
+        the environment variable QA_WORKBOOK, replaces excel.file for this
+        command (one workbook per platform: technique-excel.md)."""
         path = os.path.join(workspace, "project.yaml")
         if not os.path.exists(path):
             old = os.path.join(workspace, "projeto.yaml")
             hint = (" (a workspace from before the translation: convert it with scripts/migrate_workspace.py)"
                     if os.path.exists(old) else "")
             raise ConfigError(f"{path} does not exist{hint}")
-        return cls.from_yaml(path, section="excel")
+        return cls.from_yaml(path, section="excel", file=file or os.environ.get(WORKBOOK_ENV, "").strip() or None)
 
     @staticmethod
     def _validate(cfg: dict) -> dict:
