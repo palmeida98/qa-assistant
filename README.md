@@ -66,7 +66,7 @@ contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CH
 | Layer | What it is | Where it lives |
 |---|---|---|
 | **1. Methodology** | The method: analysis, case design, batches, decision rules (Pass/Fail/N/A/Blocked/Question), bugs, checkpoints; anonymised heuristics for *error guessing* | [`docs/methodology.md`](docs/methodology.md), [`docs/heuristics.md`](docs/heuristics.md) |
-| **2. Techniques** | How to test each type: [browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md), [mobile](docs/technique-mobile.md), [Excel workbooks](docs/technique-excel.md) | `docs/` |
+| **2. Techniques** | How to test each type: [browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md), [mobile](docs/technique-mobile.md), [Excel workbooks](docs/technique-excel.md), [ticket analysis](docs/technique-tickets.md) | `docs/` |
 | **3. Adapters and tools** | Universal Excel adapter, scripts for API, accessibility, mobile, dashboard and validation; skills. They are the framework's engine: there is no separate core | `adapters/`, `scripts/`, `.claude/skills/` |
 | **4. Workspace** | The project: `CLAUDE.md`, `project.yaml`, `context.md`, workbook, `.env`, run log | `qa-workspaces/<company>/<project>/` (outside this repository) |
 
@@ -86,6 +86,7 @@ Credentials live only in each workspace's `.env` and are referred to by the vari
 ```mermaid
 flowchart LR
   O["/project-onboarding<br/>(once)"] --> A["/analyze-feature<br/>/generate-cases"]
+  T["/analyze-tickets<br/>(at any time, read only)"] -->|"what changed,<br/>verification prompt"| A
   A --> P["/plan-batch"]
   P --> E["/run-batch · /test-api<br/>/audit-accessibility · /test-mobile"]
   E -->|"run log<br/>runs/batch_*.json"| C["/checkpoint<br/>(apply to the workbook)"]
@@ -123,6 +124,10 @@ The interface binds to `127.0.0.1` and uses a per-start token. Workspaces and an
 | `accessibility` | WCAG 2.1 AA | `/audit-accessibility` | `scripts/audit_a11y.py` (`qa-audit` engine: axe-core, keyboard, reflow) |
 | `mobile` | Maestro | `/test-mobile` | `scripts/run_mobile.py` |
 
+### Following tickets
+
+`/analyze-tickets` reads Azure DevOps or Jira (a link, a list, a sprint, a query), says what changed since the last check and gives a QA status apart from the ticket's official state. It writes only to the workspace's `memory/` and to one generated block of `context.md`: every request goes through a transport that cannot write. It needs neither Xray nor `tracker: jira|azure-devops`, and can read through a token or a logged-in browser. Specified in [`docs/technique-tickets.md`](docs/technique-tickets.md); so far validated with fictional fixtures, not yet against a real service.
+
 ### Trackers
 
 Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, the cases approved in `/generate-cases` are added by the adapter (`python -m adapters.excel.add_cases`, never by hand), and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-batch` and `/run-batch` read the imported cases, `/log-bug` searches duplicates, `/checkpoint` sends, `/generate-cases` exports); their progress view is the tracker's own reports (methodology §4.2).
@@ -157,6 +162,7 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 | 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
 | 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
 | 12 · `qa-ui` single-workspace interface | Implemented and tested with fixtures; a mobile-workspace pilot was recorded in October; a web-site pilot is still pending |
+| 14 · `/analyze-tickets`, read-only ticket analysis | Implemented and tested with fictional fixtures; the real read of Azure DevOps and Jira is pending |
 | 13 · `qa-ui` multi-project hub | Projects discovery, pinning and single-run guard implemented; in-hub navigation, project creation and other management screens remain planned |
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
