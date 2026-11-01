@@ -17,7 +17,6 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abspath(__file__))]
 
-import common
 import qa_ui_kit as kit
 import run_log as rl
 import workspace_ci
@@ -197,7 +196,7 @@ class RunLogs(unittest.TestCase):
     def test_an_edit_waits_for_a_writer_and_is_refused_when_it_does_not_finish(self):
         # audit finding D-02: the user's edit and an agent adding results both rewrote the whole run log
         before = self.log()
-        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), common.workspace_lock(self.ws):
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
             with self.assertRaises(wk.Refused) as cm:
                 self.edit("TC-SHOP-003", "answer", status="Pass", actual_result="ok")
             with self.assertRaises(wk.Refused):

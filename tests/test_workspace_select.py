@@ -149,33 +149,24 @@ class Discovery(Base):
             f.write("x")
         self.assertEqual([c.id for c in ws.discover(self.root)], ["demo/shop"])
 
-    def test_a_project_in_a_folder_with_an_unsupported_name_is_listed_and_says_why(self):
-        # audit finding D-01: such a folder vanished from the list and from every search, as if it did not exist
-        make_project(self.root, "demo/shop")
-        make_project(self.root, "Acme Corp/Web Shop")
-        make_project(self.root, "demo/Loja Online")
+    def test_any_folder_name_is_a_project_id_name_and_path_kept_apart(self):
+        # audit finding D-01: the rule on names came only from building the id; nothing needs it
+        make_project(self.root, "Acme Corp/Web Shop", project="Loja Web")
+        make_project(self.root, "demo/Loja #1 é")
         make_project(self.root, "Café")
-        os.makedirs(os.path.join(self.root, "My notes"))
-        os.makedirs(os.path.join(self.root, "Other client", "docs"))
         found = {c.id: c for c in ws.discover(self.root)}
-        self.assertEqual(sorted(found), ["Acme Corp/Web Shop", "Café", "demo/Loja Online", "demo/shop"])
-        self.assertEqual(found["demo/shop"].status, "valid")
-        for pid in ("Acme Corp/Web Shop", "Café", "demo/Loja Online"):
-            c = found[pid]
-            self.assertEqual((c.status, c.configured), ("incomplete", False), pid)
-            self.assertIn("rename the folder", c.reason)
-            self.assertIn("--workspace", c.reason)
-            self.assertIsNone(c.public()["proposes"], "this is not a project to onboard")
+        self.assertEqual(sorted(found), ["Acme Corp/Web Shop", "Café", "demo/Loja #1 é"])
+        web = found["Acme Corp/Web Shop"]
+        self.assertEqual((web.status, web.configured, web.name, web.company, web.folder),
+                         ("valid", True, "Loja Web", "Acme Corp", "Web Shop"))
+        self.assertEqual(web.path, os.path.join(self.root, "Acme Corp", "Web Shop"))
 
-    def test_an_unsupported_name_is_found_by_name_but_opens_only_by_path(self):
-        shop = make_project(self.root, "demo/Loja Online")
-        selection = self.resolve("loja")
-        self.assertEqual((selection.outcome, selection.candidate.id), ("selected", "demo/Loja Online"))
-        code, report = self.preflight("analyze-feature", "loja")
-        self.assertEqual(code, 1)
-        self.assertTrue(any("rename the folder" in p for p in report["problems"]), report["problems"])
-        self.assertNotIn("proposes", report)
-        code, report = self.preflight("analyze-feature", workspace=shop)      # a path is the user's own choice
+    def test_a_folder_with_spaces_is_selected_by_id_name_path_and_directory(self):
+        web = make_project(self.root, "Acme Corp/Web Shop", project="Loja Web")
+        for selection in (self.resolve("Acme Corp/Web Shop"), self.resolve("Web Shop"), self.resolve("loja web"),
+                          self.resolve(workspace=web), self.resolve(cwd=web)):
+            self.assertEqual((selection.outcome, selection.candidate.id), ("selected", "Acme Corp/Web Shop"))
+        code, report = self.preflight("analyze-feature", "Web Shop")
         self.assertEqual(code, 0, report["problems"])
 
     def test_a_link_is_listed_as_inaccessible_and_never_followed(self):

@@ -20,7 +20,9 @@ import re
 import shutil
 import socket
 import subprocess
+import threading
 import time
+import uuid
 
 import yaml
 
@@ -28,7 +30,11 @@ REDACTED = "«redacted»"
 SECRET_HEADERS = {"authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key",
                   "x-auth-token"}
 SECRET_KEY = re.compile(r"token|password|passwd|secret|api[_-]?key", re.IGNORECASE)
-SECRET_MIN = 4      # a shorter .env value ("1", "yes") is a flag, not a secret: looked for in text it would wreck it
+SECRET_MIN = 4          # a value with no sensitive name, shorter than this, is taken for a flag
+WHOLE_WORD = 8          # a shorter value is matched as a whole word or number
+SENSITIVE_WORDS = {"PIN", "PASS", "PWD", "PASSCODE", "OTP", "CVV", "PAT", "AUTH", "CREDENTIAL", "CREDENTIALS", "KEY",
+                   "COOKIE", "SESSION"}
+COMMON_VALUES = {"true", "false", "yes", "no", "on", "off", "none", "null", "test", "prod", "dev", "local", "debug"}
 
 
 def find_adb() -> str | None:
@@ -113,9 +119,11 @@ def replace_file(src: str, dst: str, attempts: int = 20, delay: float = 0.05) ->
 
 
 LOCK_NAME = ".qa-assistant.lock"
-LOCK_STALE_SECONDS = 15 * 60        # a lock older than this has no holder worth waiting for
+LOCK_STALE_SECONDS = 15 * 60        # no heartbeat for this long: the holder on another machine is gone
+LOCK_HEARTBEAT_SECONDS = 60.0
 LOCK_WAIT_SECONDS = 30.0
 LOCK_WAIT_ENV = "QA_LOCK_WAIT"      # seconds to wait for another writer before giving up
+_held = threading.local()           # the locks this thread holds: {path: depth}
 
 
 class WorkspaceBusy(RuntimeError):
@@ -147,26 +155,60 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def process_started(pid: int) -> str | None:
+    """When a process started, as an opaque text, or None when it cannot be known. A process id can be reused: the id
+    and this text together name one process."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.OpenProcess.restype = ctypes.c_void_p
+            handle = kernel.OpenProcess(0x1000, False, pid)
+            if not handle:
+                return None
+            try:
+                times = [ctypes.c_ulonglong() for _ in range(4)]
+                ok = kernel.GetProcessTimes(ctypes.c_void_p(handle), *[ctypes.byref(t) for t in times])
+                return str(times[0].value) if ok else None
+            finally:
+                kernel.CloseHandle(ctypes.c_void_p(handle))
+        if os.path.exists(f"/proc/{pid}/stat"):
+            with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+                return f.read().rpartition(")")[2].split()[19]
+        done = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, check=False)
+        return done.stdout.strip() or None
+    except (OSError, IndexError, ValueError):
+        return None
+
+
 def _lock_holder(path: str) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
             doc = json.load(f)
-        holder = doc if isinstance(doc, dict) else {}
+        return doc if isinstance(doc, dict) else {}
     except (OSError, ValueError):
-        holder = {}
-    if not isinstance(holder.get("at"), (int, float)):
-        try:
-            holder["at"] = os.path.getmtime(path)
-        except OSError:
-            holder["at"] = time.time()
-    return holder
+        return {}
 
 
-def _lock_is_stale(holder: dict) -> bool:
-    """Old enough to have no holder worth waiting for, or held by a process of this computer that no longer exists."""
-    if time.time() - holder["at"] > LOCK_STALE_SECONDS:
-        return True
-    return holder.get("host") == socket.gethostname() and isinstance(holder.get("pid"), int)         and not pid_alive(holder["pid"])
+def _lock_age(path: str) -> float:
+    """Seconds since the holder last said it is alive (its heartbeat touches the file)."""
+    try:
+        return time.time() - os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def _lock_is_abandoned(path: str, holder: dict) -> bool:
+    """Only what can be shown: on this computer, its process is gone, or the id now belongs to another process. A live
+    holder here is never abandoned, however long it takes. Elsewhere, or with a file nobody can read, only the
+    heartbeat can tell."""
+    pid = holder.get("pid")
+    if holder.get("host") == socket.gethostname() and isinstance(pid, int):
+        if not pid_alive(pid):
+            return True
+        started = process_started(pid)
+        return bool(started and holder.get("started") and started != holder["started"])
+    return _lock_age(path) > LOCK_STALE_SECONDS
 
 
 def _remove_lock(path: str) -> None:
@@ -180,42 +222,80 @@ def _remove_lock(path: str) -> None:
             time.sleep(0.02)
 
 
+def _take_over(path: str, holder: dict) -> None:
+    """Removes an abandoned lock, one waiter at a time: without this, a second waiter that read the old lock could
+    remove the new one the first has just taken. The small takeover file is itself recovered by its age."""
+    guard = path + ".takeover"
+    try:
+        os.close(os.open(guard, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except (FileExistsError, PermissionError):
+        if _lock_age(guard) > 60:
+            _remove_lock(guard)
+        return
+    try:
+        if _lock_holder(path) == holder and _lock_is_abandoned(path, holder):
+            _remove_lock(path)
+    finally:
+        _remove_lock(guard)
+
+
+def _heartbeat(path: str, stop: threading.Event) -> None:
+    while not stop.wait(LOCK_HEARTBEAT_SECONDS):
+        with contextlib.suppress(OSError):
+            os.utime(path)
+
+
 @contextlib.contextmanager
 def workspace_lock(workspace: str, wait: float | None = None):
-    """One writer at a time on a workspace's memory and run logs (technique-workspaces.md section 9). A second writer
-    waits `wait` seconds (default $QA_LOCK_WAIT or 30), then raises WorkspaceBusy and writes nothing. A lock whose
-    process is gone, or that is older than 15 minutes, is taken over. Not reentrant: take it once, around the read, the
-    change and the write."""
+    """One writer at a time on a workspace's memory and run logs (technique-workspaces.md section 7). A second writer
+    waits `wait` seconds (default $QA_LOCK_WAIT or 30), then raises WorkspaceBusy and writes nothing. An abandoned lock
+    (_lock_is_abandoned) is taken over; a live one never is. Reentrant in one thread: an operation inside another keeps
+    the same lock. The lock file names its holder, and a holder only ever removes its own."""
     path = workspace_path(workspace, LOCK_NAME)
+    held = _held.__dict__.setdefault("paths", {})
+    key = os.path.normcase(os.path.abspath(path))
+    if key in held:
+        held[key] += 1
+        try:
+            yield path
+        finally:
+            held[key] -= 1
+        return
     if wait is None:
         try:
             wait = float(os.environ.get(LOCK_WAIT_ENV) or LOCK_WAIT_SECONDS)
         except ValueError:
             wait = LOCK_WAIT_SECONDS
     deadline = time.monotonic() + wait
-    holder: dict = {}
     while True:
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             break
         except (FileExistsError, PermissionError):      # PermissionError: Windows, a file being deleted
             holder = _lock_holder(path)
-            if os.path.exists(path) and _lock_is_stale(holder) and _lock_holder(path) == holder:
-                _remove_lock(path)
+            if os.path.exists(path) and _lock_is_abandoned(path, holder):
+                _take_over(path, holder)
                 continue
             if time.monotonic() >= deadline:
-                since = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(holder.get("at") or time.time()))
                 raise WorkspaceBusy(
                     f"Nothing was written: another process is writing this workspace (pid {holder.get('pid', '?')} on "
-                    f"{holder.get('host', '?')}, since {since}). Wait for it to finish and run the same command again; "
-                    f"if that process is gone, delete {path}.") from None
+                    f"{holder.get('host', '?')}). Wait for it to finish and run the same command again; if that "
+                    f"process is stuck, stop it, and the lock {path} is recovered by itself.") from None
             time.sleep(0.05)
+    token = uuid.uuid4().hex
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"pid": os.getpid(), "host": socket.gethostname(), "at": time.time()}, f)
+        json.dump({"pid": os.getpid(), "host": socket.gethostname(), "started": process_started(os.getpid()),
+                   "token": token, "at": time.time()}, f)
+    stop = threading.Event()
+    threading.Thread(target=_heartbeat, args=(path, stop), daemon=True).start()
+    held[key] = 1
     try:
         yield path
     finally:
-        _remove_lock(path)
+        del held[key]
+        stop.set()
+        if _lock_holder(path).get("token") == token:
+            _remove_lock(path)
 
 
 def main_checkout(root: str) -> str:
@@ -317,6 +397,27 @@ def mobile_target(m: dict, serial: str | None = None, input_: str | None = None,
     return (str(serial) if serial else None), "adb"
 
 
+def env_value(raw: str) -> str:
+    """What follows `=` in a line of .env (docs/technique-workspaces.md section 7). Quoted: what is between the quotes,
+    `#` included, and a comment may follow the closing quote. Unquoted: up to a `#` that follows a space; a `#` inside
+    a word is part of the value. An unbalanced quote is kept as it is."""
+    text = raw.strip()
+    if text[:1] in ('"', "'"):
+        m = re.fullmatch(rf"{text[0]}(.*){text[0]}\s*(?:#.*)?", text)
+        if m:
+            return m.group(1)
+        return text
+    m = re.search(r"\s#", raw)
+    return (raw[:m.start()] if m else raw).strip()
+
+
+def env_quoted(value: str) -> str:
+    """A value as it must be written so that env_value() gives it back."""
+    if value != value.strip() or re.search(r"\s#", value) or value[:1] in ('"', "'", "#"):
+        return f'"{value}"'
+    return value
+
+
 def read_env(path: str) -> dict[str, str]:
     """KEY=VALUE per line; ignores comments, empty lines and 'export '."""
     out = {}
@@ -328,11 +429,23 @@ def read_env(path: str) -> dict[str, str]:
             if not line or line.startswith("#") or "=" not in line:
                 continue
             k, _, v = line.removeprefix("export ").partition("=")
-            v = v.strip()
-            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-                v = v[1:-1]
-            out[k.strip()] = v
+            out[k.strip()] = env_value(v)
     return out
+
+
+def env_inline_comments(path: str) -> list[str]:
+    """The names of the variables whose unquoted value is cut at ` #`: a comment, or a password written without quotes
+    from before this rule. Names only: the user decides."""
+    names = []
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.removeprefix("export ").partition("=")
+                    if v.strip()[:1] not in ('"', "'") and re.search(r"\s#", v):
+                        names.append(k.strip())
+    return names
 
 
 def read_workspace_env(workspace: str) -> dict[str, str]:
@@ -340,17 +453,35 @@ def read_workspace_env(workspace: str) -> dict[str, str]:
     return read_env(os.path.join(workspace, ".env"))
 
 
-class Redactor:
-    """Redacts secrets: by header name, by JSON key name and by value."""
+def sensitive_name(name: str) -> bool:
+    """A variable whose name says it holds a secret."""
+    return bool(SECRET_KEY.search(str(name))) or bool(SENSITIVE_WORDS & set(re.split(r"[^A-Z0-9]+", str(name).upper())))
 
-    def __init__(self, secrets_by_value: dict[str, str]):
+
+class Redactor:
+    """Redacts secrets: by header name, by JSON key name and by value (technique-workspaces.md section 7).
+
+    A value is sensitive when the caller says so (`sensitive`: names, or True for all of them) or its name does: it is
+    always looked for, whatever its length. Any other value is left alone when it is shorter than `minimum` or a common
+    word (HEADLESS=1, DEBUG=true): a flag, not a secret. A value under WHOLE_WORD characters is matched as a whole
+    word or number, so a PIN 4821 is hidden and 148210 stays as it is."""
+
+    def __init__(self, secrets_by_value: dict[str, str], sensitive=(), minimum: int = SECRET_MIN):
+        kept = []
+        for k, v in secrets_by_value.items():
+            if not v:
+                continue
+            if sensitive is True or k in sensitive or sensitive_name(k) or \
+                    (len(v) >= minimum and v.casefold() not in COMMON_VALUES):
+                kept.append((v, k))
         # longest values first, so that a secret containing another is replaced whole
-        self.values = sorted(((v, k) for k, v in secrets_by_value.items() if v and len(v) >= SECRET_MIN),
-                             key=lambda x: -len(x[0]))
+        self.values = sorted(kept, key=lambda x: -len(x[0]))
+        self.patterns = [(re.compile(rf"(?<![0-9A-Za-z]){re.escape(v)}(?![0-9A-Za-z])") if len(v) < WHOLE_WORD else None,
+                          v, k) for v, k in self.values]
 
     def text(self, s: str) -> str:
-        for value, name in self.values:
-            s = s.replace(value, f"«{name}»")
+        for pattern, value, name in self.patterns:
+            s = pattern.sub(lambda _m, n=name: f"«{n}»", s) if pattern else s.replace(value, f"«{name}»")
         return s
 
     def headers(self, h: dict) -> dict:
@@ -364,6 +495,8 @@ class Redactor:
             return [self.json(x) for x in obj]
         if isinstance(obj, str):
             return self.text(obj)
+        if isinstance(obj, (int, float)) and not isinstance(obj, bool) and self.text(str(obj)) != str(obj):
+            return self.text(str(obj))      # a PIN in a JSON number is the same PIN
         return obj
 
     def body(self, text: str | None, max_chars: int):

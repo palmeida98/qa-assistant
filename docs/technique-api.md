@@ -136,7 +136,7 @@ A **Fail** records enough request and response to reproduce:
 
 - headers `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` and the like → `«redacted»`;
 - JSON keys whose name indicates a credential (token, password, secret, API key; the exact list is `SECRET_KEY` in `scripts/common.py`) are redacted;
-- any literal occurrence of the value of a `.env` variable → `«VARIABLE_NAME»`, for values of 4 characters or more (`SECRET_MIN` in `scripts/common.py`: a flag such as `HEADLESS=1` is not a secret, and looked for in the text it would replace every `1`). The same rule applies to the output of a run started from `qa-ui`.
+- any literal occurrence of the value of a `.env` variable → `«VARIABLE_NAME»`, except a flag such as `HEADLESS=1`; a sensitive value is hidden whatever its length, with the limits of `technique-workspaces.md` §7. The same rule applies to the output of a run started from `qa-ui`.
 
 Never copy into the evidence the value of a token "just to show it existed": record that it exists and its length.
 

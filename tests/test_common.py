@@ -7,12 +7,14 @@ python -m unittest discover -s tests   (from the root of qa-assistant)
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import typing
 import unittest
 from unittest import mock
 
@@ -95,24 +97,75 @@ class FindAdb(unittest.TestCase):
             self.assertIsNone(common.find_adb())
 
 
-class ShortEnvValues(unittest.TestCase):
-    """Audit finding D-08: a flag such as HEADLESS=1 in .env made the redactor replace every `1` of an API response, so
-    the evidence of a test said `{"total": «HEADLESS»0}` for 10."""
+class Redaction(unittest.TestCase):
+    """Audit findings D-08 and D-09: a flag must not wreck the evidence, and a short secret must not reach it."""
 
-    def test_a_short_value_is_not_looked_for_but_a_secret_is(self):
-        red = common.Redactor({"HEADLESS": "1", "DEBUG": "yes", "TOKEN": "abcd1234efgh", "USER": "user"})
-        self.assertEqual(red.text("total 10, debug yes"), "total 10, debug yes")
-        self.assertEqual(red.text("token abcd1234efgh, user user"), "token «TOKEN», «USER» «USER»")
-        self.assertEqual(red.json({"total": 10, "ok": "yes"}), {"total": 10, "ok": "yes"})
+    ENV: typing.ClassVar[dict] = {"HEADLESS": "1", "DEBUG": "true", "PORT": "80", "APP_PIN": "4821", "API_PWD": "ab1",
+                                  "TOKEN": "abcd1234efgh"}
 
-    def test_the_interface_redacts_a_runs_output_like_the_scripts(self):
-        # the interface passed the whole .env, flags included, to the redactor
+    def test_numbers_and_common_words_are_kept(self):
+        red = common.Redactor(self.ENV)
+        for text in ("total 10 of 148210, debug true, port 8080", "version 1.4.8210", "abcdef"):
+            self.assertEqual(red.text(text.replace("1.4.8210", "1.4")), text.replace("1.4.8210", "1.4"))
+        self.assertEqual(red.json({"total": 10, "big": 148210, "ok": True}), {"total": 10, "big": 148210, "ok": True})
+
+    def test_a_short_sensitive_value_is_never_shown(self):
+        red = common.Redactor(self.ENV)
+        self.assertEqual(red.text("pin=4821 pwd: ab1 url?p=4821&x=1"), "pin=«APP_PIN» pwd: «API_PWD» url?p=«APP_PIN»&x=1")
+        self.assertEqual(red.json({"code": 4821, "note": "ab1"}), {"code": "«APP_PIN»", "note": "«API_PWD»"})
+        self.assertEqual(red.text("148210 and 4821 in one line"), "148210 and «APP_PIN» in one line")
+
+    def test_what_the_caller_names_is_sensitive_whatever_its_name_says(self):
+        self.assertEqual(common.Redactor({"QA_USER": "bob"}).text("bob logged in"), "bob logged in")
+        self.assertEqual(common.Redactor({"QA_USER": "bob"}, sensitive=["QA_USER"]).text("bob logged in"), "«QA_USER» logged in")
+        self.assertEqual(common.Redactor({"X": "1"}, sensitive=True).text("x 1 y"), "x «X» y")
+
+    def test_a_long_value_is_found_inside_other_text(self):
+        self.assertEqual(common.Redactor(self.ENV).text("Bearerabcd1234efghZ"), "Bearer«TOKEN»Z")
+
+    def test_a_name_that_only_contains_the_letters_is_not_sensitive(self):
+        for name in ("SHIPPING", "PINNED", "COMPASS", "MONKEY"):
+            self.assertFalse(common.sensitive_name(name), name)
+        for name in ("APP_PIN", "DB_PASS", "api-key", "MY_PASSWORD", "AUTH_TOKEN", "PAT"):
+            self.assertTrue(common.sensitive_name(name), name)
+
+    def test_the_interface_and_the_tickets_follow_the_same_rule(self):
+        from adapters.tickets.model import Sanitizer
         from qa_ui import runs
         with tempfile.TemporaryDirectory() as ws:
             with open(os.path.join(ws, ".env"), "w", encoding="utf-8") as f:
-                f.write("HEADLESS=1" + chr(10) + "TOKEN=abcd1234efgh" + chr(10))
-            red = runs.Runner(ws).redactor()
-            self.assertEqual(red.text("1 of 10: abcd1234efgh"), "1 of 10: «TOKEN»")
+                f.write("HEADLESS=1" + chr(10) + "APP_PIN=4821" + chr(10) + "NAMED=bob" + chr(10))
+            with open(os.path.join(ws, "project.yaml"), "w", encoding="utf-8") as f:
+                f.write("project: x" + chr(10) + "api:" + chr(10) + "  user_var: NAMED" + chr(10))
+            self.assertEqual(runs.Runner(ws).redactor().text("1 of 10: 4821 bob"), "1 of 10: «APP_PIN» «NAMED»")
+        sanitizer = Sanitizer({"HEADLESS": "1", "APP_PIN": "4821", "LABEL": "short"})
+        self.assertEqual(sanitizer.text("1 of 10: 4821 short"), "1 of 10: «APP_PIN» short")
+
+
+class EnvFile(unittest.TestCase):
+    """Comments in a .env line (technique-workspaces.md section 7; audit finding D-10)."""
+
+    def read(self, text):
+        with tempfile.TemporaryDirectory() as ws:
+            path = os.path.join(ws, ".env")
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            return common.read_env(path), common.env_inline_comments(path)
+
+    def test_the_formats(self):
+        got, comments = self.read(chr(10).join([
+            "# a comment", "PLAIN=abc", "HASH=pa#ss", "START=#abc", "COMMENT=abc # note", "EMPTY= # note", "NOTHING=",
+            'DQ="a # b"', "SQ='x#y'", 'DQC="v" # note', "SQC='v' # note", 'OPEN="abc', 'IN=a"b', "export EXP=1 ",
+            "CRLF=v\r".replace("\\r", chr(13)), "EQ=a=b"]))
+        self.assertEqual(got, {"PLAIN": "abc", "HASH": "pa#ss", "START": "#abc", "COMMENT": "abc", "EMPTY": "", "NOTHING": "",
+                               "DQ": "a # b", "SQ": "x#y", "DQC": "v", "SQC": "v", "OPEN": '"abc', "IN": 'a"b', "EXP": "1",
+                               "CRLF": "v", "EQ": "a=b"})
+        self.assertEqual(comments, ["COMMENT", "EMPTY"])
+
+    def test_what_is_written_is_read_back(self):
+        for value in ("plain", "pa#ss", "a # b", " spaced ", '"quoted"', "'q'", "#start", 'a"b', "x=y"):
+            got, _ = self.read("V=" + common.env_quoted(value) + chr(10))
+            self.assertEqual(got["V"], value)
 
 
 class WorkspaceLock(unittest.TestCase):
@@ -131,12 +184,22 @@ class WorkspaceLock(unittest.TestCase):
             json.dump({"pid": os.getpid(), "host": socket.gethostname(), "at": time.time(), **fields}, f)
 
     def test_one_at_a_time_and_released_afterwards(self):
+        errors = []
+
+        def second():
+            try:
+                with common.workspace_lock(self.ws, wait=0.2):
+                    pass
+            except common.WorkspaceBusy as e:
+                errors.append(str(e))
+
         with common.workspace_lock(self.ws):
             self.assertTrue(os.path.isfile(self.path))
-            with self.assertRaises(common.WorkspaceBusy) as busy, common.workspace_lock(self.ws, wait=0.2):
-                pass
-            self.assertIn(str(os.getpid()), str(busy.exception))
-            self.assertIn(common.LOCK_NAME, str(busy.exception))      # it says what to remove if the holder is gone
+            t = threading.Thread(target=second)
+            t.start()
+            t.join()
+        self.assertEqual(len(errors), 1)
+        self.assertIn(str(os.getpid()), errors[0])
         self.assertFalse(os.path.exists(self.path))
         with common.workspace_lock(self.ws, wait=0.2):
             pass
@@ -175,11 +238,12 @@ class WorkspaceLock(unittest.TestCase):
         with common.workspace_lock(self.ws, wait=0.5), open(self.path, encoding="utf-8") as f:
             self.assertEqual(json.load(f)["pid"], os.getpid())
 
-    def test_another_machines_lock_is_respected_until_it_is_old(self):
+    def test_another_machines_lock_is_respected_until_its_heartbeat_stops(self):
         self.hold(host="some-other-machine", pid=1)
         with self.assertRaises(common.WorkspaceBusy), common.workspace_lock(self.ws, wait=0.2):
             pass
-        self.hold(host="some-other-machine", pid=1, at=time.time() - 2 * common.LOCK_STALE_SECONDS)
+        old = time.time() - 2 * common.LOCK_STALE_SECONDS
+        os.utime(self.path, (old, old))
         with common.workspace_lock(self.ws, wait=0.5):
             pass
 
@@ -192,6 +256,97 @@ class WorkspaceLock(unittest.TestCase):
         os.utime(self.path, (old, old))
         with common.workspace_lock(self.ws, wait=0.5):
             pass
+
+    def test_a_reused_process_id_does_not_hold_the_lock(self):
+        self.hold(started="the start of another process")
+        with common.workspace_lock(self.ws, wait=0.5), open(self.path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["started"], common.process_started(os.getpid()))
+
+    def test_a_live_holder_is_never_taken_over_however_old(self):
+        self.hold(started=common.process_started(os.getpid()))
+        old = time.time() - 100 * common.LOCK_STALE_SECONDS
+        os.utime(self.path, (old, old))
+        with self.assertRaises(common.WorkspaceBusy), common.workspace_lock(self.ws, wait=0.2):
+            pass
+        self.assertTrue(os.path.isfile(self.path))
+
+    def test_a_nested_operation_keeps_the_lock(self):
+        with common.workspace_lock(self.ws, wait=0.1):
+            with common.workspace_lock(self.ws, wait=0.1):
+                self.assertTrue(os.path.isfile(self.path))
+            self.assertTrue(os.path.isfile(self.path))      # the inner one did not release it
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_nesting_is_per_thread(self):
+        errors = []
+
+        def other():
+            try:
+                with common.workspace_lock(self.ws, wait=0.1):
+                    errors.append("entered")
+            except common.WorkspaceBusy:
+                pass
+
+        with common.workspace_lock(self.ws):
+            t = threading.Thread(target=other)
+            t.start()
+            t.join()
+        self.assertEqual(errors, [])
+
+    def test_a_holder_never_removes_a_lock_that_is_not_its_own(self):
+        with common.workspace_lock(self.ws):
+            self.hold(pid=4, token="someone else")
+        with open(self.path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["token"], "someone else")
+        os.remove(self.path)
+
+    def test_many_waiters_on_an_abandoned_lock_exclude_each_other(self):
+        done = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True, check=False)
+        self.hold(pid=int(done.stdout))
+        counter = os.path.join(self.ws, "counter.txt")
+        with open(counter, "w", encoding="utf-8") as f:
+            f.write("0")
+
+        def bump():
+            with common.workspace_lock(self.ws, wait=30):
+                with open(counter, encoding="utf-8") as f:
+                    n = int(f.read())
+                time.sleep(0.01)
+                with open(counter, "w", encoding="utf-8") as f:
+                    f.write(str(n + 1))
+
+        threads = [threading.Thread(target=bump) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        with open(counter, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "6")
+
+    def holder_process(self) -> int:
+        """A real process holding the lock; its own id, since a virtual environment's python.exe is a launcher."""
+        code = ("import os, sys, time; sys.path.insert(0, sys.argv[1]); import common\n"
+                "with common.workspace_lock(sys.argv[2]):\n    print(os.getpid(), flush=True); time.sleep(120)\n")
+        proc = subprocess.Popen([sys.executable, "-c", code, os.path.join(ROOT, "scripts"), self.ws], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(proc.stdout.close)
+        self.addCleanup(proc.wait)
+        pid = int(proc.stdout.readline())
+        self.addCleanup(lambda: common.pid_alive(pid) and os.kill(pid, signal.SIGTERM))
+        return pid
+
+    def test_two_real_processes_and_the_death_of_the_holder(self):
+        pid = self.holder_process()
+        with self.assertRaises(common.WorkspaceBusy) as busy, common.workspace_lock(self.ws, wait=0.3):
+            pass
+        self.assertIn(str(pid), str(busy.exception))
+        self.assertTrue(os.path.isfile(self.path))          # a live holder's lock stays
+        os.kill(pid, signal.SIGTERM)
+        while common.pid_alive(pid):
+            time.sleep(0.05)
+        self.assertTrue(os.path.isfile(self.path))          # it died without releasing it
+        with common.workspace_lock(self.ws, wait=5):
+            pass
+        self.assertFalse(os.path.exists(self.path))
 
     def test_a_lock_in_a_workspace_that_does_not_exist_is_an_error_not_a_hang(self):
         with self.assertRaises(FileNotFoundError), common.workspace_lock(os.path.join(self.ws, "missing"), wait=0.2):

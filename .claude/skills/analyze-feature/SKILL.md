@@ -7,10 +7,10 @@ metadata:
   config: "project.yaml (roles, environments); the workspace's CLAUDE.md (reference documentation)."
   tools: "Reading files; nothing else."
   outputs: "Behaviours linked to a role, rule or state, risks and questions, ready for /generate-cases."
-  writes: "Nothing required; notes in the workspace only when the user asks."
+  writes: "analysis/<feature>_<YYYYMMDD>.md in the workspace; a new version in a new file. Never the tracker or the workbook."
   approvals: "None; the questions go to the user at the end."
   failures: "Contradicting sources: stop and ask. A gap becomes a question, never an assumption."
-  resume: "Repeatable: read context.md and memory/ again."
+  resume: "The newest file of analysis/ for the feature, then context.md and memory/."
 ---
 
 0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
@@ -36,3 +36,14 @@ metadata:
 7. Produce the list of behaviours to test, each one linked to the role, rule or state it comes from,
    ready for /generate-cases.
 8. Present the open questions to the user all at once, at the end.
+9. Save the analysis in the workspace (methodology.md section 5.1): analysis/<feature>_<YYYYMMDD>.md, a slug of the
+   feature, with _2, _3 when that name exists: an older file is never changed. In this format:
+   # Analysis: <feature>
+   Date: <YYYY-MM-DD>
+   Status: produced | reviewed by the user on <YYYY-MM-DD>
+   Sources: each document, ticket or link read, with its version or date; "none" when there was none
+   ## Confirmed by a source: each rule with its source
+   ## Proposed: the behaviours and risks this analysis infers, not requirements
+   ## Open questions
+   Status says reviewed only when the user said so. Reviewing an analysis does not turn what is proposed into a
+   requirement: only a source, or an explicit decision of the user written as such with its date, does.

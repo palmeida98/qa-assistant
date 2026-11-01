@@ -2,17 +2,20 @@
 adapter's golden fixture as its workbook) and fake executables, so no test ever starts a real Claude session, a
 browser or a site. All data is the fictional Demo Shop."""
 
+import contextlib
 import copy
 import os
 import stat
 import sys
 import tempfile
+import threading
 
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
 
+import common
 from build_fixture import build
 
 with open(os.path.join(ROOT, "adapters", "excel", "example.yaml"), encoding="utf-8") as _f:
@@ -44,6 +47,26 @@ def workspace(**changes) -> tempfile.TemporaryDirectory:
     with open(os.path.join(tmp.name, ".env"), "w", encoding="utf-8") as f:
         f.write("".join(f"{k}={v}\n" for k, v in ENV.items()))
     return tmp
+
+
+@contextlib.contextmanager
+def held_by_another_writer(ws: str):
+    """The workspace's lock held by someone else: another thread, since a lock is reentrant in its own."""
+    taken, leave = threading.Event(), threading.Event()
+
+    def hold():
+        with common.workspace_lock(ws):
+            taken.set()
+            leave.wait(30)
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    taken.wait(10)
+    try:
+        yield
+    finally:
+        leave.set()
+        thread.join()
 
 
 def write_project(ws: str, proj: dict) -> None:

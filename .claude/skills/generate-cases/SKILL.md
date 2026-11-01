@@ -3,7 +3,7 @@ name: generate-cases
 description: Generates test case proposals from the analysis of a feature, with the design technique given in each case, in the format of the project's tracker (methodology.md sections 5.2 and 5.3).
 metadata:
   intent: "Propose test cases from an analysis, with the design technique of each, without duplicates."
-  inputs: "The output of /analyze-feature; the existing cases."
+  inputs: "The newest analysis/<feature>_*.md, or the output of /analyze-feature in this session; the existing cases."
   config: "The tracker's section (excel.cases.fields, or the cases of jira: or azure_devops:)."
   tools: "The project's adapter."
   outputs: "Traceable proposals; after approval, the cases added with their final IDs."
@@ -24,7 +24,9 @@ metadata:
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
    it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
    (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
-1. Start from the output of /analyze-feature. If it does not exist, run it first or ask the user.
+1. Start from the newest analysis/<feature>_*.md of the workspace, saying which file, its date and its status; no
+   analysis: run /analyze-feature first or ask the user. A source newer than the analysis: say so. What is under
+   "Proposed" is never a requirement: an expected result cannot rest on it alone, so that case stays a question.
 2. Read the case format and the tracker in project.yaml (current workspace) and the structure of the
    workbook/tracker in CLAUDE.md. Do not invent columns nor statuses.
 3. Choose the design technique per behaviour (section 5.2): equivalence partitioning, boundary values,

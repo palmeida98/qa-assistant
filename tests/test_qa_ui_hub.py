@@ -137,17 +137,11 @@ class Discovery(Root):
         with self.assertRaises(hub.NotFound):
             hub.find(self.root, "demo/empty")
 
-    def test_a_project_in_an_unsupported_folder_name_is_named_and_has_no_card_or_route(self):
-        # audit finding D-01: it used to be absent from the page, as if the folder did not exist
-        make_project(self.root, "Acme Corp/Web Shop", project="web-shop")
-        state = self.hub.state()
-        self.assertNotIn("Acme Corp/Web Shop", [p["id"] for p in state["projects"]])
-        listed = {f["id"]: f for f in state["unconfigured"]}
-        self.assertEqual(listed["Acme Corp/Web Shop"]["status"], "incomplete")
-        self.assertIn("rename the folder", listed["Acme Corp/Web Shop"]["reason"])
-        self.assertIsNone(listed["Acme Corp/Web Shop"]["proposes"])       # onboarding is not what is missing
-        with self.assertRaises(hub.NotFound):
-            hub.find(self.root, "Acme Corp/Web Shop")
+    def test_a_folder_with_spaces_or_accents_is_a_project_like_any_other(self):
+        # audit finding D-01
+        path = make_project(self.root, "Acme Corp/Web Shop é", project="web-shop")
+        self.assertIn("Acme Corp/Web Shop é", [p["id"] for p in self.hub.state()["projects"]])
+        self.assertEqual(hub.find(self.root, "Acme Corp/Web Shop é").path, path)
 
     def test_an_incomplete_project_keeps_its_card_and_says_so(self):
         half = make_project(self.root, "demo/half", project="half", bug_format="")
@@ -444,6 +438,12 @@ class Http(Root):
         except urllib.error.HTTPError as e:
             with e:
                 return e.code, json.loads(e.read() or b"{}")
+
+    def test_the_routes_of_a_folder_with_spaces_accents_and_a_hash(self):
+        make_project(self.root, "Acme Corp/Loja #1 é", project="loja")
+        code, body = self.call("GET", "/api/p/Acme%20Corp/Loja%20%231%20%C3%A9/overview")
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self.call("GET", "/api/p/Acme%20Corp/nope/overview")[0], 404)
 
     def test_loopback_the_token_and_the_page(self):
         self.assertEqual(self.srv.server_address[0], "127.0.0.1")

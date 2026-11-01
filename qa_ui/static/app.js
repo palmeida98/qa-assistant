@@ -1142,7 +1142,7 @@ function renderNotes() {
 /* ------------------------------------------------------------------ the page's address (section 14.4) */
 
 function projectHash(id, screen) {
-  return `#/p/${id}/${screen}`;
+  return `#/p/${id.split('/').map(encodeURIComponent).join('/')}/${screen}`;
 }
 
 /* #/p/<id>/<screen> opens a project; anything else is the Projects screen. The id is the server's to look up: a

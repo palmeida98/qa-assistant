@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.9 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6.
+> Version 2.10 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -197,6 +197,8 @@ For each feature, identify:
 - the inputs, the states, the business rules and the integrations;
 - the risk: probability of failure × impact for the user or for the business;
 - the specification gaps. These **are not filled with assumptions**: they are recorded as a question or as a "missing specification" note.
+
+The analysis is kept in the workspace, in `analysis/<feature>_<YYYYMMDD>.md`, with its date, its sources and its status, so another session continues from it. A new version is a new file. What it infers stays under *Proposed*: neither saving it nor the user reviewing it makes it a requirement (§1.3).
 
 A feature often starts as a ticket. `/analyze-tickets` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
 
@@ -586,6 +588,11 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.9 → v2.10 (plan 15.7, 01.11.2026)
+
+- **New:** the analysis of a feature is kept in `analysis/` (§5.1) and `/generate-cases` starts from it.
+- **Kept:** cases are proposals until approved; a gap is a question.
 
 ### v2.8 → v2.9 (plan 15.6, 01.11.2026)
 

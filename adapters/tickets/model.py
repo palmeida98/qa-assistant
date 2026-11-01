@@ -15,6 +15,8 @@ import re
 from collections.abc import Callable
 from datetime import datetime
 
+from common import Redactor
+
 from adapters.tracker.errors import AuthFailed, HttpError, InvalidInput, TrackerError
 from adapters.tracker.http import Request, Response, Transport
 
@@ -100,12 +102,10 @@ class Sanitizer:
     MIN_VALUE = 6   # a shorter .env value ("1", "true") would wreck ordinary text
 
     def __init__(self, env: dict[str, str] | None = None):
-        self.values = sorted(((v, k) for k, v in (env or {}).items() if v and len(v) >= self.MIN_VALUE),
-                             key=lambda x: -len(x[0]))
+        self.redactor = Redactor(env or {}, minimum=self.MIN_VALUE)
 
     def text(self, s: str) -> str:
-        for value, name in self.values:
-            s = s.replace(value, f"«{name}»")
+        s = self.redactor.text(s)
         s = _LOGIN_LINK.sub("«login link redacted»", s)
         s = _SECRET_PARAM.sub(lambda m: m.group(1) + REDACTED_TEXT, s)
         s = _BEARER.sub(lambda m: f"{m.group(1)} {REDACTED_TEXT}", s)

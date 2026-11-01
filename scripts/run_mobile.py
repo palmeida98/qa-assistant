@@ -201,7 +201,7 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
         return 3, f"no target: {target}"
     code, output = run_maestro([maestro, *(["--device", str(serial)] if serial else []), "test",
                                 os.path.abspath(path)], extra, cfg["timeout"])
-    red = Redactor(secrets)
+    red = Redactor(secrets, sensitive=True)
     lines = [ln.strip() for ln in output.strip().splitlines() if ln.strip()]
     # the step that failed first: Maestro's last lines are often only its debug-folder notice (11.8 pilot)
     failed = [ln for ln in lines if re.search(r"FAILED|Element not found|Assertion is false|Timeout", ln)][:3]
@@ -261,7 +261,7 @@ def main(argv=None) -> int:
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    red = Redactor(secrets)
+    red = Redactor(secrets, sensitive=True)
     ok, target = target_available(cfg["platform"])
     rep = {"platform": cfg["platform"], "target": target, "ts": datetime.now().isoformat(timespec="seconds")}
     if not ok:

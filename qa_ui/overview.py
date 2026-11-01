@@ -19,7 +19,14 @@ import sys
 from datetime import datetime
 
 import yaml
-from common import SECRET_MIN, read_env, read_project, replace_file, variable_names
+from common import (
+    Redactor,
+    env_quoted,
+    read_env,
+    read_project,
+    replace_file,
+    variable_names,
+)
 
 from . import ROOT, workspace
 
@@ -108,13 +115,6 @@ def _env_line_name(line: str) -> str | None:
     return s.removeprefix("export ").partition("=")[0].strip()
 
 
-def _quoted(value: str) -> str:
-    """The value as read_env() gives it back: quoted when it has outer spaces or starts and ends with a quote."""
-    if value != value.strip() or (len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'"):
-        return f'"{value}"'
-    return value
-
-
 def write_env(ws: str, proj: dict, name, value) -> dict:
     """POST /api/p/<id>/env (section 14.6): the line of `name` in .env replaced, or added; the other lines kept;
     mode 600 on POSIX. Only a name project.yaml refers to or .env.example lists; never a value with a line break.
@@ -132,7 +132,7 @@ def write_env(ws: str, proj: dict, name, value) -> dict:
     if os.path.isfile(path):
         with open(path, encoding="utf-8-sig") as f:
             lines = f.read().splitlines()
-    new = f"{name}={_quoted(value)}"
+    new = f"{name}={env_quoted(value)}"
     done = False
     for i, line in enumerate(lines):
         if _env_line_name(line) == name:
@@ -204,7 +204,7 @@ def save_note(ws: str, name, text, new: bool = False) -> dict:
     if len(text.encode("utf-8")) > NOTE_MAX:
         raise BadValue(f"a note is at most {NOTE_MAX // 1024} KB")
     for var, value in read_env(os.path.join(ws, ".env")).items():
-        if len(value) >= SECRET_MIN and value in text:
+        if Redactor({var: value}).text(text) != text:
             raise BadValue(f"the note holds the value of the .env variable {var}: a credential lives only in .env")
     path = _note_path(ws, name, create=True)
     if _is_link(path):

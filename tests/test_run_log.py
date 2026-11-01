@@ -20,7 +20,7 @@ from unittest import mock
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
 import run_log as rl
 from build_fixture import build
@@ -93,8 +93,8 @@ class RunLog(unittest.TestCase):
         self.assertEqual(sorted(r["tc"] for r in self.log()["results"]), cases)
 
     def test_a_workspace_held_by_another_process_is_a_refusal_that_writes_nothing(self):
-        import common
-        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), common.workspace_lock(self.ws):
+        import qa_ui_kit as kit
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
             code, out = self.run_(*("add", "20260929_01", "TC-SHOP-001", "Pass", "ok"))
         self.assertEqual(code, 1)
         self.assertIn("another process", out)

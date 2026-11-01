@@ -38,7 +38,7 @@ metadata:
    blockers, pending work and validation state. Update the date and time.
 5. Do not rebuild the progress from scratch: add to what is already recorded (section 12.1).
 6. If the workspace is a git repository, make one local commit per checkpoint (section 12.1),
-   only with the run log files and context.md (and the evidence of the batch, if any, and memory/ when
+   only with the run log files and context.md (and the evidence of the batch, if any, and analysis/ and memory/ when
    /analyze-tickets wrote there). Then, from the root of
    qa-assistant: python scripts/workspace_git.py <workspace> status
    and tell the user how many commits are not pushed (and any untracked file or file over 50 MB).

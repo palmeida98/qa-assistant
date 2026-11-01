@@ -97,6 +97,15 @@ class Skills(unittest.TestCase):
                 if named:
                     self.assertLess(text.index("<qa>/docs/"), text.index("\n1. "), "say where the documents are in step 0")
 
+    def test_an_analysis_outlives_the_session_and_stays_a_proposal(self):
+        # audit finding S-03: /generate-cases read the analysis from the conversation
+        feature, cases = skill_text("analyze-feature"), skill_text("generate-cases")
+        for word in ("analysis/", "Date:", "Sources:", "Status:", "Open questions"):
+            self.assertIn(word, feature)
+        self.assertIn("analysis/", cases)
+        self.assertIn("never a requirement", cases)
+        self.assertIn("analysis/", skill_text("checkpoint"))
+
     def test_nothing_in_a_skill_depends_only_on_the_old_relative_path(self):
         for name in self.names():
             text = skill_text(name)

@@ -26,6 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
 import common
+import qa_ui_kit as kit
 from build_fixture import build
 from test_tickets import BOARDS, T1, T2, T3
 from test_tickets import Base as TicketsBase
@@ -337,7 +338,7 @@ class Concurrency(Base):
         fake = FakeAdo()
         fake.add(100)
         before = self.snapshot()
-        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), common.workspace_lock(self.ws):
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
             self.assertEqual(self.collect(fake, "100", now=T1), 5)
         text = " ".join(self.lines)
         self.assertIn("another process", text)
