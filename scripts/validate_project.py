@@ -58,6 +58,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import workspace_git as wg
 
+from adapters.tickets import config as tickets_config
 from adapters.tracker import config as tracker_config
 
 # closed list (methodology 4.1): module -> (own section, required fields in it)
@@ -394,6 +395,9 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
         p, w = tracker_config.validate_section(proj)
         problems += p
         warnings += w
+    p, w = tickets_config.validate_section(proj)
+    problems += p
+    warnings += w
     if proj.get("resolved_bugs") not in (None, "remove", "archive"):
         problems.append("resolved_bugs must be 'remove' or 'archive'")
     if proj.get("evidence") not in (None, "text", "text+screenshot"):

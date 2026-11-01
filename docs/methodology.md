@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.6 · 2026-10-17 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6.
+> Version 2.7 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -100,6 +100,7 @@ Each stage has a corresponding skill in Claude Code:
 | Stage | Skill |
 |---|---|
 | Onboarding | `/project-onboarding` |
+| Ticket follow-up (at any time; read only) | `/analyze-tickets` |
 | Analysis | `/analyze-feature` |
 | Case design | `/generate-cases` |
 | Batch planning | `/plan-batch` |
@@ -175,6 +176,8 @@ For each feature, identify:
 - the inputs, the states, the business rules and the integrations;
 - the risk: probability of failure × impact for the user or for the business;
 - the specification gaps. These **are not filled with assumptions**: they are recorded as a question or as a "missing specification" note.
+
+A feature often starts as a ticket. `/analyze-tickets` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
 
 ### 5.2 Design techniques
 
@@ -408,6 +411,8 @@ Updated: <date and time>
 
 `context.md` is the session's **temporary** state. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
 
+`/analyze-tickets` keeps one generated block in `context.md`, between its markers, with the resume point of the last check; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference (`technique-tickets.md` §5).
+
 ### 12.3 Resuming on another computer
 
 A project must be continuable from any computer with access to its private remote:
@@ -559,6 +564,11 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.6 → v2.7 (plan phase 14, 01.11.2026)
+
+- **New:** `/analyze-tickets` and `memory/` in the workspace (§3, §5.1, §12.2): a read-only follow-up of tickets, independent of `tracker:`, with a deterministic comparison between checks.
+- **Kept:** nothing reaches a tracker without the user's approval (§9.4), the statuses of §2, `/checkpoint` for the commits, `history/` immutable.
 
 ### v2.5 → v2.6 (plan 12.6, 17.10.2026)
 

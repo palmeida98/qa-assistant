@@ -38,7 +38,8 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
    `python scripts/workspace_build.py <ws> fetch` downloads it to `app/<tag>.apk` and checks its SHA-256); `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
 7. **Continue**: open Claude Code in the workspace, read `context.md` and the latest run log in `runs/`, and go on
    from the last checkpoint (methodology §12.1). Whatever a run needs that is not in the repository (a device, a login
-   link) is written in `context.md` or `project.yaml`.
+   link) is written in `context.md` or `project.yaml`. Tickets already followed with `/analyze-tickets` are in
+   `memory/` (committed with the workspace), so the next check compares with them (technique-tickets.md §5).
 8. **Or on a runner**: a mobile batch can also run on a GitHub Actions runner of the workspace's repository, from a
    browser only (methodology §12.4; settings in [`ci/README.md`](ci/README.md)).
 9. **Before leaving a computer**: `/checkpoint` (it commits locally and says how many commits are not pushed), then
