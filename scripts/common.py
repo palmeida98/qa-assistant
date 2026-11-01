@@ -1,7 +1,8 @@
 """
 Code shared by a workspace's scripts (plan 7.8): reading project.yaml and .env,
-the names of the .env variables project.yaml refers to, and redacting secrets in
-the evidence. Read only; nothing here writes to the workspace.
+the names of the .env variables project.yaml refers to, redacting secrets in the
+evidence, deciding whether a path may be written (plan 15.2) and which checkout
+this is. Read only; nothing here writes to the workspace.
 
 Used by api_request.py, audit_a11y.py, run_mobile.py, build_dashboard.py,
 device.py, workspace_git.py and validate_project.py (from the scripts/ folder,
@@ -14,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 
 import yaml
 
@@ -37,6 +39,66 @@ def find_adb() -> str | None:
     name = "adb.exe" if os.name == "nt" else "adb"
     return next((os.path.join(r, "platform-tools", name) for r in roots
                  if r and os.path.isfile(os.path.join(r, "platform-tools", name))), None)
+
+
+class OutsideWorkspace(ValueError):
+    """A path to write leaves the workspace or enters history/ (technique-workspaces.md section 7)."""
+
+
+def workspace_path(workspace: str, *parts: str) -> str:
+    """`parts` joined under the workspace, for writing. `..`, links and junctions are resolved before deciding: a path
+    that ends outside the workspace or inside history/ raises OutsideWorkspace. An absolute part replaces the
+    workspace, as in os.path.join, and is checked the same way."""
+    path = os.path.join(workspace, *parts)
+    base = os.path.normcase(os.path.realpath(workspace))
+    real = os.path.normcase(os.path.realpath(path))
+    try:
+        inside = os.path.commonpath([base, real]) == base
+    except ValueError:      # another drive
+        inside = False
+    if not inside:
+        raise OutsideWorkspace(f"{path} is outside the workspace {workspace}: nothing was written")
+    history = os.path.join(base, "history")
+    if real == history or real.startswith(history + os.sep):
+        raise OutsideWorkspace(f"{path} resolves inside history/, which is immutable (methodology 13)")
+    return path
+
+
+def main_checkout(root: str) -> str:
+    """The main checkout of a git checkout, read from .git without running git: `root` itself, unless `root` is a
+    worktree, whose .git file points to <main>/.git/worktrees/<name>. Also `root` when there is no git at all."""
+    dot = os.path.join(root, ".git")
+    if not os.path.isfile(dot):
+        return root
+    try:
+        with open(dot, encoding="utf-8") as f:
+            m = re.match(r"gitdir:\s*(.+)", f.read().strip())
+        if not m:
+            return root
+        gitdir = os.path.normpath(os.path.join(root, m.group(1).strip()))
+        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as f:
+            common = os.path.normpath(os.path.join(gitdir, f.read().strip()))
+    except OSError:
+        return root
+    return os.path.dirname(common) if os.path.basename(common) == ".git" else root
+
+
+def git_state(root: str) -> dict:
+    """{"commit", "branch", "dirty"} of a checkout; None values without git or outside a repository. Read only."""
+    def ask(*args):
+        try:
+            r = subprocess.run(["git", "--no-optional-locks", "-C", root, *args], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=30, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return r.stdout.strip() if r.returncode == 0 else None
+
+    commit = ask("rev-parse", "--short", "HEAD")
+    if commit is None:
+        return {"commit": None, "branch": None, "dirty": None}
+    status = ask("status", "--porcelain")
+    return {"commit": commit, "branch": ask("rev-parse", "--abbrev-ref", "HEAD"),
+            "dirty": None if status is None else bool(status)}
 
 
 def read_project(workspace: str) -> dict:

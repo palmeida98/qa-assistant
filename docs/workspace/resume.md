@@ -11,9 +11,10 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
    cd qa-assistant
    pip install -r requirements.txt        # the adapter and the scripts (openpyxl, PyYAML)
    pip install -e .                       # qa-audit (or scripts/install.sh / scripts\install.ps1: a .venv, browsers)
-   python scripts/sync_skills.py --apply  # the skills the workspaces use (~/.claude/skills/)
+   python scripts/sync_skills.py --apply  # the skills the workspaces use (~/.claude/skills/), and which checkout they came from
    ```
-3. **Clone the workspace** from its private remote into `qa-workspaces/<company>/<project>/`:
+3. **Clone the workspace** from its private remote into `qa-workspaces/<company>/<project>/` (a root elsewhere:
+   `python scripts/workspace_select.py set-root <path>`; `technique-workspaces.md` §3):
    ```bash
    gh repo clone <owner>/demo-demo-shop ../qa-workspaces/demo/demo-shop
    ```
@@ -37,7 +38,8 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
    from (usually a release of the workspace's private repository, `release <tag>`:
    `python scripts/workspace_build.py <ws> fetch` downloads it to `app/<tag>.apk` and checks its SHA-256); `setup_emulator.py <ws> --apk <path>` checks it against `mobile.build.sha256` before installing it.
 7. **Continue**: open Claude Code in the workspace, read `context.md` and the latest run log in `runs/`, and go on
-   from the last checkpoint (methodology §12.1). Whatever a run needs that is not in the repository (a device, a login
+   from the last checkpoint (methodology §12.1). Each skill starts with its preflight, which says whether the skill,
+   the code and the project match: `python scripts/workspace_select.py preflight --skill <name> --workspace <ws>`. Whatever a run needs that is not in the repository (a device, a login
    link) is written in `context.md` or `project.yaml`. Tickets already followed with `/analyze-tickets` are in
    `memory/` (committed with the workspace), so the next check compares with them (technique-tickets.md §5).
 8. **Or on a runner**: a mobile batch can also run on a GitHub Actions runner of the workspace's repository, from a

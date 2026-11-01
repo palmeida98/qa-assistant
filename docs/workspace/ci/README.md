@@ -17,8 +17,8 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 - **GitHub Actions**: GitHub-hosted **standard** runners only (`ubuntu-24.04`); a larger runner is refused by
   `validate_project.py` and by the workflow (larger runners are always paid). A private repository on the Free plan has
   2 000 Linux minutes a month, shared by all the user's private repositories, and each job is rounded up to the
-  minute. The minutes are shared with any other private repository's CI too (e.g. a private `qa-assistant`: each
-  pull request runs its CI once, about 7 job-minutes). A run of a batch takes about 15 minutes without the login
+  minute. The minutes are shared with any other private repository's CI too. `qa-assistant` is public since 20.10.2026,
+  so its own CI no longer spends them. A run of a batch takes about 15 minutes without the login
   wait (the emulator's first boot, the SDK, the agent) plus the time the issue waits for the link. Set the **spending limit to 0** (account Settings → Billing and licensing → Budgets and alerts: a budget of
   0 for Actions with "stop usage when the budget limit is reached"), so a job stops instead of being billed.
   `workspace_ci.py check` warns when it can read a non-zero limit (organisations) and shows the minutes used this
@@ -44,7 +44,10 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
    - `CLAUDE_CODE_OAUTH_TOKEN`: run `claude setup-token` on your own computer (it opens the browser, then prints a
      token valid for one year; it is not saved anywhere) and paste it when `gh secret set` asks for it;
    - `QA_ASSISTANT_TOKEN`: a fine-grained personal access token with **read-only** access to the contents of the
-     private `qa-assistant` repository and nothing else (expiry as short as you are comfortable with);
+     `qa-assistant` repository and nothing else (expiry as short as you are comfortable with). It is what the
+     checkout of `qa-assistant` in `mobile.yml` and `apply.yml` uses, so these workflows still need it even though
+     the repository is public, and `workspace_ci.py install` still lists it. Removing it means changing the workflows
+     and the checks first, not only deleting the secret;
    - every name in `ci.secrets` of `project.yaml`: the `.env` variables the runner needs (e.g. the test account's
      e-mail for the login helper flow; with Jira / Azure DevOps, the tracker's credentials for `qa-apply.yml`).
 4. **Variables** (same page, tab Variables): `QA_ASSISTANT_REPOSITORY` = `<owner>/qa-assistant` and, optionally,

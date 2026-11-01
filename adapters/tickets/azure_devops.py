@@ -14,6 +14,8 @@ from adapters.tracker.errors import Conflict, HttpError, InvalidInput, TrackerEr
 
 from .model import (
     COMPLETE,
+    DEVELOPMENT_KINDS,
+    LISTED_ONLY,
     NOT_FOUND,
     NOT_READ,
     PARTIAL,
@@ -23,6 +25,7 @@ from .model import (
     error_status,
     failed_snapshot,
     link_kind,
+    links_in_html,
     links_in_text,
     part,
     read_pages,
@@ -83,13 +86,32 @@ def _relations(raw: list, base_url: str) -> tuple[list, list, list]:
 def _comment(c: dict) -> dict:
     modified = c.get("modifiedDate")
     edited = bool(modified and modified != c.get("createdDate"))
+    # renderedText: what the page shows. `text` may be Markdown with mentions as @<GUID> (seen in a real read)
     return {"id": str(c.get("id")), "author": _who(c.get("createdBy")), "created_at": c.get("createdDate"),
             "edited_at": modified if edited else None, "edited_by": _who(c.get("modifiedBy")) if edited else None,
-            "version": c.get("version"), "text": plain(c.get("text")), "deleted": bool(c.get("isDeleted"))}
+            "version": c.get("version"), "text": plain(c.get("renderedText") or c.get("text")),
+            "deleted": bool(c.get("isDeleted"))}
 
 
-def _update(u: dict) -> dict | None:
+def _listed_change(r: dict, base_url: str) -> tuple[str, str]:
+    """(field, key) of an added or removed relation in an update, with the same key the comparison uses."""
+    relations, attachments, links = _relations([r], base_url)
+    if attachments:
+        return "attachment", str(attachments[0]["id"])
+    if links:
+        return "link", links[0]["url"]
+    return "relation", f"{relations[0]['kind']}:{relations[0]['target']}"
+
+
+def _update(u: dict, base_url: str = "") -> dict | None:
     changes = []
+    moved = u.get("relations") or {}
+    for r in moved.get("added") or []:
+        field, key = _listed_change(r, base_url)
+        changes.append({"field": field, "from": "", "to": key})
+    for r in moved.get("removed") or []:
+        field, key = _listed_change(r, base_url)
+        changes.append({"field": field, "from": key, "to": ""})
     for ref, value in (u.get("fields") or {}).items():
         name = HISTORY_FIELDS.get(ref) or ("acceptance_criteria" if ref == AC_FIELD else None)
         if name:
@@ -134,18 +156,25 @@ def normalize(source, bundle: dict) -> dict:
     norm_comments = [_comment(c) for c in comments["items"]]
     links += links_in_text(fields["description"], "description") + links_in_text(fields["acceptance_criteria"],
                                                                                  "acceptance_criteria")
-    for c in norm_comments:
+    links += links_in_html(f.get("System.Description"), "description") + links_in_html(f.get(ac_field),
+                                                                                       "acceptance_criteria")
+    for raw, c in zip(comments["items"], norm_comments, strict=True):
         links += links_in_text(c["text"], f"comment:{c['id']}")
+        links += links_in_html(raw.get("renderedText") or raw.get("text"), f"comment:{c['id']}")
     links_status = worst_status(COMPLETE, comments["status"])
+    listed = any(x["kind"] in DEVELOPMENT_KINDS for x in links)
     return {"ref": ref, "url": url, "source_revision": str(wi.get("rev") or ""), "changed_at": f.get("System.ChangedDate"),
             "components": {"fields": fields, "comments": norm_comments,
-                           "history": [h for h in (_update(u) for u in updates["items"]) if h],
+                           "history": [h for h in (_update(u, source.base_url) for u in updates["items"]) if h],
                            "relations": relations, "attachments": attachments, "links": dedupe_links(links)},
             "coverage": {"fields": cover(COMPLETE), "comments": cover(comments["status"], comments["detail"]),
                          "history": cover(updates["status"], updates["detail"]), "relations": cover(COMPLETE),
                          "attachments": cover(COMPLETE),
                          "links": cover(links_status, "" if links_status == COMPLETE else
-                                        "links inside comments depend on the comments")}}
+                                        "links inside comments depend on the comments"),
+                         "development": cover(LISTED_ONLY, "PRs, commits or builds are listed from the links; nothing "
+                                              "behind them was read") if listed else
+                         cover(COMPLETE, "no PR, commit or build linked")}}
 
 
 def bundle_from_raw(raw: dict) -> dict:
@@ -171,7 +200,8 @@ class AdoSource:
     def _comments(self, wid: str) -> dict:
         def fetch(token):
             data = self.api.client.get(self.api.path(f"{self.api.p}/_apis/wit/workItems/{wid}/comments",
-                                                     comments_version(self.version), **{"$top": COMMENTS_PAGE},
+                                                     comments_version(self.version),
+                                                     **{"$top": COMMENTS_PAGE, "$expand": "renderedText"},
                                                      order="desc", includeDeleted="true",
                                                      continuationToken=token)).json() or {}
             return data.get("comments") or [], data.get("continuationToken")

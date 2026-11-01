@@ -7,13 +7,19 @@ Claude Code show the first line of the body instead of the description.
 
 import os
 import re
+import sys
 import unittest
 from unittest import mock
 
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
+
+import sync_skills
+
 SKILLS = os.path.join(ROOT, ".claude", "skills")
+CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
 METHODOLOGY = os.path.join(ROOT, "docs", "methodology.md")
 
 
@@ -47,6 +53,52 @@ class Skills(unittest.TestCase):
         for name in self.names():
             with self.subTest(skill=name):
                 self.assertIn(f"/{name}", commands)
+
+    def test_each_skill_has_its_whole_contract_in_the_frontmatter(self):
+        for name in self.names():
+            metadata = frontmatter(os.path.join(SKILLS, name, "SKILL.md")).get("metadata") or {}
+            for key in CONTRACT:
+                with self.subTest(skill=name, key=key):
+                    self.assertTrue(str(metadata.get(key) or "").strip())
+            for key, value in metadata.items():
+                with self.subTest(skill=name, key=key):
+                    self.assertIsInstance(value, str)        # a map of plain strings, as the skills format asks
+
+    def test_each_requirement_can_be_checked(self):
+        import validate_project
+        known_tools = {"git", "python", ".env", "skills", "libreoffice", "node", "qa-audit", "browser", "maestro", "adb",
+                       "emulator", "android-driver", "xcrun", "build", "mcp"}
+        for name in self.names():
+            doc = sync_skills.skill_doc(os.path.join(SKILLS, name, "SKILL.md"))
+            with self.subTest(skill=name):
+                self.assertEqual(sync_skills.missing_code(ROOT, doc), [])
+                self.assertLessEqual(set(sync_skills.listed(doc, "requires-tools")), known_tools)
+                self.assertLessEqual(set(sync_skills.listed(doc, "requires-config")),
+                                     {"tickets", "excel", *(s for s, _ in validate_project.MODULES.values() if s)})
+                self.assertIn((doc.get("metadata") or {}).get("requires-project", "valid"), ("valid", "any"))
+
+    def test_each_skill_starts_by_finding_the_framework_and_the_project(self):
+        import workspace_select
+        for name in self.names():
+            text = skill_text(name)
+            m = re.search(r"python <qa>/scripts/workspace_select\.py (preflight --skill (\S+)) ", text)
+            with self.subTest(skill=name):
+                self.assertIsNotNone(m)
+                self.assertEqual(m.group(2), name)
+                workspace_select.parser().parse_args(m.group(1).split())
+                self.assertLess(text.index("preflight"), text.index("\n1. ") if "\n1. " in text else len(text))
+
+    def test_nothing_in_a_skill_depends_only_on_the_old_relative_path(self):
+        for name in self.names():
+            text = skill_text(name)
+            with self.subTest(skill=name):
+                self.assertEqual(text.count("../../../qa-assistant"), 1)    # the last option of the preflight, and nowhere else
+
+    def test_a_skill_folder_holds_only_its_skill(self):
+        # scripts/sync_skills.py copies SKILL.md alone: a helper file here would never reach a workspace
+        for name in self.names():
+            with self.subTest(skill=name):
+                self.assertEqual(os.listdir(os.path.join(SKILLS, name)), ["SKILL.md"])
 
 
 def skill_text(name: str) -> str:

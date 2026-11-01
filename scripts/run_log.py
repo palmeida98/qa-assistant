@@ -31,7 +31,7 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
-from common import read_project
+from common import OutsideWorkspace, read_project, workspace_path
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
@@ -54,7 +54,10 @@ def batch_id(batch: str) -> str:
 
 
 def run_log_path(workspace: str, batch: str) -> str:
-    return os.path.join(workspace, "runs", batch_id(batch) + ".json")
+    try:
+        return workspace_path(workspace, "runs", batch_id(batch) + ".json")
+    except OutsideWorkspace as e:
+        raise UsageError(str(e)) from None
 
 
 def vocabulary(proj: dict) -> list[str]:
@@ -162,7 +165,7 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         raise UsageError(f"status {status!r} is not in the project's vocabulary {statuses} (or Question)")
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
-    path = os.path.join(workspace, "runs", name + ".json")
+    path = run_log_path(workspace, name)
     doc = read_log(path)
     item = {"tc": case.strip(), "status": status, "actual_result": actual,
             "ts": (now or datetime.now()).isoformat(timespec="seconds")}

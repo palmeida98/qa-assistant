@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.7 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14.
+> Version 2.8 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -23,7 +23,7 @@
 
 | Layer | Content | Where it lives |
 |---|---|---|
-| **Engine** | Skills (`.claude/skills/`), adapters, scripts (`scripts/`, `tools/`), tests and guards; and the automated audit engine `qa-audit` (`src/qa_audit`, specified in `docs/qa-audit.md`), which lives next to this layer and does not replace it (decision of 25.09.2026, which revises the one of 24.09.2026 about a separate core) | Personal repository `qa-assistant` |
+| **Engine** | A central library of skills (`.claude/skills/`), adapters, scripts (`scripts/`, `tools/`), tests and guards; and the automated audit engine `qa-audit` (`src/qa_audit`, specified in `docs/qa-audit.md`), which lives next to this layer and does not replace it (decision of 25.09.2026, which revises the one of 24.09.2026 about a separate core) | Personal repository `qa-assistant` |
 | **1. Methodology** | This document | `qa-assistant/docs/` |
 | **2. Test modules** | Techniques per type of test (`technique-browser.md`, `technique-api.md`, `technique-accessibility.md`, `technique-mobile.md`; list in §4.1) | `qa-assistant/docs/` |
 | **3. Adapters** | Conversion between the internal model and each company's tools: Excel (`adapters/excel/`, technique `technique-excel.md`), Jira with Xray and Azure DevOps Test Plans (`adapters/jira/`, `adapters/azure_devops/`, on the common base `adapters/tracker/`; techniques `technique-jira-xray.md` and `technique-azure-devops.md`; built in phase 10 of the plan — §4.2) | `qa-assistant/adapters/` |
@@ -51,6 +51,8 @@ When two sources conflict, the one with the lower number prevails:
 7. Historical artefacts (as a reference only)
 
 If the conflict cannot be resolved objectively with this hierarchy, **stop and ask** before any change with consequences.
+
+Claude's personal or global memory is not a source of truth for a project: it does not enter this hierarchy (`technique-workspaces.md` §7).
 
 ### 1.4 Generalisation rule
 
@@ -95,20 +97,27 @@ Onboarding → Analysis → Case design → Batch planning → Execution
     → Classification → Bug management → Validation → Checkpoint / Report
 ```
 
-Each stage has a corresponding skill in Claude Code:
+Each stage has a corresponding skill in Claude Code, which is also where a request in natural language goes:
 
-| Stage | Skill |
-|---|---|
-| Onboarding | `/project-onboarding` |
-| Ticket follow-up (at any time; read only) | `/analyze-tickets` |
-| Analysis | `/analyze-feature` |
-| Case design | `/generate-cases` |
-| Batch planning | `/plan-batch` |
-| Execution and classification | `/run-batch` (browser), `/test-api` (API), `/audit-accessibility`, `/test-mobile` |
-| Bug management | `/log-bug` |
-| Checkpoint | `/checkpoint` |
-| Validation and report | `/end-session` |
-| Follow-up (at any time) | `/dashboard` |
+| Stage or request | Skill | Result |
+|---|---|---|
+| Onboarding: set up a project | `/project-onboarding` | Configuration and environment validated |
+| Ticket follow-up (at any time; read only) | `/analyze-tickets` | Status, differences, memory and a verification prompt |
+| Analysis: understand a feature | `/analyze-feature` | Rules, behaviours, risks and gaps |
+| Case design | `/generate-cases` | Traceable proposals, without duplicates |
+| Batch planning | `/plan-batch` | A batch with order, dependencies and scope |
+| Execution and classification: test the web | `/run-batch` | Observed results and evidence |
+| Test an API | `/test-api` | Contract checked, results |
+| Test accessibility | `/audit-accessibility` | Findings and limits of coverage |
+| Test mobile | `/test-mobile` | Results per device, platform and build |
+| Bug management | `/log-bug` | Duplicate search and a bug proposal |
+| Checkpoint: save progress | `/checkpoint` | State kept, and application once authorised |
+| Validation and report: close a session | `/end-session` | Consistency, summary and next steps |
+| Follow-up of an Excel project (at any time) | `/dashboard` | The workbook's dashboard |
+
+The user need not know these commands. Claude Code matches the request against the skills' descriptions, and each skill starts by finding the framework and the project (§4.3). Each skill's contract (intent, inputs, configuration, tools, outputs, writes, approvals, failures, resume) is in its own frontmatter; `python scripts/workspace_select.py skills` prints the catalogue from there. A skill existing does not prove its tools are available.
+
+**Analysis is not execution.** "Analyse these tickets" gives an analysis and marks nothing as tested. "Test this feature" may go through planning and execution, respecting the approved batch and the project's rules.
 
 ---
 
@@ -161,6 +170,18 @@ Other variants mentioned in the techniques (smoke, role matrix, visual, cross-br
 The configuration is the tracker's section of `project.yaml` (`excel:`, `jira:`, `azure_devops:`), with credentials only as names of `.env` variables; the technique of each adapter (`technique-excel.md`, `technique-jira-xray.md`, `technique-azure-devops.md`) has the details. Version 1 of the Jira and Azure DevOps adapters targets the **cloud** services (Jira Cloud + Xray Cloud, Azure DevOps Services); Server / Data Center stays out until a real project needs it.
 
 The Jira and Azure DevOps adapters were built in phase 10 of the plan (10.2 and 10.3); `scripts/validate_project.py` requires the tracker's section. When the adapter cannot be used (e.g. the tracker's API is out of reach), the run log in `runs/` stays the source and the user (or the assistant, with approval) passes the results and bugs to the tracker by hand. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
+
+### 4.3 Selecting a project
+
+A project is selected before a skill acts (`technique-workspaces.md`): an explicit path, then a name, then the current directory, then the configured root of workspaces. Both `<root>/<company>/<project>/` and `<root>/<project>/` are supported, and the root can have any name.
+
+- **Nothing is chosen silently between candidates:** ambiguity is a short question.
+- **A folder found is not a project ready:** each one is `valid`, `incomplete`, `not-configured` or `inaccessible`, and `/project-onboarding` is proposed only when needed.
+- **Listing does not authorise reading:** only the selected project's data is loaded, and listing reads no ticket, evidence or secret.
+- **Writes stay inside the selected workspace.** A path that leaves it, through `..` or a link, is refused.
+- **The framework is found explicitly and checked against the skill**, in a main checkout or a worktree. A mismatch stops with an instruction: nothing is installed silently, and a wrongly resolved path never creates an empty root.
+
+Before executing, the project, task, environment and relevant tools are shown. The agent only asks when there is ambiguity or an authorisation is missing.
 
 Information already in the workspace **is not asked for nor researched again**, unless there is evidence that it is out of date or inconsistent. If information needed to continue is missing, identify exactly what is missing and ask.
 
@@ -388,7 +409,7 @@ Check especially: case IDs, feature names, statuses, results, bugs, descriptions
 ### 12.1 Rules
 
 - The execution must survive interruptions.
-- When resuming: read `context.md` and the latest run log in `runs/` first, identify what was already run and continue from the last valid point.
+- When resuming: read `context.md`, the latest run log in `runs/` and, for tickets, `memory/` first, identify what was already run and continue from the last valid point.
 - Do not repeat work without need. Do not rebuild the progress from scratch.
 - The workspace's git serves as a restore point: one commit per checkpoint. The checkpoint says how many commits are not pushed; the push to the private remote happens only when the user says so, never with `--force`.
 - A run can also happen in the **workspace's CI** (§12.4): it starts from the pushed state of the private remote and comes back as a pull request; its run log is applied only after the merge.
@@ -411,7 +432,7 @@ Updated: <date and time>
 
 `context.md` is the session's **temporary** state. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
 
-`/analyze-tickets` keeps one generated block in `context.md`, between its markers, with the resume point of the last check; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference (`technique-tickets.md` §5).
+`/analyze-tickets` keeps one generated block in `context.md`, between its markers, with the resume point of each scope; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference, and analysing an older check never rewinds the current state (`technique-tickets.md` §5).
 
 ### 12.3 Resuming on another computer
 
@@ -476,7 +497,7 @@ At the start of each session, confirm and, if there are differences, record:
 - which scripts and skills can be used;
 - the environment's limitations.
 
-Do not assume that a tool available in one environment exists in another.
+Do not assume that a tool available in one environment exists in another. `python scripts/workspace_select.py where` shows which framework, Python and imports really run, and each skill's preflight shows the tools it needs (`technique-workspaces.md`).
 
 A **CI runner** (§12.4) is an environment of its own: a clean Linux machine for each run, with only the tools the workflow installs; no screen (the evidence is the only view the user gets); no person during the run (questions and approvals wait for the pull request); a time limit and a turn limit from `project.yaml`; the secrets only as Actions secrets. What it cannot do is Blocked, never assumed: a hardware feature the emulator does not have, a login nobody pasted in time.
 
@@ -564,6 +585,12 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.7 → v2.8 (plan phase 15, 01.11.2026)
+
+- **New:** finding the framework and selecting a project for any skill (§3, §4.3, `technique-workspaces.md`); each skill's contract in its frontmatter; the two layouts of a workspace; the statuses of a project.
+- **Changed:** a root of workspaces that does not exist is an error, no longer created; the root can be configured.
+- **Kept:** the names of the skills, the closed list of modules, the approvals of §9.4, `history/` immutable, one engine: nothing is copied into a project.
 
 ### v2.6 → v2.7 (plan phase 14, 01.11.2026)
 

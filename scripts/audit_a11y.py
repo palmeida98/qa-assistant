@@ -36,7 +36,7 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import read_project, read_workspace_env
+from common import OutsideWorkspace, read_project, read_workspace_env, workspace_path
 
 STANDARDS = {
     "WCAG 2.0 AA": ["wcag2a", "wcag2aa"],
@@ -299,14 +299,15 @@ def text_summary(rep: dict) -> list[str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Automated accessibility audit (qa-audit engine).")
     ap.add_argument("workspace")
-    ap.add_argument("--output", help="write the JSON report (relative to the workspace, unless absolute)")
+    ap.add_argument("--output", help="write the JSON report (inside the workspace)")
     a = ap.parse_args(argv)
     try:
+        target = workspace_path(a.workspace, a.output) if a.output else None   # refused before anything is audited
         conf, env = configuration(a.workspace)
         if not engine_installed():
             raise ConfigError("qa-audit engine not installed: pip install -e . (from the root of qa-assistant) "
                               "and then qa-audit doctor")
-    except ConfigError as e:
+    except (ConfigError, OutsideWorkspace) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     for w in conf["warnings"]:
@@ -329,8 +330,7 @@ def main(argv=None) -> int:
     rep["ts"] = datetime.now().isoformat(timespec="seconds")
     for line in text_summary(rep):
         print(line)
-    if a.output:
-        target = a.output if os.path.isabs(a.output) else os.path.join(a.workspace, a.output)
+    if target:
         os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
         with open(target, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=1)

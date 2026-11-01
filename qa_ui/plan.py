@@ -16,6 +16,7 @@ import re
 from datetime import date
 
 import yaml
+from common import OutsideWorkspace, workspace_path
 
 from . import MODULES
 from .suggest import skill_for
@@ -116,7 +117,10 @@ def save(workspace: str, plan: dict) -> list[str]:
         doc = {"cases": list(b["cases"]), "module": b["module"]}
         if b.get("role"):
             doc["role"] = b["role"]
-        path = os.path.join(workspace, "batches", f"{b['name']}.yaml")
+        try:
+            path = workspace_path(workspace, "batches", f"{b['name']}.yaml")
+        except OutsideWorkspace as e:
+            raise PlanError(str(e)) from None
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False, default_flow_style=None)

@@ -10,6 +10,7 @@ import hashlib
 from .model import COMPLETE, PARTIAL
 
 TEXT_FIELDS = ("description", "acceptance_criteria", "title")
+LISTED_FIELDS = ("relation", "attachment", "link")      # in the history, for who changed them; compared as lists
 COMPARED_FIELDS = ("type", "title", "description", "acceptance_criteria", "state", "reason", "assignee", "priority",
                    "sprint", "area")
 # what a change means for QA: a code, which the agent turns into the user's language and judges in context
@@ -62,6 +63,13 @@ def _fields(old: dict, new: dict, history: list, at: str, url: str) -> list[dict
     return out
 
 
+def _edited(before: dict, now: dict) -> bool:
+    """The source's version decides, when it gives one: how a text was rendered is not an edit."""
+    if before.get("version") is not None and now.get("version") is not None:
+        return before["version"] != now["version"]
+    return not _same(before.get("text"), now.get("text"))
+
+
 def _comments(old: list, new: list, complete: bool, at: str, url: str) -> list[dict]:
     out = []
     old_by_id = {c["id"]: c for c in old}
@@ -77,7 +85,7 @@ def _comments(old: list, new: list, complete: bool, at: str, url: str) -> list[d
         elif before is None:
             out.append(_change("comments", "added", cid, None, c.get("text"), "comment", at, link, c.get("author"),
                                c.get("created_at"), partial))
-        elif not _same(before.get("text"), c.get("text")) or before.get("version") != c.get("version"):
+        elif _edited(before, c):
             out.append(_change("comments", "edited", cid, before.get("text"), c.get("text"), "comment", at, link,
                                c.get("edited_by") or c.get("author"), c.get("edited_at"), partial))
     if complete:      # absence is evidence only in a complete listing
@@ -87,18 +95,29 @@ def _comments(old: list, new: list, complete: bool, at: str, url: str) -> list[d
     return out
 
 
+def _who_moved(history: list, field: str, key: str, side: str) -> tuple:
+    """Who added (`to`) or removed (`from`) an item of a list, when the source's history says so."""
+    for entry in sorted(history or [], key=lambda h: str(h.get("at") or ""), reverse=True):
+        for c in entry.get("changes") or []:
+            if c.get("field") == field and str(c.get(side)) == str(key):
+                return entry.get("author"), entry.get("at")
+    return None, None
+
+
 def _listed(component: str, impact_key: str, old: list, new: list, identity, complete: bool, at: str, url: str,
-            describe) -> list[dict]:
+            describe, history: list | None = None) -> list[dict]:
     out = []
     old_by_id, new_by_id = {identity(x): x for x in old}, {identity(x): x for x in new}
     for key, item in new_by_id.items():
         if key not in old_by_id:
-            out.append(_change(component, "added", key, None, describe(item), impact_key, at, url,
-                               changed_at=item.get("created_at"), from_partial=not complete))
+            author, when = _who_moved(history, impact_key, key, "to")
+            out.append(_change(component, "added", key, None, describe(item), impact_key, at, url, author,
+                               when or item.get("created_at"), from_partial=not complete))
     if complete:
         for key, item in old_by_id.items():
             if key not in new_by_id:
-                out.append(_change(component, "removed", key, describe(item), None, impact_key, at, url))
+                author, when = _who_moved(history, impact_key, key, "from")
+                out.append(_change(component, "removed", key, describe(item), None, impact_key, at, url, author, when))
     return out
 
 
@@ -109,7 +128,7 @@ def _transient(old_history: list, new_history: list, reported: set, at: str, url
     for entry in new_history or []:
         if entry["id"] not in known:
             for c in entry.get("changes") or []:
-                if c.get("field") not in reported and c.get("field") not in TEXT_FIELDS:
+                if c.get("field") not in reported and c.get("field") not in TEXT_FIELDS + LISTED_FIELDS:
                     fresh.setdefault(c["field"], []).append((entry, c))
     out = []
     for field, moves in fresh.items():
@@ -152,14 +171,14 @@ def compare_ticket(reference: dict | None, snap: dict, at: str) -> dict:
 
     if comparison["relations"] in ("compared", "partial"):
         changes += _listed("relations", "relation", data("relations"), comps["relations"], rel_id,
-                           comparison["relations"] == "compared", at, url, rel_id)
+                           comparison["relations"] == "compared", at, url, rel_id, history_read)
     if comparison["attachments"] in ("compared", "partial"):
         changes += _listed("attachments", "attachment", data("attachments"), comps["attachments"],
                            lambda a: str(a.get("id") or a.get("url")), comparison["attachments"] == "compared", at, url,
-                           lambda a: a.get("name") or a.get("url"))
+                           lambda a: a.get("name") or a.get("url"), history_read)
     if comparison["links"] in ("compared", "partial"):
         changes += _listed("links", "link", data("links"), comps["links"], lambda x: x["url"],
-                           comparison["links"] == "compared", at, url, lambda x: x["url"])
+                           comparison["links"] == "compared", at, url, lambda x: x["url"], history_read)
     if comparison["history"] in ("compared", "partial") and comparison["fields"] == "compared":
         reported = {c["item"] for c in changes if c["component"] == "fields"}
         changes += _transient(data("history"), history_read, reported, at, url)
@@ -192,7 +211,7 @@ def suggested_situation(snap: dict, entries_by_id: dict) -> dict | None:
     if fields.get("state_category") == "done":
         value = "verification-candidate"
         flags.append("closed_without_qa_evidence")
-    elif blockers:
+    elif blockers or str(fields.get("state") or "").strip().casefold() == "blocked":
         value = "blocked-by-dependency"
     elif not (fields.get("description") or fields.get("acceptance_criteria")):
         value = "needs-clarification"

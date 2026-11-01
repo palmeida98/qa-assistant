@@ -17,7 +17,13 @@ from datetime import datetime
 
 import run_log
 import yaml
-from common import read_env, read_project, variable_names
+from common import (
+    OutsideWorkspace,
+    read_env,
+    read_project,
+    variable_names,
+    workspace_path,
+)
 
 DEFECT_ACTIONS = ("approve", "edit", "link", "drop")
 
@@ -101,7 +107,10 @@ def set_batch_module(workspace: str, proj: dict, name: str, module: str) -> dict
         raise Refused(f"{module!r} is not a module of the list {list(MODULES)}")
     if module not in (proj.get("modules") or []):
         raise Refused(f"`{module}` is not in `modules:` of project.yaml (methodology 4.1)")
-    path = os.path.join(workspace, "batches", f"{name}.yaml")
+    try:
+        path = workspace_path(workspace, "batches", f"{name}.yaml")
+    except OutsideWorkspace as e:
+        raise Refused(str(e)) from None
     with open(path, "rb") as f:
         raw = f.read()
     nl = b"\r\n" if b"\r\n" in raw else b"\n"

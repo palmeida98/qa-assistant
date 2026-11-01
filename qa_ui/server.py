@@ -239,16 +239,29 @@ class HubApp:
                 self.apps[project.id] = App(project.path, runner, self.token)
             return self.apps[project.id]
 
+    def _project_route(self, parts: list[str]) -> tuple[hubmod.Project, list[str]]:
+        """The project a route names, and the rest of the route: /api/p/<company>/<project>/... or /api/p/<project>/...
+        (a folder with its own project.yaml is never a company). Looked up, never joined (section 14.2)."""
+        if len(parts) >= 5:
+            try:
+                return self.hub.find(f"{parts[2]}/{parts[3]}"), parts[4:]
+            except workspace.NotFound as e:
+                try:
+                    return self.hub.find(parts[2]), parts[3:]
+                except workspace.NotFound:
+                    raise e from None
+        return self.hub.find(parts[2]), parts[3:]
+
     def handle(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         body = body if isinstance(body, dict) else {}
         url = urlsplit(path)
         parts = [unquote(p) for p in url.path.strip("/").split("/")]
-        if parts[:2] == ["api", "p"] and len(parts) >= 5:
+        if parts[:2] == ["api", "p"] and len(parts) >= 4:
             try:
-                project = self.hub.find(f"{parts[2]}/{parts[3]}")     # looked up, never joined (section 14.2)
+                project, rest = self._project_route(parts)
             except workspace.NotFound as e:
                 return 404, {"error": str(e)}
-            return self.app(project).handle_parts(method, ["api", *parts[4:]], url.query, body)
+            return self.app(project).handle_parts(method, ["api", *rest], url.query, body)
         try:
             return 200, self.route(method, parts, body)
         except BadRequest as e:

@@ -54,7 +54,8 @@ function banner(message) {
   el.hidden = !message;
 }
 
-/* In the hub, a project's routes live under /api/p/<company>/<project>/ (docs/qa-ui.md section 14.10). */
+/* In the hub, a project's routes live under /api/p/<id>/ (docs/qa-ui.md section 14.10); an id is <company>/<project>,
+   or <project> directly under the root. */
 const HUB_ROUTES = ['/api/mode', '/api/hub'];
 
 function projectPath(path) {
@@ -917,6 +918,8 @@ function projectCard(p) {
     p.error ? h('p', { class: 'note', text: p.error }) : h('div', { class: 'chips' },
       h('span', { class: 'chip outline', text: p.tracker || 'no tracker' }),
       p.modules.map((m) => h('span', { class: 'chip accent', text: m }))),
+    !p.error && p.status && p.status !== 'valid'
+      ? h('p', { class: 'note', text: `${p.status}: ${p.reason}. Complete it with /project-onboarding in its folder.` }) : null,
     p.error ? null : lastRunLine(p),
     h('div', { class: 'chips' },
       running ? h('span', { class: 'chip accent', text: 'Running now' }) : null,
@@ -937,7 +940,8 @@ function renderHub() {
     return;
   }
   root.append(h('p', { class: 'lead' }, `${plural(hub.projects.length, 'project')} in `, h('code', { text: hub.root }),
-    '. Every folder ', h('code', { text: '<company>/<project>/' }), ' with a ', h('code', { text: 'project.yaml' }), ' is one.'));
+    '. Every folder ', h('code', { text: '<company>/<project>/' }), ' or ', h('code', { text: '<project>/' }), ' with a ',
+    h('code', { text: 'project.yaml' }), ' is one.'));
   root.append(h('div', { class: 'row' },
     hub.inbox ? h('span', { class: 'chip ask', text: `Inbox: ${hub.inbox} item${hub.inbox === 1 ? '' : 's'} need you` })
       : h('span', { class: 'chip ok', text: 'Nothing needs you' }),
@@ -949,12 +953,18 @@ function renderHub() {
       h('p', {}, h('strong', { text: hub.run.project }), ` — ${hub.run.label}, started ${hub.run.started.replace('T', ' ')}. `,
         'One run at a time on this computer: the others wait until it ends.')));
   }
+  const notReady = (hub.unconfigured || []).length ? h('section', { class: 'panel group', 'aria-label': 'Folders that are not projects yet' },
+    h('h2', { text: 'Folders that are not projects yet' }),
+    h('ul', {}, hub.unconfigured.map((f) => h('li', {}, h('code', { text: f.id }), ` — ${f.status}: ${f.reason}.`))),
+    h('p', { class: 'small muted' }, 'Open ', h('code', { text: 'claude' }), ' in the folder and run ',
+      h('code', { text: '/project-onboarding' }), '.')) : null;
   if (!hub.projects.length) {
     root.append(h('section', { class: 'panel group' },
       h('h2', { text: 'No project yet' }),
-      h('p', {}, 'Create the folder ', h('code', { text: 'qa-workspaces/<company>/<project>/' }), ', open ',
+      h('p', {}, 'Create the folder ', h('code', { text: '<company>/<project>/' }), ' in this root, open ',
         h('code', { text: 'claude' }), ' in it and run ', h('code', { text: '/project-onboarding' }),
         '. Creating a project from this page comes with plan 13.4.')));
+    if (notReady) root.append(notReady);
     return;
   }
   const groups = [];
@@ -965,8 +975,9 @@ function renderHub() {
   for (const [title, list] of groups) {
     if (!list.length) continue;
     root.append(h('section', { class: 'group', 'aria-label': title },
-      h('h2', { text: title }), h('div', { class: 'grid' }, list.map(projectCard))));
+      h('h2', { text: title || 'Projects directly under the root' }), h('div', { class: 'grid' }, list.map(projectCard))));
   }
+  if (notReady) root.append(notReady);
 }
 
 /* ------------------------------------------------------------------ a project's bar, Overview and Notes (14.4, 14.6, 14.7) */
@@ -1133,14 +1144,17 @@ function projectHash(id, screen) {
   return `#/p/${id}/${screen}`;
 }
 
-/* #/p/<company>/<project>/<screen> opens a project; anything else is the Projects screen. The id is the server's
-   to look up: a project that is not discovered answers 404 and the page goes back to the Projects screen. */
+/* #/p/<id>/<screen> opens a project; anything else is the Projects screen. The id is the server's to look up: a
+   project that is not discovered answers 404 and the page goes back to the Projects screen. */
 const AREAS = ['overview', 'test', 'notes'];
 
 function readHash() {
-  const m = /^#\/p\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/.exec(window.location.hash);
+  const m = /^#\/p\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?$/.exec(window.location.hash);
   if (!m) return { id: null, area: 'overview' };
-  return { id: `${decodeURIComponent(m[1])}/${decodeURIComponent(m[2])}`, area: AREAS.includes(m[3]) ? m[3] : 'overview' };
+  const first = decodeURIComponent(m[1]);
+  if (m[3]) return { id: `${first}/${decodeURIComponent(m[2])}`, area: AREAS.includes(m[3]) ? m[3] : 'overview' };
+  if (m[2] && AREAS.includes(m[2])) return { id: first, area: m[2] };     // a project directly under the root
+  return { id: m[2] ? `${first}/${decodeURIComponent(m[2])}` : first, area: 'overview' };
 }
 
 /* What a screen of the project reads when it is opened. The project's state comes too, for the top bar (the run in

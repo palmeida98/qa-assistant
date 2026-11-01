@@ -13,14 +13,16 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Callable
+from datetime import datetime
 
 from adapters.tracker.errors import AuthFailed, HttpError, InvalidInput, TrackerError
 from adapters.tracker.http import Request, Response, Transport
 
 COMPONENTS = ("fields", "comments", "history", "relations", "attachments", "links")
-COMPLETE, PARTIAL, FAILED, DENIED, NOT_FOUND, UNSUPPORTED, NOT_READ = (
-    "complete", "partial", "failed", "denied", "not_found", "unsupported", "not_read")
-STATUSES = (COMPLETE, PARTIAL, FAILED, DENIED, NOT_FOUND, UNSUPPORTED, NOT_READ)
+COMPLETE, PARTIAL, FAILED, DENIED, NOT_FOUND, UNSUPPORTED, NOT_READ, LISTED_ONLY = (
+    "complete", "partial", "failed", "denied", "not_found", "unsupported", "not_read", "listed_only")
+STATUSES = (COMPLETE, PARTIAL, FAILED, DENIED, NOT_FOUND, UNSUPPORTED, NOT_READ, LISTED_ONLY)
+DEVELOPMENT_KINDS = ("pr", "commit", "build", "branch")
 RELATION_KINDS = ("parent", "child", "blocks", "blocked-by", "tested-by", "tests", "related", "duplicate")
 FIELD_NAMES = ("type", "title", "description", "acceptance_criteria", "state", "state_category", "reason", "assignee",
                "priority", "sprint", "area", "custom")
@@ -47,6 +49,9 @@ def ticket_key(ref: dict) -> str:
     return f"{ref['service']}:{ref['org']}/{ref['project']}#{ref['id']}"
 
 
+MAX_SLUG = 24       # a long organisation or project must not eat the path: the hash is what keeps them apart
+
+
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-") or "x"
 
@@ -54,7 +59,19 @@ def slug(text: str) -> str:
 def ticket_slug(ref: dict) -> str:
     """Safe as a file name. The hash keeps apart names that slugify alike ('A B' and 'A-B')."""
     digest = hashlib.sha256(f"{ref['service']}|{ref['org']}|{ref['project']}".encode()).hexdigest()[:8]
-    return f"{ref['service']}__{slug(ref['org'])}__{slug(ref['project'])}__{digest}__{slug(ref['id'])}"
+    return (f"{ref['service']}__{slug(ref['org'])[:MAX_SLUG]}__{slug(ref['project'])[:MAX_SLUG]}__{digest}"
+            f"__{slug(ref['id'])}")
+
+
+def check_order(at: str, check_id: str) -> tuple:
+    """A check's place in time: the instant of the consultation (a value without an offset is local time), then the
+    sequence in its id. The one order everything current is worked out with (technique section 5)."""
+    try:
+        when = datetime.fromisoformat(str(at)).timestamp()
+    except (ValueError, OverflowError, OSError):
+        when = 0.0
+    tail = str(check_id).split("-")[2:]
+    return (when, int(tail[0]) if tail and tail[0].isdigit() else 1, str(check_id))
 
 
 def text_hash(text) -> str:
@@ -158,6 +175,7 @@ def bundle_part(raw, what: str) -> dict:
 # --- shared by the normalisers ---------------------------------------------------------------------------------------
 
 URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>)\]]+")
+URL_IN_HTML = re.compile(r"""(?:href|src)\s*=\s*["'](https?://[^"']+)["']""", re.IGNORECASE)
 
 
 def link_kind(url: str) -> str:
@@ -176,6 +194,12 @@ def link_kind(url: str) -> str:
 def links_in_text(text: str, origin: str) -> list[dict]:
     return [{"url": u.rstrip(".,;:"), "kind": link_kind(u), "label": "", "origin": origin, "content_read": False}
             for u in URL_IN_TEXT.findall(str(text or ""))]
+
+
+def links_in_html(html: str, origin: str) -> list[dict]:
+    """The links only an attribute holds (`<a href>`, `<img src>`): the plain text of the field does not have them."""
+    return [{"url": u, "kind": link_kind(u), "label": "", "origin": origin, "content_read": False}
+            for u in URL_IN_HTML.findall(str(html or ""))]
 
 
 def dedupe_links(links: list[dict]) -> list[dict]:

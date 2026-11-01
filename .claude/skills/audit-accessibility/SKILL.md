@@ -1,11 +1,33 @@
 ---
 name: audit-accessibility
 description: Audits the accessibility (WCAG 2.1 AA) of the current workspace's pages - the automated part with the qa-audit engine (axe-core, keyboard, reflow) and the guided manual part - and maps each failure to the WCAG criterion and level.
+metadata:
+  intent: "Audit accessibility (WCAG 2.1 AA): the automated part with qa-audit and the guided manual part."
+  inputs: "The pages of accessibility: in project.yaml."
+  config: "accessibility: (standard, browser, login, pages); the module active; login variables by name."
+  tools: "qa-audit with a Playwright browser; the Playwright MCP or a browser for the manual part."
+  outputs: "Findings mapped to criterion and level, run log, limits of coverage."
+  writes: "runs/ (report and run log), evidence/. Bugs only proposed."
+  approvals: "Defects through /log-bug; applying through /checkpoint."
+  failures: "Exit 3 or a redirect: Blocked (environment), never Pass. A failed login is not repeated."
+  resume: "The run log in runs/ and context.md."
+  requires-modules: "qa_audit"
+  requires-scripts: "scripts/audit_a11y.py"
+  requires-config: "accessibility"
+  requires-tools: "qa-audit, browser, .env"
 ---
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill audit-accessibility [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read technique-accessibility.md (<qa>/docs/) and, in the current workspace, the accessibility: section of
-   project.yaml (standard, browser, login, pages, audit_error_pages) and context.md. <qa> is the root of
-   qa-assistant: usually ../../../qa-assistant; in the demo, ../.. . If the section is empty, propose the pages
-   from the main flows and ask.
+   project.yaml (standard, browser, login, pages, audit_error_pages) and context.md. If the section is empty, propose
+   the pages from the main flows and ask.
 2. Confirm that the URLs are from the TEST environment (technique-browser.md section 2) and that the login's
    variables exist in .env (only that they exist; never show values).
 3. The qa-audit engine must be installed (technique-accessibility.md section 7): if the script exits with 2

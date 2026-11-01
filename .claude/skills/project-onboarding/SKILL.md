@@ -1,12 +1,32 @@
 ---
 name: project-onboarding
 description: Sets up a new project workspace - environments, roles, tracker, bug format - following methodology.md section 4.
+metadata:
+  intent: "Set up a new project workspace: environments, roles, tracker, tickets, bug format."
+  inputs: "A folder, new or incomplete; the user's answers; a copy of the workbook."
+  config: "It fills them: project.yaml, CLAUDE.md, .gitignore, .claude/settings.json, context.md."
+  tools: "git; the project's adapter; gh for a private remote."
+  outputs: "A workspace validated with 0 problems, a git repository of its own."
+  writes: "Files of the workspace only; never the framework."
+  approvals: "The remote only with the user's yes; credential values are the user's, in .env."
+  failures: "Every blank is asked, never assumed; validate_project.py lists what is left."
+  resume: "It continues from the files already there."
+  requires-modules: "adapters.excel, adapters.tracker"
+  requires-scripts: "scripts/validate_project.py, scripts/workspace_git.py"
+  requires-tools: "git"
+  requires-project: "any"
 ---
 
-1. Find the root of qa-assistant (<qa>) from the current workspace: usually ../../../qa-assistant
-   (workspace in qa-workspaces/<company>/<project>/); in the demo, inside the repository itself, it is ../..
-   (examples/demo/). Confirm that <qa>/docs/methodology.md exists before continuing.
-   Check whether CLAUDE.md and project.yaml exist in the current workspace. If not, copy them from:
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill project-onboarding [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
+1. A new folder is the normal start here (the preflight says not-configured, and exits 0). Confirm that
+   <qa>/docs/methodology.md exists before continuing. Check whether CLAUDE.md and project.yaml exist in the current workspace. If not, copy them from:
    - <qa>/docs/context-template.md -> CLAUDE.md (and adjust the @ imports to the same <qa>)
    - <qa>/docs/project.yaml -> project.yaml
    A workspace with projeto.yaml is from before the translation (plan 8.11): convert it first with
@@ -75,6 +95,12 @@ description: Sets up a new project workspace - environments, roles, tracker, bug
    f. bugs: the fields from the project's bug format (bug_format), defaults, the statuses/states a retest may
       move a bug to (resolved_bugs rule), priorities; open_jql (jira) or closed_states (azure-devops).
    Validate with step 8a; check and import-cases come after .env has the values (step 8d).
+4k. Tickets (technique-tickets.md section 2): ASK whether the team's tickets live in Azure DevOps or Jira, whatever
+   the tracker of the results is. If they do, fill in tickets: of project.yaml with the user: each source (service,
+   organisation or site, project, access: api with only the NAMES of the .env variables, or access: browser for a
+   logged-in session), the scopes the user means by "the current sprint" and "my tickets" (never guessed), and
+   tickets.cases.link_fields when the cases have a column for their ticket. With a jira or azure-devops tracker this
+   section is optional. Check with python -m adapters.tickets <workspace> sources (from the root of qa-assistant).
 5. If a browser module is active (e.g. functional-web), register the Playwright MCP IN THE WORKSPACE
    (technique-browser.md section 1, level N1). The command runs from the workspace's folder, because
    --scope project writes .mcp.json in the current folder:

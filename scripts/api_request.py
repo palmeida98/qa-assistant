@@ -42,10 +42,12 @@ from datetime import datetime
 from common import (
     REDACTED,
     SECRET_HEADERS,
+    OutsideWorkspace,
     Redactor,
     read_env,
     read_project,
     read_workspace_env,
+    workspace_path,
 )
 
 SESSION = ".api-session.env"
@@ -200,20 +202,19 @@ def main(argv=None) -> int:
     ap.add_argument("--expected", type=int)
     ap.add_argument("--save", action="append", default=[], metavar="field=NAME")
     ap.add_argument("--save-secret", action="append", default=[], metavar="field=NAME")
-    ap.add_argument("--output", help="also write the evidence to this JSON file (relative to the workspace, "
-                                     "unless absolute)")
+    ap.add_argument("--output", help="also write the evidence to this JSON file (inside the workspace)")
     ap.add_argument("--timeout", type=float, default=30)
     ap.add_argument("--max-body", type=int, default=4000)
     a = ap.parse_args(argv)
     try:
+        target = workspace_path(a.workspace, a.output) if a.output else None   # refused before the request is made
         rc, evid = request(a)
-    except UsageError as e:
+    except (UsageError, OutsideWorkspace) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     out = json.dumps(evid, ensure_ascii=False, indent=1)
     print(out)
-    if a.output:
-        target = a.output if os.path.isabs(a.output) else os.path.join(a.workspace, a.output)
+    if target:
         os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
         with open(target, "w", encoding="utf-8") as f:
             f.write(out + "\n")

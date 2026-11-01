@@ -1,8 +1,10 @@
 """
-The hub (docs/qa-ui.md section 14): every project of qa-workspaces/ in one interface.
+The hub (docs/qa-ui.md section 14): every project of the root of workspaces in one interface.
 
-    default_root()                    -> <qa-assistant>/../qa-workspaces, the only root (14.1)
-    discover(root)                    -> the projects: <root>/<company>/<project>/project.yaml, two levels (14.2)
+    default_root()                    -> scripts/workspace_select.py's root: never created (14.1)
+    discover(root)                    -> the projects: a project.yaml in <root>/<company>/<project>/ or <root>/<project>/
+                                         (14.2), from the discovery the skills use (technique-workspaces.md section 4)
+    unconfigured(root)                -> the folders that are not a project yet, with their status
     find(root, id)                    -> the project of an id, looked up in discover(), never joined from the id
     summary(project, pinned)          -> what the Projects screen shows of a project (14.4)
     Prefs(path).pinned() / .pin()     -> the pinned ids, in ~/.qa-assistant/qa-ui.json (14.10, 14.11)
@@ -15,17 +17,16 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import dataclass
 
 import run_log
+import workspace_select
 import yaml
 from common import read_project
 
-from . import ROOT, workspace
+from . import workspace
 from .runs import Gate
 
-NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")      # a company's or a project's folder; never `.` or `_` first
 PREFS = os.path.join(os.path.expanduser("~"), ".qa-assistant", "qa-ui.json")
 
 
@@ -35,43 +36,28 @@ class NotFound(workspace.NotFound):
 
 @dataclass(frozen=True)
 class Project:
-    id: str                 # <company>/<project>
+    id: str                 # <company>/<project>, or <project> directly under the root
     company: str
     folder: str
     path: str
 
 
 def default_root() -> str:
-    """qa-workspaces/ next to this repository, where the methodology keeps the workspaces (user decision,
-    21.10.2026): the hub has no other root."""
-    return os.path.join(os.path.dirname(ROOT), "qa-workspaces")
-
-
-def _is_plain_dir(entry: os.DirEntry) -> bool:
-    if entry.is_symlink() or (hasattr(entry, "is_junction") and entry.is_junction()):
-        return False
-    return entry.is_dir(follow_symlinks=False) and bool(NAME.fullmatch(entry.name))
-
-
-def _dirs(path: str) -> list[os.DirEntry]:
-    try:
-        with os.scandir(path) as it:
-            return [e for e in it if _is_plain_dir(e)]
-    except OSError:
-        return []
+    """The root of workspaces, configured or next to the main checkout (docs/qa-ui.md section 14.1)."""
+    return workspace_select.workspaces_root()[0]
 
 
 def discover(root: str) -> list[Project]:
-    """Every <root>/<company>/<project>/ with a project.yaml (a file, not a link), sorted by company and project.
-    Anything else in the root is ignored."""
-    out = []
-    for company in _dirs(root):
-        for proj in _dirs(company.path):
-            yaml_path = os.path.join(proj.path, "project.yaml")
-            if os.path.isfile(yaml_path) and not os.path.islink(yaml_path):
-                out.append(Project(f"{company.name}/{proj.name}", company.name, proj.name,
-                                   os.path.join(os.path.abspath(root), company.name, proj.name)))
-    return sorted(out, key=lambda p: (p.company.lower(), p.folder.lower(), p.id))
+    """Every project of the root: a folder with a project.yaml (a file, not a link), sorted by company and project.
+    Only whether the file exists is looked at here: this runs on every request."""
+    return [Project(c.id, c.company, c.folder, c.path) for c in workspace_select.discover(root, read=False)
+            if c.configured]
+
+
+def unconfigured(root: str) -> list[dict]:
+    """The folders that could become a project and are not one yet: named, never given a card or routes."""
+    return [{"id": c.id, "status": c.status, "reason": c.reason} for c in workspace_select.discover(root)
+            if not c.configured]
 
 
 def find(root: str, project_id: str) -> Project:
@@ -96,7 +82,7 @@ def summary(project: Project, pinned: bool = False) -> dict:
     """A card of the Projects screen. A project.yaml that cannot be read gives the card its error and nothing
     else: it never stops the hub (section 14.2)."""
     out = {"id": project.id, "company": project.company, "folder": project.folder, "pinned": pinned,
-           "name": project.folder, "tracker": None, "modules": [], "error": None,
+           "name": project.folder, "tracker": None, "modules": [], "error": None, "status": None, "reason": "",
            "runs": 0, "last_run": None, "needs": 0}
     try:
         proj = read_project(project.path)
@@ -108,6 +94,7 @@ def summary(project: Project, pinned: bool = False) -> dict:
     if not isinstance(proj, dict):
         out["error"] = "project.yaml cannot be read: it is not a mapping of keys"
         return out
+    out["status"], out["reason"], _ = workspace_select.classify(project.path)
     out.update(name=str(proj.get("project") or project.folder), tracker=proj.get("tracker"),
                modules=[str(m) for m in proj.get("modules") or [] if isinstance(m, str)])
     try:
@@ -177,7 +164,7 @@ class Hub:
         busy = self.gate.current()
         run = dict(busy[1].public(), tail=[], project=busy[0].name) if busy else None
         return {"root": self.root, "projects": projects, "pinned": [p["id"] for p in projects if p["pinned"]],
-                "run": run, "inbox": sum(p["needs"] for p in projects)}
+                "run": run, "inbox": sum(p["needs"] for p in projects), "unconfigured": unconfigured(self.root)}
 
     def pin(self, project_id: str, pinned: bool) -> dict:
         self.find(project_id)                                    # only a discovered project is pinned

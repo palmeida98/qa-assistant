@@ -32,8 +32,9 @@ device scripts take them, QA_MOBILE_SERIAL / QA_MOBILE_INPUT over project.yaml
 mobile.build.source. Nothing is started nor installed. A missing tool is a
 warning (exit 0) unless --strict.
 
-Read only; never changes anything. Problems prevent calling the onboarding done;
-warnings are shown to the user.
+With a tickets: section, also how /analyze-tickets can read each source (a token
+set in .env, or a logged-in browser). Read only; never changes anything. Problems
+prevent calling the onboarding done; warnings are shown to the user.
 
 Exit codes: 0 no problems (there may be warnings) · 1 problems (or, with
 --strict, a missing tool) · 2 no project.yaml or usage
@@ -369,9 +370,9 @@ def rebuild_rule_warnings(workspace: str) -> list[str]:
              "cases go in with `python -m adapters.excel.add_cases` (technique-excel.md section 4.1); update the rule")]
 
 
-def validate(workspace: str) -> tuple[list[str], list[str]]:
-    from common import read_project
-    proj = read_project(workspace)
+def base_problems(proj: dict) -> tuple[list[str], list[str]]:
+    """What project.yaml alone says: the fields, environments, tracker, tickets and modules. No other file is opened
+    and no tool or service is asked, so a list of projects can use it (technique-workspaces.md section 4)."""
     problems, warnings = [], []
 
     for field in ("project", "tracker", "bug_format"):
@@ -432,6 +433,14 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     p, w = mobile_target(proj)
     problems += p
     warnings += w
+    return problems, warnings
+
+
+def validate(workspace: str) -> tuple[list[str], list[str]]:
+    from common import read_project
+    proj = read_project(workspace)
+    problems, warnings = base_problems(proj)
+    modules = proj.get("modules") or []
     p, w = ci_section(workspace, proj)
     problems += p
     warnings += w
@@ -681,6 +690,27 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
                                          + (", checked against mobile.build.sha256" if build.get("sha256") else "")
                                          if source else "mobile.build.source is not set: write where the build "
                                          "comes from (the build is never committed)")))
+    if proj.get("tickets"):
+        out += ticket_sources(workspace)
+    return out
+
+
+def ticket_sources(workspace: str) -> list[tuple[bool, str, str]]:
+    """How /analyze-tickets can read each source: a token set in .env (names only), or a logged-in session."""
+    try:
+        config = tickets_config.load(workspace)
+    except tracker_config.ConfigError as e:
+        return [(False, "tickets", str(e))]
+    out = []
+    for source in config.sources.values():
+        tool = f"ticket source {source.id}"
+        if source.access != "api":
+            out.append((True, tool, (f"{source.service} through a logged-in browser (technique-tickets.md 4.3): "
+                                    "whether a session is open is seen when reading")))
+            continue
+        missing = [n for n, ok in tickets_config.credentials_state(config, source).items() if not ok]
+        out.append((not missing, tool, f"{source.service} through its API, credentials set (values not shown)"
+                     if not missing else f"{source.service}: .env misses {', '.join(missing)}: {VALUES_FROM}"))
     return out
 
 

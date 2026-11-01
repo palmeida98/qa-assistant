@@ -1,6 +1,6 @@
 # qa-ui — local web interface
 
-> Version 1.1 · 2026-10-21 · Plan, phases 12 and 13 (specification first, methodology §15). 1.1: the hub (§14).
+> Version 1.2 · 2026-11-01 · Plan, phases 12, 13 and 15 (specification first, methodology §15). 1.1: the hub (§14). 1.2: the root can be configured and is never created; projects directly under the root; folders that are not ready are shown (§14.1, §14.2).
 >
 > Universal: nothing of a real project enters this document. The examples use the fictional Demo Shop.
 
@@ -350,21 +350,28 @@ have written.
 ### 14.1 Starting
 
 ```
-python -m qa_ui                 # the hub, over <qa-assistant>/../qa-workspaces
+python -m qa_ui [--root PATH]   # the hub, over the root of workspaces
 python -m qa_ui <workspace>     # one workspace, as in §1 to §13 (unchanged)
 ```
 
-The root is fixed: `qa-workspaces/` next to this repository (user decision, 21.10.2026), where the methodology
-already keeps the workspaces (`CLAUDE.md`, "Environment"). No other folder is registered or searched. A root that
-does not exist is created empty on the first start, after saying so. The options of §1 (`--port`, `--no-open`,
-`--claude`, `--max-turns`, `--timeout-minutes`) are the same; exit code 2 also when the root cannot be created.
+The root comes from `--root`, `$QA_WORKSPACES_ROOT`, `workspaces_root` in `~/.qa-assistant/config.json`, or
+`qa-workspaces/` next to the **main checkout**, in this order (`technique-workspaces.md` §3): from a worktree it is the
+same root as from its main checkout. One root at a time; nothing else is registered or searched. **A root that does
+not exist is never created** (revises the decision of 21.10.2026, plan 15.2): a wrongly resolved path must not leave an
+empty root in the wrong place, so the command exits with 2, saying where the value came from and how to set it. The
+options of §1 (`--port`, `--no-open`, `--claude`, `--max-turns`, `--timeout-minutes`) are the same.
 
 ### 14.2 Discovery
 
-A project is a folder `<root>/<company>/<project>/` that holds a `project.yaml`: exactly two levels, each name of
+A project is a folder `<root>/<company>/<project>/` or `<root>/<project>/` that holds a `project.yaml`: each name of
 letters, digits, `.`, `_` and `-`, not starting with `.` or `_`; symbolic links are not followed; anything else in
-the root is ignored. Its id is `<company>/<project>`. The list is read again on each request that needs it (nothing
-is kept that the root does not have), sorted by company and project.
+the root is ignored. Its id is `<company>/<project>` or `<project>`, and a folder that has its own `project.yaml` is a
+project, never a company. The list is read again on each request that needs it (nothing is kept that the root does
+not have), sorted by company and project. The discovery is `scripts/workspace_select.py`'s, the same one the skills
+use (`technique-workspaces.md` §4).
+
+A folder that is not ready has no card and no routes, but it is named: `unconfigured` in `GET /api/hub`, under the
+projects on the Projects screen, with its status and `/project-onboarding` to run there.
 
 A route that names a project takes its id from the request and **looks it up in that list**: a path is never joined
 from what the request gave, so `..`, an absolute path or a project that is not discovered is a 404.
@@ -464,7 +471,7 @@ The routes of §11 stay as they are in one-workspace mode. In the hub, the same 
 | Route | Does |
 |---|---|
 | `GET /api/mode` | `{"mode": "hub"}`; in one-workspace mode the same route gives `{"mode": "workspace"}`, so the one page knows which interface it is in |
-| `GET /api/hub` | the projects with the summary of §14.4, the pinned ids, the run in progress, the count of the inbox |
+| `GET /api/hub` | the projects with the summary of §14.4, the pinned ids, the run in progress, the count of the inbox, and the folders that are not ready (§14.2) |
 | `POST /api/hub/pins` | `{"id", "pinned"}`: the pinned projects, kept in `~/.qa-assistant/qa-ui.json` (ids only) |
 | `GET /api/inbox` | the items of §14.4 across the projects |
 | `GET /api/settings` | §14.4 |
@@ -491,7 +498,8 @@ request, nothing written in this repository. It writes only inside the root: the
 ### 14.12 Tests
 
 As §12, with a fictional root built by the test (companies and projects copied from `examples/demo`, one with a
-broken `project.yaml`): the discovery and its refusals (`..`, a link, a name with `.` first, three levels), the
+broken `project.yaml`): the discovery and its refusals (`..`, a link, a name with `.` first, three levels), a project
+directly under the root and its routes, a root that does not exist (never created), the folders that are not ready, the
 summaries, a run in one project refusing a run in another, the routes under `/api/p/…`, the creation of a project
 and its refusal over an existing folder, the write-only `.env` (the value never in any response, any log or any
 other file), the notes (names, size, a credential refused), and the report routes (only those files, only under
@@ -499,7 +507,7 @@ the project).
 
 ### 14.13 What the hub does not do
 
-- Projects outside `qa-workspaces/` (user decision, 21.10.2026), or moving and deleting a project.
+- Projects outside the root (one root at a time, §14.1), or moving and deleting a project.
 - Several runs at once, also across projects (§14.3), or a queue.
 - Editing `project.yaml` after the creation: that is `/project-onboarding` or a session, where the validation and
   the methodology's questions are.

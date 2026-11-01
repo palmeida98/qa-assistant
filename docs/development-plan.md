@@ -36,9 +36,11 @@
 | 8 | `qa-audit`: automated audit engine alongside the workspace layer (`docs/qa-audit.md`); and the translation (8.11) | 8.0–8.10 done (8.10 login merged 26.09.2026; `/audit-accessibility` on `qa-audit` and `tools/a11y/` retired, 26.09.2026); 8.12 saved sessions, 8.13 sitemap discovery and 8.14 several engines in one run, 8.15 `qa-audit check` and 8.16 fixes from the first real use done (26.09.2026); 8.17 (focus visibility decided by pixels) done (26.09.2026); 8.11 (everything in English) done (27.09.2026) |
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
-| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026); its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
+| 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026), then started on a real workspace (13.10.2026): in progress, the end-to-end waits for the user; its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
-| 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | 13.0–13.1 done (21.10.2026); 13.2–13.7 not yet completed |
+| 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
+| 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4 |
+| 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1792,10 +1794,44 @@ partial read; the memory inside the workspace; nothing written to a tracker.
       the technique first (methodology §15). Tried on 01.11.2026 in a browser without a session: only the 203 sign-in
       answer was seen, no ticket.
 
+## Phase 15 — Central skills and project workspaces
+
+Why: the framework should work as a central library of skills that finds the selected project, runs only what is authorised, and keeps results and memory in that workspace. Approved by the user (specification of 01.11.2026). Not in this phase, kept in the backlog unless a dependency shows up: finishing the hub, a cloud migration, new types of test, a writing pilot of Jira or Azure DevOps, the remote end-to-end.
+
+### 15.0 Inventory — done 01.11.2026
+Confirmed against the code: PR #37 merged, but the main checkout on another branch without `adapters/tickets/` (`No module named adapters.tickets` from a workspace's skill); the hub's root resolved inside `.claude/worktrees/` from a worktree, and created empty; analysing an old check rewinding `context.md`, and a second scope erasing the first; the verification prompt in no Markdown; `first-and-no-changes` undocumented. The silent exit of `pre-commit` on this computer is a launcher left by a removed Python 3.14; the git hook uses another interpreter and works.
+
+### 15.1 Stabilisation — done 01.11.2026
+- [x] `scripts/sync_skills.py` records the checkout a global copy came from, and refuses a skill whose code is not there; `preflight` stops with an instruction, also on an old checkout without the module.
+- [x] An explicit order of the checks; a block of `context.md` rebuilt from the memory, one row per scope; an old analysis kept with its check; the last attempt apart from the last complete reference.
+- [x] A structured `verification_prompt`, validated without forcing what is unknown, rendered in `<id>.analysis.md` with its readiness.
+- [x] Coverage: `listed_only`, a `vstfs:///` link never taken as read, a section Coverage and limits.
+
+### 15.2 Workspaces and skills — done 01.11.2026
+- [x] `docs/technique-workspaces.md`; `scripts/workspace_select.py` (`where`, `list`, `resolve`, `preflight`, `skills`, `set-root`), with the hub's discovery moved there; `<root>/<project>/` also in the hub.
+- [x] A root never created; a configurable root; a worktree resolves the main checkout's root.
+- [x] `common.workspace_path`: no write outside the workspace or into `history/`, links and traversal included.
+- [x] Each skill's contract in its frontmatter, and its preflight; no entry skill, because no gap needs one; tickets in `/project-onboarding`.
+
+### 15.3 Impact on cases — done 01.11.2026
+- [x] `adapters/tickets/impact.py`: confirmed and candidate cases from the library, read only, without taking a bare number for a ticket; linked to the analysis and to the prompt.
+
+### 15.4 Real read pilot — Azure DevOps through a browser done 01.11.2026; its API route and Jira pending
+- [x] Azure DevOps, browser route, on a real workspace, with tickets the user authorised and the user's own login, reading only: fields, comments and relations compared by hand with the page; a repeat without changes (`no-changes`); a historical change compared with the API's revisions, in a temporary workspace (no ticket changed); a resume in a new process; evidence only in the workspace.
+- [x] What it found, now fixed with fictional tests: links only in `href` (most tickets), comments in Markdown with `@<GUID>` (`renderedText`), a state named `Blocked`, references as `DevOps 123` or `(123: ...)`, the author of a change to a relation. A rehearsal found a path over Windows' limit: exit 5, with what to do.
+- [ ] Azure DevOps with a token (API route): no token was used.
+- [ ] Jira: no site was given; implemented and tested with fixtures only.
+- [ ] A resume in a new Claude session (a headless agent was refused by the session's permission rules); it was shown in a new process.
+
+### 15.5 Consolidation — done 01.11.2026
+- [x] Documentation, the phase table, the runner's guide, the skills synced, an isolated run like the CI's (Python 3.12 and the pinned versions).
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | Phase 15: central skills and project workspaces, by the user's specification; 15.0–15.3 and 15.5 done with fictional fixtures; 15.4 done for Azure DevOps through a browser (its API route and Jira pending); methodology v2.8, `technique-workspaces.md` v1.0, `technique-tickets.md` v1.1, `qa-ui.md` v1.2. Unit tests 941 → 1082. |
+| 2026-10-27 | The phase table brought up to date: 13.2–13.3 done and merged (PR #36); 11.8 in progress since 13.10.2026. |
 | 2026-11-01 | 14.1: `/analyze-tickets` and `adapters/tickets/`, specified in `docs/technique-tickets.md`; methodology v2.7. Validated with fictional fixtures; the real read of each service is pending. |
 | 2026-10-22 | 13.3: a project's Overview, credentials typed write-only into `.env`, notes in `notes/`; 6 new tests (861 → 867). |
 | 2026-10-22 | 13.2: a project's routes under `/api/p/<id>/` (an App and a Runner per project, one Gate), the page's address `#/p/<id>/test`, switching project; 4 new tests (857 → 861). |
