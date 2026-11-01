@@ -122,6 +122,11 @@ def validate_section(proj: dict) -> tuple[list[str], list[str]]:
             elif not src.get("team"):
                 c.problem(f"{where}.current_iteration", "needs the source's team: a sprint belongs to a team")
         c.boolean(scope.get("expand"), f"{where}.expand")
+    cases = section.get("cases") or {}
+    if not isinstance(cases, dict):
+        c.problem("cases", "must be a map {link_fields: [...]}")
+    else:
+        c.texts(cases.get("link_fields"), "cases.link_fields")
     limits = section.get("limits") or {}
     if not isinstance(limits, dict):
         c.problem("limits", "must be a map")

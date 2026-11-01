@@ -1,10 +1,29 @@
 ---
 name: dashboard
 description: Builds and opens the current workspace's progress dashboard (progress per area and status, open defects, last checkpoint, check of the workbook's summary).
+metadata:
+  intent: "Show the progress of an Excel project: areas, statuses, open defects, last checkpoint."
+  inputs: "The workspace's workbook and context.md."
+  config: "tracker: excel; dashboard: states in project.yaml."
+  tools: "Python; the workbook is only read."
+  outputs: "dashboard.html, local, and a summary of the numbers."
+  writes: "dashboard.html in the workspace (ignored by git). Never publishes it."
+  approvals: "None; changing project.yaml needs a confirmation."
+  failures: "Exit 2: nothing built, the message says why. Jira or Azure DevOps: stop, the tracker's reports serve."
+  resume: "Run it again at any time."
+  requires-scripts: "scripts/build_dashboard.py"
+  requires-config: "excel"
 ---
-1. Find the root of qa-assistant (<qa>) from the current workspace: usually ../../../qa-assistant
-   (workspace in qa-workspaces/<company>/<project>/); in the demo, inside the repository itself, it is ../..
-   (examples/demo/). Confirm that <qa>/scripts/build_dashboard.py exists.
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill dashboard [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
+1. <qa> and <qa>/scripts/build_dashboard.py are what the preflight confirmed.
 2. Confirm that the current workspace has a project.yaml with tracker: excel. With jira or azure-devops, stop:
    the dashboard is Excel only by decision (plan 10.0; technique-jira-xray.md section 9), because one built
    from what this assistant sent would miss everyone else's results. Point the user to the tracker's own

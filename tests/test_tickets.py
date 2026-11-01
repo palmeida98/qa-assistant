@@ -155,7 +155,7 @@ class Changes(Base):
         fake.add(100)
         os.makedirs(os.path.join(self.ws, "runs"))
         with open(os.path.join(self.ws, "runs", "batch_1.json"), "w", encoding="utf-8") as f:
-            f.write('{"results": [{"tc": "CHK-1", "note": "see 100"}]}')
+            f.write('{"results": [{"tc": "CHK-1", "bug": "100"}]}')
         self.collect(fake, "100")
         fake.set(100, System__State="Done")
         self.collect(fake, "100", now=T2)
@@ -205,7 +205,8 @@ class Changes(Base):
         self.assertIn(("relations", "added", "blocked-by:200"), changes)
         self.assertIn(("attachments", "added", "abc"), changes)
         self.assertIn(("links", "added", "vstfs:///Git/PullRequestId/1"), changes)
-        self.assertIn({"ticket": "100", "url": f"{ORG}/_apis/wit/attachments/abc"}, check["content_not_read"])
+        self.assertIn({"ticket": "100", "url": f"{ORG}/_apis/wit/attachments/abc", "component": "attachments",
+                       "kind": "attachment"}, check["content_not_read"])
 
     def test_a_transition_that_came_back_is_not_lost(self):
         fake = FakeAdo()

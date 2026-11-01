@@ -49,7 +49,15 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import Redactor, find_adb, mobile_target, read_project, read_workspace_env
+from common import (
+    OutsideWorkspace,
+    Redactor,
+    find_adb,
+    mobile_target,
+    read_project,
+    read_workspace_env,
+    workspace_path,
+)
 
 PLATFORMS = ("android", "ios", "web")
 CASE = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
@@ -203,13 +211,25 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
     return 0, f"{os.path.basename(path)}: passed (helper flow, no result recorded)"
 
 
+def report_path(workspace: str, output: str) -> str:
+    """Where the report goes: inside the workspace, or in the throwaway temporary folder of a runner, where the
+    workspace's CI keeps it until `workspace_ci.py import-flows` reads it (docs/workspace/ci/mobile.yml)."""
+    temp = os.environ.get("RUNNER_TEMP")
+    if temp and os.path.isabs(output):
+        try:
+            return workspace_path(temp, output)
+        except OutsideWorkspace:
+            pass
+    return workspace_path(workspace, output)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Runs Maestro flows and links the results to the cases "
                                              "(technique-mobile.md).")
     ap.add_argument("workspace")
     ap.add_argument("flows", nargs="*", help="flows to run: path or case ID (default: every flow of the folder "
                                              "whose name starts with a case ID)")
-    ap.add_argument("--output", help="JSON report (relative to the workspace, unless absolute)")
+    ap.add_argument("--output", help="JSON report (inside the workspace)")
     ap.add_argument("--helper", metavar="FLOW", help="run one helper flow (flows/_<name>.yaml), not a case: no "
                                                      "result recorded")
     ap.add_argument("--serial", help="with --helper: the device (default: $QA_MOBILE_SERIAL, else mobile.serial)")
@@ -220,6 +240,11 @@ def main(argv=None) -> int:
         code, message = run_helper(a.workspace, a.helper, a.serial)
         print(message, file=sys.stderr if code else sys.stdout)
         return code
+    try:
+        target_path = report_path(a.workspace, a.output) if a.output else None      # refused before anything runs
+    except OutsideWorkspace as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
     try:
         cfg = configuration(a.workspace)
         flows = (resolve_flows(a.flows, a.workspace, cfg["folder"]) if a.flows
@@ -273,8 +298,7 @@ def main(argv=None) -> int:
               + f" ({x['time_s']:.0f} s)")
     if rep.get("error"):
         print(f"Maestro ERROR: {rep['error']}", file=sys.stderr)
-    if a.output:
-        target_path = a.output if os.path.isabs(a.output) else os.path.join(a.workspace, a.output)
+    if target_path:
         os.makedirs(os.path.dirname(target_path) or ".", exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=1)

@@ -38,6 +38,7 @@ accessibility:
 #     current-sprint: {source: "boards", current_iteration: true}
 #     mine: {source: "boards", query: ""}
 #   limits: {max_depth: 2, max_items: 30, max_comments: 200, max_history: 500}
+#   cases: {link_fields: []}   # columns (Excel) or keys (tracker/cases.json) that name a case's ticket, e.g. ["Ticket"]
 
 # mobile: only with the mobile module active (docs/technique-mobile.md).
 mobile:

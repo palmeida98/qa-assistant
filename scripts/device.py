@@ -85,10 +85,12 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from common import (
     MOBILE_INPUTS,
+    OutsideWorkspace,
     find_adb,
     mobile_target,
     read_project,
     read_workspace_env,
+    workspace_path,
 )
 
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
@@ -499,7 +501,10 @@ def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
     png = adb(serial, "exec-out", "screencap", "-p", binary=True)
     if not png.startswith(b"\x89PNG"):
         raise NoTarget("screencap returned no PNG")
-    folder = os.path.join(cfg["workspace"], "evidence", batch or cfg["batch"])
+    try:
+        folder = workspace_path(cfg["workspace"], "evidence", batch or cfg["batch"])
+    except OutsideWorkspace as e:
+        raise UsageError(str(e)) from None
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, name if name.lower().endswith(".png") else name + ".png")
     with open(path, "wb") as f:

@@ -1,7 +1,29 @@
 ---
 name: end-session
 description: "Closes the test session: final checkpoint, bugs, cross-check and summary."
+metadata:
+  intent: "Close the test session: final checkpoint, bugs, cross-check and summary."
+  inputs: "The session's run logs, bugs and open questions."
+  config: "The tracker's section; resolved_bugs."
+  tools: "git; the project's adapter; the dashboard with Excel."
+  outputs: "Consistency checked, the summary of methodology 16.3, next steps."
+  writes: "context.md and what /checkpoint writes."
+  approvals: "As in /checkpoint and /log-bug."
+  failures: "A known inconsistency is said aloud: the session is not called done."
+  resume: "context.md says what stayed open."
+  requires-modules: "adapters.excel, adapters.tracker"
+  requires-scripts: "scripts/build_dashboard.py"
+  requires-tools: "git"
 ---
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill end-session [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Confirm that no case was left in Question without being presented to the user; reclassify with the
    answers (section 8.5). The adapter refuses batches with a Question.
 2. Make the last checkpoint with /checkpoint (methodology.md section 16.2), including applying the

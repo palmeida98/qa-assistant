@@ -35,6 +35,16 @@ HEADERS = {
     "module": ("module", "test module", "modulo", "modul"),
     "technique": ("technique", "design technique", "tecnica", "technik"),
 }
+# A column that names a case's ticket when the project does not configure one (tickets.cases.link_fields), and the words
+# that make a number in free text mean a ticket (`bug 123`; docs/technique-tickets.md section 6.1).
+TICKET_HEADERS = ("ticket", "tickets", "ticket id", "work item", "work items", "work item id", "issue", "issue key",
+                  "issue id", "user story", "story", "pbi", "requirement", "requirements", "requirement id",
+                  "requisito", "requisitos", "historia", "tarefa", "tarea", "exigence", "anforderung", "requisiti")
+TICKET_WORDS = ("ticket", "bug", "task", "tasks", "pbi", "story", "user story", "work item", "workitem", "wi", "issue",
+                "defect", "requirement", "devops", "ado", "jira", "fe", "be", "tarefa", "tarefas", "requisito", "defeito",
+                "historia", "história", "tarea", "historia de usuario")
+
+
 def norm(header) -> str:
     """A header as it is compared: lower case, without accents, spaces, '_' and '-' as one space."""
     text = unicodedata.normalize("NFKD", str(header or ""))
@@ -43,6 +53,10 @@ def norm(header) -> str:
 
 
 _HEADER_OF = {norm(name): field for field, names in HEADERS.items() for name in names}
+
+
+def is_ticket_header(header) -> bool:
+    return norm(header) in TICKET_HEADERS
 
 
 def field_of(header) -> str | None:

@@ -6,7 +6,7 @@ Command line of the ticket analysis (docs/technique-tickets.md). Reads trackers;
     python -m adapters.tickets <workspace> collect --scope <name> [--expand]
     python -m adapters.tickets <workspace> collect --query "<WIQL|JQL>" --source <id> [--expand]
     python -m adapters.tickets <workspace> ingest <bundle.json> [--dry-run]
-    python -m adapters.tickets <workspace> analysis <check id> <analysis.json>
+    python -m adapters.tickets <workspace> analysis <check id> <analysis.json> [--now YYYY-MM-DDTHH:MM:SS]
 
 Exit codes:
   0  complete, memory updated
@@ -14,6 +14,7 @@ Exit codes:
   2  ambiguity or conflict with the tracker (a refused query, several iterations): nothing recorded
   3  nothing could be read: the check records the failure, every reference preserved
   4  invalid input or configuration: nothing read, nothing recorded
+  5  the memory could not be written (no space, permissions, a path too long): the next run reports the same changes
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from .collect import BundleSource, expand, resolve_ref
 from .model import COMPLETE, FAILED, Sanitizer, read_only_transport, validate_snapshot
 from .render import one_line
 
+WRITE_FAILED = 5
 SOURCES = {"azure-devops": (azure_devops.AdoSource, azure_devops.normalize, azure_devops.bundle_from_raw),
            "jira": (jira.JiraSource, jira.normalize, jira.bundle_from_raw)}
 
@@ -72,6 +74,11 @@ def _print_summary(check: dict, path: str, printer) -> None:
     printer(f"Check {check['id']}: outcome {check['outcome']}, conclusion {check['conclusion']}, "
             f"{len(check['tickets'])} ticket(s), {sum(len(t['changes']) for t in check['tickets'])} change(s), "
             f"{len(check['omitted'])} omitted, {len(check['content_not_read'])} link(s)/attachment(s) not read.")
+    source = check["impact_source"]
+    confirmed = sum(len(t["impact"]["confirmed"]) for t in check["tickets"])
+    candidates = sum(len(t["impact"]["candidates"]) for t in check["tickets"])
+    printer(f"Existing cases: {confirmed} confirmed, {candidates} candidate(s); searched {source['source'] or 'nothing'} "
+            f"({source['status']}). No match does not prove no impact.")
     for t in check["tickets"]:
         missing = [f"{k}:{v['status']}" for k, v in t["coverage"].items() if v["status"] != COMPLETE]
         printer(f"  {one_line(t['ref']['id'], 40)} [{t['role']}] {t['conclusion']}, {len(t['changes'])} change(s)"
@@ -142,14 +149,29 @@ def _collect_many(a, config, resolved, transport, sleep, now, printer, sanitizer
     return code
 
 
-def run_ingest(a, config, now, printer, sanitizer) -> int:
+def _read_bundle(path: str):
+    """A bundle, or the file a browser tool saved when its answer was too large: [{"type": "text", "text": ...}], whose
+    text holds the bundle as a JSON string (technique section 4.3)."""
     try:
-        with open(a.bundle, encoding="utf-8-sig") as f:
+        with open(path, encoding="utf-8-sig") as f:
             doc = json.load(f)
     except FileNotFoundError:
-        raise InvalidInput(f"bundle not found: {a.bundle}") from None
+        raise InvalidInput(f"bundle not found: {path}") from None
     except ValueError as e:
-        raise InvalidInput(f"{a.bundle}: not valid JSON ({e})") from None
+        raise InvalidInput(f"{path}: not valid JSON ({e})") from None
+    if isinstance(doc, list) and doc and isinstance(doc[0], dict) and isinstance(doc[0].get("text"), str):
+        text = doc[0]["text"]
+        start = text.find('"{')
+        try:
+            inner = json.JSONDecoder().raw_decode(text[start:])[0] if start >= 0 else text
+            doc = json.loads(inner) if isinstance(inner, str) else inner
+        except ValueError as e:
+            raise InvalidInput(f"{path}: the text it holds is not a bundle ({e})") from None
+    return doc
+
+
+def run_ingest(a, config, now, printer, sanitizer) -> int:
+    doc = _read_bundle(a.bundle)
     source = config.sources.get(doc.get("source")) if isinstance(doc, dict) else None
     if source is None or not isinstance(doc.get("tickets"), list):
         raise InvalidInput(f"a bundle is {{\"source\": one of {sorted(config.sources)}, \"tickets\": [...]}}")
@@ -224,7 +246,8 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("ingest", parents=[now], help="a bundle read in a browser or MCP: compare, update the memory")
     p.add_argument("bundle")
     p.add_argument("--dry-run", action="store_true", help="say what is missing; write nothing")
-    p = sub.add_parser("analysis", help="validate the agent's analysis of a check and merge it into the memory")
+    p = sub.add_parser("analysis", parents=[now], help="validate the agent's analysis of a check and merge it into the "
+                                                       "memory")
     p.add_argument("check")
     p.add_argument("file")
     return ap
@@ -253,9 +276,11 @@ def main(argv=None, transport=None, sleep=None, printer=None) -> int:
             raise InvalidInput(f"analysis not found: {a.file}") from None
         except ValueError as e:
             raise InvalidInput(f"{a.file}: not valid JSON ({e})") from None
-        path, updated = memory.record_analysis(a.workspace, a.check, sanitizer.obj(doc))
-        printer(f"Analysis recorded: {path}")
-        for u in updated:
+        result = memory.record_analysis(a.workspace, a.check, sanitizer.obj(doc), now)
+        printer(f"Analysis recorded: {result['json']}")
+        printer(f"Readable, with the verification prompt: {result['markdown']}")
+        printer(f"Verification prompt: {result['readiness'] or 'none'}")
+        for u in result["tickets"]:
             printer(f"  {u}")
         return 0
     except TrackerError as e:
@@ -263,6 +288,9 @@ def main(argv=None, transport=None, sleep=None, printer=None) -> int:
         for p in e.problems:
             err(redactor.text(f" - {p}"))
         return e.code
+    except OSError as e:
+        err(redactor.text(memory.write_failure(e)))
+        return WRITE_FAILED
 
 
 __all__ = ["main", "parser"]

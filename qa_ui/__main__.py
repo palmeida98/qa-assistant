@@ -1,10 +1,11 @@
 """
-python -m qa_ui [<workspace>] [--port 8765] [--no-open] [--claude PATH] [--max-turns 150] [--timeout-minutes 60]
+python -m qa_ui [<workspace>] [--root PATH] [--port 8765] [--no-open] [--claude PATH] [--max-turns 150]
+                [--timeout-minutes 60]
 
-Without a workspace: the hub, every project of <qa-assistant>/../qa-workspaces (docs/qa-ui.md section 14). With one:
-the interface of that workspace (sections 1 to 13). On the loopback address, opened in the browser.
+Without a workspace: the hub, every project of the root of workspaces (docs/qa-ui.md section 14). With one: the
+interface of that workspace (sections 1 to 13). On the loopback address, opened in the browser.
 Exit codes: 0 stopped by the user (Ctrl+C) · 2 usage or configuration (no project.yaml, the port is taken, the
-hub's root cannot be created).
+hub's root does not exist: it is never created).
 """
 
 from __future__ import annotations
@@ -14,13 +15,17 @@ import os
 import sys
 import webbrowser
 
+import workspace_select
+
 from . import hub, runs, server, workspace
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m qa_ui", description="Local web interface: the hub of every project, "
                                                                     "or one workspace (docs/qa-ui.md).")
-    ap.add_argument("workspace", nargs="?", help="one workspace; without it, the hub over ../qa-workspaces")
+    ap.add_argument("workspace", nargs="?", help="one workspace; without it, the hub over the root of workspaces")
+    ap.add_argument("--root", help="the hub's root (default: $QA_WORKSPACES_ROOT, the configured one, or qa-workspaces/ "
+                                   "next to the main checkout)")
     ap.add_argument("--port", type=int, default=8765, help="port on 127.0.0.1 (0: a free one; default 8765)")
     ap.add_argument("--no-open", action="store_true", help="do not open the browser: only print the address")
     ap.add_argument("--claude", metavar="PATH", help="the Claude Code executable (default: `claude` on the PATH)")
@@ -32,7 +37,7 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 2
     if a.workspace is None:
-        return main_hub(a)
+        return main_hub(a, a.root)
     ws = os.path.abspath(a.workspace)
     try:
         proj = workspace.project(ws)
@@ -59,14 +64,11 @@ def main(argv=None) -> int:
 
 def main_hub(a, root: str | None = None) -> int:
     """The hub over the root (docs/qa-ui.md section 14.1)."""
+    source = "--root" if root else workspace_select.workspaces_root()[1]
     root = os.path.abspath(root or hub.default_root())
     if not os.path.isdir(root):
-        print(f"The hub's root {root} does not exist: it is created empty (docs/qa-ui.md section 14.1).")
-        try:
-            os.makedirs(root)
-        except OSError as e:
-            print(f"ERROR: the root {root} cannot be created ({e})", file=sys.stderr)
-            return 2
+        print(f"ERROR: {workspace_select.missing_root_message(root, source)}", file=sys.stderr)
+        return 2
     the_hub = hub.Hub(root, claude=a.claude, max_turns=a.max_turns, timeout_minutes=a.timeout_minutes)
     try:
         srv, url = server.serve_hub(the_hub, a.port)

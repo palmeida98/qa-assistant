@@ -7,10 +7,12 @@ Uses a temporary folder as the target: never touches the real ~/.claude/skills.
 
 import contextlib
 import io
+import json
 import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -85,6 +87,81 @@ class Sync(unittest.TestCase):
         self.assertEqual(self.run_it("--apply")[0], 0)
         self.assertFalse(os.path.exists(os.path.join(self.target, "executar-lote")))
         self.assertFalse(os.path.exists(os.path.join(self.target, "painel")))
+
+    def test_apply_records_the_checkout_the_copies_came_from(self):
+        self.assertIsNone(ss.read_record(self.target))
+        rc, out = self.run_it("--apply")
+        self.assertEqual(rc, 0)
+        record = ss.read_record(self.target)
+        self.assertTrue(ss.same_path(record["root"], ROOT))
+        self.assertEqual(set(record["skills"]), set(ss.compare(ss.SOURCE, self.target)))
+        self.assertIn("synced_at", record)
+        self.assertIn("recorded as their source", out)
+        self.assertNotIn(".qa-assistant-source.json", ss.compare(ss.SOURCE, self.target))
+
+    def test_only_the_skills_are_copied(self):
+        self.run_it("--apply")
+        copied = sorted(os.listdir(os.path.join(self.target, "analyze-tickets")))
+        self.assertEqual(copied, ["SKILL.md"])
+
+    def test_a_copy_already_the_same_still_gets_its_record(self):
+        self.run_it("--apply")
+        os.remove(os.path.join(self.target, ss.RECORD))
+        self.assertEqual(self.run_it("--apply")[0], 0)
+        self.assertIsNotNone(ss.read_record(self.target))
+
+    def test_checking_only_names_a_record_of_another_checkout_and_writes_nothing(self):
+        self.run_it("--apply")
+        ss.write_record(self.target, {"root": os.path.join(self.tmp.name, "other"), "branch": "feature", "commit": "abc"})
+        before = os.path.getmtime(os.path.join(self.target, ss.RECORD))
+        rc, out = self.run_it()
+        self.assertEqual(rc, 0)
+        self.assertIn("last synced from", out)
+        self.assertIn("feature", out)
+        self.assertEqual(os.path.getmtime(os.path.join(self.target, ss.RECORD)), before)
+
+    def test_a_worktree_or_another_branch_is_said_aloud(self):
+        with mock.patch("common.git_state", return_value={"commit": "abc", "branch": "feature", "dirty": False}):
+            rc, out = self.run_it("--apply")
+        self.assertEqual(rc, 0)
+        self.assertIn("nothing was merged", out)
+        with mock.patch("common.git_state", return_value={"commit": "abc", "branch": "main", "dirty": False}), \
+                mock.patch("common.main_checkout", return_value=ss.ROOT):
+            rc, out = self.run_it("--apply")
+        self.assertNotIn("nothing was merged", out)
+
+    def test_a_skill_whose_code_is_not_in_this_checkout_is_refused(self):
+        with tempfile.TemporaryDirectory() as src:
+            os.makedirs(os.path.join(src, "needs-code"))
+            with open(os.path.join(src, "needs-code", "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write('---\nname: needs-code\nmetadata:\n  requires-modules: "adapters.nothing"\n'
+                        '  requires-scripts: "scripts/nothing.py"\n---\nbody\n')
+            err = io.StringIO()
+            with mock.patch.object(ss, "SOURCE", src), contextlib.redirect_stderr(err):
+                rc, _ = self.run_it("--apply")
+        self.assertEqual(rc, 2)
+        self.assertIn("module adapters.nothing", err.getvalue())
+        self.assertIn("script scripts/nothing.py", err.getvalue())
+        self.assertEqual(os.listdir(self.target), [])
+
+    def test_the_requirements_of_this_checkout_exist(self):
+        for name in os.listdir(ss.SOURCE):
+            path = os.path.join(ss.SOURCE, name, "SKILL.md")
+            if os.path.isfile(path):
+                with self.subTest(skill=name):
+                    self.assertEqual(ss.missing_code(ROOT, ss.skill_doc(path)), [])
+
+    def test_a_module_is_looked_at_as_files(self):
+        self.assertTrue(ss.module_exists(ROOT, "adapters.tickets"))
+        self.assertTrue(ss.module_exists(ROOT, "adapters.tickets.memory"))
+        self.assertTrue(ss.module_exists(ROOT, "qa_audit"))
+        self.assertFalse(ss.module_exists(ROOT, "adapters.nothing"))
+
+    def test_the_record_is_json_kept_whole(self):
+        ss.write_record(self.target, {"root": "x"})
+        with open(os.path.join(self.target, ss.RECORD), encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"root": "x"})
+        self.assertFalse(os.path.exists(os.path.join(self.target, ss.RECORD + ".tmp")))
 
 
 if __name__ == "__main__":

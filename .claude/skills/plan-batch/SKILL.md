@@ -1,8 +1,27 @@
 ---
 name: plan-batch
-description: Groups and orders test cases into batches by area, feature, platform, role and flow, to minimise logins and context switches without reducing coverage (methodology.md section 6).
+description: Groups and orders test cases into batches by area, feature, platform, role and flow, to minimise logins and context switches without reducing coverage (methodology.md section 6). Where a request such as "test this feature" starts when no batch is approved yet.
+metadata:
+  intent: "Group and order cases into batches, to minimise logins and context switches without losing coverage."
+  inputs: "The candidate cases; the time available; a request such as 'test this feature'."
+  config: "roles, environments, modules; the tracker's cases."
+  tools: "The project's adapter, to read the cases."
+  outputs: "Batches with order, dependencies and scope, saved after confirmation."
+  writes: "batches/<name>.yaml; tracker/cases.json when refreshed."
+  approvals: "The plan is confirmed before anything runs."
+  failures: "No test data: the case is Blocked. Planned must equal selected."
+  resume: "batches/ and context.md."
+  requires-modules: "adapters.tracker"
 ---
 
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill plan-batch [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read from the current workspace project.yaml (roles, environments, active modules) and context.md
    (execution point, known blockers, scope decisions).
 1a. With the jira or azure-devops tracker, the cases come from <workspace>/tracker/cases.json (technique-jira-xray.md

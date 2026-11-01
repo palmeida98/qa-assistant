@@ -1,7 +1,28 @@
 ---
 name: log-bug
 description: Logs or updates a bug from a Fail case, looking for duplicates first.
+metadata:
+  intent: "Log or update a bug from a Fail, looking for duplicates first."
+  inputs: "The Fail, its evidence, the batch."
+  config: "bug_format; excel.defects or the tracker's bugs section."
+  tools: "The project's adapter (bug-search with a tracker)."
+  outputs: "A bug proposal, or a link to an existing one, in the run log."
+  writes: "The run log only: the bug reaches the workbook or tracker at /checkpoint."
+  approvals: "The user approves a bug before it is logged; unattended, it stays proposed."
+  failures: "Tracker out of reach: said aloud, the search is never skipped silently."
+  resume: "The run log keeps the draft."
+  requires-modules: "adapters.tracker"
+  requires-scripts: "scripts/run_log.py"
 ---
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill log-bug [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read the bug format in project.yaml (bug_format and, with the excel tracker, excel.defects) and in the
    current workspace's CLAUDE.md.
 2. Look for existing bugs with a similar area/feature/sub-area/platform/role (section 9.1).

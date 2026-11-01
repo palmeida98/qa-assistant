@@ -1,8 +1,29 @@
 ---
 name: checkpoint
 description: Saves the run log, updates the workspace's context.md in the format of methodology.md section 12.2 and makes a local commit in the workspace.
+metadata:
+  intent: "Save the run log and context.md, make a local commit, and apply results once authorised."
+  inputs: "The session's results; the batch to apply, when the user confirms."
+  config: "run_log; the tracker's section (excel:, jira:, azure_devops:)."
+  tools: "git; LibreOffice for the workbook's recalculation; the tracker's API."
+  outputs: "State kept, the exact point reached, what was applied or what is still to approve."
+  writes: "runs/, context.md, memory/ in the local commit; the workbook or the tracker only after confirmation."
+  approvals: "Applying: the user's confirmation, a dry run first and --yes after. Push: only when the user says so."
+  failures: "The exit codes of adapters.excel.apply and adapters.tracker: nothing is forced, a partial send continues from its record."
+  resume: "context.md, the run log and tracker/sent/."
+  requires-modules: "adapters.excel, adapters.tracker"
+  requires-scripts: "scripts/workspace_git.py"
+  requires-tools: "git, libreoffice"
 ---
 
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill checkpoint [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read the run log's path from project.yaml (run_log). If it is not defined, use runs/.
    Never write to history/: it is immutable (methodology.md section 13).
 2. Save to the run log every result of the session not saved yet: case, result, short note,

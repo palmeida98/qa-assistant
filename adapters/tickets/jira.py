@@ -42,6 +42,26 @@ def _text(value) -> str:
     return from_adf(value)[0]
 
 
+def links_in_adf(node, origin: str) -> list[dict]:
+    """The links an ADF document holds in its marks and cards: the plain text of the field does not have them."""
+    found: list[str] = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            attrs = value.get("attrs") if isinstance(value.get("attrs"), dict) else {}
+            for key in ("href", "url"):
+                if isinstance(attrs.get(key), str) and attrs[key].startswith(("http://", "https://")):
+                    found.append(attrs[key])
+            for v in value.values():
+                walk(v)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v)
+
+    walk(node)
+    return [{"url": u, "kind": link_kind(u), "label": "", "origin": origin, "content_read": False} for u in found]
+
+
 def _name_of(names: dict, wanted: str) -> str | None:
     return next((k for k, v in (names or {}).items() if str(v).lower() == wanted), None)
 
@@ -137,8 +157,12 @@ def normalize(source, bundle: dict) -> dict:
              for r in remote["items"]]
     links += links_in_text(fields["description"], "description") + links_in_text(fields["acceptance_criteria"],
                                                                                  "acceptance_criteria")
-    for c in norm_comments:
+    links += links_in_adf(f.get("description"), "description")
+    if ac_field:
+        links += links_in_adf(f.get(ac_field), "acceptance_criteria")
+    for raw, c in zip(comments["items"], norm_comments, strict=True):
         links += links_in_text(c["text"], f"comment:{c['id']}")
+        links += links_in_adf(raw.get("body"), f"comment:{c['id']}")
     attachments = [{"id": str(a.get("id")), "name": a.get("filename") or "", "url": a.get("content") or "",
                     "size": a.get("size"), "created_at": a.get("created"), "content_read": False}
                    for a in f.get("attachment") or []]

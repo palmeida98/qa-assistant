@@ -25,7 +25,8 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abs
 
 import qa_ui_kit as kit
 import run_log
-from common import read_workspace_env
+import workspace_select
+from common import main_checkout, read_workspace_env
 
 from qa_ui import __main__ as cli
 from qa_ui import hub, runs, server
@@ -107,8 +108,41 @@ class Discovery(Root):
     def test_a_root_that_does_not_exist_has_no_project(self):
         self.assertEqual(hub.discover(os.path.join(self.tmp.name, "nothing")), [])
 
-    def test_the_default_root_is_next_to_this_repository(self):
-        self.assertEqual(hub.default_root(), os.path.join(os.path.dirname(ROOT), "qa-workspaces"))
+    def test_the_default_root_is_next_to_the_main_checkout(self):
+        with mock.patch.dict(os.environ, {workspace_select.CONFIG_ENV: os.path.join(self.tmp.name, "no-config.json")}), \
+                mock.patch.dict(os.environ):
+            os.environ.pop(workspace_select.ROOT_ENV, None)
+            self.assertEqual(hub.default_root(), os.path.join(os.path.dirname(main_checkout(ROOT)), "qa-workspaces"))
+
+    def test_the_root_can_be_configured(self):
+        with mock.patch.dict(os.environ, {workspace_select.ROOT_ENV: self.root}):
+            self.assertEqual(hub.default_root(), self.root)
+
+    def test_a_project_directly_under_the_root(self):
+        solo = make_project(self.root, "solo", project="solo-project")
+        make_project(self.root, "solo/inner")
+        self.assertIn("solo", [p.id for p in hub.discover(self.root)])
+        self.assertNotIn("solo/inner", [p.id for p in hub.discover(self.root)])
+        project = hub.find(self.root, "solo")
+        self.assertEqual((project.company, project.folder), ("", "solo"))
+        self.assertEqual(os.path.normcase(project.path), os.path.normcase(os.path.abspath(solo)))
+        card = hub.summary(project)
+        self.assertEqual((card["name"], card["status"]), ("solo-project", "valid"))
+
+    def test_a_folder_that_is_not_a_project_is_named_and_has_no_card(self):
+        state = self.hub.state()
+        self.assertNotIn("demo/empty", [p["id"] for p in state["projects"]])
+        self.assertEqual(state["unconfigured"], [{"id": "demo/empty", "status": "not-configured",
+                                                  "reason": "no project.yaml"}])
+        with self.assertRaises(hub.NotFound):
+            hub.find(self.root, "demo/empty")
+
+    def test_an_incomplete_project_keeps_its_card_and_says_so(self):
+        half = make_project(self.root, "demo/half", project="half", bug_format="")
+        self.assertTrue(half)
+        card = next(p for p in self.hub.state()["projects"] if p["id"] == "demo/half")
+        self.assertEqual(card["status"], "incomplete")
+        self.assertIn("problem(s) in project.yaml", card["reason"])
 
 
 class Summaries(Root):
@@ -412,6 +446,14 @@ class Http(Root):
         self.assertEqual(self.call("GET", "/api/p/demo/shop/state", token="wrong")[0], 403)
         self.assertEqual(self.call("GET", "/api/p/demo/../acme/api/state")[0], 404)
 
+    def test_the_routes_of_a_project_directly_under_the_root(self):
+        make_project(self.root, "solo", project="solo-project")
+        status, state = self.call("GET", "/api/p/solo/state")
+        self.assertEqual((status, state["project"]["name"]), (200, "solo-project"))
+        self.assertEqual(self.call("GET", "/api/p/demo/state")[0], 404)         # a company is not a project
+        self.assertEqual(self.call("GET", "/api/p/solo/../demo/state")[0], 404)
+        self.assertEqual(self.call("GET", "/api/p/demo/shop/state")[0], 200)
+
 
 class CommandLine(unittest.TestCase):
     def run_(self, *args, root):
@@ -421,27 +463,36 @@ class CommandLine(unittest.TestCase):
             code = cli.main(list(args))
         return code, out.getvalue()
 
-    def test_without_a_workspace_the_hub_starts_and_creates_its_root(self):
+    def test_without_a_workspace_the_hub_starts_over_its_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = os.path.join(tmp, "qa-workspaces")
+            os.makedirs(root)
             with mock.patch.object(server.ThreadingHTTPServer, "serve_forever", side_effect=KeyboardInterrupt), \
                     mock.patch.object(cli.webbrowser, "open") as opened:
                 code, out = self.run_("--port", "0", root=root)
             self.assertEqual(code, 0)
-            self.assertTrue(os.path.isdir(root))
-            self.assertIn("does not exist: it is created empty", out)
             self.assertIn("0 project(s)", out)
             url = re.search(r"Open: (http://127\.0\.0\.1:\d+/\?token=\S{24,})", out).group(1)
             opened.assert_called_once_with(url)
 
-    def test_a_root_that_cannot_be_created_is_2(self):
+    def test_a_root_that_does_not_exist_is_2_and_is_never_created(self):
         with tempfile.TemporaryDirectory() as tmp:
-            blocker = os.path.join(tmp, "file")
-            with open(blocker, "w") as f:
-                f.write("x")
-            code, out = self.run_("--no-open", root=os.path.join(blocker, "qa-workspaces"))
-            self.assertEqual(code, 2)
-            self.assertIn("cannot be created", out)
+            root = os.path.join(tmp, "wrong", "qa-workspaces")
+            for args in (("--no-open",), ("--no-open", "--root", root)):
+                code, out = self.run_(*args, root=root)
+                self.assertEqual(code, 2)
+                self.assertIn("nothing was created", out)
+                self.assertIn(workspace_select.ROOT_ENV, out)
+            self.assertFalse(os.path.exists(os.path.dirname(root)))
+
+    def test_root_is_a_flag_of_the_hub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            given = os.path.join(tmp, "given")
+            make_project(given, "demo/shop")
+            with mock.patch.object(server.ThreadingHTTPServer, "serve_forever", side_effect=KeyboardInterrupt):
+                code, out = self.run_("--no-open", "--port", "0", "--root", given, root=os.path.join(tmp, "other"))
+            self.assertEqual(code, 0)
+            self.assertIn("1 project(s)", out)
 
 
 if __name__ == "__main__":

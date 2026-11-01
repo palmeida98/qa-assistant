@@ -1,8 +1,27 @@
 ---
 name: generate-cases
 description: Generates test case proposals from the analysis of a feature, with the design technique given in each case, in the format of the project's tracker (methodology.md sections 5.2 and 5.3).
+metadata:
+  intent: "Propose test cases from an analysis, with the design technique of each, without duplicates."
+  inputs: "The output of /analyze-feature; the existing cases."
+  config: "The tracker's section (excel.cases.fields, or the cases of jira: or azure_devops:)."
+  tools: "The project's adapter."
+  outputs: "Traceable proposals; after approval, the cases added with their final IDs."
+  writes: "cases/ or tracker/export/, then the workbook or the tracker through the adapter."
+  approvals: "Every case is a proposal until the user approves it; a dry run first."
+  failures: "An ID that exists or a candidate duplicate: the user decides, it is never forced."
+  resume: "A file already added is never edited: new cases go in a new file."
+  requires-modules: "adapters.excel, adapters.tracker"
 ---
 
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill generate-cases [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Start from the output of /analyze-feature. If it does not exist, run it first or ask the user.
 2. Read the case format and the tracker in project.yaml (current workspace) and the structure of the
    workbook/tracker in CLAUDE.md. Do not invent columns nor statuses.

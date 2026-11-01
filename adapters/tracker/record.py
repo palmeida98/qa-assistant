@@ -18,6 +18,7 @@ import re
 from datetime import datetime
 
 import yaml
+from common import OutsideWorkspace, workspace_path
 
 from .errors import ConfigError, InvalidInput
 
@@ -30,12 +31,12 @@ def _now(now: datetime | None) -> str:
 
 
 def safe_path(workspace: str, *parts: str) -> str:
-    """A path under <workspace>/tracker/, refused if it resolves inside history/ (e.g. through a link)."""
-    path = os.path.join(workspace, FOLDER, *parts)
-    real, history = os.path.realpath(path), os.path.realpath(os.path.join(workspace, "history"))
-    if real == history or real.startswith(history + os.sep):
-        raise ConfigError(f"{path} resolves inside history/, which is immutable (methodology 13)")
-    return path
+    """A path under <workspace>/tracker/, refused if it resolves outside the workspace or inside history/ (e.g. through
+    a link; common.workspace_path)."""
+    try:
+        return workspace_path(workspace, FOLDER, *parts)
+    except OutsideWorkspace as e:
+        raise ConfigError(str(e)) from None
 
 
 def _write_atomic(path: str, text: str) -> None:

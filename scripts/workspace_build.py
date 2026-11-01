@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import workspace_git as wg
 from apk_manifest import ManifestError, read_manifest
-from common import read_project
+from common import OutsideWorkspace, read_project, workspace_path
 from setup_emulator import PROD, sha256_of
 
 SOURCE = re.compile(r"^release\s+(\S+)$")
@@ -258,7 +258,10 @@ def cmd_fetch(workspace: str, a) -> int:
         expected, where = (found or ""), "the release's notes"
     if not expected:
         raise Refused(f"no SHA-256 to check the build against ({where} is empty): record it first")
-    dest = a.dest if os.path.isabs(a.dest) else os.path.join(workspace, a.dest)
+    try:
+        dest = workspace_path(workspace, a.dest)
+    except OutsideWorkspace as e:
+        raise UsageError(str(e)) from None
     os.makedirs(dest, exist_ok=True)
     target = os.path.join(dest, f"{tag}.apk")
     with tempfile.TemporaryDirectory(dir=dest) as tmp:

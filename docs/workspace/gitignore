@@ -23,6 +23,9 @@ dashboard.html
 # tracker data: the base of a later real golden, kept locally; technique-jira-xray.md 10.3)
 tracker/recordings/
 
+# what a stopped /analyze-tickets left half written (the next check removes it)
+memory/**/*.tmp
+
 # app binaries: project.yaml records where the build comes from and its SHA-256 (mobile.build)
 *.apk
 *.aab

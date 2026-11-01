@@ -6,7 +6,8 @@ References:
 - docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/log-bug`)
 - docs/technique-jira-xray.md — Jira + Xray tracker adapter technique, with the common contract of the tracker adapters in §2 (read when `tracker: jira`, or when touching `adapters/tracker/` or `adapters/jira/`; built in plan 10.2)
 - docs/technique-azure-devops.md — Azure DevOps (Test Plans + Boards) tracker adapter technique (read when `tracker: azure-devops`, or when touching `adapters/azure_devops/`; built in plan 10.3)
-- docs/technique-tickets.md — read-only ticket analysis in Azure DevOps and Jira, what changed and the workspace's `memory/` (read for `/analyze-tickets`, or when touching `adapters/tickets/`; plan phase 14)
+- docs/technique-workspaces.md — finding the framework, selecting a project, isolation, the skills' contract and sync (read when a skill's preflight fails, or when touching `scripts/workspace_select.py`, `scripts/sync_skills.py` or a skill's frontmatter; plan phase 15)
+- docs/technique-tickets.md — read-only ticket analysis in Azure DevOps and Jira, what changed and the workspace's `memory/` (read for `/analyze-tickets`, or when touching `adapters/tickets/`; plan phases 14 and 15)
 - docs/technique-api.md — API testing technique (read when the `api` module is active; `/test-api`)
 - docs/technique-accessibility.md — WCAG 2.1 AA accessibility technique (read when the `accessibility` module is active; `/audit-accessibility`)
 - docs/technique-mobile.md — mobile technique with Maestro (read when the `mobile` module is active; `/test-mobile`)
@@ -18,7 +19,7 @@ References:
 ## Fixed rules
 - Never write client data (URLs, accounts, names, credentials) in this repository.
 - Follow the hierarchy of sources of truth of the methodology (section 1.3).
-- A project workspace always lives outside this repository, in qa-workspaces/.
+- A project workspace always lives outside this repository, under the root of workspaces (qa-workspaces/ by default).
 - Before any change to the framework, follow the validation process (methodology section 15).
 - Everything in this repository is in English (plan 8.11); a project's own names (sheets, columns, statuses) are never translated.
 
@@ -34,10 +35,11 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/build_driver.py` — builds the companion driver `tools/android-driver/`; its signing key lives in `~/.qa-assistant/`, never in a repository
 - `scripts/setup_emulator.py`, `scripts/workspace_build.py`, `scripts/workspace_ci.py`, `scripts/remote_login.py` — the emulator, builds as releases, and remote execution (phase 11; `docs/workspace/ci/README.md`)
 - `scripts/build_dashboard.py <workspace> [--open]` — the workspace's `dashboard.html` (`/dashboard`)
-- `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`
+- `scripts/workspace_select.py where|list|resolve|preflight|skills|set-root` — which framework really runs, the projects under the root with their status, which one a request means, and whether a skill can run there (read only, apart from `set-root`)
+- `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`, and the record next to it says which checkout it came from
 - `qa-audit …` (`pip install -e .` first; `qa-audit doctor`), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
 - `python -m qa_ui <workspace>` — the local web interface (docs/qa-ui.md)
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `--dir <workspace>/golden/<batch>` (methodology §15). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
 
 ## Environment
-Personal repository. Each company's workspaces live in ../qa-workspaces/<company>/<project>/.
+Personal repository. Workspaces live under a root of workspaces, by default ../qa-workspaces/ next to the main checkout, as <company>/<project>/ or <project>/ (docs/technique-workspaces.md §3 and §4).

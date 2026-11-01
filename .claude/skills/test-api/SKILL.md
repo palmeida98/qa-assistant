@@ -1,10 +1,31 @@
 ---
 name: test-api
 description: Tests an HTTP API of the current workspace (contract, status codes, authentication per role, negatives, persistence) with redacted evidence, following technique-api.md.
+metadata:
+  intent: "Test an HTTP API: contract, status codes, authentication per role, negatives, persistence."
+  inputs: "Approved API cases; the contract."
+  config: "api: (base_url, contract, auth, credentials); the module active."
+  tools: "scripts/api_request.py."
+  outputs: "Contract checked, results with redacted evidence."
+  writes: "runs/ and runs/evidence/; test resources in the test environment, cleaned up or listed."
+  approvals: "A new bug through /log-bug; applying through /checkpoint."
+  failures: "No response: one retry, then Blocked. A base_url that looks like production: stop."
+  resume: "The run log and the resources listed in context.md."
+  requires-scripts: "scripts/api_request.py, scripts/run_log.py"
+  requires-config: "api"
+  requires-tools: ".env"
 ---
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill test-api [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read technique-api.md (<qa>/docs/) and, in the current workspace, the api: section of project.yaml
-   (base_url, contract, auth, credentials per role) and context.md. <qa> is the root of qa-assistant:
-   usually ../../../qa-assistant; in the demo, ../.. . If the api module is not active or the api:
+   (base_url, contract, auth, credentials per role) and context.md. If the api module is not active or the api:
    section is empty, stop and ask.
 2. Confirm that base_url is the TEST environment (technique-api.md section 2). If it looks like production,
    stop.

@@ -1,11 +1,32 @@
 ---
 name: test-mobile
 description: Tests the current workspace's mobile app (Android/iOS) or the web in a mobile context, with Maestro flows (one per case) or, for generated content, in conversational mode with the device driver, following technique-mobile.md.
+metadata:
+  intent: "Test the mobile app with Maestro flows or, for generated content, in conversational mode."
+  inputs: "Approved cases or charters; a device, an emulator and a build."
+  config: "mobile: (platform, app_id, flows, variables, serial or avd, build); the module active."
+  tools: "Maestro; adb, emulator and the companion driver on Android; xcrun on iOS."
+  outputs: "Results per device, platform and build, with captures."
+  writes: "runs/ and evidence/. Bugs only proposed."
+  approvals: "A new bug through /log-bug; applying through /checkpoint. Never third-party services without authorisation."
+  failures: "No target: Blocked (environment), never Pass. Tool instability: one retry, then Blocked (tool)."
+  resume: "The run log and context.md; a login link is never written down."
+  requires-scripts: "scripts/run_mobile.py, scripts/device.py, scripts/run_log.py"
+  requires-config: "mobile"
+  requires-tools: "maestro, adb, emulator, android-driver, xcrun, build, .env"
 ---
+
+0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
+   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   python <qa>/scripts/workspace_select.py preflight --skill test-mobile [<project id or name>] [--workspace <path>]
+   Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
+   propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
+   what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
+   it asks for. In the steps below, the current workspace is the one it selected.
 1. Read technique-mobile.md (<qa>/docs/) and, in the current workspace, the mobile: section of project.yaml
-   (platform, app_id, flows, variables, serial/avd, send_label, ignore_labels, browser) and context.md.
-   <qa> is the root of qa-assistant: usually ../../../qa-assistant; in the demo, ../.. . If the section is
-   empty, stop and ask.
+   (platform, app_id, flows, variables, serial/avd, send_label, ignore_labels, browser) and context.md. If the
+   section is empty, stop and ask.
 2. Choose the mode PER BATCH (technique section 4.1) and write it with the reason at the top of the run log
    ("mode": "flows: <why>" or "conversational: <why>"):
    - deterministic UI (the expected result can be asserted) -> flows, steps 3-5;
