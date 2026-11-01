@@ -59,7 +59,9 @@ def _sync():
 # --- the framework ---------------------------------------------------------------------------------------------------
 
 def _inside(path: str, base: str) -> bool:
-    a, b = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(base))
+    from common import plain_path
+    a = os.path.normcase(plain_path(os.path.realpath(path)))
+    b = os.path.normcase(plain_path(os.path.realpath(base)))
     try:
         return os.path.commonpath([a, b]) == b
     except ValueError:      # another drive
@@ -221,6 +223,7 @@ class Candidate:
     tracker: str | None = None
     modules: tuple = ()
     configured: bool = True     # it has its own project.yaml, a file and not a link
+    badname: bool = False       # a folder name discovery does not accept: listed, never taken for a project
 
     def public(self, root: str | None = None) -> dict:
         """What a list shows: the minimum needed to choose. The path relative to the root, when there is one."""
@@ -228,8 +231,12 @@ class Candidate:
         out["modules"] = list(self.modules)
         if root:
             out["path"] = os.path.relpath(self.path, root).replace("\\", "/")
-        out["proposes"] = ONBOARDING if self.status in (INCOMPLETE, NOT_CONFIGURED) else None
+        out["proposes"] = ONBOARDING if self.needs_onboarding else None
         return out
+
+    @property
+    def needs_onboarding(self) -> bool:
+        return self.status in (INCOMPLETE, NOT_CONFIGURED) and not self.badname
 
 
 def classify(path: str) -> tuple[str, str, dict]:
@@ -282,12 +289,50 @@ def _entries(path: str) -> tuple[list[os.DirEntry], str | None]:
         return [], e.strerror or str(e)
 
 
+def _unsupported(path: str) -> list[os.DirEntry]:
+    """The folders of a folder whose names discovery does not accept (a space, an accent...), not hidden and not links.
+    Hidden (`.git`) and `_scratch` folders are left alone on purpose."""
+    try:
+        with os.scandir(path) as it:
+            return [e for e in it if not NAME.fullmatch(e.name) and e.name[:1] not in (".", "_")
+                    and e.is_dir(follow_symlinks=False) and not _is_link(e.path)]
+    except OSError:
+        return []
+
+
+def _bad_name(*names: str) -> str:
+    shown = " and ".join(repr(n) for n in names)
+    return (f"the folder name{'s' if len(names) > 1 else ''} {shown} {'are' if len(names) > 1 else 'is'} outside what "
+            "discovery accepts (letters and digits first, then letters, digits, '.', '_', '-'): rename the folder"
+            f"{'s' if len(names) > 1 else ''} to have {'them' if len(names) > 1 else 'it'} listed and found by name, or "
+            "open it with --workspace PATH")
+
+
+def _unsupported_projects(root: str, company: str | None = None) -> list[Candidate]:
+    """The projects discovery would have found if their folder names were accepted: a folder with its own project.yaml
+    in an unsupported name, or one inside an unsupported company folder. Listed as incomplete, never as a project."""
+    out: list[Candidate] = []
+    base = os.path.join(root, company) if company else root
+    for entry in _unsupported(base):
+        holders = [(entry, [entry.name])] if os.path.isfile(os.path.join(entry.path, "project.yaml")) else []
+        if not holders and not company:
+            for sub in _entries(entry.path)[0] + _unsupported(entry.path):
+                if os.path.isfile(os.path.join(sub.path, "project.yaml")) and not _is_link(sub.path):
+                    holders.append((sub, [entry.name] + ([] if NAME.fullmatch(sub.name) else [sub.name])))
+        for holder, names in holders:
+            top = holder is entry and not company
+            pid = entry.name if top else f"{company or entry.name}/{holder.name}"
+            out.append(Candidate(pid, company or ("" if top else entry.name), holder.name, holder.path, INCOMPLETE,
+                                 _bad_name(*names), holder.name, configured=False, badname=True))
+    return out
+
+
 def discover(root: str, read: bool = True) -> list[Candidate]:
     """What the root holds, in its two layouts (technique-workspaces.md section 4): every folder that is a project or
     could become one, sorted by company and project. Links and junctions are never followed: they are listed as
     inaccessible. `read=False` only sees whether a project.yaml exists: every candidate then says `valid`, unchecked."""
     root = os.path.abspath(root)
-    out: list[Candidate] = []
+    out: list[Candidate] = _unsupported_projects(root)
     entries, _ = _entries(root)
     for entry in entries:
         if _is_link(entry.path):
@@ -297,6 +342,7 @@ def discover(root: str, read: bool = True) -> list[Candidate]:
         if os.path.exists(os.path.join(entry.path, "project.yaml")):
             out.append(_candidate(entry.name, "", entry.name, entry.path, read))
             continue
+        out += _unsupported_projects(root, entry.name)
         subfolders, error = _entries(entry.path)
         if error:
             out.append(Candidate(entry.name, "", entry.name, entry.path, INACCESSIBLE,
@@ -430,7 +476,7 @@ def resolve(hint: str | None = None, workspace: str | None = None, root: str | N
 def _print_candidates(candidates: list[Candidate]) -> None:
     width = max([len(c.id) for c in candidates] + [10])
     for c in candidates:
-        tail = f"{c.reason} -> {ONBOARDING}" if c.status in (INCOMPLETE, NOT_CONFIGURED) else c.reason
+        tail = f"{c.reason} -> {ONBOARDING}" if c.needs_onboarding else c.reason
         print(f"  {c.status:15} {c.id:{width}}  {c.name if c.name != c.folder else ''}{'  ' if tail else ''}{tail}")
 
 
@@ -570,12 +616,14 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
     report["project"] = project.public()
     accepted = (VALID, INCOMPLETE, NOT_CONFIGURED) if metadata.get("requires-project") == "any" else (VALID,)
     status, reason, proj = classify(project.path)
+    if project.badname:
+        status, reason, proj = project.status, project.reason, {}
     if status not in accepted:
         report["problems"].append(reason)
         if status == INCOMPLETE and proj:
             import validate_project
             report["problems"] += validate_project.base_problems(proj)[0]
-        if status in (INCOMPLETE, NOT_CONFIGURED):
+        if status in (INCOMPLETE, NOT_CONFIGURED) and not project.badname:
             report["proposes"] = ONBOARDING
         return NOT_USABLE, report
     environments = proj.get("environments") if isinstance(proj.get("environments"), dict) else {}
@@ -705,7 +753,7 @@ def _run(a) -> int:
             if selection.candidate:
                 c = selection.candidate
                 print(f"{c.id} ({c.status}{': ' + c.reason if c.reason else ''}), by {selection.how}: {c.path}")
-                if c.status in (INCOMPLETE, NOT_CONFIGURED):
+                if c.needs_onboarding:
                     print(f"Proposed: {ONBOARDING} in that folder")
         return code
     code, report = preflight(a.skill, a.project, a.workspace, a.root)

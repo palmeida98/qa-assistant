@@ -132,5 +132,17 @@ class Cli(unittest.TestCase):
         self.assertEqual(cli.exit_code(result, "none"), 0)
 
 
+class AsAModule(unittest.TestCase):
+    def test_python_m_qa_audit_is_the_same_command(self):
+        # audit finding E-01: after a Python upgrade the `qa-audit` launcher pointed at the old interpreter and printed nothing
+        import subprocess
+        import sys
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        done = subprocess.run([sys.executable, "-m", "qa_audit", "version"], capture_output=True, text=True, timeout=60,
+                              check=False, cwd=root, env={**os.environ, "PYTHONPATH": os.path.join(root, "src")})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(), f"qa-audit {__version__}")
+
+
 if __name__ == "__main__":
     unittest.main()

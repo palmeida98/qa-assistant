@@ -283,8 +283,8 @@ Required, even when the honest answer is an empty list: `tickets`, `objective`, 
 | 1 | partial: read what could be read, memory updated safely; see the check's coverage |
 | 2 | ambiguity or conflict with the tracker (a refused query, several iterations): nothing recorded |
 | 3 | nothing could be read: the check records the failure, every reference preserved |
-| 4 | invalid input or configuration: nothing read, nothing recorded |
-| 5 | the memory could not be written (no space, permissions, a path over Windows' 260 characters): the message says where; the next run reports the same changes |
+| 4 | invalid input or configuration (including a bundle or an analysis file that cannot be opened or is not JSON): nothing read, nothing recorded |
+| 5 | the memory could not be written (no space, permissions, a path over Windows' 260 characters) or another process is writing the workspace (`technique-workspaces.md` §7): the message says where or who; the next run reports the same changes |
 
 ## 9. Validation
 

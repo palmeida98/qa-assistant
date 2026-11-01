@@ -98,7 +98,9 @@ def common_token_prefix(ids: list[str]) -> str:
     """Longest common prefix, cut at a separator (e.g. 'TC-SHOP-')."""
     if not ids:
         return ""
-    p = os.path.commonprefix(ids)
+    first, last = min(ids), max(ids)      # the common prefix of all of them is the one of the smallest and the largest
+    size = next((i for i, (a, b) in enumerate(zip(first, last, strict=False)) if a != b), min(len(first), len(last)))
+    p = first[:size]
     cut = max(p.rfind(ch) for ch in "-_.")
     return p[: cut + 1] if cut >= 0 else ""
 

@@ -794,26 +794,6 @@ class ExcelAdapter:
         ctl.append([record.get(name) for name in self._control_names(ctl)])
         return {"added": True, "hash": h_cases, "cases": plan}
 
-    def update_defect_note(self, defect_id: str, note: str, column: str,
-                           new_status: str | None = None) -> None:
-        """Appends a note to a text column of an existing defect, without
-        erasing what was there. Changes the status only if new_status is
-        passed explicitly."""
-        d = self.cfg["defects"]
-        ws, h, rows = self._defect_rows()
-        if column not in h:
-            raise KeyError(f"column '{column}' does not exist in '{d['sheet']}'")
-        for r, v in rows:
-            if str(v).strip() == defect_id:
-                c = ws.cell(r, h[column])
-                c.value = (str(c.value or "").rstrip() + "\n\n" + note).strip()
-                if new_status:
-                    if new_status not in d["statuses"]:
-                        raise ValueError(f"invalid defect status: {new_status}")
-                    ws.cell(r, h[d["columns"]["status"]]).value = new_status
-                return
-        raise KeyError(f"defect not found: {defect_id}")
-
     # ------------------------------------------------------------------
     # Active defects view
     # ------------------------------------------------------------------

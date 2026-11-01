@@ -111,8 +111,8 @@ def request(a) -> tuple[int, dict]:
     env = read_workspace_env(a.workspace)
     session, session_secrets = read_session(a.workspace)
     vars_ = {**os.environ, **env, **session}
-    # redact by value: everything from .env (>= 4 characters) and the session's secrets
-    by_value = {k: v for k, v in env.items() if len(v) >= 4}
+    # redact by value: everything from .env (Redactor skips the values shorter than SECRET_MIN) and the session's secrets
+    by_value = dict(env)
     by_value.update({k: session[k] for k in session_secrets if k in session})
     red = Redactor(by_value)
 

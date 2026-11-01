@@ -15,8 +15,8 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
   applied_batches) or it has a record in tracker/sent/ (Jira, Azure DevOps). Appending to it made the adapter refuse
   it ("already applied ... with a DIFFERENT content"); a correction goes to a new batch, whose name is suggested.
 
-Exit codes: 0 written · 1 refused (the batch was already applied) · 2 usage or configuration (unknown status, bad
-JSON, no project.yaml)
+Exit codes: 0 written · 1 refused (the batch was already applied, or another process is writing the workspace: nothing
+was written, run the same command again) · 2 usage or configuration (unknown status, bad JSON, no project.yaml)
 """
 
 from __future__ import annotations
@@ -31,7 +31,14 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
-from common import OutsideWorkspace, read_project, workspace_path
+from common import (
+    OutsideWorkspace,
+    WorkspaceBusy,
+    read_project,
+    replace_file,
+    workspace_lock,
+    workspace_path,
+)
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
@@ -142,7 +149,9 @@ def write_log(path: str, doc: dict) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
-    os.replace(tmp, path)
+        f.flush()
+        os.fsync(f.fileno())        # on the disk before it takes the place of the old one
+    replace_file(tmp, path)
 
 
 def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: str | None = None,
@@ -166,7 +175,17 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
     path = run_log_path(workspace, name)
-    doc = read_log(path)
+    try:
+        with workspace_lock(workspace):         # read, change and write the file as one step (audit finding D-02)
+            return _add(path, doc_for=path, case=case, status=status, actual=actual, bug=bug, new_defect=new_defect,
+                        evidence=evidence, environment=environment, build=build, now=now)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+
+
+def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
+         now) -> tuple[str, bool]:
+    doc = read_log(doc_for)
     item = {"tc": case.strip(), "status": status, "actual_result": actual,
             "ts": (now or datetime.now()).isoformat(timespec="seconds")}
     if bug:

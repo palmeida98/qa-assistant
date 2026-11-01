@@ -1,6 +1,6 @@
 # qa-ui — local web interface
 
-> Version 1.2 · 2026-11-01 · Plan, phases 12, 13 and 15 (specification first, methodology §15). 1.1: the hub (§14). 1.2: the root can be configured and is never created; projects directly under the root; folders that are not ready are shown (§14.1, §14.2).
+> Version 1.3 · 2026-11-01 · Plan, phases 12, 13, 15 and 15.6 (specification first, methodology §15). 1.1: the hub (§14). 1.2: the root can be configured and is never created; projects directly under the root; folders that are not ready are shown (§14.1, §14.2). 1.3: a project in a folder with an unsupported name is named, not hidden; each screen sets the tab's title and moves the focus to its heading; the user's edits of a run log take the workspace's lock (§9, §14.2).
 >
 > Universal: nothing of a real project enters this document. The examples use the fictional Demo Shop.
 
@@ -364,14 +364,17 @@ options of §1 (`--port`, `--no-open`, `--claude`, `--max-turns`, `--timeout-min
 ### 14.2 Discovery
 
 A project is a folder `<root>/<company>/<project>/` or `<root>/<project>/` that holds a `project.yaml`: each name of
-letters, digits, `.`, `_` and `-`, not starting with `.` or `_`; symbolic links are not followed; anything else in
-the root is ignored. Its id is `<company>/<project>` or `<project>`, and a folder that has its own `project.yaml` is a
+letters, digits, `.`, `_` and `-`, not starting with `.` or `_`; symbolic links are not followed; a folder starting with `.` or `_`
+is ignored. A folder with a `project.yaml` in a name outside that rule (a space, an accent) is not ignored: it is named
+as `incomplete`, with "rename the folder", and never gets a card or routes. Its id is `<company>/<project>` or `<project>`, and a folder that has its own `project.yaml` is a
 project, never a company. The list is read again on each request that needs it (nothing is kept that the root does
 not have), sorted by company and project. The discovery is `scripts/workspace_select.py`'s, the same one the skills
 use (`technique-workspaces.md` §4).
 
 A folder that is not ready has no card and no routes, but it is named: `unconfigured` in `GET /api/hub`, under the
-projects on the Projects screen, with its status and `/project-onboarding` to run there.
+projects on the Projects screen, with its status and, when onboarding is what is missing, `/project-onboarding` to run
+there (`proposes` in each item). A route change sets the tab's title (`<screen> · <project> · qa-ui`) and moves the focus
+to the new screen's heading, so the keyboard and a screen reader do not start from a link that is gone.
 
 A route that names a project takes its id from the request and **looks it up in that list**: a path is never joined
 from what the request gave, so `..`, an absolute path or a project that is not discovered is a 404.

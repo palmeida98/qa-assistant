@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import run_log
 import workspace_select
 import yaml
-from common import read_project
+from common import read_project, replace_file
 
 from . import workspace
 from .runs import Gate
@@ -56,8 +56,8 @@ def discover(root: str) -> list[Project]:
 
 def unconfigured(root: str) -> list[dict]:
     """The folders that could become a project and are not one yet: named, never given a card or routes."""
-    return [{"id": c.id, "status": c.status, "reason": c.reason} for c in workspace_select.discover(root)
-            if not c.configured]
+    return [{"id": c.id, "status": c.status, "reason": c.reason, "proposes": c.public()["proposes"]}
+            for c in workspace_select.discover(root) if not c.configured]
 
 
 def find(root: str, project_id: str) -> Project:
@@ -137,7 +137,7 @@ class Prefs:
         tmp = self.path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        os.replace(tmp, self.path)
+        replace_file(tmp, self.path)
         return ids
 
 

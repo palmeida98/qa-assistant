@@ -330,9 +330,13 @@ class Runner:
         if stdin_text is not None:
             try:
                 proc.stdin.write(stdin_text)
-                proc.stdin.close()
             except OSError:
                 pass                      # the command ended before reading its input: its exit code says why
+            finally:
+                try:
+                    proc.stdin.close()    # whatever happened: an open pipe is a leaked handle
+                except OSError:
+                    pass
         with proc.stdout, open(run.log_path, "w", encoding="utf-8", newline="\n") as log:
             for raw in proc.stdout:
                 raw = raw.rstrip("\r\n")

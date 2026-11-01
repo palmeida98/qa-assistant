@@ -37,7 +37,7 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/build_dashboard.py <workspace> [--open]` — the workspace's `dashboard.html` (`/dashboard`)
 - `scripts/workspace_select.py where|list|resolve|preflight|skills|set-root` — which framework really runs, the projects under the root with their status, which one a request means, and whether a skill can run there (read only, apart from `set-root`)
 - `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`, and the record next to it says which checkout it came from
-- `qa-audit …` (`pip install -e .` first; `qa-audit doctor`), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
+- `qa-audit …` (`pip install -e .` first; `qa-audit doctor`, or `python -m qa_audit doctor` when the `qa-audit` launcher points at a Python that is gone), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
 - `python -m qa_ui <workspace>` — the local web interface (docs/qa-ui.md)
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `--dir <workspace>/golden/<batch>` (methodology §15). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
 

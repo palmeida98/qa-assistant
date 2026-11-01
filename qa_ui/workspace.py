@@ -19,9 +19,11 @@ import run_log
 import yaml
 from common import (
     OutsideWorkspace,
+    WorkspaceBusy,
     read_env,
     read_project,
     variable_names,
+    workspace_lock,
     workspace_path,
 )
 
@@ -183,7 +185,15 @@ def read_run_log(workspace: str, proj: dict, name: str, with_applied: bool = Tru
 
 def create_run_log(workspace: str, proj: dict, name: str, environment: str | None, build: str | None) -> str:
     """The run log of a batch about to run, with the run block (methodology 7.1). An existing one is kept (a
-    batch run again continues it) unless it was applied."""
+    batch run again continues it) unless it was applied. One writer at a time (technique-workspaces.md section 7)."""
+    try:
+        with workspace_lock(workspace):
+            return _create_run_log(workspace, proj, name, environment, build)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+
+
+def _create_run_log(workspace: str, proj: dict, name: str, environment: str | None, build: str | None) -> str:
     try:
         batch_id = run_log.batch_id(name)
     except run_log.UsageError as e:
@@ -206,7 +216,18 @@ def create_run_log(workspace: str, proj: dict, name: str, environment: str | Non
 
 def edit_item(workspace: str, proj: dict, name: str, case: str, action: str, data: dict | None = None,
               now: datetime | None = None) -> dict:
-    """One edit of one item of a run log (docs/qa-ui.md section 9); returns the run log as read_run_log."""
+    """One edit of one item of a run log (docs/qa-ui.md section 9); returns the run log as read_run_log. The read, the
+    change and the write are one step under the workspace's lock: an agent adding results at the same time is not
+    overwritten (technique-workspaces.md section 7)."""
+    try:
+        with workspace_lock(workspace):
+            return _edit_item(workspace, proj, name, case, action, data, now)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+
+
+def _edit_item(workspace: str, proj: dict, name: str, case: str, action: str, data: dict | None,
+               now: datetime | None) -> dict:
     data = data or {}
     try:
         batch_id = run_log.batch_id(name)

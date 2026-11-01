@@ -14,7 +14,8 @@ Exit codes:
   2  ambiguity or conflict with the tracker (a refused query, several iterations): nothing recorded
   3  nothing could be read: the check records the failure, every reference preserved
   4  invalid input or configuration: nothing read, nothing recorded
-  5  the memory could not be written (no space, permissions, a path too long): the next run reports the same changes
+  5  the memory could not be written (no space, permissions, a path too long, another process holding the workspace):
+     the next run reports the same changes
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ import json
 import sys
 from datetime import datetime
 
-from common import read_workspace_env
+from common import WorkspaceBusy, read_workspace_env
 
 from adapters.tracker.base import Context
 from adapters.tracker.config import TrackerConfig
@@ -157,6 +158,8 @@ def _read_bundle(path: str):
             doc = json.load(f)
     except FileNotFoundError:
         raise InvalidInput(f"bundle not found: {path}") from None
+    except OSError as e:
+        raise InvalidInput(f"bundle {path} cannot be read ({e.strerror or e}): give the file the browser tool saved")             from None
     except ValueError as e:
         raise InvalidInput(f"{path}: not valid JSON ({e})") from None
     if isinstance(doc, list) and doc and isinstance(doc[0], dict) and isinstance(doc[0].get("text"), str):
@@ -274,6 +277,8 @@ def main(argv=None, transport=None, sleep=None, printer=None) -> int:
                 doc = json.load(f)
         except FileNotFoundError:
             raise InvalidInput(f"analysis not found: {a.file}") from None
+        except OSError as e:
+            raise InvalidInput(f"analysis {a.file} cannot be read ({e.strerror or e}): give the JSON file") from None
         except ValueError as e:
             raise InvalidInput(f"{a.file}: not valid JSON ({e})") from None
         result = memory.record_analysis(a.workspace, a.check, sanitizer.obj(doc), now)
@@ -288,6 +293,9 @@ def main(argv=None, transport=None, sleep=None, printer=None) -> int:
         for p in e.problems:
             err(redactor.text(f" - {p}"))
         return e.code
+    except WorkspaceBusy as e:
+        err(str(e))
+        return WRITE_FAILED
     except OSError as e:
         err(redactor.text(memory.write_failure(e)))
         return WRITE_FAILED

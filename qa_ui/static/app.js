@@ -956,14 +956,15 @@ function renderHub() {
   const notReady = (hub.unconfigured || []).length ? h('section', { class: 'panel group', 'aria-label': 'Folders that are not projects yet' },
     h('h2', { text: 'Folders that are not projects yet' }),
     h('ul', {}, hub.unconfigured.map((f) => h('li', {}, h('code', { text: f.id }), ` — ${f.status}: ${f.reason}.`))),
-    h('p', { class: 'small muted' }, 'Open ', h('code', { text: 'claude' }), ' in the folder and run ',
-      h('code', { text: '/project-onboarding' }), '.')) : null;
+    hub.unconfigured.some((f) => f.proposes)
+      ? h('p', { class: 'small muted' }, 'Open ', h('code', { text: 'claude' }), ' in the folder and run ',
+        h('code', { text: '/project-onboarding' }), '.') : null) : null;
   if (!hub.projects.length) {
     root.append(h('section', { class: 'panel group' },
       h('h2', { text: 'No project yet' }),
       h('p', {}, 'Create the folder ', h('code', { text: '<company>/<project>/' }), ' in this root, open ',
         h('code', { text: 'claude' }), ' in it and run ', h('code', { text: '/project-onboarding' }),
-        '. Creating a project from this page comes with plan 13.4.')));
+        '. Creating a project from this page is not available yet.')));
     if (notReady) root.append(notReady);
     return;
   }
@@ -1175,6 +1176,7 @@ async function followHash(first) {
     render();
     try { await loadArea(); } catch (e) { banner(e.message); }
     render();
+    focusHeading();
     return;
   }
   if (id === S.project && first !== true) return;
@@ -1196,9 +1198,30 @@ async function followHash(first) {
     banner(e.message);
   }
   render();
+  focusHeading();
+}
+
+const SCREEN_NAMES = { intake: 'Intake', suggest: 'Suggestion', run: 'Execution', overview: 'Overview', notes: 'Notes' };
+
+/* The tab's title says where the user is (WCAG 2.4.2): the screen, then the project. */
+function setTitle() {
+  const atHub = S.mode === 'hub' && !S.project;
+  const area = S.mode === 'hub' ? S.area : 'test';
+  const part = atHub ? 'Projects' : SCREEN_NAMES[area === 'test' ? S.screen : area];
+  document.title = [part, atHub ? '' : S.project, 'qa-ui'].filter(Boolean).join(' · ');
+}
+
+/* After a route change the keyboard and the screen reader start at the new screen's heading, not at a link that is
+   no longer there. */
+function focusHeading() {
+  const heading = document.querySelector('main > section:not([hidden]) h1');
+  if (!heading) return;
+  heading.setAttribute('tabindex', '-1');
+  heading.focus({ preventScroll: true });
 }
 
 function render() {
+  setTitle();
   if (S.mode === 'hub' && !S.project) {
     renderTopHub();
     for (const screen of ['intake', 'suggest', 'run', 'overview', 'notes']) $(`screen-${screen}`).hidden = true;

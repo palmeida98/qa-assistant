@@ -13,6 +13,8 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 import unittest
 from typing import ClassVar
 from unittest import mock
@@ -23,12 +25,13 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
+import common
 from build_fixture import build
 from test_tickets import BOARDS, T1, T2, T3
 from test_tickets import Base as TicketsBase
 from tickets_fake import ORG, SITE, FakeAdo, FakeJira
 
-from adapters.tickets import analysis, impact, memory
+from adapters.tickets import analysis, cli, impact, memory
 from adapters.tickets.model import check_order
 
 with open(os.path.join(ROOT, "adapters", "excel", "example.yaml"), encoding="utf-8") as _f:
@@ -292,6 +295,73 @@ class Repeating(Base):
         self.assertEqual({t["ref"]["id"]: t["conclusion"] for t in check["tickets"]}, {"100": "no-changes", "200": "first"})
 
 
+class Concurrency(Base):
+    """Audit finding D-02: two sessions on one workspace wrote the same memory with nothing between them, and the second
+    one's cleanup of leftovers removed the temporary file the first was about to put in place."""
+
+    def test_a_second_check_waits_for_the_first_and_both_are_kept(self):
+        fake = FakeAdo()
+        fake.add(100)
+        fake.add(200)
+        self.assertEqual(self.collect(fake, "100", now=T1), 0)
+        fake.set(100, System__State="Done")
+        real, started, results = os.replace, threading.Event(), {}
+
+        def slow(src, dst):
+            if dst.endswith(".json") and not started.is_set():
+                started.set()
+                time.sleep(0.4)             # the first writer is in the middle of its files when the second one arrives
+            real(src, dst)
+
+        def run(name, ref, now):
+            results[name] = cli.main([self.ws, "collect", ref, "--now", now], transport=fake, sleep=lambda s: None,
+                                     printer=lambda line: None)
+
+        with mock.patch.object(memory.os, "replace", slow):
+            first = threading.Thread(target=run, args=("first", "100", T2))
+            second = threading.Thread(target=run, args=("second", "200", T3))
+            first.start()
+            started.wait(5)
+            second.start()
+            first.join()
+            second.join()
+        self.assertEqual(results, {"first": 0, "second": 0})
+        self.assertTrue(os.path.isfile(os.path.join(self.ws, "memory", "checks", "20261102-100000.json")))
+        self.assertTrue(os.path.isfile(os.path.join(self.ws, "memory", "checks", "20261103-100000.json")))
+        ref = self.check(A)["tickets"][0]["ref"]
+        self.assertEqual(memory.read_json(memory.ticket_path(self.ws, ref))["components"]["fields"]["data"]["state"], "Done")
+        self.assertIn("Newest check: `20261103-100000`", self.context())
+        self.assertFalse(os.path.exists(os.path.join(self.ws, common.LOCK_NAME)))
+
+    def test_a_workspace_held_by_another_process_is_said_and_nothing_is_written(self):
+        fake = FakeAdo()
+        fake.add(100)
+        before = self.snapshot()
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), common.workspace_lock(self.ws):
+            self.assertEqual(self.collect(fake, "100", now=T1), 5)
+        text = " ".join(self.lines)
+        self.assertIn("another process", text)
+        self.assertIn(common.LOCK_NAME, text)
+        self.assertIn("run the same command again", text)
+        self.assertEqual({k: v for k, v in self.snapshot().items() if k != common.LOCK_NAME}, before)
+
+
+class UnreadableInput(Base):
+    """Audit finding D-03: a bundle or an analysis that cannot be opened was reported as a memory that cannot be written."""
+
+    def test_a_folder_given_as_the_bundle_is_an_input_error(self):
+        self.assertEqual(self.run_cli(None, "ingest", self.ws, "--now", T1), 4)
+        text = " ".join(self.lines)
+        self.assertIn("bundle", text)
+        self.assertNotIn("memory could not be written", text)
+
+    def test_a_folder_given_as_the_analysis_is_an_input_error(self):
+        self.assertEqual(self.run_cli(None, "analysis", A, self.ws, "--now", T1), 4)
+        text = " ".join(self.lines)
+        self.assertIn("analysis", text)
+        self.assertNotIn("memory could not be written", text)
+
+
 class Interruption(Base):
     """Interrupção e retoma: nothing half written counts, and the next read goes on."""
 
@@ -334,6 +404,24 @@ class Interruption(Base):
         self.assertIn("Newest check: `20261103-100000`", self.context())
         leftovers = glob.glob(os.path.join(self.ws, "memory", "**", "*.tmp"), recursive=True)
         self.assertEqual(leftovers, [])
+
+    def test_a_file_is_on_the_disk_before_it_takes_the_place_of_the_old_one(self):
+        # audit finding D-06 (a risk): a power cut after the rename could leave an empty file where a reference was
+        events = []
+        real_fsync, real_replace = os.fsync, os.replace
+
+        def fsync(fd):
+            events.append("fsync")
+            return real_fsync(fd)
+
+        def replace(src, dst):
+            events.append("replace")
+            return real_replace(src, dst)
+
+        path = os.path.join(self.ws, "memory", "tickets", "x.json")
+        with mock.patch.object(memory.os, "fsync", fsync), mock.patch.object(memory.os, "replace", replace):
+            memory.write_atomic(path, b"{}")
+        self.assertEqual(events, ["fsync", "replace"])
 
     def test_a_memory_that_cannot_be_written_is_said_and_loses_nothing(self):
         # found by a rehearsal of the skill: a path over Windows' 260 characters gave a traceback and exit 1 ("partial")

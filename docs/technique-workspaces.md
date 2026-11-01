@@ -36,7 +36,7 @@ A skill in `~/.claude/skills/` runs in a workspace that knows nothing about the 
 
 1. `$QA_ASSISTANT_ROOT`: explicit, for one shell or one machine;
 2. `root` in `~/.claude/skills/.qa-assistant-source.json`: the checkout the skills were last synced from (§9);
-3. `../../../qa-assistant` from the workspace: the historical layout, the last resort, never the only one.
+3. `../../../qa-assistant` from the workspace (`../../qa-assistant` when the project is directly under the root): the historical layout, the last resort, never the only one.
 
 Whatever the order gives is **checked, not trusted**: `python <qa>/scripts/workspace_select.py preflight` compares it with what the skill needs (§6). A missing folder or script means the skills are newer than that checkout: the skill stops and says so.
 
@@ -63,7 +63,7 @@ In this order, each named in the output as the source of the value:
 - `<root>/<company>/<project>/`: a project whose id is `<company>/<project>`, for each subfolder of a folder without its own `project.yaml`;
 - a folder with no `project.yaml` and no subfolder is a new project, id `<folder>`.
 
-Names follow the hub's rule: letters, digits, `.`, `_`, `-`, never starting with `.` or `_`. Anything else is ignored.
+Names follow the hub's rule: letters, digits, `.`, `_`, `-`, never starting with `.` or `_`. A folder starting with `.` or `_` (`.git`, `_scratch`) is ignored. Any other name that holds a project (a space, an accent...) is listed as `incomplete` with the reason "rename the folder", so it never looks as if it did not exist; it has no card or routes in the hub and is found by name only to say why, but `--workspace PATH` opens it (the path is the user's own choice).
 
 | Status | Meaning | Proposed |
 |---|---|---|
@@ -114,6 +114,7 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 
 - **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/`. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, `qa-ui`'s batches, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
 - **Two explicit exceptions, both stated by configuration or by the runner:** the workbook lives where `excel.file` of `project.yaml` says, possibly a synced folder (`technique-excel.md` §2); on a runner, `run_mobile.py` may keep its report in `$RUNNER_TEMP`, a throwaway folder, as `docs/workspace/ci/mobile.yml` does.
+- **One writer at a time.** The ticket memory (`record_check`, `record_analysis`) and `run_log.py add` read, change and write under `common.workspace_lock`: a lock file `.qa-assistant.lock` in the workspace, taken with an exclusive create and released at the end. A second writer waits up to 30 seconds (`QA_LOCK_WAIT`), then stops with exit 5 (tickets) or 1 (`run_log.py`), writes nothing and says what to do: run the same command again, or delete the lock if its process is gone. A lock whose process no longer exists on this computer, or older than 15 minutes, is taken over, so a crash never blocks a project. The file is in the workspace's `.gitignore`.
 - **Credentials** are read from the selected workspace's `.env` only, and the sanitiser of `/analyze-tickets` knows only that file's values.
 - **Memory and sessions** belong to one workspace. Two projects with the same name, ticket id or source never share anything: nothing global holds project data.
 - **Claude's personal or global memory is not a source of truth for a project.** On resuming, the agent loads `context.md`, the relevant records and the configuration. Real results stay in the workspace; the framework receives only generalised improvements and fictional examples.
@@ -165,6 +166,8 @@ Analysis and execution stay apart. "Analyse these tickets" gives an analysis. "T
 | `<qa>` is older than the skill | Exit 3, or no script at all: stop, with the instruction |
 | A broken `project.yaml` | `incomplete`, with the parser's message for the selected project |
 | A folder without permission | `inaccessible`; the rest of the list still works |
+| Another session is writing the same workspace | The second writer waits, then stops with nothing written and the command to run again (§7) |
+| A folder name discovery does not accept (a space, an accent) | Listed as `incomplete` with "rename the folder"; `--workspace PATH` opens it (§4) |
 
 ## 11. Validation
 

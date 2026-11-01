@@ -133,9 +133,21 @@ class Discovery(Root):
         state = self.hub.state()
         self.assertNotIn("demo/empty", [p["id"] for p in state["projects"]])
         self.assertEqual(state["unconfigured"], [{"id": "demo/empty", "status": "not-configured",
-                                                  "reason": "no project.yaml"}])
+                                                  "reason": "no project.yaml", "proposes": "/project-onboarding"}])
         with self.assertRaises(hub.NotFound):
             hub.find(self.root, "demo/empty")
+
+    def test_a_project_in_an_unsupported_folder_name_is_named_and_has_no_card_or_route(self):
+        # audit finding D-01: it used to be absent from the page, as if the folder did not exist
+        make_project(self.root, "Acme Corp/Web Shop", project="web-shop")
+        state = self.hub.state()
+        self.assertNotIn("Acme Corp/Web Shop", [p["id"] for p in state["projects"]])
+        listed = {f["id"]: f for f in state["unconfigured"]}
+        self.assertEqual(listed["Acme Corp/Web Shop"]["status"], "incomplete")
+        self.assertIn("rename the folder", listed["Acme Corp/Web Shop"]["reason"])
+        self.assertIsNone(listed["Acme Corp/Web Shop"]["proposes"])       # onboarding is not what is missing
+        with self.assertRaises(hub.NotFound):
+            hub.find(self.root, "Acme Corp/Web Shop")
 
     def test_an_incomplete_project_keeps_its_card_and_says_so(self):
         half = make_project(self.root, "demo/half", project="half", bug_format="")

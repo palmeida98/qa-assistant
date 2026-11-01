@@ -19,14 +19,13 @@ import sys
 from datetime import datetime
 
 import yaml
-from common import read_env, read_project, variable_names
+from common import SECRET_MIN, read_env, read_project, replace_file, variable_names
 
 from . import ROOT, workspace
 
 NOTE_NAME = re.compile(r"[A-Za-z0-9_-]{1,80}")
 NOTE_MAX = 200 * 1024                  # bytes of a note (section 14.7)
 CONTEXT_MAX = 200 * 1024               # what of context.md the Overview shows
-SECRET_MIN = 4                         # shorter .env values (e.g. "1", "yes") are not looked for in a note
 GIT_TIMEOUT = 30
 
 
@@ -147,7 +146,7 @@ def write_env(ws: str, proj: dict, name, value) -> dict:
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    os.replace(tmp, path)
+    replace_file(tmp, path)
     if os.name != "nt":
         os.chmod(path, 0o600)
     return {"name": name, "set": True}
@@ -215,5 +214,5 @@ def save_note(ws: str, name, text, new: bool = False) -> dict:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
-    os.replace(tmp, path)
+    replace_file(tmp, path)
     return {"name": name, "saved": True}

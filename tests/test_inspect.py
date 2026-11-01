@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+import warnings
 
 import openpyxl
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -16,7 +17,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from adapters.excel.inspect import propose
+from adapters.excel.inspect import common_token_prefix, propose
 
 STATUSES = ["To run", "Passed", "Failed"]
 
@@ -135,6 +136,31 @@ class Inspect(unittest.TestCase):
         before = os.path.getmtime(self.path), os.path.getsize(self.path)
         propose(self.path)
         self.assertEqual((os.path.getmtime(self.path), os.path.getsize(self.path)), before)
+
+
+class TokenPrefix(unittest.TestCase):
+    """The longest prefix of the IDs, cut at a separator. Audit finding D-05: it used os.path.commonprefix, deprecated in
+    Python 3.15 (and a path function for what is not a path)."""
+
+    def test_the_prefix_is_cut_at_a_separator(self):
+        self.assertEqual(common_token_prefix(["TC-SHOP-001", "TC-SHOP-002", "TC-SHOP-130"]), "TC-SHOP-")
+        self.assertEqual(common_token_prefix(["TC-SHOP-001", "TC-SHIP-002"]), "TC-")
+        self.assertEqual(common_token_prefix(["A_1", "A_2"]), "A_")
+        self.assertEqual(common_token_prefix(["v1.2", "v1.3"]), "v1.")
+
+    def test_no_separator_and_no_ids(self):
+        self.assertEqual(common_token_prefix(["ABC1", "ABC2"]), "")
+        self.assertEqual(common_token_prefix([]), "")
+        self.assertEqual(common_token_prefix(["TC-1"]), "TC-")
+        self.assertEqual(common_token_prefix(["TC-1", "TC-1"]), "TC-")
+
+    def test_one_id_inside_another(self):
+        self.assertEqual(common_token_prefix(["TC-SHOP-", "TC-SHOP-001"]), "TC-SHOP-")
+
+    def test_no_deprecation_warning(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            common_token_prefix(["TC-SHOP-001", "TC-SHOP-002"])
 
 
 if __name__ == "__main__":
