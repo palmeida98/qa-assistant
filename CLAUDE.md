@@ -6,6 +6,7 @@ References:
 - docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/log-bug`)
 - docs/technique-jira-xray.md — Jira + Xray tracker adapter technique, with the common contract of the tracker adapters in §2 (read when `tracker: jira`, or when touching `adapters/tracker/` or `adapters/jira/`; built in plan 10.2)
 - docs/technique-azure-devops.md — Azure DevOps (Test Plans + Boards) tracker adapter technique (read when `tracker: azure-devops`, or when touching `adapters/azure_devops/`; built in plan 10.3)
+- docs/technique-tickets.md — read-only ticket analysis in Azure DevOps and Jira, what changed and the workspace's `memory/` (read for `/analyze-tickets`, or when touching `adapters/tickets/`; plan phase 14)
 - docs/technique-api.md — API testing technique (read when the `api` module is active; `/test-api`)
 - docs/technique-accessibility.md — WCAG 2.1 AA accessibility technique (read when the `accessibility` module is active; `/audit-accessibility`)
 - docs/technique-mobile.md — mobile technique with Maestro (read when the `mobile` module is active; `/test-mobile`)
@@ -28,6 +29,7 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/migrate_workspace.py <workspace> [--apply]` — converts a workspace from before the translation (plan 8.11)
 - `python -m adapters.excel.inspect|add_cases|apply` — the Excel adapter: propose the `excel:` section, add approved cases, apply a batch
 - `python -m adapters.tracker <workspace> check|import-cases|export-cases|apply|bug-search` — the Jira (Xray) / Azure DevOps adapter; every writing command is a dry run without `--yes`, and `--yes` only after the user approved what it showed
+- `python -m adapters.tickets <workspace> sources|collect|ingest|analysis` — `/analyze-tickets`: reads Azure DevOps or Jira (a transport that cannot write), compares with the last check, writes only the workspace's `memory/` and a block of `context.md`
 - `scripts/api_request.py`, `scripts/audit_a11y.py`, `scripts/run_mobile.py`, `scripts/device.py`, `scripts/run_log.py` — the API, accessibility and mobile techniques and the run log (`device.py` with `mobile.input: driver` for a device that refuses `adb shell input`, technique-mobile.md §1.2)
 - `scripts/build_driver.py` — builds the companion driver `tools/android-driver/`; its signing key lives in `~/.qa-assistant/`, never in a repository
 - `scripts/setup_emulator.py`, `scripts/workspace_build.py`, `scripts/workspace_ci.py`, `scripts/remote_login.py` — the emulator, builds as releases, and remote execution (phase 11; `docs/workspace/ci/README.md`)

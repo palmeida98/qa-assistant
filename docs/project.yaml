@@ -27,6 +27,18 @@ accessibility:
   audit_error_pages: false     # (opt.) true: audit the declared pages that answer 4xx but show
                                #   content (an SPA that answers 404 to a direct link); the report names them
 
+# tickets: (opt.) what /analyze-tickets reads (docs/technique-tickets.md section 2), independent of tracker:. Without
+# it, a jira or azure-devops tracker's section is used. Only NAMES of .env variables, never values.
+# tickets:
+#   sources:
+#     boards: {service: "azure-devops", access: "api", organization_url: "", project: "", pat_var: "", team: ""}
+#     issues: {service: "jira", access: "api", site: "", project_key: "", user_var: "", token_var: ""}
+#     # access: "browser" needs no token: the logged-in session of a browser (section 4.3)
+#   scopes:                    # what "the current sprint" and "my tickets" mean here: never guessed
+#     current-sprint: {source: "boards", current_iteration: true}
+#     mine: {source: "boards", query: ""}
+#   limits: {max_depth: 2, max_items: 30, max_comments: 200, max_history: 500}
+
 # mobile: only with the mobile module active (docs/technique-mobile.md).
 mobile:
   platform: ""                 # android | ios | web (Maestro Web, beta)

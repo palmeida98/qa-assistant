@@ -1775,10 +1775,28 @@ only, like phase 12; the interface in English; the tests never start a real Clau
 - [ ] `README.md`, `CLAUDE.md` (`Scripts`), the skill `/project-onboarding` (it continues a project the hub
       created); the pilot on the user's computer with the real workspaces.
 
+## Phase 14 — Ticket analysis (`/analyze-tickets`)
+
+Why: the user follows a project's tickets by hand, and "what changed since I last looked?" had no answer that could be
+trusted. Decisions approved by the user (01.11.2026): one flow for Azure DevOps and Jira, independent of Xray and of
+`tracker:`; the official state apart from the QA situation; a comparison per component that never concludes from a
+partial read; the memory inside the workspace; nothing written to a tracker.
+
+### 14.1 Specification, engine, skill and tests — done 01.11.2026, real read of each service pending
+- [x] `docs/technique-tickets.md`; methodology v2.7 (§3, §5.1, §12.2); the `tickets:` section in `docs/project.yaml` and
+      in `scripts/validate_project.py`.
+- [x] `adapters/tickets/`, on the API classes and HTTP client of the tracker adapters, whose contracts are unchanged;
+      every request through a transport that cannot write. Reads through an API or a bundle from a logged-in browser,
+      through the same normaliser. `tests/test_tickets.py` with fictional fakes.
+- [ ] A real read of Azure DevOps and of Jira: until then both are "validated with fixtures"; what differs is fixed in
+      the technique first (methodology §15). Tried on 01.11.2026 in a browser without a session: only the 203 sign-in
+      answer was seen, no ticket.
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 14.1: `/analyze-tickets` and `adapters/tickets/`, specified in `docs/technique-tickets.md`; methodology v2.7. Validated with fictional fixtures; the real read of each service is pending. |
 | 2026-10-22 | 13.3: a project's Overview, credentials typed write-only into `.env`, notes in `notes/`; 6 new tests (861 → 867). |
 | 2026-10-22 | 13.2: a project's routes under `/api/p/<id>/` (an App and a Runner per project, one Gate), the page's address `#/p/<id>/test`, switching project; 4 new tests (857 → 861). |
 | 2026-10-21 | 13.1: the hub's discovery, the Projects screen, the pins and one run at a time on the computer (`runs.Gate`); 19 new tests (838 → 857). |
