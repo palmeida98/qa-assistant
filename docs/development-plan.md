@@ -1857,12 +1857,13 @@ The commit of 15.6 reviewed line by line: in scope, no client data, no test or g
 | D-01b | D-01 reversed | The rule on folder names came only from building the id; "rename the folder" was not needed | Any name; id, name and path apart; routes encoded | `test_workspace_select` (2), `test_qa_ui_hub` (2) |
 | D-02b | risk confirmed by reading | A live holder older than 15 minutes could lose its lock, a reused id kept it for 15 minutes, a nested lock waited for itself, a waiter could remove another's new lock | Identity with the start time, heartbeat, reentrant per thread, takeover file, token | `test_common.WorkspaceLock` (8 new, 2 real processes) |
 | S-03 | gap | `/generate-cases` read the analysis from the conversation | `analysis/<feature>_<date>.md`, with sources, date, status; what is proposed stays proposed | `test_skills` (text only: no agent ran it) |
+| D-11 | usability (misleading) | `complete` beside "every component was read" could read as if the links had been analysed | The outcome says it is about the collection; the record counts what was not opened or followed | `test_tickets_memory.CompleteIsAboutTheCollection` |
 | D-10 | defect | `A="x" # note` kept the quotes and the comment in the value | The rule of `technique-workspaces.md` §7; `validate_project.py` warns by name; `write-env` quotes | `test_common.EnvFile` (2) |
 
 
 | Date | Change |
 |---|---|
-| 2026-11-01 | 15.7: consolidation of the audit; methodology v2.10. Unit tests 1116 → 1132. |
+| 2026-11-01 | 15.7: consolidation of the audit; methodology v2.10. Unit tests 1116 → 1133. |
 | 2026-11-01 | 15.6: audit of the skills and the workspaces, 14 findings, each reproduced by a test first (one writer at a time per workspace, a guard that does not refuse paths being deleted, folders with unsupported names listed, skills that say where the documents are); methodology v2.9, `qa-ui.md` v1.3. Unit tests 1082 → 1116. |
 | 2026-11-01 | Phase 15: central skills and project workspaces, by the user's specification; 15.0–15.3 and 15.5 done with fictional fixtures; 15.4 done for Azure DevOps through a browser (its API route and Jira pending); methodology v2.8, `technique-workspaces.md` v1.0, `technique-tickets.md` v1.1, `qa-ui.md` v1.2. Unit tests 941 → 1082. |
 | 2026-10-27 | The phase table brought up to date: 13.2–13.3 done and merged (PR #36); 11.8 in progress since 13.10.2026. |

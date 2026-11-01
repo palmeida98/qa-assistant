@@ -347,6 +347,24 @@ class Concurrency(Base):
         self.assertEqual({k: v for k, v in self.snapshot().items() if k != common.LOCK_NAME}, before)
 
 
+class CompleteIsAboutTheCollection(Base):
+    """Audit finding D-11: `complete` next to "every component was read" read as if the links had been analysed."""
+
+    def test_the_record_and_the_context_keep_collection_and_content_apart(self):
+        fake = FakeAdo()
+        fake.add(100, System__Description='<a href="https://www.figma.com/design/x">design</a>')
+        self.assertEqual(self.collect(fake, "100", now=T1), 0)
+        check = self.check(A)
+        self.assertEqual(check["outcome"], "complete")
+        self.assertEqual(len(check["content_not_read"]), 1)
+        record = self.read("memory", "checks", f"{A}.md")
+        self.assertIn("(of the collection in this scope, not of the content of links or attachments)", record)
+        self.assertIn("**Collection:**", record)
+        self.assertIn("1 link(s) or attachment(s) not opened", record)
+        self.assertIn("figma.com/design/x", record)
+        self.assertIn("`complete` is about the collection", self.context())
+
+
 class UnreadableInput(Base):
     """Audit finding D-03: a bundle or an analysis that cannot be opened was reported as a memory that cannot be written."""
 
