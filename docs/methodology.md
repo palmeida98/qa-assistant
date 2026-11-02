@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.10 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7.
+> Version 2.11 · 2026-11-02 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -257,6 +257,9 @@ During the session, the results are written to a run log in `runs/` (one file pe
 - `status` uses the project's vocabulary; `actual_result` is what was observed (not the expected result copied); `bug` is an **existing** bug linked to the case.
 - The run's context goes at the top level, `"run": {"environment": "<key of environments>", "build": "<version>"}` (the **Run** of §2); the Jira and Azure DevOps adapters require it, the Excel adapter ignores it.
 - A **new** bug goes as `new_defect` (fields in the tracker's technique, e.g. `technique-excel.md` §4), only after the user approves it (§9).
+- **A result is written only for a case of the project's library** (the workbook, or `tracker/cases.json`): an unknown ID is refused with the closest known ones, and a library that cannot be read is an error, never a silent acceptance.
+- **The run block is immutable once the batch has results**: another build or environment is refused. A build that changes during a batch ends that batch; a new one is planned with the right context (`technique-mobile.md` §1.4).
+- **A mistaken result is removed, not edited over**: `run_log.py remove` shows the result, keeps the others, never deletes evidence and refuses a batch already applied.
 - Cases in `Question` can stay in the log during the session, but are reclassified before the batch goes to the workbook or tracker (§8.5): the adapter refuses a batch with statuses outside the project's vocabulary.
 
 ### 7.2 Checkpoints
@@ -435,6 +438,8 @@ Updated: <date and time>
 
 `context.md` is the session's **temporary** state. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
 
+It stays **short**: the newest entries of the current state and of the execution point, the decisions still valid, the open questions, the blockers and the next steps, each pointing to the detailed record (run log, evidence, memory, `analysis/`). Older entries move to `archive/context/` word for word (`scripts/compact_context.py`, a dry run first, a recoverable copy of the whole file before the change); `history/` and the run logs are never touched, and a decision is never dropped by the tool: only dated entries older than the newest few are moved. A new session finds the last batch, what is pending and where the rest is without reading the older ones.
+
 `/analyze-tickets` keeps one generated block in `context.md`, between its markers, with the resume point of each scope; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference, and analysing an older check never rewinds the current state (`technique-tickets.md` §5).
 
 ### 12.3 Resuming on another computer
@@ -588,6 +593,11 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.10 → v2.11 (plan 15.8, 02.11.2026)
+
+- **New:** a result only for a case of the library, removing a mistaken result, an immutable run block (§7.1); a context kept short (§12.2); the roles of a build and one check of the target (`technique-mobile.md` §1.3 and §1.4).
+- **Kept:** the run log as the source, the approvals, `history/` immutable.
 
 ### v2.9 → v2.10 (plan 15.7, 01.11.2026)
 

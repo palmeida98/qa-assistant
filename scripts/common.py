@@ -302,6 +302,24 @@ def workspace_lock(workspace: str, wait: float | None = None):
             _remove_lock(path)
 
 
+BUILD_PARTS = re.compile(r"(\d+(?:\.\d+)*)\s*\(\s*(?:code\s*)?(\d+)\s*\)", re.IGNORECASE)
+
+
+def observed_build(app_id: str, version_name: str, version_code: str) -> str:
+    """A build as a run records it: `pt.demo.app 1.0.0 (34)` (technique-mobile.md section 1.4)."""
+    return f"{app_id} {version_name} ({version_code})"
+
+
+def same_build(a: str, b: str) -> bool:
+    """Two writings of one build. When both hold a version and a code, those decide (the app id and the word `code`
+    do not count); otherwise the texts, without case or repeated blanks."""
+    pa, pb = BUILD_PARTS.search(a or ""), BUILD_PARTS.search(b or "")
+    if pa and pb:
+        return pa.groups() == pb.groups()
+    norm = lambda s: " ".join(str(s or "").casefold().split())
+    return bool(norm(a)) and norm(a) == norm(b)
+
+
 def main_checkout(root: str) -> str:
     """The main checkout of a git checkout, read from .git without running git: `root` itself, unless `root` is a
     worktree, whose .git file points to <main>/.git/worktrees/<name>. Also `root` when there is no git at all."""

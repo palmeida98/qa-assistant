@@ -4,13 +4,14 @@ Drives an Android device or emulator through adb for the conversational mode
 
     python scripts/device.py <workspace> [--serial S] <subcommand> ...
 
-    check                                   target, OS, model, app version, foreground app
+    check [--batch B]                       one report: device, app, driver, build, environment, session; ready or not
     dump [--capture NAME] [--batch B]       visible text, one line per node: [x1,y1][x2,y2] <text>
     tap TEXT [--index N] | tap --xy X Y     exact text first (case-insensitive), then contains
     type TEXT|--file F [--field LABEL] [--via auto|adb|maestro]
                                             ASCII through `input text`; any other text through Maestro
-    send TEXT|--file F [--capture NAME] [--send-label L] [--field LABEL] [--timeout 200]
-                                            type, tap send, wait until the screen is stable, print what is new
+    send TEXT|--file F [--capture NAME] [--send-label L] [--field LABEL] [--timeout 200] [--samples N]
+                                            type, tap send, wait until the screen is stable, print what is new;
+                                            --samples keeps timed readings of a streamed answer (technique 4.1)
     shot NAME [--batch B]                   screenshot to <workspace>/evidence/<batch>/<NAME>.png
     link URL [--package P]                  opens a deep link or a login callback with `am start`
     swipe X1 Y1 X2 Y2 [--ms 300]            a swipe (e.g. to scroll a long answer)
@@ -18,6 +19,11 @@ Drives an Android device or emulator through adb for the conversational mode
     launch [--restart] [--timeout 60]       opens mobile.app_id, waits for it and prints its screen
     clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
 
+- `check` reports everything and stops at nothing (technique-mobile.md 1.3): the device, the app, the driver (its
+  setting and whether it answers are two facts), the observed build against the intended one
+  (mobile.build.version), the environment, the session (mobile.session: signed_in / signed_out texts; else unknown),
+  and `ready: yes` or NOT READY with what to do. It changes nothing on the device. --batch compares the observed build
+  with the run log's: a build that changed during a batch stops it.
 - project.yaml, mobile: section: app_id (required), serial (optional; with
   none, the only device connected), input (adb | driver; default adb). Each of
   serial and input: --serial / --input > the environment variable
@@ -88,11 +94,14 @@ from common import (
     OutsideWorkspace,
     find_adb,
     mobile_target,
+    observed_build,
     read_project,
     read_workspace_env,
+    same_build,
     workspace_path,
 )
 
+DRIVER_SERVICE = "io.qaassistant.driver/"
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
 SEND_LABELS = ("Send", "Send message", "Submit")
 DUMP_PATH = "/sdcard/qa-device-dump.xml"
@@ -176,9 +185,10 @@ def hide_urls(s: str) -> str:
 
 def configuration(workspace: str, serial: str | None, input_: str | None = None) -> dict:
     try:
-        m = read_project(workspace).get("mobile") or {}
+        proj = read_project(workspace)
     except FileNotFoundError as e:
         raise UsageError(str(e)) from None
+    m = proj.get("mobile") or {}
     if not m.get("app_id"):
         raise UsageError("mobile.app_id missing in project.yaml (the app under test, e.g. com.demoshop.app)")
 
@@ -194,7 +204,12 @@ def configuration(workspace: str, serial: str | None, input_: str | None = None)
             "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
             "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
             "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
-            "browser": m.get("browser")}
+            "browser": m.get("browser"),
+            "environments": sorted(str(k) for k in (proj.get("environments") or {})
+                                   if isinstance(proj.get("environments"), dict)),
+            "intended_build": str((m.get("build") or {}).get("version") or "") if isinstance(m.get("build"), dict) else "",
+            "signed_in": as_list((m.get("session") or {}).get("signed_in")) if isinstance(m.get("session"), dict) else [],
+            "signed_out": as_list((m.get("session") or {}).get("signed_out")) if isinstance(m.get("session"), dict) else []}
 
 
 def resolve_serial(wanted: str | None) -> str:
@@ -530,23 +545,142 @@ def sh_quote(s: str) -> str:
 
 # --- subcommands ------------------------------------------------------------------------------------------------
 
-def cmd_check(cfg, serial, a) -> int:
-    release = adb(serial, "shell", "getprop", "ro.build.version.release").strip()
-    sdk = adb(serial, "shell", "getprop", "ro.build.version.sdk").strip()
-    model = adb(serial, "shell", "getprop", "ro.product.model").strip()
-    print(f"target: {serial} · Android {release} (SDK {sdk}) · model: {model}")
-    pkg = adb(serial, "shell", "dumpsys", "package", cfg["app_id"])
-    name = re.search(r"versionName=(\S+)", pkg) if f"Package [{cfg['app_id']}]" in pkg else None
-    code = re.search(r"versionCode=(\d+)", pkg)
-    print(f"foreground: {foreground(serial) or 'nothing'}")
-    if not name:
-        raise NoTarget(f"app {cfg['app_id']} is not installed on {serial}")
-    print(f"app: {cfg['app_id']} {name.group(1)}" + (f" (code {code.group(1)})" if code else ""))
-    if cfg["input"] == "driver":
-        print(f"input: driver {driver(serial, 'ping')['version']}, service on")
+def driver_report(serial: str) -> dict:
+    """The driver as two facts: the setting lists the service, and the service answers a ping. Reads only."""
+    try:
+        enabled = DRIVER_SERVICE in adb(serial, "shell", "settings", "get", "secure", "enabled_accessibility_services")
+    except NoTarget:
+        enabled = False
+    try:
+        return {"enabled": enabled, "answering": True, "version": driver(serial, "ping")["version"], "why": "", "state": "on"}
+    except NoTarget as e:
+        why = str(e)
+        state = "off" if "service is off" in why else "missing" if "did not answer" in why else "refused"
+        return {"enabled": enabled, "answering": False, "version": None, "why": why, "state": state}
+
+
+def driver_advice(d: dict) -> str:
+    if d["state"] == "off" and d["enabled"]:
+        return ("the setting lists the QA driver but the service is not running (Android can leave a service listed "
+                "without running it): in Settings, Accessibility, turn the QA driver off and on again; nothing was changed")
+    if d["state"] == "off":
+        return "the QA driver is installed but its service is off: turn it on in Settings, Accessibility (technique-mobile.md §1.2)"
+    if d["state"] == "missing":
+        return f"the driver is not installed or its provider does not answer: {DRIVER_HELP}"
+    return f"the driver refused the ping ({d['why']}): technique-mobile.md §1.2"
+
+
+def session_state(cfg: dict, serial: str, foreground_pkg: str) -> tuple[str, str]:
+    """(confirmed | needed | unknown, why). Only from the screen text and mobile.session: never guessed."""
+    if not cfg["signed_in"] and not cfg["signed_out"]:
+        return "unknown", "mobile.session is not set in project.yaml (signed_in / signed_out: texts of the screen)"
+    if foreground_pkg != cfg["app_id"]:
+        return "unknown", "the app is not in the foreground: python scripts/device.py <workspace> launch"
+    try:
+        texts = [n.text.casefold() for n in read_screen(cfg, serial)]
+    except NoTarget as e:
+        return "unknown", f"the screen could not be read ({e})"
+
+    def seen(words):
+        return any(w.casefold() in t for w in words for t in texts)
+
+    inn, out = seen(cfg["signed_in"]), seen(cfg["signed_out"])
+    if inn and out:
+        return "unknown", "both a signed-in and a signed-out text are on the screen"
+    if inn:
+        return "confirmed", ""
+    if out:
+        return "needed", "the person logs in (a magic link is theirs to ask for and hand over, technique-mobile.md §1.2)"
+    return "unknown", "none of the configured texts is on the screen"
+
+
+def cmd_check(cfg, serial, a, no_target: str = "") -> int:
+    """One report, nothing changed on the device (technique-mobile.md 1.3). 0 ready, 3 not ready."""
+    out, blockers, advice = [], [], []
+    envs = f"environment: {', '.join(cfg['environments']) or 'none declared'}, app {cfg['app_id']}"
+    if serial is None:
+        out += [f"device: not connected ({no_target})", envs, "session: unknown (no device)"]
+        blockers.append(no_target)
+        advice.append("connect the device (USB debugging on) or start the emulator, then repeat")
     else:
-        print("input: adb")
+        release = adb(serial, "shell", "getprop", "ro.build.version.release").strip()
+        sdk = adb(serial, "shell", "getprop", "ro.build.version.sdk").strip()
+        model = adb(serial, "shell", "getprop", "ro.product.model").strip()
+        out.append(f"target: {serial} · Android {release} (SDK {sdk}) · model: {model}")
+        out.append(f"device: {serial} connected")
+        window = foreground(serial)
+        out.append(f"foreground: {window or 'nothing'}")
+        pkg = adb(serial, "shell", "dumpsys", "package", cfg["app_id"])
+        installed = f"Package [{cfg['app_id']}]" in pkg
+        name = re.search(r"versionName=(\S+)", pkg) if installed else None
+        code = re.search(r"versionCode=(\d+)", pkg)
+        if not name:
+            out.append(f"app: {cfg['app_id']} not installed")
+            blockers.append(f"app {cfg['app_id']} is not installed on {serial}")
+            advice.append("install the test build (technique-mobile.md §1.1; mobile.build.source says where it comes from)")
+        else:
+            out.append(f"app: {cfg['app_id']} {name.group(1)}" + (f" (code {code.group(1)})" if code else ""))
+        if cfg["input"] == "driver":
+            d = driver_report(serial)
+            if d["answering"]:
+                out.append(f"input: driver {d['version']}, service on")
+                out.append(f"driver: setting on, answering (version {d['version']})")
+            else:
+                out.append("input: driver, not answering")
+                out.append(f"driver: setting {'on' if d['enabled'] else 'off'}, NOT answering ({d['why']})")
+                blockers.append(d["why"])
+                advice.append(driver_advice(d))
+        else:
+            out += ["input: adb", "driver: not used (input: adb)"]
+        if name:
+            observed = observed_build(cfg["app_id"], name.group(1), code.group(1) if code else "?")
+            if cfg["intended_build"]:
+                verdict = "same" if same_build(observed, cfg["intended_build"]) else "DIFFERS"
+                line = f"build: observed {observed}, intended {cfg['intended_build']}: {verdict}"
+                if verdict == "DIFFERS":
+                    advice.append("the observed build is not the intended one (mobile.build.version): confirm it is the one "
+                                  "to test; the intended build is never rewritten from the device")
+            else:
+                line = f"build: observed {observed}, intended not set"
+            out.append(line)
+            if a.batch:
+                observed_in_batch = _batch_build(cfg["workspace"], a.batch)
+                if observed_in_batch is None:
+                    out.append(f"batch: {a.batch}: no run log yet, the first result will record this build")
+                elif not same_build(observed, observed_in_batch):
+                    blockers.append(f"the build changed during the batch: {a.batch} started on {observed_in_batch!r} and the "
+                                    f"device now has {observed!r}")
+                    advice.append("stop this batch (its results stay as they are) and plan a new batch with the right "
+                                  "context (/plan-batch)")
+                else:
+                    out.append(f"batch: {a.batch}: same build as its run log")
+        out.append(envs)
+        state, why = session_state(cfg, serial, window.split("/")[0])
+        out.append(f"session: {state}" + (f" ({why})" if why else ""))
+        if state == "needed":
+            blockers.append("the app has no session")
+            advice.append(why)
+        elif state == "unknown" and "foreground" in why:
+            advice.append(why)
+    out.append("ready: yes" if not blockers else "ready: NOT READY: " + "; ".join(blockers))
+    out += [f"next: {x}" for x in advice]
+    print("\n".join(out))
+    if blockers:
+        print(f"NO TARGET: {blockers[0]}", file=sys.stderr)
+        return 3
     return 0
+
+
+def _batch_build(workspace: str, batch: str) -> str | None:
+    """The build a batch's run log recorded, or None when it has no run log or no build yet."""
+    import run_log
+    try:
+        path = run_log.run_log_path(workspace, batch)
+        doc = run_log.read_log(path) if os.path.isfile(path) else None
+    except run_log.UsageError as e:
+        raise UsageError(str(e)) from None
+    build = ((doc or {}).get("run") or {}).get("build") if doc else None
+    return str(build) if build else None
 
 
 def cmd_dump(cfg, serial, a) -> int:
@@ -577,6 +711,66 @@ def cmd_type(cfg, serial, a) -> int:
     return 0
 
 
+def failure_kind(error: Exception) -> str:
+    """A failed reading is not a failed app: the dump cannot be read while the screen animates (capture-failed); an app
+    that left the foreground is another thing (app-not-foreground)."""
+    return "app-not-foreground" if "the foreground is" in str(error) else "capture-failed"
+
+
+class Sampler:
+    """Timed readings of a streamed answer (technique-mobile.md 4.1), limited in number and in time."""
+
+    def __init__(self, text: str, ignore: set[str], samples: int, seconds: float, interval: float):
+        self.text, self.ignore = text, ignore
+        self.limits = {"samples": samples, "seconds": seconds, "interval_s": interval}
+        self.samples: list[dict] = []
+        self.started = time.monotonic()
+        self.last_good: list[str] = []
+
+    def _room(self) -> bool:
+        return len(self.samples) < self.limits["samples"] and time.monotonic() - self.started <= self.limits["seconds"]
+
+    def wrap(self, read):
+        def sampled():
+            try:
+                lines = read()
+            except NoTarget as e:
+                if self._room():
+                    self.samples.append({"at": datetime.now().isoformat(timespec="milliseconds"),
+                                         "elapsed_s": round(time.monotonic() - self.started, 2),
+                                         "kind": failure_kind(e), "reason": str(e)})
+                return object()                 # never equal to a reading: a failed one cannot end the wait
+            self.last_good = lines
+            if self._room():
+                new, _ = after_message(lines, self.text, self.ignore)
+                answer = "\n".join(ln.split("] ", 1)[1] if "] " in ln else ln for ln in new)
+                self.samples.append({"at": datetime.now().isoformat(timespec="milliseconds"),
+                                     "elapsed_s": round(time.monotonic() - self.started, 2), "kind": "read",
+                                     "answer": answer})
+            return lines
+        return sampled
+
+    def summary(self) -> dict:
+        reads = [s["answer"] for s in self.samples if s["kind"] == "read"]
+        partial = any(a and b != a and b.startswith(a) for i, a in enumerate(reads) for b in reads[i + 1:])
+        return {"reads": len(reads), "failed_captures": sum(s["kind"] == "capture-failed" for s in self.samples),
+                "app_not_in_foreground": sum(s["kind"] == "app-not-foreground" for s in self.samples),
+                "partial_text_observed": partial}
+
+    def write(self, cfg: dict, name: str, batch: str | None) -> str:
+        try:
+            folder = workspace_path(cfg["workspace"], "evidence", batch or cfg["batch"])
+        except OutsideWorkspace as e:
+            raise UsageError(str(e)) from None
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, name + "_samples.json")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump({"limits": self.limits, "summary": self.summary(), "samples": self.samples}, f,
+                      ensure_ascii=False, indent=1)
+            f.write("\n")
+        return path
+
+
 def cmd_send(cfg, serial, a) -> int:
     a.text = text_of(a)
     guard(cfg, serial, "send")
@@ -594,7 +788,13 @@ def cmd_send(cfg, serial, a) -> int:
 
     def read():
         return [n.line() for n in read_screen(cfg, serial)]
-    lines, stable = wait_stable(read, a.timeout)
+    sampler = Sampler(a.text, cfg["ignore"], a.samples, a.sample_seconds, a.sample_interval) if a.samples else None
+    if sampler:
+        lines, stable = wait_stable(sampler.wrap(read), a.timeout, interval=a.sample_interval)
+        if not isinstance(lines, list):
+            lines = sampler.last_good
+    else:
+        lines, stable = wait_stable(read, a.timeout)
     new, found = after_message(lines, a.text, cfg["ignore"])
     if not found:
         print("NOTE: the sent message is not on the screen (scrolled away?): every line follows", file=sys.stderr)
@@ -602,6 +802,11 @@ def cmd_send(cfg, serial, a) -> int:
         print(ln)
     if a.capture:
         print(f"capture: {shot(cfg, serial, a.capture, a.batch)}")
+    if sampler:
+        s = sampler.summary()
+        path = sampler.write(cfg, a.capture or "send", a.batch)
+        print(f"samples: {s['reads']} read, {s['failed_captures']} capture-failed, {s['app_not_in_foreground']} "
+              f"app-not-foreground; partial text observed: {'yes' if s['partial_text_observed'] else 'no'} ({path})")
     if not stable:
         raise NoTarget(f"the screen did not settle in {a.timeout:.0f} s (answer still streaming?): "
                        "the lines above are the last reading")
@@ -695,7 +900,8 @@ def parser() -> argparse.ArgumentParser:
     common.add_argument("--serial", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     common.add_argument("--input", choices=INPUTS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = ap.add_subparsers(dest="command", required=True)
-    sub.add_parser("check", parents=[common], help="target, OS, model, app version, foreground app")
+    p = sub.add_parser("check", parents=[common], help="one report: device, app, driver, build, environment, session")
+    p.add_argument("--batch", help="also compare the observed build with the run log of this batch")
     p = sub.add_parser("dump", parents=[common], help="visible text with bounds, one line per node")
     p.add_argument("--capture", metavar="NAME", help="also save a screenshot")
     p.add_argument("--batch", help="evidence folder (default: mobile.evidence_batch or today)")
@@ -717,6 +923,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--send-label", help="label of the send control (default: mobile.send_label)")
     p.add_argument("--field", metavar="LABEL")
     p.add_argument("--timeout", type=float, default=200, help="seconds to wait for the answer (default 200)")
+    p.add_argument("--samples", type=int, default=0, metavar="N",
+                   help="keep up to N timed readings of the answer in evidence/<batch>/<capture>_samples.json (default off)")
+    p.add_argument("--sample-seconds", type=float, default=60, help="stop sampling after this many seconds (default 60)")
+    p.add_argument("--sample-interval", type=float, default=3, help="seconds between readings while sampling (default 3)")
     p = sub.add_parser("shot", parents=[common], help="screenshot to evidence/<batch>/<NAME>.png")
     p.add_argument("name")
     p.add_argument("--batch")
@@ -740,6 +950,12 @@ def main(argv=None) -> int:
     a = parser().parse_args(argv)
     try:
         cfg = configuration(a.workspace, a.serial, a.input)
+        if a.command == "check":            # a report: a missing device is a line of it, not the end of it
+            try:
+                serial, reason = resolve_serial(cfg["serial"]), ""
+            except NoTarget as e:
+                serial, reason = None, str(e)
+            return cmd_check(cfg, serial, a, reason)
         serial = resolve_serial(cfg["serial"])
         return COMMANDS[a.command](cfg, serial, a)
     except UsageError as e:

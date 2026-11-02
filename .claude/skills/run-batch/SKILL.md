@@ -13,6 +13,7 @@ metadata:
   resume: "The run log says the last case; continue from there."
   requires-scripts: "scripts/run_log.py"
   requires-tools: "node, .env, mcp"
+  routes-mobile-only-to: "test-mobile"
 ---
 
 0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
@@ -23,7 +24,8 @@ metadata:
    Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
    propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
-   it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
+   it asks for. A `Route:` line names the skill that fits this project: say so and continue with that one. A `Next:`
+   line is the one command to run before the work. In the steps below, the current workspace is the one it selected, and the documents named without a folder
    (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
 1. Start from the plan approved in /plan-batch and from context.md (execution point). If there is no
    approved plan, run /plan-batch first. With the jira or azure-devops tracker, the steps and expected result of

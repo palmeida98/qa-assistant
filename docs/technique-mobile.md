@@ -1,7 +1,7 @@
 # Mobile technique
 
 > **Layer 2 — Technique for mobile tests with Maestro**
-> Version 1.6 · 2026-10-17 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2); on a runner, the emulator and `adb` over `mobile.serial` / `mobile.input` (`QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT`) in plan 11.8 (§1.2, §11.1); exploratory charters on the app in plan 12.6 (§4.2).
+> Version 1.7 · 2026-11-02 · One check of the target and the roles of a build (§1.3, §1.4), sampling of a streamed answer (§4.1). Before: 1.6 · 2026-10-17 · Plan, task 3.3; in English since plan 8.11; device driver and conversational mode in plan 9.0; remote execution on a GitHub Actions runner in plan 11.0 (§11); a real device that blocks input injection, through the companion driver, in plan 11.7 (§1.2); on a runner, the emulator and `adb` over `mobile.serial` / `mobile.input` (`QA_MOBILE_SERIAL` / `QA_MOBILE_INPUT`) in plan 11.8 (§1.2, §11.1); exploratory charters on the app in plan 12.6 (§4.2).
 >
 > Describes **how** the assistant tests mobile apps (Android/iOS) and the web version in a mobile context. It is project agnostic: it contains no apps, accounts nor rules of any client. The examples use the fictional project **Demo Shop**.
 >
@@ -61,6 +61,32 @@ Limits: the driver replaces input only. Other apps are never driven nor read (th
 
 Rule: the run log and the bug **always** say where it ran (platform, OS version, model or emulator, app version). A Pass on the emulator does not count for "real device" nor the other way round, if the case distinguishes them.
 
+### 1.3 One check before a batch
+
+`python scripts/device.py <workspace> check` is the single check of the target. It reports everything and stops at nothing, so that one call says what is missing:
+
+| Line | Says |
+|---|---|
+| `target`, `foreground`, `app`, `input` | The device (serial, Android version, model), the app in the foreground, the installed app and its version, and the input route (with the driver: its version and whether it answers) |
+| `device` | Connected, or not, and why |
+| `driver` | Only with `mobile.input: driver`. **Setting** (the service is listed in `enabled_accessibility_services`) and **answering** (it replies to a ping) are two facts. Setting on and not answering is a divergence: Android can leave a service listed without running it |
+| `build` | **Observed** (read from the device now), **intended** (`mobile.build.version`, when set), and whether they are the same (§1.4) |
+| `environment` | The environments of `project.yaml` and the app under test; the app must be the test build, not the store's |
+| `session` | `confirmed`, `needed` or `unknown`, from the screen text and the optional `mobile.session` (`signed_in` and `signed_out`: lists of texts). Without them it is `unknown`, never guessed |
+| `ready` | `yes`, or `NOT READY` with each blocker and the way out |
+
+Recovery is a line of advice and never an action: the framework does not change device settings. Setting on and driver not answering: in Settings, Accessibility, turn the QA driver off and on again. Setting off: turn it on. Driver not installed: §1.2. Device not connected: connect it, USB debugging on. App not installed or in the background: install it or open it (`device.py launch`). Session needed: the person logs in (a magic link is theirs, §1.2).
+
+Exit 0 when ready, 3 when not (the first blocker on stderr). `--batch <name>` also compares the observed build with the one of that batch's run log (§1.4). In a project whose modules are only `mobile` (and `exploratory`), `workspace_select.py preflight` for a browser skill prints a `Route` line to `/test-mobile`: the Playwright MCP is not a requirement of a mobile run.
+
+### 1.4 The build, three roles
+
+- **Intended** (`mobile.build` in `project.yaml`: `source`, `sha256`, `version`): the build the project targets. Written by a person, or by `workspace_build.py publish`. Nothing updates it automatically, and nothing replaces an artefact reference or a hash with what a device reports.
+- **Observed**: what `device.py check` reads from the device at the start of an execution. Printed, compared with the intended one, never written to `project.yaml`.
+- **Of the run**: `run.build` of the run log, copied from the observed build when the first result is written. **Immutable once the batch has results**: `run_log.py add` refuses another build (or environment) for that batch. A build that changes during a batch (a new install) ends the batch: the results stay as they are, and a new batch (`/plan-batch`) starts with the right context.
+
+The permanent files do not repeat a build number. `CLAUDE.md` says where it comes from (`mobile.build`); a checkpoint may keep a line "last observed build" in `context.md`, which is a summary and is replaced by the next one; the history of builds is in the run logs.
+
 ---
 
 ## 2. Execution levels
@@ -105,6 +131,7 @@ When the expected result cannot be asserted by a flow — the app's content is g
 - **One turn per step**: `device.py <workspace> send "<message>" --capture <name>` types, sends, waits until the screen is stable and returns only what is new after the message. A new conversation per theme when the case asks for it (so earlier turns do not contaminate the answer).
 - **Reading**: text from the accessibility tree; a **screenshot** whenever the tree may miss content (cards, multi-line bubbles, bottom sheets). A result is never classified from the tree alone when something it shows is incomplete.
 - **Typing**: a message with emoji or several lines goes from a UTF-8 file (`send --file`); `adb shell input text` is cut at about 430 characters and Maestro's `inputText` slows down and stops on long texts, so the driver types in chunks of 300 characters. Maestro's keyboard sometimes is not active ("Maestro IME is not active"): the driver taps the field again and retries once, then types ASCII through `adb` and says so.
+- **Proving streaming**: a final answer that is complete does not show that it was presented progressively. When a case expects it, `send ... --samples N` reads the screen during the wait and writes `evidence/<batch>/<capture>_samples.json`: each sample has a time, the seconds since the send, a kind (`read`, `capture-failed`, `app-not-foreground`) and the text of the answer so far. Limits: `--samples` (most samples, default off), `--sample-seconds` (default 60) and `--sample-interval` (default 3 s). The summary line says how many samples were read, how many captures failed and whether partial text was observed (a read whose text is a start of a later one). **A failed capture is not a failure of the app**: the dump cannot be read while the screen animates, and that is said as `capture-failed`; an app that left the foreground is `app-not-foreground`. Without a partial reading the case is judged on what was observed and the limit is said in the note.
 - **Record per turn**: a note in the run log's `actual_result` (what was sent, what came back, the decisive quote), with the capture's path, written with `scripts/run_log.py add` (it never touches a batch already applied).
 - **Classification**: the same rules (§6 and methodology §8). An answer judged against the specification's guardrails is Pass/Fail by the specification's text, never by taste; a doubt is `Question`.
 
@@ -175,6 +202,7 @@ The rules of methodology §8. Particulars:
 ## 10. Checklist per batch
 
 - [ ] Target confirmed (device/emulator or web) and recorded
+- [ ] `device.py <workspace> check` ready (device, driver answering, test build, session), build observed recorded in the run block
 - [ ] Test build / test URL confirmed
 - [ ] Credentials only as `${MAESTRO_<VAR>}`
 - [ ] One flow per case, with the ID in the name

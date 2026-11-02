@@ -493,6 +493,11 @@ def _tool_lines(tokens: list[str], workspace: str, proj: dict) -> list[dict]:
     return lines
 
 
+def _mobile_only(proj: dict) -> bool:
+    modules = {str(m) for m in proj.get("modules") or []}
+    return "mobile" in modules and "functional-web" not in modules
+
+
 def _ticket_sources(workspace: str) -> list[dict]:
     from adapters.tickets import config as tickets_config
     config = tickets_config.load(workspace)
@@ -557,7 +562,7 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
     cwd = cwd or os.getcwd()
     target = target or sync.TARGET
     report: dict = {"skill": {"name": skill}, "framework": {"root": framework}, "problems": [], "warnings": [],
-                    "tools": [], "imports": [], "project": None, "candidates": [], "instruction": None}
+                    "tools": [], "imports": [], "project": None, "candidates": [], "instruction": None, "next": []}
     doc, instruction, imports, warnings = check_skill(skill, framework, target, cwd)
     report["imports"], report["warnings"] = imports, warnings
     metadata = doc.get("metadata") or {}
@@ -591,7 +596,16 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
             report["problems"] += problems
             report["proposes"] = ONBOARDING
             return NOT_USABLE, report
-        report["tools"] = _tool_lines(sync.listed(doc, "requires-tools"), project.path, proj)
+        tokens = sync.listed(doc, "requires-tools")
+        route = metadata.get("routes-mobile-only-to")
+        if route and _mobile_only(proj):
+            # a mobile project runs through its own skill: the browser the skill asks for is not a requirement of it
+            report["route"] = {"skill": route, "why": "this project's modules are only mobile (and exploratory)"}
+            tokens = [t for t in tokens if t != "mcp"]
+        report["tools"] = _tool_lines(tokens, project.path, proj)
+        if skill == "test-mobile" or metadata.get("next-check"):
+            report["next"] = [(f"python {framework}/scripts/device.py {project.path} check [--batch <batch>]: one report of "
+                               "the device, the app, the driver, the build, the environment and the session")]
         if "tickets" in sync.listed(doc, "requires-config"):
             report["sources"] = _ticket_sources(project.path)
     return OK, report
@@ -619,6 +633,10 @@ def _print_preflight(code: int, r: dict) -> None:
         print(f"Tools: {r['skill'].get('tools', '')}")
         for line in r["tools"]:
             print(f"  [{'ok' if line['ok'] else 'missing'}] {line['tool']}: {line['detail']}")
+        if r.get("route"):
+            print(f"Route: /{r['route']['skill']} -- {r['route']['why']}; use it for this request instead")
+        for line_ in r.get("next") or []:
+            print(f"Next: {line_}")
         for s in r.get("sources") or []:
             creds = ", ".join(f"{k}: {'set' if v else 'MISSING'}" for k, v in s["credentials"].items()) or "none"
             print(f"  source {s['id']}: {s['service']}, access {s['access']}, credentials {creds}")

@@ -24,7 +24,8 @@ metadata:
    Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
    propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
-   it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
+   it asks for. A `Route:` line names the skill that fits this project: say so and continue with that one. A `Next:`
+   line is the one command to run before the work. In the steps below, the current workspace is the one it selected, and the documents named without a folder
    (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
 1. Read technique-mobile.md (<qa>/docs/) and, in the current workspace, the mobile: section of project.yaml
    (platform, app_id, flows, variables, serial/avd, send_label, ignore_labels, browser) and context.md. If the
@@ -51,8 +52,15 @@ metadata:
      one retry of that flow; if it repeats, Blocked (tool) with a suggestion of a manual test.
    Continue to step 10.
 6. Conversational (Android): prepare the target -- python scripts/setup_emulator.py <workspace> (or the
-   device in mobile.serial) -- then python scripts/device.py <workspace> check. Record platform, OS, model
-   and app version. Exit 3 (no target, app not installed) -> the cases are Blocked (environment).
+   device in mobile.serial) -- then ONE check: python scripts/device.py <workspace> check [--batch <batch>]. It reports
+   the device, the app, the driver (its setting and whether it answers are two facts), the observed build against the
+   intended one, the environment and the session, and ends in `ready: yes` or NOT READY with what to do (it changes
+   nothing on the device: a setting is the person's to turn). Record platform, OS, model and the `build:` line it
+   prints as the run's build (`--build`: observed, never invented). Exit 3 (no device, app not installed, driver not
+   answering, session needed) -> say what it says; with no target the cases are Blocked (environment), never Pass.
+   With --batch, a build that changed since the batch started is exit 3: stop that batch and plan a new one
+   (/plan-batch). A session that is needed is the person's to start (a magic link is theirs); never type their
+   phone number or code.
    A real device that refuses input injection (adb shell input -> SecurityException INJECT_EVENTS, e.g. a
    Xiaomi without a SIM): mobile.input: driver, the companion driver (technique-mobile.md section 1.2;
    python scripts/build_driver.py --push, the person installs it and turns its service on once); check
@@ -74,11 +82,18 @@ metadata:
    opened sheet, a new one with device.py <workspace> shot <case>_t<N>b; never classify from an incomplete
    dump. Exit 3 from send = the answer did not settle: read the screen again (dump) before deciding. Captures only with the app in the foreground (the driver
    refuses otherwise: bring the app back, never capture another app).
+   A case that expects the answer to be presented progressively (streaming): add `--samples 20 --sample-interval 3`
+   to send: it keeps timed readings in evidence/<batch>/<capture>_samples.json and says whether partial text was
+   observed. A complete final answer does not prove streaming; a `capture-failed` sample (the dump cannot be read
+   while the screen animates) is not a failure of the app. Without a partial reading, judge on what was observed and say
+   the limit in the note.
 9. Record one note per turn in actual_result: what was sent, the decisive quote of the answer and the
    capture's path (evidence/<batch>/<case>_t<N>.png), through
    python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path>]
    (one item per case, replaced when written again; a batch already applied is refused: use the new name
-   it suggests). Assisted mode (the user taps and types; device.py only reads) only when the companion
+   it suggests). A result written for the wrong case: python scripts/run_log.py <workspace> remove <batch> <case> (a batch
+   not yet applied; it shows the result, keeps the rest and never deletes evidence). A case that is not in the project's
+   library is refused: it is added first (/generate-cases). Assisted mode (the user taps and types; device.py only reads) only when the companion
    driver cannot be used on that device, said in the run log.
 10. Classify by methodology section 8 and technique-mobile.md section 6. An answer judged against the
     specification's guardrails is Pass/Fail by the specification's TEXT, never by taste; a doubt is
