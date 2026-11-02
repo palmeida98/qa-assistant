@@ -181,6 +181,32 @@ class Apply(Base):
         self.assertIn(block, self.read("context.md"))
 
 
+class Preservation(Base):
+    """What the move must keep: every line of the original is in the new context or in the archive, the sections it does
+    not touch are the very same text, and the references stay reachable."""
+
+    def sections(self, text):
+        parts = __import__("re").split(r"(?m)^(## .*)$", text)
+        return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+
+    def test_nothing_is_lost_and_the_other_sections_are_identical(self):
+        original = self.read("context.md")
+        cc.apply(self.ws, 2, datetime(2026, 11, 2, 11, 0, 0))
+        new, archive = self.read("context.md"), self.read("archive", "context", "context_archive_20261102.md")
+        lost = [ln for ln in original.split("\n") if ln.strip() and ln not in new and ln not in archive]
+        self.assertEqual(lost, [])
+        before, after = self.sections(original), self.sections(new)
+        for name in ("## Decisions made (and who made them)", "## Pending work"):
+            self.assertEqual(before[name], after[name], name)
+        references = lambda x: set(__import__("re").findall(r"TC-[A-Z]+-\d+|L\d+", x))
+        self.assertLessEqual(references(original), references(new) | references(archive))
+
+    def test_the_original_can_be_rebuilt_from_the_copy_alone(self):
+        original = self.read("context.md")
+        cc.apply(self.ws, 2, datetime(2026, 11, 2, 11, 0, 0))
+        self.assertEqual(self.read("archive", "context", "context_20261102_110000_before.md"), original)
+
+
 class Command(Base):
     def run_main(self, *args):
         with mock.patch("sys.stdout", new_callable=__import__("io").StringIO) as out, \

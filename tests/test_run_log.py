@@ -232,6 +232,55 @@ class RunLog(unittest.TestCase):
         self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "ok", "--build", "1.0.0 (33)")[0], 0)
         self.assertEqual(self.log()["run"], before["run"])
 
+    def test_the_build_is_checked_under_the_lock_that_writes_the_result(self):
+        # the check and the write are one step: nothing can change the run block between them
+        import common
+        lock = os.path.join(self.ws, common.LOCK_NAME)
+        held = []
+        real = rl._same_context
+
+        def spy(doc, environment, build):
+            held.append(os.path.isfile(lock))
+            return real(doc, environment, build)
+
+        with mock.patch.object(rl, "_same_context", spy):
+            rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", build="1.0 (1)", now=NOW)
+        self.assertEqual(held, [True])
+        self.assertFalse(os.path.exists(lock))
+
+    def test_two_builds_written_at_the_same_time_only_the_first_is_kept(self):
+        outcomes, barrier = {}, threading.Barrier(2)
+
+        def add(case, build):
+            barrier.wait()
+            try:
+                rl.add(self.ws, "20260929_01", case, "Pass", "ok", build=build, now=NOW)
+                outcomes[case] = "written"
+            except rl.Refused as e:
+                outcomes[case] = "refused: " + str(e)[:40]
+
+        threads = [threading.Thread(target=add, args=("TC-SHOP-001", "1.0 (1)")),
+                   threading.Thread(target=add, args=("TC-SHOP-002", "1.0 (2)"))]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        winner = next(c for c, o in outcomes.items() if o == "written")
+        loser = next(c for c, o in outcomes.items() if o != "written")
+        self.assertIn("the build changed during the batch", outcomes[loser])
+        doc = self.log()
+        self.assertEqual([r["tc"] for r in doc["results"]], [winner])           # the loser left nothing behind
+        self.assertEqual(doc["run"]["build"], "1.0 (1)" if winner == "TC-SHOP-001" else "1.0 (2)")
+
+    def test_a_refused_build_leaves_every_earlier_result_as_it_was(self):
+        for case in ("TC-SHOP-001", "TC-SHOP-002"):
+            rl.add(self.ws, "20260929_01", case, "Pass", "ok", build="1.0 (1)", environment="test", now=NOW)
+        before = self.log()
+        for _ in range(3):
+            self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-003", "Pass", "ok", "--build", "1.0 (2)")[0], 1)
+            self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-001", "Fail", "rewritten", "--build", "1.0 (2)")[0], 1)
+        self.assertEqual(self.log(), before)
+
     def test_the_build_can_still_be_set_before_any_result(self):
         # the interface writes the run block when a run starts, with no result yet
         with open(os.path.join(self.ws, "runs.tmp"), "w", encoding="utf-8"):
