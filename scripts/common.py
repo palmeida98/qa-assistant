@@ -152,7 +152,11 @@ def pid_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
-    return True
+    try:        # a zombie (ended, not yet collected by its parent) still answers kill 0: it holds nothing
+        with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+            return f.read().rpartition(")")[2].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
 
 
 def process_started(pid: int) -> str | None:
