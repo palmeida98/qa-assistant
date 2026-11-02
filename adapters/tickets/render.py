@@ -65,7 +65,11 @@ def _coverage_section(check: dict) -> list[str]:
             if cover["status"] not in ("complete",):
                 detail = f": {one_line(cover.get('detail'), 160)}" if cover.get("detail") else ""
                 gaps.append(f"- {one_line(t['ref']['id'])} · {name}: **{cover['status']}**{detail}")
-    lines += gaps or ["- Every component of every ticket was read to the end."]
+    lines += gaps or ["- **Collection:** the fields, comments, history and relations of every ticket were read to the end."]
+    lines.append(f"- **Content:** the collection does not open what a ticket points to: "
+                 f"{len(check.get('content_not_read') or [])} link(s) or attachment(s) not opened and "
+                 f"{len(check.get('omitted') or [])} related item(s) not followed, listed below. Only what an analysis "
+                 "records as read was analysed.")
     if check.get("scope") and check["scope"]["status"] != "complete":
         lines.append(f"- The listing of {one_line(check['scope']['name'])} is **{check['scope']['status']}**: who entered "
                      "or left is not concluded.")
@@ -112,7 +116,7 @@ def _impact_section(check: dict) -> list[str]:
 
 def check_markdown(check: dict) -> str:
     lines = [f"# Ticket check {check['id']}", "", NOTICE, "", f"- Consulted at: {check['at']}",
-             f"- Request: {one_line(check['request'].get('text'))}", f"- Outcome: **{check['outcome']}**",
+             f"- Request: {one_line(check['request'].get('text'))}", f"- Outcome: **{check['outcome']}** (of the collection in this scope, not of the content of links or attachments)",
              f"- Conclusion: **{check['conclusion']}**", ""]
     lines += ["## Tickets", "", "| Ticket | Role | State | Suggested QA situation | Conclusion | Changes | Source changed at |",
               "|---|---|---|---|---|---|---|"]
@@ -330,7 +334,8 @@ def context_block(state: dict) -> str:
     """The resume point, rebuilt from the memory, so repeating adds nothing and an old analysis rewinds nothing."""
     newest = state.get("newest")
     lines = [(f"Newest check: `{newest['id']}` · {newest['at']} · {newest['outcome']} · {newest['conclusion']}. "
-              "Checks are ordered by the time of the consultation.") if newest else "No check yet."]
+              "Checks are ordered by the time of the consultation. `complete` is about the collection in that scope: "
+              "links and attachments are analysed only where the analysis says so.") if newest else "No check yet."]
     rows = state.get("scopes") or []
     if rows:
         lines += ["", "| Scope or request | Newest attempt | Outcome | Conclusion | Last complete read | Record | Analysis |",

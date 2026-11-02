@@ -57,6 +57,8 @@ qa-audit sessions [--delete HOST|all] [--sessions-dir DIR]  list or delete saved
 qa-audit check --cdp URL --page-url REGEX --label NAME     audit a page another tool has open (§22)
 ```
 
+`python -m qa_audit <command>` is the same command: it works when the `qa-audit` launcher of pip points at a Python that is no longer installed (a launcher is bound to the interpreter that installed it).
+
 | Option | Default | Meaning |
 |---|---|---|
 | `--type LIST` | `full` | Comma-separated module names, or `full` (every available module that applies to the target, except `visual`, which stores screenshots between runs and runs only when named, §19). Unknown or not-yet-available names are a usage error (exit 2) listing what exists. |

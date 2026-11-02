@@ -42,7 +42,6 @@ for _p in (os.path.join(ROOT, "scripts"), ROOT):
 CONFIG = os.path.join(os.path.expanduser("~"), ".qa-assistant", "config.json")
 ROOT_ENV = "QA_WORKSPACES_ROOT"
 CONFIG_ENV = "QA_ASSISTANT_CONFIG"
-NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")      # a company's or a project's folder; never `.` or `_` first
 VALID, INCOMPLETE, NOT_CONFIGURED, INACCESSIBLE = "valid", "incomplete", "not-configured", "inaccessible"
 ONBOARDING = "/project-onboarding"
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
@@ -59,7 +58,9 @@ def _sync():
 # --- the framework ---------------------------------------------------------------------------------------------------
 
 def _inside(path: str, base: str) -> bool:
-    a, b = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(base))
+    from common import plain_path
+    a = os.path.normcase(plain_path(os.path.realpath(path)))
+    b = os.path.normcase(plain_path(os.path.realpath(base)))
     try:
         return os.path.commonpath([a, b]) == b
     except ValueError:      # another drive
@@ -228,8 +229,12 @@ class Candidate:
         out["modules"] = list(self.modules)
         if root:
             out["path"] = os.path.relpath(self.path, root).replace("\\", "/")
-        out["proposes"] = ONBOARDING if self.status in (INCOMPLETE, NOT_CONFIGURED) else None
+        out["proposes"] = ONBOARDING if self.needs_onboarding else None
         return out
+
+    @property
+    def needs_onboarding(self) -> bool:
+        return self.status in (INCOMPLETE, NOT_CONFIGURED)
 
 
 def classify(path: str) -> tuple[str, str, dict]:
@@ -277,7 +282,7 @@ def _entries(path: str) -> tuple[list[os.DirEntry], str | None]:
     """The folders of a folder whose names could be a project's, links included, and why it could not be read."""
     try:
         with os.scandir(path) as it:
-            return [e for e in it if NAME.fullmatch(e.name) and (e.is_dir(follow_symlinks=False) or _is_link(e.path))], None
+            return [e for e in it if e.name[:1] not in (".", "_") and (e.is_dir(follow_symlinks=False) or _is_link(e.path))], None
     except OSError as e:
         return [], e.strerror or str(e)
 
@@ -430,7 +435,7 @@ def resolve(hint: str | None = None, workspace: str | None = None, root: str | N
 def _print_candidates(candidates: list[Candidate]) -> None:
     width = max([len(c.id) for c in candidates] + [10])
     for c in candidates:
-        tail = f"{c.reason} -> {ONBOARDING}" if c.status in (INCOMPLETE, NOT_CONFIGURED) else c.reason
+        tail = f"{c.reason} -> {ONBOARDING}" if c.needs_onboarding else c.reason
         print(f"  {c.status:15} {c.id:{width}}  {c.name if c.name != c.folder else ''}{'  ' if tail else ''}{tail}")
 
 
@@ -705,7 +710,7 @@ def _run(a) -> int:
             if selection.candidate:
                 c = selection.candidate
                 print(f"{c.id} ({c.status}{': ' + c.reason if c.reason else ''}), by {selection.how}: {c.path}")
-                if c.status in (INCOMPLETE, NOT_CONFIGURED):
+                if c.needs_onboarding:
                     print(f"Proposed: {ONBOARDING} in that folder")
         return code
     code, report = preflight(a.skill, a.project, a.workspace, a.root)

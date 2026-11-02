@@ -6,13 +6,20 @@ check records never overwritten. What is current is worked out from the memory, 
 
 from __future__ import annotations
 
+import functools
 import glob
 import json
 import os
 import re
 from datetime import datetime
 
-from common import OutsideWorkspace, read_project, workspace_path
+from common import (
+    OutsideWorkspace,
+    read_project,
+    replace_file,
+    workspace_lock,
+    workspace_path,
+)
 
 from adapters.tracker.config import ROOT
 from adapters.tracker.errors import ConfigError, InvalidInput
@@ -57,7 +64,9 @@ def write_atomic(path: str, data: bytes) -> None:
     tmp = path + ".tmp"
     with open(tmp, "wb") as f:
         f.write(data)
-    os.replace(tmp, path)
+        f.flush()
+        os.fsync(f.fileno())        # on the disk before it takes the place of the old one
+    replace_file(tmp, path)
 
 
 def write_failure(error: OSError) -> str:
@@ -185,6 +194,16 @@ def _scope_changes(ticket: dict, scope: dict, at: str) -> None:
         ticket["conclusion"] = "changes"
 
 
+def _one_writer(fn):
+    """The whole read-compare-write of a function under the workspace's lock (audit finding D-02)."""
+    @functools.wraps(fn)
+    def inner(workspace, *args, **kwargs):
+        with workspace_lock(workspace):
+            return fn(workspace, *args, **kwargs)
+    return inner
+
+
+@_one_writer
 def record_check(workspace: str, request: dict, entries: list[dict], omitted: list[dict], errors: list[str],
                  scope: dict | None, at: datetime) -> tuple[dict, str, int]:
     """Compares and writes. (check, its path, 0 complete | 1 partial | 3 nothing read). A repeat with the same instant
@@ -462,6 +481,7 @@ def _analysis_files(workspace: str, check_id: str, doc: dict) -> tuple[str, str,
         n += 1
 
 
+@_one_writer
 def record_analysis(workspace: str, check_id: str, doc: dict, now: datetime | None = None) -> dict:
     """Validates, keeps the analysis next to its check (never overwriting another), merges it into each ticket, and
     refreshes what is current: an older check's analysis stays with its check. Writes nothing to any tracker."""

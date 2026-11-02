@@ -88,6 +88,8 @@ Each ticket has one status per component (`fields`, `comments`, `history`, `rela
 
 Reading a link is not reading its content: every attachment and link has `content_read: false` until the analysis records otherwise (section 7), and `content_not_read` in the check lists them, each with its `kind`. A `vstfs:///` link of Azure DevOps is an **identifier**, never analysed content: the analysis refuses it in `content_read`, and resolving what it points to is a later extension. A check is `complete` only when every component of every ticket is complete and nothing was omitted for lack of budget or access. An item left out by `max-depth` or `not-followed` is declared and does not make it partial.
 
+`complete` is about the **collection** in the scope read: it never says that what a ticket points to was opened. A record keeps three things apart: the collection, the content opened and analysed (only what an analysis records), and the links, attachments and relations not consulted, counted and listed.
+
 The Markdown of a check has a section **Coverage and limits**, with what must not be taken as read: incomplete pages and components, attachments not read, PRs, commits and builds only listed, other links not read, what was omitted.
 
 ## 4. Services
@@ -283,8 +285,8 @@ Required, even when the honest answer is an empty list: `tickets`, `objective`, 
 | 1 | partial: read what could be read, memory updated safely; see the check's coverage |
 | 2 | ambiguity or conflict with the tracker (a refused query, several iterations): nothing recorded |
 | 3 | nothing could be read: the check records the failure, every reference preserved |
-| 4 | invalid input or configuration: nothing read, nothing recorded |
-| 5 | the memory could not be written (no space, permissions, a path over Windows' 260 characters): the message says where; the next run reports the same changes |
+| 4 | invalid input or configuration (including a bundle or an analysis file that cannot be opened or is not JSON): nothing read, nothing recorded |
+| 5 | the memory could not be written (no space, permissions, a path over Windows' 260 characters) or another process is writing the workspace (`technique-workspaces.md` §7): the message says where or who; the next run reports the same changes |
 
 ## 9. Validation
 

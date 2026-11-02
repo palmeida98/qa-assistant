@@ -149,6 +149,26 @@ class Discovery(Base):
             f.write("x")
         self.assertEqual([c.id for c in ws.discover(self.root)], ["demo/shop"])
 
+    def test_any_folder_name_is_a_project_id_name_and_path_kept_apart(self):
+        # audit finding D-01: the rule on names came only from building the id; nothing needs it
+        make_project(self.root, "Acme Corp/Web Shop", project="Loja Web")
+        make_project(self.root, "demo/Loja #1 é")
+        make_project(self.root, "Café")
+        found = {c.id: c for c in ws.discover(self.root)}
+        self.assertEqual(sorted(found), ["Acme Corp/Web Shop", "Café", "demo/Loja #1 é"])
+        web = found["Acme Corp/Web Shop"]
+        self.assertEqual((web.status, web.configured, web.name, web.company, web.folder),
+                         ("valid", True, "Loja Web", "Acme Corp", "Web Shop"))
+        self.assertEqual(web.path, os.path.join(self.root, "Acme Corp", "Web Shop"))
+
+    def test_a_folder_with_spaces_is_selected_by_id_name_path_and_directory(self):
+        web = make_project(self.root, "Acme Corp/Web Shop", project="Loja Web")
+        for selection in (self.resolve("Acme Corp/Web Shop"), self.resolve("Web Shop"), self.resolve("loja web"),
+                          self.resolve(workspace=web), self.resolve(cwd=web)):
+            self.assertEqual((selection.outcome, selection.candidate.id), ("selected", "Acme Corp/Web Shop"))
+        code, report = self.preflight("analyze-feature", "Web Shop")
+        self.assertEqual(code, 0, report["problems"])
+
     def test_a_link_is_listed_as_inaccessible_and_never_followed(self):
         outside = make_project(self.tmp, "outside/secret", env=f"X={SECRET}\n")
         os.makedirs(os.path.join(self.root, "demo"))

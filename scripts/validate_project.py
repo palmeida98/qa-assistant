@@ -437,7 +437,7 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
 
 
 def validate(workspace: str) -> tuple[list[str], list[str]]:
-    from common import read_project
+    from common import env_inline_comments, read_project
     proj = read_project(workspace)
     problems, warnings = base_problems(proj)
     modules = proj.get("modules") or []
@@ -445,6 +445,8 @@ def validate(workspace: str) -> tuple[list[str], list[str]]:
     problems += p
     warnings += w
     warnings += gitignore_warnings(workspace, proj, modules)
+    warnings += [f"{n} in .env has ` #` in an unquoted value: read as a comment. If it is part of the value, put the "
+                 "value in quotes" for n in env_inline_comments(os.path.join(workspace, ".env"))]
     try:
         p, w = portable_checks(workspace, proj)
     except wg.Failed as e:

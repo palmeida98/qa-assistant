@@ -26,6 +26,11 @@ tracker/recordings/
 # what a stopped /analyze-tickets left half written (the next check removes it)
 memory/**/*.tmp
 
+# one writer at a time per workspace: the lock a running writer holds, and what a stopped one left half written
+.qa-assistant.lock
+context.md.tmp
+runs/*.tmp
+
 # app binaries: project.yaml records where the build comes from and its SHA-256 (mobile.build)
 *.apk
 *.aab

@@ -12,13 +12,15 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from datetime import datetime
+from unittest import mock
 
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
 import run_log as rl
 from build_fixture import build
@@ -70,6 +72,50 @@ class RunLog(unittest.TestCase):
             {"tc": "TC-SHOP-002", "status": "Fail", "actual_result": "coupon accepted", "ts": "2026-09-29T14:03:00",
              "bug": "BUG-1", "evidence": "evidence/b/TC-SHOP-002_t1.png"}])
         self.assertEqual(path, os.path.join(self.ws, "runs", "batch_20260929_01.json"))
+
+    def test_results_added_at_the_same_time_are_all_kept(self):
+        # audit finding D-02: each writer read the file, added its case and wrote the whole file back over the others
+        cases = [f"TC-SHOP-{n:03d}" for n in range(1, 9)]
+        errors = []
+
+        def add(case):
+            try:
+                rl.add(self.ws, "20260929_01", case, "Pass", "ok", now=NOW)
+            except Exception as e:      # noqa: BLE001 -- reported below, in the main thread
+                errors.append(repr(e))
+
+        threads = [threading.Thread(target=add, args=(c,)) for c in cases]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(r["tc"] for r in self.log()["results"]), cases)
+
+    def test_a_workspace_held_by_another_process_is_a_refusal_that_writes_nothing(self):
+        import qa_ui_kit as kit
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
+            code, out = self.run_(*("add", "20260929_01", "TC-SHOP-001", "Pass", "ok"))
+        self.assertEqual(code, 1)
+        self.assertIn("another process", out)
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs", "batch_20260929_01.json")))
+
+    def test_the_run_log_is_on_the_disk_before_it_takes_the_place_of_the_old_one(self):
+        # audit finding D-06 (a risk): the run log is where the results live until the checkpoint
+        events = []
+        real_fsync, real_replace = os.fsync, os.replace
+
+        def fsync(fd):
+            events.append("fsync")
+            return real_fsync(fd)
+
+        def replace(src, dst):
+            events.append("replace")
+            return real_replace(src, dst)
+
+        with mock.patch.object(rl.os, "fsync", fsync), mock.patch.object(rl.os, "replace", replace):
+            rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
+        self.assertEqual(events, ["fsync", "replace"])
 
     def test_the_command_line_with_a_new_defect(self):
         draft = os.path.join(self.ws, "draft.json")

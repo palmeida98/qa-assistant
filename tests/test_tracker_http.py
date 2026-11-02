@@ -233,12 +233,15 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/busy" and _Handler.hits.count("/busy") > 1:
             status = 200
         body = json.dumps({"path": self.path}).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Retry-After", "0")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Retry-After", "0")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except ConnectionError:
+            pass            # the client gave up (the /slow test): nobody to answer, and no traceback in the output
 
 
 class RealTransport(unittest.TestCase):

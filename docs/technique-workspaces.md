@@ -36,7 +36,7 @@ A skill in `~/.claude/skills/` runs in a workspace that knows nothing about the 
 
 1. `$QA_ASSISTANT_ROOT`: explicit, for one shell or one machine;
 2. `root` in `~/.claude/skills/.qa-assistant-source.json`: the checkout the skills were last synced from (§9);
-3. `../../../qa-assistant` from the workspace: the historical layout, the last resort, never the only one.
+3. `../../../qa-assistant` from the workspace (`../../qa-assistant` when the project is directly under the root): the historical layout, the last resort, never the only one.
 
 Whatever the order gives is **checked, not trusted**: `python <qa>/scripts/workspace_select.py preflight` compares it with what the skill needs (§6). A missing folder or script means the skills are newer than that checkout: the skill stops and says so.
 
@@ -63,7 +63,7 @@ In this order, each named in the output as the source of the value:
 - `<root>/<company>/<project>/`: a project whose id is `<company>/<project>`, for each subfolder of a folder without its own `project.yaml`;
 - a folder with no `project.yaml` and no subfolder is a new project, id `<folder>`.
 
-Names follow the hub's rule: letters, digits, `.`, `_`, `-`, never starting with `.` or `_`. Anything else is ignored.
+Any folder name is accepted, spaces and accents included; a folder starting with `.` or `_` (`.git`, `_scratch`) is ignored. Three things stay apart: the **id** (`<company>/<project>`, the relative path, compared with the list and never joined into a path), the **name shown** (`project:` of `project.yaml`) and the **real path**. A name once had to be letters, digits, `.`, `_`, `-` only because of how ids were built; the routes encode each part and a test goes through them with a space, an accent and a `#`. A command typed in a shell needs the path in quotes.
 
 | Status | Meaning | Proposed |
 |---|---|---|
@@ -114,6 +114,19 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 
 - **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/`. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, `qa-ui`'s batches, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
 - **Two explicit exceptions, both stated by configuration or by the runner:** the workbook lives where `excel.file` of `project.yaml` says, possibly a synced folder (`technique-excel.md` §2); on a runner, `run_mobile.py` may keep its report in `$RUNNER_TEMP`, a throwaway folder, as `docs/workspace/ci/mobile.yml` does.
+- **One writer at a time.** The ticket memory (`record_check`, `record_analysis`), `run_log.py add` and the interface's run-log edits read, change and write under `common.workspace_lock`: a file `.qa-assistant.lock` in the workspace, created exclusively, naming its holder (process, its start time, machine, a token). A second writer waits up to 30 seconds (`QA_LOCK_WAIT`), then stops with exit 5 (tickets) or 1 (`run_log.py`), having written nothing. The file is in the workspace's `.gitignore`.
+
+  | Situation | What happens |
+  |---|---|
+  | The holder is alive on this computer | The lock stays, however old: never removed by a timeout. A stuck process is said by id, for the user to stop |
+  | The holder died | Taken over at once by the next writer |
+  | The id now belongs to another process | Its start time differs: taken over. Where the start time cannot be read, the lock is respected while that process lives |
+  | The holder is on another machine (a synced folder) | Its heartbeat touches the file every minute; 15 minutes without one and it is taken over. A file nobody can read is treated the same |
+  | An operation inside another, in one thread | Keeps the same lock; released by the outermost |
+  | Several waiters on an abandoned lock | One at a time removes it, through a small takeover file, so nobody removes the new lock of another; a holder only removes a lock with its own token |
+
+- **Redaction by value.** A variable is **sensitive** when the caller names it (those `project.yaml` refers to, `--save-secret`, the variables of a mobile flow, a tracker's credentials) or its name says so (`SECRET_KEY` and `SENSITIVE_WORDS` in `scripts/common.py`: `APP_PIN`, `DB_PASS`): its value is hidden **whatever its length**, in text and in JSON numbers. Any other value is left alone under 4 characters (6 in tickets) or when it is a common word (`HEADLESS=1`, `DEBUG=true`). A value under 8 characters is matched as a whole word or number, so a PIN `4821` is hidden and `148210` stays. **Limits:** a short secret in a variable with a neutral name that the project does not refer to is not recognised, nor is one glued to letters or digits (`pin4821`); a legitimate number equal to a PIN is hidden too, on purpose. This is a safety net: evidence is still reviewed, and a secret should not be typed where it can be echoed.
+- **`.env`.** One `KEY=value` per line, `export ` allowed, a line starting with `#` is a comment. A quoted value is what is between the quotes, `#` included, and a comment may follow the closing quote. In an unquoted value a `#` after a space starts a comment; a `#` inside a word or at the start of the value is part of it. An unbalanced quote is kept as it is. Before this rule ` #` was part of the value, so `validate_project.py` warns, by name only, about each variable cut this way; put the value in quotes if it was a password. The interface and the runner's `write-env` quote what needs it.
 - **Credentials** are read from the selected workspace's `.env` only, and the sanitiser of `/analyze-tickets` knows only that file's values.
 - **Memory and sessions** belong to one workspace. Two projects with the same name, ticket id or source never share anything: nothing global holds project data.
 - **Claude's personal or global memory is not a source of truth for a project.** On resuming, the agent loads `context.md`, the relevant records and the configuration. Real results stay in the workspace; the framework receives only generalised improvements and fictional examples.
@@ -123,6 +136,7 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 | `CLAUDE.md` | Permanent instructions | No temporary conclusion becomes a rule |
 | `project.yaml` | Configuration | The project's values; credentials only by reference |
 | `context.md` | Current summary and resume point | Localised updates; independent content is kept |
+| `analysis/` | Analyses of features, with date, sources and status | A new version is a new file; what is proposed is not a requirement |
 | `memory/tickets/` | Ticket references | Identity made of service, organisation and project |
 | `memory/checks/` | Checks and differences | Past reads are kept; analyses are linked and versioned |
 | `runs/` | Results of execution | Observed apart from expected; an applied batch is never rewritten |
@@ -165,6 +179,7 @@ Analysis and execution stay apart. "Analyse these tickets" gives an analysis. "T
 | `<qa>` is older than the skill | Exit 3, or no script at all: stop, with the instruction |
 | A broken `project.yaml` | `incomplete`, with the parser's message for the selected project |
 | A folder without permission | `inaccessible`; the rest of the list still works |
+| Another session is writing the same workspace | The second writer waits, then stops with nothing written and the command to run again (§7) |
 
 ## 11. Validation
 

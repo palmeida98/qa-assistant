@@ -10,6 +10,7 @@ import os
 import sys
 import unittest
 from datetime import date, datetime
+from unittest import mock
 
 import yaml
 
@@ -191,6 +192,19 @@ class RunLogs(unittest.TestCase):
 
     def edit(self, case, action, **data) -> dict:
         return wk.edit_item(self.ws, self.proj, "b1", case, action, data, now=NOW)
+
+    def test_an_edit_waits_for_a_writer_and_is_refused_when_it_does_not_finish(self):
+        # audit finding D-02: the user's edit and an agent adding results both rewrote the whole run log
+        before = self.log()
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
+            with self.assertRaises(wk.Refused) as cm:
+                self.edit("TC-SHOP-003", "answer", status="Pass", actual_result="ok")
+            with self.assertRaises(wk.Refused):
+                wk.create_run_log(self.ws, self.proj, "b1", "test", "1.0")
+        self.assertIn("another process", str(cm.exception))
+        self.assertEqual(self.log(), before)
+        self.edit("TC-SHOP-003", "answer", status="Pass", actual_result="ok")       # once the writer is gone it works
+        self.assertEqual(self.item("TC-SHOP-003")["status"], "Pass")
 
     def test_what_the_page_shows_of_a_run_log(self):
         out = wk.read_run_log(self.ws, self.proj, "b1")

@@ -18,12 +18,14 @@ metadata:
 
 0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
    root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
-   ../../../qa-assistant from the workspace (in the demo, ../..). Then:
+   ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
+   demo, ../..). Then:
    python <qa>/scripts/workspace_select.py preflight --skill checkpoint [<project id or name>] [--workspace <path>]
    Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
    propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
-   it asks for. In the steps below, the current workspace is the one it selected.
+   it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
+   (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
 1. Read the run log's path from project.yaml (run_log). If it is not defined, use runs/.
    Never write to history/: it is immutable (methodology.md section 13).
 2. Save to the run log every result of the session not saved yet: case, result, short note,
@@ -36,7 +38,7 @@ metadata:
    blockers, pending work and validation state. Update the date and time.
 5. Do not rebuild the progress from scratch: add to what is already recorded (section 12.1).
 6. If the workspace is a git repository, make one local commit per checkpoint (section 12.1),
-   only with the run log files and context.md (and the evidence of the batch, if any, and memory/ when
+   only with the run log files and context.md (and the evidence of the batch, if any, and analysis/ and memory/ when
    /analyze-tickets wrote there). Then, from the root of
    qa-assistant: python scripts/workspace_git.py <workspace> status
    and tell the user how many commits are not pushed (and any untracked file or file over 50 MB).

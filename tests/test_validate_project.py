@@ -73,6 +73,14 @@ class Validate(unittest.TestCase):
     def test_base_is_valid(self):
         self.assertEqual(self.with_(), ([], []))
 
+    def test_a_value_cut_at_a_comment_is_warned_by_name_only(self):
+        # audit finding D-10: a password written without quotes, from before the rule, must not be cut in silence
+        with open(os.path.join(self.tmp.name, ".env"), "w", encoding="utf-8") as f:
+            f.write("SHOP_PASSWORD=fictional #part" + chr(10))
+        _, warnings = self.with_()
+        self.assertTrue(any("SHOP_PASSWORD" in w and "quotes" in w for w in warnings), warnings)
+        self.assertFalse(any("fictional" in w for w in warnings))
+
     def test_excel_cases_fields_without_title_or_expected_is_warned(self):
         # the first real batch of qa-ui: a workbook in another language, its title and expected columns unmapped,
         # reached the agent empty and every case came back Question

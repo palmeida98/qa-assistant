@@ -47,3 +47,4 @@ folder of `qa-assistant`, `<ws>` the workspace's folder.
 9. **Before leaving a computer**: `/checkpoint` (it commits locally and says how many commits are not pushed), then
    push only when you approve it (`python scripts/workspace_git.py <ws> push`; never `--force`). Unpushed work does
    not exist on the next computer.
+10. **If a command says another process is writing the workspace**: two sessions on one project write one at a time (technique-workspaces.md §7). The second one waits up to 30 seconds, then stops with nothing written: run the same command again. If that process is stuck, stop it: a lock whose process no longer exists is taken over by itself.

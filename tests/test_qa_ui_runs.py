@@ -6,6 +6,7 @@ or site is ever used. Fictional data only (Demo Shop).
 python -m unittest discover -s tests   (from the root of qa-assistant)
 """
 
+import io
 import json
 import os
 import sys
@@ -166,6 +167,20 @@ class Batch(Base):
             stored = f.read()
         self.assertEqual(stored.splitlines(), out["tail"])
         self.assertNotIn(kit.SECRET, stored + json.dumps(out))
+
+    def test_the_input_pipe_is_closed_even_when_writing_to_it_fails(self):
+        # audit finding D-04: a command that ended before reading its prompt left its stdin open (a ResourceWarning and
+        # a leaked handle on Windows)
+        stdin = mock.Mock()
+        stdin.write.side_effect = OSError(22, "Invalid argument")
+        proc = mock.Mock(stdin=stdin, stdout=io.StringIO(""))
+        proc.wait.return_value = 3
+        run = rn.Run("r1", "batch", "label", ["x"], os.path.join(self.ws, "runs", "log.txt"))
+        run.proc = proc
+        os.makedirs(os.path.join(self.ws, "runs"), exist_ok=True)
+        self.runner._pump(run, self.runner.redactor(), "the prompt", False)
+        stdin.close.assert_called_once()
+        self.assertEqual((run.state, run.code), ("failed", 3))
 
     def test_a_failure_keeps_the_exit_code_and_the_raw_line(self):
         self.batch()

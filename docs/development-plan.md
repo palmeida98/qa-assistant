@@ -40,7 +40,7 @@
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
 | 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
 | 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4 |
-| 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending |
+| 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1826,10 +1826,45 @@ Confirmed against the code: PR #37 merged, but the main checkout on another bran
 ### 15.5 Consolidation — done 01.11.2026
 - [x] Documentation, the phase table, the runner's guide, the skills synced, an isolated run like the CI's (Python 3.12 and the pinned versions).
 
-## Change log of this plan
+### 15.6 Audit of the skills and the workspaces — done 01.11.2026
+Why: a full audit of the integration (discovery, isolation, memory, run logs, skills, interface, tests) with each finding reproduced before it was fixed. A suspicion read in code is a *risk* until a test shows it. Reproductions are tests; the fix is the smallest change.
+
+| ID | Class | Finding | Fix | Test |
+|---|---|---|---|---|
+| D-01 | confirmed defect (usability) | A project in a folder with a space or an accent (`Acme Corp/Web Shop`) was absent from `list`, from name search and from the hub, as if it did not exist | Listed as `incomplete`, "rename the folder"; `--workspace PATH` opens it; hub names it without a card; onboarding is not proposed for it | `test_workspace_select` (2), `test_qa_ui_hub` |
+| D-02 | confirmed defect (data) | Two sessions on one workspace: the second's cleanup removed the first's temporary file (the first failed with exit 5); the run log, the ticket memory and the interface's edits lost updates; on Windows the write guard refused paths that were inside (realpath answers `\?\` forms and a `$Deleted` path for a file being deleted) and `os.replace` failed for a moment with `PermissionError` | `common.workspace_lock` (one writer, stale locks taken over), `common.plain_path`, a guard that resolves the folder, `common.replace_file` | `test_common` (13), `test_tickets_memory.Concurrency` (2), `test_run_log` (2), `test_qa_ui_plan` |
+| D-03 | confirmed defect | A bundle or an analysis that could not be opened was reported as a memory that could not be written (exit 5) | Exit 4, naming the file | `test_tickets_memory.UnreadableInput` (2) |
+| D-04 | confirmed defect | The runner of `qa-ui` left the child's input pipe open when writing the prompt failed (a leaked handle) | Closed always | `test_qa_ui_runs` |
+| D-05 | technical debt | `os.path.commonprefix` is deprecated in Python 3.15 (`adapters/excel/inspect.py`) | A string prefix, same result | `test_inspect.TokenPrefix` (4) |
+| D-06 | risk | Files were replaced without being flushed to the disk | `fsync` before the rename, in the ticket memory and the run log | 2 tests of the order |
+| D-07 | dead code | `ExcelAdapter.update_defect_note`: no reference in code, tests, docs or skills | Removed | adapter tests and the golden unchanged |
+| D-08 | confirmed defect (evidence) | The interface redacted a run's output with the whole `.env`, flags included: `HEADLESS=1` turned every `1` into the variable's name; the API script already ignored values under 4 characters, with a literal of its own | One `SECRET_MIN` in `scripts/common.py`, applied by `Redactor` and used by the API script and by the notes of the interface | `test_common.ShortEnvValues` (2) |
+| S-01 | confirmed (usability) | Skills named `technique-*.md` and `methodology.md` without a folder, and a workspace is outside the repository | Step 0 of every skill says they are in `<qa>/docs/` | `test_skills` |
+| S-02 | risk | The last-resort path to `<qa>` was wrong for `<root>/<project>/` | Both depths in the skills and the technique | `test_skills` |
+| U-01 | usability | The Projects page told the user a project could be created "with plan 13.4"; each screen had the same tab title; focus stayed on a link that was gone after a route change | "not available yet"; title `<screen> · <project>`, focus on the heading; the onboarding hint only when it applies | checked in the browser (no JS test harness) |
+| E-01 | environment | The `qa-audit` launcher pointed at a removed Python and printed nothing | `python -m qa_audit` | `tests/unit/test_cli.py` |
+| E-02 | test noise | A fake HTTP server printed tracebacks; `test_common.py` and `test_inspect.py` had a `__main__` guard in the middle of the file | Handler tolerant of a client that left; one guard at the end | the output of the suite |
+| G-01 | usability | The workspace `.gitignore` did not list the lock and the leftovers of a stopped writer | Three lines in `docs/workspace/gitignore` | `test_workspace_git` |
+
+The first two points kept open here, and D-01 and D-08, were revised in 15.7. The real validations that need a token, Jira, a device, a runner or a new Claude session stay as in 15.4.
+
+### 15.7 Consolidation of the audit — done 01.11.2026
+The commit of 15.6 reviewed line by line: in scope, no client data, no test or guard weakened. Revised:
+
+| ID | Class | Finding | Fix | Test |
+|---|---|---|---|---|
+| D-09 | confirmed regression of D-08 | The minimum of 4 applied to every value, so a short explicit secret (a tracker's, `--save-secret`, a mobile variable) was no longer hidden, nor was a PIN in a JSON number | Sensitive values hidden whatever their length, flags left alone, short values matched as whole words (`technique-workspaces.md` §7) | `test_common.Redaction` (6) |
+| D-01b | D-01 reversed | The rule on folder names came only from building the id; "rename the folder" was not needed | Any name; id, name and path apart; routes encoded | `test_workspace_select` (2), `test_qa_ui_hub` (2) |
+| D-02b | risk confirmed by reading | A live holder older than 15 minutes could lose its lock, a reused id kept it for 15 minutes, a nested lock waited for itself, a waiter could remove another's new lock | Identity with the start time, heartbeat, reentrant per thread, takeover file, token | `test_common.WorkspaceLock` (8 new, 2 real processes) |
+| S-03 | gap | `/generate-cases` read the analysis from the conversation | `analysis/<feature>_<date>.md`, with sources, date, status; what is proposed stays proposed | `test_skills` (text only: no agent ran it) |
+| D-11 | usability (misleading) | `complete` beside "every component was read" could read as if the links had been analysed | The outcome says it is about the collection; the record counts what was not opened or followed | `test_tickets_memory.CompleteIsAboutTheCollection` |
+| D-10 | defect | `A="x" # note` kept the quotes and the comment in the value | The rule of `technique-workspaces.md` §7; `validate_project.py` warns by name; `write-env` quotes | `test_common.EnvFile` (2) |
+
 
 | Date | Change |
 |---|---|
+| 2026-11-01 | 15.7: consolidation of the audit; methodology v2.10. Unit tests 1116 → 1133. |
+| 2026-11-01 | 15.6: audit of the skills and the workspaces, 14 findings, each reproduced by a test first (one writer at a time per workspace, a guard that does not refuse paths being deleted, folders with unsupported names listed, skills that say where the documents are); methodology v2.9, `qa-ui.md` v1.3. Unit tests 1082 → 1116. |
 | 2026-11-01 | Phase 15: central skills and project workspaces, by the user's specification; 15.0–15.3 and 15.5 done with fictional fixtures; 15.4 done for Azure DevOps through a browser (its API route and Jira pending); methodology v2.8, `technique-workspaces.md` v1.0, `technique-tickets.md` v1.1, `qa-ui.md` v1.2. Unit tests 941 → 1082. |
 | 2026-10-27 | The phase table brought up to date: 13.2–13.3 done and merged (PR #36); 11.8 in progress since 13.10.2026. |
 | 2026-11-01 | 14.1: `/analyze-tickets` and `adapters/tickets/`, specified in `docs/technique-tickets.md`; methodology v2.7. Validated with fictional fixtures; the real read of each service is pending. |

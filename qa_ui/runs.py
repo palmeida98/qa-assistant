@@ -27,7 +27,7 @@ import threading
 from datetime import datetime
 
 import run_log
-from common import Redactor, read_workspace_env
+from common import Redactor, read_project, read_workspace_env, variable_names
 
 from . import MODULES, ROOT, intake, workspace
 from .suggest import (
@@ -279,7 +279,11 @@ class Runner:
         return find_claude(self.claude_path)
 
     def redactor(self) -> Redactor:
-        return Redactor(read_workspace_env(self.ws))
+        try:
+            named = variable_names(read_project(self.ws))
+        except (OSError, ValueError):
+            named = []
+        return Redactor(read_workspace_env(self.ws), sensitive=named)
 
     def current(self) -> Run | None:
         return next((r for r in self.runs.values() if r.state == "running"), None)
@@ -330,9 +334,13 @@ class Runner:
         if stdin_text is not None:
             try:
                 proc.stdin.write(stdin_text)
-                proc.stdin.close()
             except OSError:
                 pass                      # the command ended before reading its input: its exit code says why
+            finally:
+                try:
+                    proc.stdin.close()    # whatever happened: an open pipe is a leaked handle
+                except OSError:
+                    pass
         with proc.stdout, open(run.log_path, "w", encoding="utf-8", newline="\n") as log:
             for raw in proc.stdout:
                 raw = raw.rstrip("\r\n")

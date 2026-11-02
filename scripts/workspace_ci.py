@@ -70,7 +70,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import run_log
 import workspace_git as wg
-from common import read_project, read_workspace_env
+from common import env_quoted, read_project, read_workspace_env
 
 TEMPLATE_DIR = os.path.join(ROOT, "docs", "workspace", "ci")
 # template -> where install copies it in the workspace
@@ -322,7 +322,7 @@ def cmd_write_env(workspace: str, a) -> int:
         raise Refused(".env is not ignored by the workspace's .gitignore: it would be committed")
     path = os.path.join(workspace, ".env")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("".join(f"{n}={secrets[n]}\n" for n in names))
+        f.write("".join(f"{n}={env_quoted(str(secrets[n]))}\n" for n in names))
     if os.name != "nt":
         os.chmod(path, 0o600)
     print(f".env: {len(names)} variable(s) from the Actions secrets ({', '.join(names) or 'none'}; values not shown)")

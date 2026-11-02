@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.8 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15.
+> Version 2.10 · 2026-11-01 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -197,6 +197,8 @@ For each feature, identify:
 - the inputs, the states, the business rules and the integrations;
 - the risk: probability of failure × impact for the user or for the business;
 - the specification gaps. These **are not filled with assumptions**: they are recorded as a question or as a "missing specification" note.
+
+The analysis is kept in the workspace, in `analysis/<feature>_<YYYYMMDD>.md`, with its date, its sources and its status, so another session continues from it. A new version is a new file. What it infers stays under *Proposed*: neither saving it nor the user reviewing it makes it a requirement (§1.3).
 
 A feature often starts as a ticket. `/analyze-tickets` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
 
@@ -411,6 +413,7 @@ Check especially: case IDs, feature names, statuses, results, bugs, descriptions
 - The execution must survive interruptions.
 - When resuming: read `context.md`, the latest run log in `runs/` and, for tickets, `memory/` first, identify what was already run and continue from the last valid point.
 - Do not repeat work without need. Do not rebuild the progress from scratch.
+- Two sessions never write the same workspace at the same time: the second one waits, then says so and writes nothing (`technique-workspaces.md` §7).
 - The workspace's git serves as a restore point: one commit per checkpoint. The checkpoint says how many commits are not pushed; the push to the private remote happens only when the user says so, never with `--force`.
 - A run can also happen in the **workspace's CI** (§12.4): it starts from the pushed state of the private remote and comes back as a pull request; its run log is applied only after the merge.
 
@@ -585,6 +588,16 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.9 → v2.10 (plan 15.7, 01.11.2026)
+
+- **New:** the analysis of a feature is kept in `analysis/` (§5.1) and `/generate-cases` starts from it.
+- **Kept:** cases are proposals until approved; a gap is a question.
+
+### v2.8 → v2.9 (plan 15.6, 01.11.2026)
+
+- **New:** one writer at a time per workspace (§12.1): the ticket memory, the run log and the interface's edits take a short lock, so two sessions never overwrite each other.
+- **Kept:** everything else; a lock left by a crash is taken over, so no project is ever blocked by it.
 
 ### v2.7 → v2.8 (plan phase 15, 01.11.2026)
 

@@ -128,12 +128,12 @@ class SecretRedactor(Redactor):
 
     def __init__(self, secrets_by_name: dict[str, str] | None = None):
         self.secrets = {k: v for k, v in (secrets_by_name or {}).items() if v}
-        super().__init__(self.secrets)   # {name: value}: each value is printed as «name»
+        super().__init__(self.secrets, sensitive=True)   # {name: value}: each value is printed as «name»
 
     def add(self, name: str, value: str) -> None:
         if value:
             self.secrets[name] = value
-            super().__init__(self.secrets)
+            super().__init__(self.secrets, sensitive=True)
 
 
 class Recorder:

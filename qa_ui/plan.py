@@ -16,7 +16,7 @@ import re
 from datetime import date
 
 import yaml
-from common import OutsideWorkspace, workspace_path
+from common import OutsideWorkspace, replace_file, workspace_path
 
 from . import MODULES
 from .suggest import skill_for
@@ -124,6 +124,6 @@ def save(workspace: str, plan: dict) -> list[str]:
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False, default_flow_style=None)
-        os.replace(tmp, path)
+        replace_file(tmp, path)
         paths.append(path)
     return paths

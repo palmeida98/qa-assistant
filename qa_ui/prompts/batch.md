@@ -5,7 +5,7 @@ person is watching and nobody can answer a question or approve anything during t
 the user waits for the interface's review (methodology 9.4).
 
 - Workspace: {{workspace}} (the current folder). qa-assistant: {{qa}}. Run its scripts from anywhere as
-  `python {{qa}}/scripts/<script>.py {{workspace}} ...` (absolute paths, forward slashes).
+  `python {{qa}}/scripts/<script>.py "{{workspace}}" ...` (absolute paths, forward slashes).
 - Tools: {{tools}} Each Bash call is ONE command, exactly one of {{commands}}: no `cd`, `;`, `&&`, `|`,
   redirections, variables, `sleep` nor `adb`, and there is no other shell. Anything else is refused in this run
   and nobody can allow it: a refused command is sent again as one allowed command, never given up on. Files are
@@ -25,7 +25,7 @@ The cases, as the project's library has them (read only; the source of each expe
 2. Run the cases with {{skill}}, following its technique, in the order given.
 3. Classify by methodology section 8 against the expected result above, never by taste. Write each result as soon
    as it is classified (an interrupted run keeps what was written):
-   `python {{qa}}/scripts/run_log.py {{workspace}} add {{run_log}} <case> <status> "<what was observed>" [--evidence <paths>]`
+   `python {{qa}}/scripts/run_log.py "{{workspace}}" add {{run_log}} <case> <status> "<what was observed>" [--evidence <paths>]`
    The status is one of the project's vocabulary; what was observed is never the expected result copied.
 4. A doubt about the requirement or the expected result: status `Question`, with the concrete question as what
    was observed. Never assume; the user answers in the interface.

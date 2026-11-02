@@ -47,6 +47,7 @@ from common import (
     read_env,
     read_project,
     read_workspace_env,
+    variable_names,
     workspace_path,
 )
 
@@ -111,10 +112,14 @@ def request(a) -> tuple[int, dict]:
     env = read_workspace_env(a.workspace)
     session, session_secrets = read_session(a.workspace)
     vars_ = {**os.environ, **env, **session}
-    # redact by value: everything from .env (>= 4 characters) and the session's secrets
-    by_value = {k: v for k, v in env.items() if len(v) >= 4}
+    # redact by value: everything from .env (Redactor tells flags from secrets), the session's secrets always
+    by_value = dict(env)
     by_value.update({k: session[k] for k in session_secrets if k in session})
-    red = Redactor(by_value)
+    try:
+        named = variable_names(read_project(a.workspace))
+    except (FileNotFoundError, ValueError):
+        named = []
+    red = Redactor(by_value, sensitive={*named, *session_secrets})
 
     url = substitute(a.url, vars_)
     if re.match(r"^[A-Za-z]:[/\\]", url):
