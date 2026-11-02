@@ -97,6 +97,23 @@ class FindAdb(unittest.TestCase):
             self.assertIsNone(common.find_adb())
 
 
+class Builds(unittest.TestCase):
+    """The build a run records and the one a device reports are compared as a name and a code, not as text."""
+
+    def test_the_observed_build_is_named_the_way_a_run_records_it(self):
+        self.assertEqual(common.observed_build("pt.demo.app", "1.0.0", "34"), "pt.demo.app 1.0.0 (34)")
+
+    def test_the_same_build_written_in_different_ways(self):
+        same = common.same_build
+        self.assertTrue(same("pt.demo.app 1.0.0 (34)", "1.0.0 (34)"))
+        self.assertTrue(same("1.4.0 (140)", "pt.demo.app 1.4.0 (code 140)"))
+        self.assertTrue(same("release build-7", " Release  Build-7 "))
+        self.assertFalse(same("1.0.0 (34)", "1.0.0 (33)"))
+        self.assertFalse(same("1.0.0 (34)", "1.0.1 (34)"))
+        self.assertFalse(same("1.0.0 (34)", "release build-7"))
+        self.assertFalse(same("", "1.0.0 (34)"))
+
+
 class Redaction(unittest.TestCase):
     """Audit findings D-08 and D-09: a flag must not wreck the evidence, and a short secret must not reach it."""
 

@@ -24,7 +24,8 @@ metadata:
    Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
    propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
-   it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
+   it asks for. A `Route:` line names the skill that fits this project: say so and continue with that one. A `Next:`
+   line is the one command to run before the work. In the steps below, the current workspace is the one it selected, and the documents named without a folder
    (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
 1. Confirm that no case was left in Question without being presented to the user; reclassify with the
    answers (section 8.5). The adapter refuses batches with a Question.

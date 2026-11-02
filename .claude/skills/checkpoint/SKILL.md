@@ -12,7 +12,7 @@ metadata:
   failures: "The exit codes of adapters.excel.apply and adapters.tracker: nothing is forced, a partial send continues from its record."
   resume: "context.md, the run log and tracker/sent/."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/workspace_git.py"
+  requires-scripts: "scripts/workspace_git.py, scripts/compact_context.py"
   requires-tools: "git, libreoffice"
 ---
 
@@ -24,7 +24,8 @@ metadata:
    Exit 0: show the project, task, environment and tools it printed, and go on. 1: not usable as it is: show why and
    propose /project-onboarding. 2: ask which project, with its list. 3, or <qa> or the script missing: stop and show
    what it says: the skill and the code do not match, and nothing is installed or changed. 4: show the configuration
-   it asks for. In the steps below, the current workspace is the one it selected, and the documents named without a folder
+   it asks for. A `Route:` line names the skill that fits this project: say so and continue with that one. A `Next:`
+   line is the one command to run before the work. In the steps below, the current workspace is the one it selected, and the documents named without a folder
    (methodology.md, technique-*.md, heuristics.md) are in <qa>/docs/.
 1. Read the run log's path from project.yaml (run_log). If it is not defined, use runs/.
    Never write to history/: it is immutable (methodology.md section 13).
@@ -37,6 +38,12 @@ metadata:
    (last batch, last case), work done, decisions (and who made them), open questions,
    blockers, pending work and validation state. Update the date and time.
 5. Do not rebuild the progress from scratch: add to what is already recorded (section 12.1).
+5a. Keep context.md short (section 12.2): one line "Last observed build: <build> (<date>, device.py check)" in
+   the current state, replacing the previous one; the build of each run stays in its run log, and the intended
+   build, artefact references and hashes in project.yaml are never rewritten from it. When context.md has more
+   than about 15 dated entries, python <qa>/scripts/compact_context.py <workspace> (a dry run), check the entries it
+   marks [check the rule] against "Decisions made" (move a rule that is still valid there first), then --apply: the
+   older entries go word for word to archive/context/, after a copy of the whole file.
 6. If the workspace is a git repository, make one local commit per checkpoint (section 12.1),
    only with the run log files and context.md (and the evidence of the batch, if any, and analysis/ and memory/ when
    /analyze-tickets wrote there). Then, from the root of

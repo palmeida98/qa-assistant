@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from typing import ClassVar
 from unittest import mock
 
 import yaml
@@ -589,6 +590,45 @@ class Preflight(Base):
             line = self.preflight("run-batch", "demo/shop")[1]["tools"][0]
         self.assertEqual((line["ok"], line["tool"]), (True, "mcp"))
         self.assertIn("playwright", line["detail"])
+
+    MOBILE: ClassVar[dict] = {"modules": ["mobile", "exploratory"],
+                              "mobile": {"app_id": "pt.demo.app", "platform": "android", "flows": "flows"}}
+
+    def test_a_mobile_only_project_is_routed_to_test_mobile_and_needs_no_browser_mcp(self):
+        # audit finding D-14: /run-batch on a mobile project listed the Playwright MCP as missing
+        make_project(self.root, "demo/app", **self.MOBILE)
+        with mock.patch("validate_project.environment", return_value=[]):
+            code, report = self.preflight("run-batch", "demo/app")
+        self.assertEqual(code, ws.OK)
+        self.assertEqual(report["route"]["skill"], "test-mobile")
+        self.assertEqual([t["tool"] for t in report["tools"]], [])         # the MCP is not a requirement of that flow
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ws._print_preflight(code, report)
+        self.assertIn("Route: /test-mobile", out.getvalue())
+        self.assertNotIn("[missing] mcp", out.getvalue())
+
+    def test_a_web_or_mixed_project_keeps_its_browser_requirement(self):
+        make_project(self.root, "demo/shop")
+        make_project(self.root, "demo/both", modules=["functional-web", "mobile"],
+                     mobile={"app_id": "pt.demo.app", "platform": "android", "flows": "flows"})
+        with mock.patch("validate_project.environment", return_value=[]):
+            for pid in ("demo/shop", "demo/both"):
+                _, report = self.preflight("run-batch", pid)
+                self.assertNotIn("route", report, pid)
+                self.assertEqual([t["tool"] for t in report["tools"]], ["mcp"], pid)
+
+    def test_test_mobile_names_the_one_check_of_the_target(self):
+        make_project(self.root, "demo/app", **self.MOBILE)
+        with mock.patch("validate_project.environment", return_value=[]):
+            _, report = self.preflight("test-mobile", "demo/app")
+        self.assertTrue(any("device.py" in n and "check" in n for n in report["next"]), report["next"])
+
+    def test_the_route_of_a_skill_is_a_skill_that_exists(self):
+        for entry in ws.catalogue():
+            target = entry.get("routes-mobile-only-to")
+            if target:
+                self.assertIn(target, [e["name"] for e in ws.catalogue()])
 
     def test_nothing_to_select(self):
         code, report = self.preflight("plan-batch", root=os.path.join(self.tmp, "missing"))

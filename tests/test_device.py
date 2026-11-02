@@ -10,6 +10,7 @@ import base64
 import contextlib
 import functools
 import io
+import json
 import os
 import sys
 import tempfile
@@ -721,6 +722,232 @@ class DriverInput(unittest.TestCase):
         rc, _, err = self.run_it(FakeDevice(), "check")
         self.assertEqual(rc, 2)
         self.assertIn("mobile.input", err)
+
+
+SETTING_ON = "io.qaassistant.driver/io.qaassistant.driver.DriverService"
+
+
+class ReportDevice(DriverDevice):
+    """DriverDevice that also says which accessibility services the setting lists (a fact apart from the driver
+    answering), and records every adb call so that a test can show nothing was changed."""
+
+    def __init__(self, dumps=(HOME,), state="on", enabled=True, **kw):
+        super().__init__(dumps, state, **kw)
+        self.enabled = enabled
+
+    def __call__(self, serial, *args, binary=False, timeout=60):
+        if args[:5] == ("shell", "settings", "get", "secure", "enabled_accessibility_services"):
+            self.calls.append(args)
+            return (SETTING_ON if self.enabled else "null") + "\n"
+        return super().__call__(serial, *args, binary=binary, timeout=timeout)
+
+    def changes(self):
+        """Calls that would change the device: settings, permissions, installs."""
+        return [a for a in self.calls if a[:3] in (("shell", "settings", "put"), ("shell", "pm", "grant"))
+                or a[:1] == ("install",) or a[:3] == ("shell", "pm", "install")]
+
+
+class OneCheck(unittest.TestCase):
+    """Audit finding D-13: `check` stopped at the first thing missing, and the driver's setting and its answering were
+    one fact. It reports everything once, says what to do, and changes nothing on the device (technique-mobile.md 1.3)."""
+
+    setUp = Commands.setUp
+    tearDown = Commands.tearDown
+    run_it = Commands.run_it
+
+    @staticmethod
+    def text(path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    def yaml(self):
+        return self.text(os.path.join(self.ws, "project.yaml"))
+
+    def configure(self, extra=""):
+        with open(os.path.join(self.ws, "project.yaml"), "w", encoding="utf-8") as f:
+            f.write("environments:\n  test: https://shop.example/\n"
+                    "mobile:\n  platform: android\n  app_id: com.demoshop.app\n  send_label: Send\n  input: driver\n"
+                    "  ignore_labels: [Demo Shop, Send, Type a message]\n" + extra)
+
+    def test_everything_in_one_report_when_all_is_ready(self):
+        self.configure("  build: {version: \"1.4.0 (140)\"}\n  session:\n    signed_in: [Type a message]\n"
+                       "    signed_out: [Log in]\n")
+        fake = ReportDevice([CHAT_SENT])
+        rc, out, err = self.run_it(fake, "check")
+        self.assertEqual((rc, err), (0, ""), out)
+        for line in ("device: emulator-5554 connected", "app: com.demoshop.app 1.4.0 (code 140)",
+                     "input: driver 1, service on", "driver: setting on, answering (version 1)",
+                     "build: observed com.demoshop.app 1.4.0 (140), intended 1.4.0 (140): same",
+                     "environment: test, app com.demoshop.app", "session: confirmed", "ready: yes"):
+            self.assertIn(line, out)
+        self.assertEqual(fake.changes(), [])
+
+    def test_setting_on_and_driver_not_answering_is_a_divergence_with_a_way_out(self):
+        self.configure()
+        fake = ReportDevice(state="off", enabled=True)
+        rc, out, err = self.run_it(fake, "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("driver: setting on, NOT answering", out)
+        self.assertIn("off and on again", out)
+        self.assertIn("NOT READY", out)
+        self.assertIn("service is off", err)
+        self.assertEqual(fake.changes(), [])                    # advice only: no setting was touched
+
+    def test_setting_off_driver_missing_and_no_device_each_say_what_to_do(self):
+        self.configure()
+        rc, out, _ = self.run_it(ReportDevice(state="off", enabled=False), "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("setting off", out)
+        self.assertIn("turn it on", out)
+        rc, out, _ = self.run_it(ReportDevice(state="missing", enabled=False), "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("§1.2", out)
+        self.assertIn("build_driver.py", out)
+        fake = ReportDevice(devices="")
+        rc, out, err = self.run_it(fake, "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("device: not connected", out)
+        self.assertIn("environment: test, app com.demoshop.app", out)   # what is configured is said all the same
+        self.assertIn("no Android device", err)
+
+    def test_an_app_that_is_not_installed_is_reported_with_the_rest(self):
+        self.configure()
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("")
+        self.configure()
+        text = self.yaml().replace("com.demoshop.app", "com.other")
+        with open(os.path.join(self.ws, "project.yaml"), "w", encoding="utf-8") as f:
+            f.write(text)
+        rc, out, err = self.run_it(ReportDevice(), "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("app: com.other not installed", out)
+        self.assertIn("not installed", err)
+
+    def test_the_observed_build_is_compared_with_the_intended_one_without_rewriting_it(self):
+        self.configure("  build: {version: \"1.3.0 (130)\", source: keep-me}\n")
+        before = self.yaml()
+        rc, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check")
+        self.assertEqual(rc, 0)                                          # a difference is said, it does not block
+        self.assertIn("intended 1.3.0 (130): DIFFERS", out)
+        self.assertEqual(self.yaml(), before)
+        self.configure()
+        self.assertIn("intended not set", self.run_it(ReportDevice([CHAT_SENT]), "check")[1])
+
+    def test_a_build_that_changed_during_the_batch_stops_it(self):
+        self.configure()
+        os.makedirs(os.path.join(self.ws, "runs"))
+        log = os.path.join(self.ws, "runs", "batch_20261102_L46.json")
+        with open(log, "w", encoding="utf-8") as f:
+            json.dump({"run": {"environment": "test", "build": "com.demoshop.app 1.3.0 (130)"},
+                       "results": [{"tc": "TC-SHOP-001", "status": "Pass"}]}, f)
+        before = self.text(log)
+        rc, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "20261102_L46")
+        self.assertEqual(rc, 3)
+        self.assertIn("the build changed during the batch", out)
+        self.assertIn("plan a new batch", out)
+        self.assertEqual(self.text(log), before)                         # the run block is never rewritten here
+        with open(log, "w", encoding="utf-8") as f:
+            json.dump({"run": {"build": "1.4.0 (140)"}, "results": [{"tc": "x"}]}, f)
+        self.assertEqual(self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "20261102_L46")[0], 0)
+        self.assertIn("no run log yet", self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "nope")[1])
+
+    def test_the_session_is_confirmed_needed_or_unknown_and_never_guessed(self):
+        self.configure("  session:\n    signed_in: [Type a message]\n    signed_out: [Log in]\n")
+        self.assertIn("session: confirmed", self.run_it(ReportDevice([CHAT_SENT]), "check")[1])
+        login = screen(("Log in", "", "[0,100][500,200]"))
+        rc, out, _ = self.run_it(ReportDevice([login]), "check")
+        self.assertEqual(rc, 3)
+        self.assertIn("session: needed", out)
+        self.assertIn("the person logs in", out)
+        both = screen(("Log in", "", "[0,100][500,200]"), ("Type a message", "", "[0,200][500,300]"))
+        self.assertIn("session: unknown (both", self.run_it(ReportDevice([both]), "check")[1])
+        self.configure()
+        rc, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check")
+        self.assertEqual(rc, 0)
+        self.assertIn("session: unknown (mobile.session is not set", out)
+        self.configure("  session:\n    signed_in: [Type a message]\n")
+        rc, out, _ = self.run_it(ReportDevice([CHAT_SENT], focus=OTHER), "check")
+        self.assertIn("session: unknown (the app is not in the foreground", out)
+        self.assertIn("device.py", out)
+
+    def test_with_the_adb_input_the_driver_is_not_asked_for(self):
+        self.configure()
+        text = self.yaml().replace("input: driver", "input: adb")
+        with open(os.path.join(self.ws, "project.yaml"), "w", encoding="utf-8") as f:
+            f.write(text)
+        fake = ReportDevice(state="off")
+        rc, out, _ = self.run_it(fake, "check")
+        self.assertEqual(rc, 0)
+        self.assertIn("driver: not used (input: adb)", out)
+        self.assertEqual(fake.driver_calls(), [])
+
+
+class StreamingSamples(unittest.TestCase):
+    """`send --samples`: a final answer that is complete does not show it was presented progressively (technique-mobile.md
+    4.1). Timed samples, limited, with a failed capture told apart from a failure of the app."""
+
+    setUp = Commands.setUp
+    tearDown = Commands.tearDown
+    run_it = Commands.run_it
+
+    @staticmethod
+    def partial(text):
+        return CHAT_SENT.replace('text="Your order"', f'text="{text}"')
+
+    def sampled(self, *extra, dumps=None):
+        two = self.partial("Your order ships")
+        dumps = dumps or [CHAT_TYPED, self.partial("Your"), two, "", "", "", CHAT_ANSWERED]
+        with mock.patch.object(dv.time, "sleep"):
+            return self.run_it(FakeDevice(dumps), "send", "Where is my order QA-1?", "--capture", "TC-SHOP-001_t1",
+                               "--samples", "20", "--sample-interval", "5", *extra)
+
+    def samples_file(self):
+        with open(os.path.join(self.ws, "evidence", "batch_20260928_01", "TC-SHOP-001_t1_samples.json"),
+                  encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_partial_text_is_evidence_and_a_failed_capture_is_not_a_failed_app(self):
+        rc, out, err = self.sampled()
+        self.assertEqual(rc, 0, err)
+        doc = self.samples_file()
+        kinds = [x["kind"] for x in doc["samples"]]
+        self.assertIn("capture-failed", kinds)
+        self.assertNotIn("app-not-foreground", kinds)
+        self.assertTrue(doc["summary"]["partial_text_observed"])
+        self.assertEqual(doc["summary"]["failed_captures"], 1)
+        reads = [x for x in doc["samples"] if x["kind"] == "read"]
+        self.assertEqual([x["answer"] for x in reads][:2], ["Your", "Your order ships"])
+        self.assertTrue(all("at" in x and "elapsed_s" in x for x in doc["samples"]))
+        self.assertIn("partial text observed: yes", out)
+        self.assertIn("1 capture-failed", out)
+
+    def test_only_the_final_answer_is_not_proof_of_streaming(self):
+        rc, out, _ = self.sampled(dumps=[CHAT_TYPED, CHAT_ANSWERED, CHAT_ANSWERED, CHAT_ANSWERED, CHAT_ANSWERED])
+        self.assertEqual(rc, 0)
+        self.assertFalse(self.samples_file()["summary"]["partial_text_observed"])
+        self.assertIn("partial text observed: no", out)
+
+    def test_the_number_of_samples_is_limited(self):
+        with mock.patch.object(dv.time, "sleep"):
+            rc, _, _ = self.run_it(FakeDevice([CHAT_TYPED, CHAT_SENT, CHAT_ANSWERED]), "send", "Where is my order QA-1?",
+                                   "--capture", "TC-SHOP-001_t1", "--samples", "2", "--sample-interval", "5")
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(self.samples_file()["samples"]), 2)
+        self.assertEqual(self.samples_file()["limits"], {"samples": 2, "seconds": 60.0, "interval_s": 5.0})
+
+    def test_nothing_is_written_without_asking(self):
+        with mock.patch.object(dv.time, "sleep"):
+            rc, _, _ = self.run_it(FakeDevice([CHAT_TYPED, CHAT_SENT, CHAT_ANSWERED]), "send", "Where is my order QA-1?",
+                                   "--capture", "TC-SHOP-001_t1")
+        self.assertEqual(rc, 0)
+        self.assertEqual([n for n in os.listdir(os.path.join(self.ws, "evidence", "batch_20260928_01"))
+                          if n.endswith(".json")], [])
+
+    def test_an_app_that_left_the_foreground_is_told_apart(self):
+        err = dv.NoTarget("dump refused: the foreground is 'com.example.mail/x', not com.demoshop.app")
+        self.assertEqual(dv.failure_kind(err), "app-not-foreground")
+        self.assertEqual(dv.failure_kind(dv.NoTarget("uiautomator dump returned no hierarchy after 3 tries")),
+                         "capture-failed")
 
 
 if __name__ == "__main__":

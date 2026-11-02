@@ -49,8 +49,10 @@ mobile:
   # app_id: ""                 # the app under test, e.g. com.demoshop.app
   # avd: ""                    # AVD name (default: qa-<project>)
   # image: "system-images;android-35;google_apis;x86_64"   # Google APIs (has root); a Play Store image has none
-  # build: {source: "", sha256: "", version: ""}   # where the build comes from (APKs are never committed: e.g.
-  #                            #   "release build-1.4.0-140", written by scripts/workspace_build.py publish), its SHA-256 and version
+  # session: {signed_in: [], signed_out: []}   # (opt.) texts that say, on the screen, whether the app has a session: device.py check says confirmed, needed or unknown
+  # build: {source: "", sha256: "", version: ""}   # the INTENDED build: where it comes from (APKs are never committed: e.g.
+  #                            #   "release build-1.4.0-140", written by scripts/workspace_build.py publish), its SHA-256 and
+  #                            #   version. The observed build is read from the device; the run's is in the run log (technique-mobile.md §1.4)
   # permissions: {grant: [], revoke: []}   # e.g. grant: [android.permission.POST_NOTIFICATIONS]
   # serial: ""                 # a real device or a running emulator (default: the only device connected)
   # (opt.) conversational mode (scripts/device.py, technique-mobile.md §4.1):

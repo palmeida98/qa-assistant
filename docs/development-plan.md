@@ -40,7 +40,7 @@
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
 | 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
 | 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4 |
-| 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026) |
+| 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026); 15.8 daily use of the mobile flow done (02.11.2026) |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1861,8 +1861,25 @@ The commit of 15.6 reviewed line by line: in scope, no client data, no test or g
 | D-10 | defect | `A="x" # note` kept the quotes and the comment in the value | The rule of `technique-workspaces.md` §7; `validate_project.py` warns by name; `write-env` quotes | `test_common.EnvFile` (2) |
 
 
+### 15.8 Daily use of the mobile flow — done 02.11.2026
+Why: the first daily-use session on a real workspace (3 cases, a Redmi with the driver, 02.11.2026) showed what the framework still makes hard. Each finding below was confirmed in the code first, and the specification (`technique-mobile.md` §1.3, §1.4 and §4.1, methodology §7.1 and §12.2) was written before the code.
+
+| ID | Class | Finding | Fix | Test |
+|---|---|---|---|---|
+| D-12 | confirmed defect | `run_log.py add` accepted any case ID: a `TC-SHOP-099` that no library has entered a real run log | The ID is checked against the library (workbook or `tracker/cases.json`) before the write, with the closest known ones; a library that cannot be read is an error. `remove` takes a mistaken result out of a batch not yet applied: it shows it, keeps the others, never deletes evidence, refuses an applied batch, under the lock | `test_run_log` (9) |
+| D-13 | confirmed (usability) | `device.py check` stopped at the first thing missing, and the driver's setting and its answering were one fact: the setting was on while the service answered "service off", and it took three rounds to find out | One report: device, app, driver (setting and answering apart, with the recovery as advice, nothing changed on the device), observed build against the intended one, environment, session (confirmed, needed or unknown from `mobile.session`), ready or not | `test_device.OneCheck` (8) |
+| D-14 | confirmed (usability) | `/run-batch` on a mobile-only project listed the Playwright MCP as missing | `Route: /test-mobile` and no MCP requirement (`routes-mobile-only-to` in the skill's contract); `Next:` names the one check | `test_workspace_select` (4) |
+| D-15 | confirmed (consistency) | Three different "current builds" (`CLAUDE.md`, `project.yaml`, the device), and a run's build could be rewritten while the batch had results | Three roles: intended (`mobile.build`), observed (`device.py check`), of the run (`run.build`, immutable once the batch has results: another build or environment is refused). `check --batch` stops a batch whose build changed | `test_run_log`, `test_device.OneCheck`, `test_common.Builds` |
+| D-16 | confirmed (cost) | `context.md` had 95 000 characters, 44 000 of them in 34 dated entries of the current state | `scripts/compact_context.py`: the older dated entries move word for word to `archive/context/`, after a copy of the whole file; dry run by default; an entry with a rule is flagged first (words from `context.rule_words` of `project.yaml`) | `test_compact_context` (13) |
+| D-17 | gap | A complete final answer cannot show streaming, and the only trace of it in L46 is one capture in the middle | `send --samples N`: timed samples, limited in number and seconds, partial text detected, a failed capture told apart from a failure of the app | `test_device.StreamingSamples` (5) |
+
+Not changed: the results already applied. TC-SHOP-001 of the L46 expects a progressive answer, and its evidence is indirect (a capture in the middle and dumps that failed while the screen animated): a specific review, or a retest with `--samples`, is a decision of the team and is not made here. The button without an accessible name is an observation about the app, kept in the workspace, not a bug. The 15.7 consolidation had dropped the heading of the change log below; it is back.
+
+## Change log of this plan
+
 | Date | Change |
 |---|---|
+| 2026-11-02 | 15.8: daily use of the mobile flow (first session on a real workspace): the case library checked before a result is written, `run_log.py remove`, one check of the target, the route of a mobile-only project, the roles of a build, `compact_context.py`, streaming samples; methodology v2.11, `technique-mobile.md` v1.7. Unit tests 1133 → 1176. |
 | 2026-11-01 | 15.7: consolidation of the audit; methodology v2.10. Unit tests 1116 → 1133. |
 | 2026-11-01 | 15.6: audit of the skills and the workspaces, 14 findings, each reproduced by a test first (one writer at a time per workspace, a guard that does not refuse paths being deleted, folders with unsupported names listed, skills that say where the documents are); methodology v2.9, `qa-ui.md` v1.3. Unit tests 1082 → 1116. |
 | 2026-11-01 | Phase 15: central skills and project workspaces, by the user's specification; 15.0–15.3 and 15.5 done with fictional fixtures; 15.4 done for Azure DevOps through a browser (its API route and Jira pending); methodology v2.8, `technique-workspaces.md` v1.0, `technique-tickets.md` v1.1, `qa-ui.md` v1.2. Unit tests 941 → 1082. |

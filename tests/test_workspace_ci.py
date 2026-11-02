@@ -344,6 +344,9 @@ class WorkflowSteps(Base):
         self.assertEqual(self.run_(FakeGh(), "write-env")[0], 0)
 
     def test_blocked_and_import_flows(self):
+        os.makedirs(os.path.join(self.ws, "tracker"), exist_ok=True)           # the library the results are checked against
+        with open(os.path.join(self.ws, "tracker", "cases.json"), "w", encoding="utf-8") as f:
+            json.dump({"cases": [{"id": "TC-MOB-001", "title": "x"}, {"id": "TC-MOB-002", "title": "y"}]}, f)
         self.run_(FakeGh(), "batch", "--input", "TC-MOB-001 TC-MOB-002", "--run-id", "9")
         code, out = self.run_(FakeGh(), "blocked", "--run-log", "batch_adhoc_r9", "--cases", "TC-MOB-001",
                               "TC-MOB-002", "--reason", "login: no link in time")

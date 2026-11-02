@@ -75,7 +75,7 @@ class RunLog(unittest.TestCase):
 
     def test_results_added_at_the_same_time_are_all_kept(self):
         # audit finding D-02: each writer read the file, added its case and wrote the whole file back over the others
-        cases = [f"TC-SHOP-{n:03d}" for n in range(1, 9)]
+        cases = [f"TC-{area}-{n:03d}" for area in ("ACCOUNT", "ADMIN") for n in range(1, 5)]
         errors = []
 
         def add(case):
@@ -116,6 +116,131 @@ class RunLog(unittest.TestCase):
         with mock.patch.object(rl.os, "fsync", fsync), mock.patch.object(rl.os, "replace", replace):
             rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
         self.assertEqual(events, ["fsync", "replace"])
+
+    def test_an_unknown_case_is_refused_with_the_closest_ones(self):
+        # audit finding D-12: TC-SHOP-099, which no library has, entered a real run log
+        code, out = self.run_("add", "20260929_01", "TC-SHOP-099", "Pass", "ok")
+        self.assertEqual(code, 2)
+        self.assertIn("TC-SHOP-099", out)
+        self.assertIn("not in the project's library", out)
+        self.assertIn("did you mean TC-SHOP-00", out)
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs")))
+        self.assertEqual(self.run_("add", "20260929_01", " TC-SHOP-001 ", "Pass", "ok")[0], 0)   # blanks are not part of an ID
+
+    def test_a_library_that_cannot_be_read_is_an_error_not_a_pass(self):
+        os.remove(os.path.join(self.ws, CFG["file"]))
+        code, out = self.run_("add", "20260929_01", "TC-SHOP-001", "Pass", "ok")
+        self.assertEqual(code, 2)
+        self.assertIn("library cannot be read", out)
+        self.assertIn("nothing was written", out)
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs")))
+
+    def test_the_library_of_a_tracker_project_is_its_cases_file(self):
+        self.project(tracker="jira", jira={"site": "https://demo.example", "project_key": "CHK"})
+        code, out = self.run_("add", "20260929_01", "CHK-1", "Pass", "ok")
+        self.assertEqual(code, 2)
+        self.assertIn("tracker/cases.json", out)
+        os.makedirs(os.path.join(self.ws, "tracker"))
+        with open(os.path.join(self.ws, "tracker", "cases.json"), "w", encoding="utf-8") as f:
+            json.dump({"cases": [{"id": "CHK-1", "title": "x"}]}, f)
+        code, out = self.run_("add", "20260929_01", "CHK-2", "Pass", "ok")
+        self.assertEqual((code, "CHK-1" in out), (2, True))
+
+    def test_remove_a_mistaken_result_and_keep_the_rest(self):
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", evidence=["evidence/b/a.png"], now=NOW)
+        rl.add(self.ws, "20260929_01", "TC-SHOP-002", "Fail", "wrong case", evidence=["evidence/b/b.png"], now=NOW)
+        rl.add(self.ws, "20260929_01", "TC-SHOP-003", "Pass", "ok", environment="test", build="1.0 (1)", now=NOW)
+        os.makedirs(os.path.join(self.ws, "evidence", "b"))
+        for name in ("a.png", "b.png"):
+            with open(os.path.join(self.ws, "evidence", "b", name), "wb") as f:
+                f.write(b"x")
+        before = self.log()
+        code, out = self.run_("remove", "20260929_01", "TC-SHOP-002")
+        self.assertEqual(code, 0, out)
+        self.assertIn("wrong case", out)                                    # the result affected is shown
+        self.assertIn("evidence/b/b.png", out)
+        self.assertIn("not deleted", out)
+        after = self.log()
+        self.assertEqual([r["tc"] for r in after["results"]], ["TC-SHOP-001", "TC-SHOP-003"])
+        self.assertEqual(after["results"], [r for r in before["results"] if r["tc"] != "TC-SHOP-002"])
+        self.assertEqual(after["run"], before["run"])
+        self.assertTrue(os.path.isfile(os.path.join(self.ws, "evidence", "b", "b.png")))      # evidence stays
+        self.assertEqual(self.run_("remove", "20260929_01", "TC-SHOP-002")[0], 2)             # no longer there
+        self.assertEqual(self.run_("remove", "20260929_99", "TC-SHOP-001")[0], 2)             # no such batch
+
+    def test_a_batch_already_applied_cannot_lose_a_result(self):
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
+        ad = ExcelAdapter.from_project(self.ws)
+        ad.load()
+        ad.apply_batch(self.log()["results"], batch_id="batch_20260929_01")
+        ad.save()
+        before = self.log()
+        code, out = self.run_("remove", "20260929_01", "TC-SHOP-001")
+        self.assertEqual(code, 1)
+        self.assertIn("already applied", out)
+        self.assertEqual(self.log(), before)
+
+    def test_removing_and_adding_at_the_same_time_loses_nothing(self):
+        for case in ("TC-ACCOUNT-001", "TC-ACCOUNT-002"):
+            rl.add(self.ws, "20260929_01", case, "Pass", "ok", now=NOW)
+        errors = []
+
+        def add(case):
+            try:
+                rl.add(self.ws, "20260929_01", case, "Pass", "ok", now=NOW)
+            except Exception as e:      # noqa: BLE001 -- reported below
+                errors.append(repr(e))
+
+        def remove():
+            try:
+                rl.remove(self.ws, "20260929_01", "TC-ACCOUNT-001")
+            except Exception as e:      # noqa: BLE001
+                errors.append(repr(e))
+
+        threads = [threading.Thread(target=add, args=(c,)) for c in ("TC-SHOP-001", "TC-SHOP-002", "TC-SHOP-003")]
+        threads.append(threading.Thread(target=remove))
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(r["tc"] for r in self.log()["results"]),
+                         ["TC-ACCOUNT-002", "TC-SHOP-001", "TC-SHOP-002", "TC-SHOP-003"])
+
+    def test_remove_waits_for_the_lock_and_writes_nothing_without_it(self):
+        import qa_ui_kit as kit
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
+        before = self.log()
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
+            code, out = self.run_("remove", "20260929_01", "TC-SHOP-001")
+        self.assertEqual(code, 1)
+        self.assertIn("another process", out)
+        self.assertEqual(self.log(), before)
+
+    def test_the_build_of_a_batch_cannot_change_once_it_has_results(self):
+        # the run block is the record of where the results came from
+        self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-001", "Pass", "ok", "--environment", "test",
+                                   "--build", "pt.demo.app 1.0.0 (33)")[0], 0)
+        before = self.log()
+        code, out = self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "ok", "--build", "pt.demo.app 1.0.0 (34)")
+        self.assertEqual(code, 1)
+        self.assertIn("build changed", out)
+        self.assertIn("plan a new batch", out)
+        self.assertEqual(self.log(), before)
+        self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "ok", "--environment", "staging")[0], 1)
+        # the same build, written another way, is the same build
+        self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "ok", "--build", "1.0.0 (33)")[0], 0)
+        self.assertEqual(self.log()["run"], before["run"])
+
+    def test_the_build_can_still_be_set_before_any_result(self):
+        # the interface writes the run block when a run starts, with no result yet
+        with open(os.path.join(self.ws, "runs.tmp"), "w", encoding="utf-8"):
+            pass
+        os.makedirs(os.path.join(self.ws, "runs"))
+        with open(os.path.join(self.ws, "runs", "batch_20260929_01.json"), "w", encoding="utf-8") as f:
+            json.dump({"run": {"environment": "test", "build": "1.0 (1)"}, "results": []}, f)
+        self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-001", "Pass", "ok", "--build", "1.0 (2)")[0], 0)
+        self.assertEqual(self.log()["run"]["build"], "1.0 (2)")
 
     def test_the_command_line_with_a_new_defect(self):
         draft = os.path.join(self.ws, "draft.json")
@@ -161,11 +286,9 @@ class RunLog(unittest.TestCase):
         self.assertIn("sent to jira", out)
         self.assertIn("batch_demo_03", out)                            # _02 is taken too
         self.assertEqual(self.run_("add", "other", "DS-12", "Blocked", "x")[0], 2)      # not in the map
+        with open(os.path.join(self.ws, "tracker", "cases.json"), "w", encoding="utf-8") as f:
+            json.dump({"cases": [{"id": "DS-12", "title": "x"}]}, f)                    # the library of a tracker project
         self.assertEqual(self.run_("add", "other", "DS-12", "Pass", "ok")[0], 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ProjectStatus(unittest.TestCase):
@@ -192,3 +315,7 @@ class ProjectStatus(unittest.TestCase):
         with self.assertRaises(rl.UsageError) as e:
             rl.project_status(self.proj(self.PT), "blocked")
         self.assertIn("dashboard.states", str(e.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

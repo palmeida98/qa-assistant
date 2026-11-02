@@ -3,6 +3,13 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 
     python scripts/run_log.py <workspace> add <batch> <case> <status> <actual>
         [--bug ID] [--new-defect FILE.json] [--evidence PATH ...] [--environment KEY] [--build VERSION]
+    python scripts/run_log.py <workspace> remove <batch> <case>
+
+- The case must be in the project's library (the workbook, or tracker/cases.json): an unknown ID is exit 2 with the
+  closest known ones, and a library that cannot be read is exit 2 too. The run block does not change once the batch
+  has results: another build or environment is exit 1 (the build changed during the batch: plan a new batch).
+- remove: takes one mistaken result out of a batch not yet applied. It shows the result, keeps the others, never
+  deletes evidence (it lists the files), and refuses a batch already applied (exit 1) or a result that is not there (2).
 
 - add: appends the result of <case> to runs/batch_<batch>.json, or replaces it when the case is already there (one
   item per case, the adapter refuses a case repeated); "ts" is now. <batch> may be given with or without the
@@ -22,6 +29,7 @@ was written, run the same command again) · 2 usage or configuration (unknown st
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -36,6 +44,7 @@ from common import (
     WorkspaceBusy,
     read_project,
     replace_file,
+    same_build,
     workspace_lock,
     workspace_path,
 )
@@ -119,6 +128,18 @@ def applied(workspace: str, proj: dict, name: str) -> str | None:
     return None
 
 
+def library_cases(workspace: str, proj: dict) -> tuple[set[str], str]:
+    """The IDs of the project's case library and what it was read from: the workbook, or tracker/cases.json. A library
+    that cannot be read is a UsageError, never an empty answer: an unknown ID must not pass for lack of a library."""
+    from adapters.tickets import impact
+    lib = impact.load_library(workspace, proj)
+    if lib.status != impact.COMPLETE:
+        hint = " (python -m adapters.tracker <workspace> import-cases writes it)" if "cases.json" in lib.source else ""
+        raise UsageError(f"the project's case library cannot be read ({lib.source or proj.get('tracker')}: "
+                         f"{lib.detail}){hint}: nothing was written")
+    return {str(r["case"]).strip() for r in lib.rows}, lib.detail
+
+
 def next_name(workspace: str, proj: dict, name: str) -> str:
     """A free batch name for a correction: <name>_02, _03... (or the next number when it already ends in one)."""
     m = re.fullmatch(r"(.*?)(?:_(\d{2}))?", name)
@@ -174,6 +195,12 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         raise UsageError(f"status {status!r} is not in the project's vocabulary {statuses} (or Question)")
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
+    known, source = library_cases(workspace, proj)
+    if case.strip() not in known:
+        close = difflib.get_close_matches(case.strip(), sorted(known), n=3, cutoff=0.6)
+        raise UsageError(f"case {case.strip()!r} is not in the project's library ({source})"
+                         + (f"; did you mean {', '.join(close)}?" if close else "")
+                         + ": nothing was written. A new case is added first (/generate-cases)")
     path = run_log_path(workspace, name)
     try:
         with workspace_lock(workspace):         # read, change and write the file as one step (audit finding D-02)
@@ -186,6 +213,7 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
 def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
          now) -> tuple[str, bool]:
     doc = read_log(doc_for)
+    _same_context(doc, environment, build)
     item = {"tc": case.strip(), "status": status, "actual_result": actual,
             "ts": (now or datetime.now()).isoformat(timespec="seconds")}
     if bug:
@@ -196,7 +224,9 @@ def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, n
         item["evidence"] = evidence if len(evidence) > 1 else evidence[0]
     if environment or build:
         run = dict(doc.get("run") or {})
-        run.update({k: v for k, v in (("environment", environment), ("build", build)) if v})
+        # the block is only written while the batch has no results: after that it is the record of where they came from
+        run.update({k: v for k, v in (("environment", environment), ("build", build))
+                    if v and (not doc["results"] or k not in run)})
         doc = {**{k: v for k, v in doc.items() if k != "results"}, "run": run, "results": doc["results"]}
     at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict) and
                str(x.get("tc") or "").strip() == item["tc"]), None)
@@ -206,6 +236,51 @@ def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, n
         doc["results"][at] = item
     write_log(path, doc)
     return path, at is not None
+
+
+def _same_context(doc: dict, environment: str | None, build: str | None) -> None:
+    """The run block is the record of where the results came from: once the batch has results it does not change. A
+    build that changes during a batch ends that batch (technique-mobile.md section 1.4)."""
+    if not doc.get("results"):
+        return
+    run = doc.get("run") or {}
+    if build and run.get("build") and not same_build(str(run["build"]), build):
+        raise Refused(f"the build changed during the batch: it started on {run['build']!r} and this result says "
+                      f"{build!r}. Stop this batch (its results stay as they are) and plan a new batch with the right "
+                      "context (/plan-batch)")
+    if environment and run.get("environment") and str(run["environment"]) != environment:
+        raise Refused(f"the environment changed during the batch: it started on {run['environment']!r} and this result "
+                      f"says {environment!r}. Plan a new batch (/plan-batch)")
+
+
+def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
+    """Takes one mistaken result out of a batch not yet applied: (path, the result removed). The others stay as they
+    are, evidence is never deleted, and the read, the change and the write are one step under the workspace's lock."""
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    name = batch_id(batch)
+    where = applied(workspace, proj, name)
+    if where:
+        raise Refused(f"{name} was already {where}: it is never changed; a correction goes to a new batch, "
+                      f"e.g. {next_name(workspace, proj, name)}")
+    path = run_log_path(workspace, name)
+    if not os.path.isfile(path):
+        raise UsageError(f"{name} has no run log (runs/{os.path.basename(path)})")
+    try:
+        with workspace_lock(workspace):
+            doc = read_log(path)
+            at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict)
+                       and str(x.get("tc") or "").strip() == case.strip()), None)
+            if at is None:
+                have = ", ".join(str(x.get("tc")) for x in doc["results"] if isinstance(x, dict)) or "none"
+                raise UsageError(f"{case.strip()!r} is not in {name} (results: {have})")
+            gone = doc["results"].pop(at)
+            write_log(path, doc)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+    return path, gone
 
 
 def main(argv=None) -> int:
@@ -222,8 +297,20 @@ def main(argv=None) -> int:
     p.add_argument("--evidence", nargs="+", metavar="PATH", help="paths under evidence/")
     p.add_argument("--environment", help="run.environment (a key of environments)")
     p.add_argument("--build", help="run.build (the version tested)")
+    p = sub.add_parser("remove", help="take one mistaken result out of a batch not yet applied")
+    p.add_argument("batch")
+    p.add_argument("case")
     a = ap.parse_args(argv)
     try:
+        if a.command == "remove":
+            path, gone = remove(a.workspace, a.batch, a.case)
+            print(f"removed: {gone.get('tc')} {gone.get('status')} from {path}")
+            print(json.dumps(gone, ensure_ascii=False, indent=1))
+            files = [e for e in ([gone.get("evidence")] if isinstance(gone.get("evidence"), str)
+                                 else gone.get("evidence") or []) if isinstance(e, str)]
+            if files:
+                print("evidence not deleted (delete it by hand if it is not needed): " + ", ".join(files))
+            return 0
         new = None
         if a.new_defect:
             try:
