@@ -257,6 +257,18 @@ class WorkspaceLock(unittest.TestCase):
         with common.workspace_lock(self.ws, wait=0.5):
             pass
 
+    @unittest.skipUnless(os.path.isdir("/proc"), "zombies are read from /proc (Linux)")
+    def test_a_zombie_is_not_alive(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:          # ended but not collected: a zombie
+            with open(f"/proc/{proc.pid}/stat", encoding="utf-8") as f:
+                if f.read().rpartition(")")[2].split()[0] == "Z":
+                    break
+            time.sleep(0.05)
+        self.assertFalse(common.pid_alive(proc.pid))
+        proc.wait()
+
     def test_a_reused_process_id_does_not_hold_the_lock(self):
         self.hold(started="the start of another process")
         with common.workspace_lock(self.ws, wait=0.5), open(self.path, encoding="utf-8") as f:
@@ -341,8 +353,10 @@ class WorkspaceLock(unittest.TestCase):
         self.assertIn(str(pid), str(busy.exception))
         self.assertTrue(os.path.isfile(self.path))          # a live holder's lock stays
         os.kill(pid, signal.SIGTERM)
-        while common.pid_alive(pid):
+        deadline = time.monotonic() + 30            # never a hang: CI found one on Linux, where the dead child was a zombie
+        while common.pid_alive(pid) and time.monotonic() < deadline:
             time.sleep(0.05)
+        self.assertFalse(common.pid_alive(pid), "the holder should be dead, or a zombie that holds nothing")
         self.assertTrue(os.path.isfile(self.path))          # it died without releasing it
         with common.workspace_lock(self.ws, wait=5):
             pass
