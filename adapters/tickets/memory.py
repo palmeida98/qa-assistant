@@ -15,8 +15,8 @@ from datetime import datetime
 
 from common import (
     OutsideWorkspace,
+    atomic_write,
     read_project,
-    replace_file,
     workspace_lock,
     workspace_path,
 )
@@ -41,7 +41,7 @@ from .model import (
 SCHEMA = 1
 BLOCK_START = "<!-- analyze-tickets:start (generated: edits between these markers are replaced) -->"
 BLOCK_END = "<!-- analyze-tickets:end -->"
-BLOCK_TITLE = "## Tickets (/analyze-tickets)"
+BLOCK_TITLE = "## Tickets (/analyze-ticket)"
 SEARCH_IMPACTS = ("requirements-changed", "state-changed")
 CHECK_ID = re.compile(r"\d{8}-\d{6}(-\d+)?")
 ANALYSIS_FILE = re.compile(r"(\d{8}-\d{6}(?:-\d+)?)\.analysis(?:-(\d+))?\.md")
@@ -60,13 +60,7 @@ def safe_path(workspace: str, *parts: str) -> str:
 
 
 def write_atomic(path: str, data: bytes) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())        # on the disk before it takes the place of the old one
-    replace_file(tmp, path)
+    atomic_write(path, data)
 
 
 def write_failure(error: OSError) -> str:
@@ -98,11 +92,16 @@ def read_json(path: str):
 
 def _remove_leftovers(workspace: str) -> None:
     """What a stopped write left behind: only the temporary files of this memory."""
-    for path in glob.glob(os.path.join(glob.escape(os.path.join(workspace, "memory")), "**", "*.tmp"), recursive=True):
-        try:
-            os.remove(safe_path(workspace, os.path.relpath(path, workspace)))
-        except OSError:
-            continue
+    root = os.path.join(workspace, "memory")
+    for folder, dirs, files in os.walk(root, followlinks=False):     # a linked folder is never entered
+        dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(folder, d))]
+        for name in files:
+            if not name.endswith(".tmp"):
+                continue
+            try:
+                os.remove(safe_path(workspace, os.path.relpath(os.path.join(folder, name), workspace)))
+            except (OSError, ConfigError):
+                continue
 
 
 def ticket_path(workspace: str, ref: dict, ext: str = "json") -> str:
@@ -417,7 +416,15 @@ def current_state(workspace: str) -> dict:
             analysis = doc.get("analysis") or {}
             situation = analysis.get("qa_situation") or {}
             rid = t["ref"]["id"]
-            tickets[t["key"]] = {"id": rid, "slug": t["slug"], "stale": doc.get("stale") or [],
+            since = []          # what changed in this ticket in checks after the one its analysis comes from
+            if situation.get("check"):
+                analysed = next((c for c in checks if c["id"] == situation["check"]), None)
+                for c in checks:
+                    if analysed and check_order(c["at"], c["id"]) > check_order(analysed["at"], analysed["id"]):
+                        mine = next((x for x in c.get("tickets") or [] if x.get("key") == t["key"]), None)
+                        since += [f"{ch.get('component')} {ch.get('item')}" for ch in (mine or {}).get("changes") or []]
+            tickets[t["key"]] = {"changed_since": sorted(set(since)),
+                                 "flags": (t.get("suggested_situation") or {}).get("flags") or [],"id": rid, "slug": t["slug"], "stale": doc.get("stale") or [],
                                  "state": ((doc.get("components") or {}).get("fields") or {}).get("data", {}).get("state"),
                                  "situation": situation.get("value"), "situation_check": situation.get("check"),
                                  "situation_is_older": bool(situation) and situation.get("check") !=
@@ -519,7 +526,7 @@ def record_analysis(workspace: str, check_id: str, doc: dict, now: datetime | No
             ticket_doc["analysis"] = merged
             write_ticket(workspace, ticket_doc)
         updated.append(ticket_path(workspace, ticket["ref"], "md"))
-    if new:
+    if new or not os.path.isfile(md_path):      # a missing view is written again (audit 06.11.2026)
         checks = read_checks(workspace)
         project = str(_project(workspace).get("project") or os.path.basename(os.path.abspath(workspace)))
         write_atomic(md_path, _text(render.analysis_markdown(check, doc, meta, project, os.path.abspath(workspace),

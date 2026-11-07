@@ -32,7 +32,7 @@ Rules:
 - Move from N0 to N1 as soon as the expected result involves dynamic or interactive behaviour.
 - A case moves from N1 to N2 by the criteria of §13.
 - If the Playwright MCP is not available in the environment, use the available browser (for example, Claude in Chrome) and **record the environment difference** (methodology §14.2).
-- The Playwright MCP is registered with a **fixed version** (`@playwright/mcp@<version>`, the same in the demo's `.mcp.json` and in `/project-onboarding`), never `@latest`: a new version can change the tools or the snapshot in the middle of a project. Updating is a change of its own, checked in the demo.
+- The Playwright MCP is registered with a **fixed version** (`@playwright/mcp@<version>`, the same in the demo's `.mcp.json` and in `/project-context`), never `@latest`: a new version can change the tools or the snapshot in the middle of a project. Updating is a change of its own, checked in the demo.
 - The Playwright MCP runs with `--isolated` (a clean browser profile in each session, in memory). With the default persistent profile, in the pilot of 25.09.2026 the clicks (`browser_click`, `browser_press_key`) stopped reaching the page after the 1st navigation, while filling fields kept working; the diagnosis with three variants (the same task: login + add to cart) failed only with the persistent profile. The clean profile also leaves no cookies nor sessions of the tested site from one session to the next. Never work around clicks that do not arrive with `element.click()` in `browser_evaluate`: the case is `Blocked` (tool limitation, §9).
 
 ---
@@ -174,7 +174,7 @@ Follows the policy of `project.yaml` (methodology §7.3). In the browser, a **Fa
 
 - Reuse the session and the navigation within the batch. Go directly by URL when the case does not test the navigation itself.
 - Do not take repeated full snapshots of the same page when nothing changed.
-- In large batches, the execution can run in a **subagent**, which returns to the main context only the run log: ID, result, short note and bug. There is no subagent of the framework's own: Claude Code's generic subagent is used with the instructions of `/run-batch`. A dedicated subagent (`executor-web`) is only created if the pilot in a real project shows batches filling the main context (decision of 24.09.2026).
+- In large batches, the execution can run in a **subagent**, which returns to the main context only the run log: ID, result, short note and bug. There is no subagent of the framework's own: Claude Code's generic subagent is used with the instructions of `/run-tests`. A dedicated subagent (`executor-web`) is only created if the pilot in a real project shows batches filling the main context (decision of 24.09.2026).
 - Group checks of the same page, when several cases share it, without mixing each case's results.
 
 ---
@@ -247,7 +247,7 @@ In the conversion:
 - [ ] Entities created recorded or cleaned up
 - [ ] Secondary observations (console, network, accessibility) kept apart from the results
 - [ ] N2 candidates identified
-- [ ] Control passed to `/end-session`
+- [ ] Control passed to `/qa-report`
 
 ---
 
@@ -255,7 +255,7 @@ In the conversion:
 
 ### v2.0 → v2.1 (plan 8.11, 26.09.2026)
 
-- **Changed:** in English, with the new names (`technique-browser.md`, `/run-batch`, `auditState`, `data/`).
+- **Changed:** in English, with the new names (`technique-browser.md`, `/run-batch` — `/run-tests` since 06.11.2026, `auditState`, `data/`).
 
 ### v1 → v2
 

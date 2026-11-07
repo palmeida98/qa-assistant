@@ -14,7 +14,7 @@ import unittest
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ONBOARDING = os.path.join(ROOT, ".claude", "skills", "project-onboarding", "SKILL.md")
+ONBOARDING = os.path.join(ROOT, "docs", "procedures", "onboarding.md")   # read by /project-context
 
 
 def hooks() -> dict:

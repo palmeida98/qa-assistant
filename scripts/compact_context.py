@@ -34,7 +34,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 from common import (
     OutsideWorkspace,
     WorkspaceBusy,
-    replace_file,
+    atomic_write,
     workspace_lock,
     workspace_path,
 )
@@ -53,6 +53,8 @@ class Usage(Exception):
 def _blocks(lines: list[str], start: str) -> list[tuple[int, int]]:
     """(first, end) line ranges of the entries of a section: each starts with `start` at column 0 and runs to the next."""
     firsts = [i for i, ln in enumerate(lines) if re.match(start, ln)]
+    if not firsts:                  # a section with no dated entry (an empty one): nothing to move
+        return []
     return [(a, b) for a, b in zip(firsts, firsts[1:] + [len(lines)], strict=True)]
 
 
@@ -70,7 +72,7 @@ def plan(text: str, keep: int, extra_words=()) -> dict:
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.replace("\r\n", "\n").split("\n")
     heads = [i for i, ln in enumerate(lines) if ln.startswith("## ")]
-    bounds = list(zip(heads, heads[1:] + [len(lines)], strict=True))
+    bounds = list(zip(heads, heads[1:] + [len(lines)], strict=True)) if heads else []
     removed: set[int] = set()
     rule = rule_pattern(extra_words)
     report, archived, pointers = [], {}, []
@@ -135,25 +137,38 @@ def apply(workspace: str, keep: int, now: datetime | None = None, extra_words=()
             return {**done, "files": []}
         os.makedirs(folder, exist_ok=True)
         stamp = now.strftime("%Y%m%d_%H%M%S")
-        before = os.path.join(folder, f"context_{stamp}_before.md")
-        archive = os.path.join(folder, f"context_archive_{now.strftime('%Y%m%d')}.md")
-        with open(before, "w", encoding="utf-8", newline="") as f:
-            f.write(text)
+        try:
+            archive = workspace_path(workspace, ARCHIVE, f"context_archive_{now.strftime('%Y%m%d')}.md")
+            before = _new_file(workspace, f"context_{stamp}_before.md", text)
+        except OutsideWorkspace as e:
+            raise Usage(str(e)) from None
         parts = [(f"\n<!-- moved from context.md on {now.isoformat(timespec='seconds')}; the whole file before is "
                   f"{os.path.basename(before)} -->\n")]
         for name, entries in done["archived"].items():
             parts.append(f"\n## {name}\n\n" + "\n\n".join(entries) + "\n")
-        with open(archive, "a", encoding="utf-8", newline="\n") as f:
+        fd = os.open(archive, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        with os.fdopen(fd, "a", encoding="utf-8", newline="\n") as f:
             if f.tell() == 0:
                 f.write("# context.md: entries moved here, word for word\n")
             f.write("".join(parts))
-        tmp = context + ".tmp"
-        with open(tmp, "w", encoding="utf-8", newline="") as f:
-            f.write(done["new_text"])
-            f.flush()
-            os.fsync(f.fileno())
-        replace_file(tmp, context)
+        atomic_write(context, done["new_text"])
         return {**done, "files": [before, archive]}
+
+
+def _new_file(workspace: str, name: str, text: str) -> str:
+    """Writes the copy of the whole file before a compaction under a name that did not exist (`_2`, `_3` … when two
+    compactions fall in the same second), never through a link. Returns its path."""
+    stem, ext = os.path.splitext(name)
+    for n in range(1, 100):
+        path = workspace_path(workspace, ARCHIVE, f"{stem}{'' if n == 1 else f'_{n}'}{ext}")
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        except FileExistsError:
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        return path
+    raise Usage(f"too many copies named {name} in {ARCHIVE}")
 
 
 def _words(workspace: str, given: str) -> list[str]:

@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from typing import ClassVar
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -81,6 +82,9 @@ class Sync(unittest.TestCase):
             os.makedirs(os.path.join(self.target, name))
             with open(os.path.join(self.target, name, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(f"---\nname: {name}\n---\n")
+        # only what this framework's record says it installed is retired (audit 06.11.2026)
+        with open(os.path.join(self.target, ss.RECORD), "w", encoding="utf-8") as f:
+            json.dump({"skills": {"executar-lote": "x", "painel": "y"}}, f)
         rc, out = self.run_it()
         self.assertEqual(rc, 1)
         self.assertIn("retired    executar-lote", out)
@@ -101,7 +105,7 @@ class Sync(unittest.TestCase):
 
     def test_only_the_skills_are_copied(self):
         self.run_it("--apply")
-        copied = sorted(os.listdir(os.path.join(self.target, "analyze-tickets")))
+        copied = sorted(os.listdir(os.path.join(self.target, "analyze-ticket")))
         self.assertEqual(copied, ["SKILL.md"])
 
     def test_a_copy_already_the_same_still_gets_its_record(self):
@@ -162,6 +166,107 @@ class Sync(unittest.TestCase):
         with open(os.path.join(self.target, ss.RECORD), encoding="utf-8") as f:
             self.assertEqual(json.load(f), {"root": "x"})
         self.assertFalse(os.path.exists(os.path.join(self.target, ss.RECORD + ".tmp")))
+
+
+def read(path: str) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+class Version2(unittest.TestCase):
+    """Skills version 2 (docs/skills-spec.md): the eight skills installed, repeatably, with their origin."""
+    EIGHT: ClassVar[set] = {"project-context", "analyze-ticket", "plan-tests", "run-tests", "manage-bugs", "qa-report", "checkpoint",
+             "test-pbi"}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.target = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_it(self, *args):
+        with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+            rc = ss.main(["--target", self.target, *args])
+        return rc, out.getvalue()
+
+    def test_the_eight_are_installed_and_a_second_run_changes_nothing(self):
+        self.assertEqual(self.run_it("--apply")[0], 0)
+        installed = {n for n in os.listdir(self.target) if os.path.isfile(os.path.join(self.target, n, "SKILL.md"))}
+        self.assertEqual(installed, self.EIGHT)
+        first = {n: read(os.path.join(self.target, n, "SKILL.md")) for n in installed}
+        rc, out = self.run_it("--apply")
+        self.assertEqual(rc, 0)
+        self.assertIn("in sync", out)
+        self.assertEqual(first, {n: read(os.path.join(self.target, n, "SKILL.md")) for n in installed})
+
+    def test_version_1_copies_are_retired_and_other_origins_kept(self):
+        for name in ("test-mobile", "log-bug", "dashboard", "my-own-skill"):
+            os.makedirs(os.path.join(self.target, name))
+            with open(os.path.join(self.target, name, "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write(f"---\nname: {name}\n---\n")
+        with open(os.path.join(self.target, ss.RECORD), "w", encoding="utf-8") as f:
+            json.dump({"skills": {"test-mobile": "x", "log-bug": "y"}}, f)        # installed by this framework
+        self.assertEqual(self.run_it("--apply")[0], 0)
+        left = set(os.listdir(self.target))
+        self.assertFalse({"test-mobile", "log-bug"} & left)
+        self.assertIn("my-own-skill", left)                         # a skill of another origin is never touched
+        self.assertIn("dashboard", left)    # an old name the record does not list belongs to another origin: kept
+
+    def test_a_linked_skill_is_never_written_through_nor_removed(self):
+        elsewhere = os.path.join(self.tmp.name, "elsewhere")
+        os.makedirs(elsewhere)
+        with open(os.path.join(elsewhere, "SKILL.md"), "w", encoding="utf-8") as f:
+            f.write("---\nname: theirs\n---\n")
+        os.symlink(elsewhere, os.path.join(self.target, "run-tests"))
+        os.symlink(elsewhere, os.path.join(self.target, "dashboard"))
+        with open(os.path.join(self.target, ss.RECORD), "w", encoding="utf-8") as f:
+            json.dump({"skills": {"dashboard": "x"}}, f)
+        rc, out = self.run_it("--apply")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("linked", out)
+        self.assertEqual(read(os.path.join(elsewhere, "SKILL.md")), "---\nname: theirs\n---\n")
+        self.assertTrue(os.path.islink(os.path.join(self.target, "dashboard")))
+
+    def test_the_record_names_origin_commit_and_what_is_not_committed(self):
+        with mock.patch.object(ss, "uncommitted", return_value=[".claude/skills/run-tests/SKILL.md", "docs/x.md"]):
+            rc, out = self.run_it("--apply")
+        self.assertEqual(rc, 0)
+        record = ss.read_record(self.target)
+        self.assertEqual(set(record["skills"]), self.EIGHT)
+        for key in ("root", "branch", "commit", "dirty", "synced_at"):
+            self.assertIn(key, record)
+        self.assertEqual(record["uncommitted_skills"], ["run-tests"])
+        self.assertIn("PLUS 2 file(s) not committed", out)          # the commit is never shown as the whole content
+        with mock.patch.object(ss, "uncommitted", return_value=None):
+            _, out = self.run_it("--apply")
+        self.assertIn("git could not say", out)
+
+    def test_a_missing_document_refuses_the_installation(self):
+        with tempfile.TemporaryDirectory() as src:
+            os.makedirs(os.path.join(src, "x"))
+            with open(os.path.join(src, "x", "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write("---\nname: x\ndescription: d\nmetadata:\n  requires-docs: \"procedures/nothing.md\"\n---\n")
+            err = io.StringIO()
+            with mock.patch.object(ss, "SOURCE", src), contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                rc = ss.main(["--target", self.target, "--apply"])
+        self.assertEqual(rc, 2)
+        self.assertIn("document docs/procedures/nothing.md", err.getvalue())
+        self.assertEqual(os.listdir(self.target), [])
+
+    def test_no_skills_in_the_checkout_is_a_clear_error(self):
+        err = io.StringIO()
+        with mock.patch.object(ss, "SOURCE", os.path.join(self.target, "nowhere")), contextlib.redirect_stderr(err):
+            self.assertEqual(ss.main(["--target", self.target]), 2)
+        self.assertIn("has no skills", err.getvalue())
+
+    def test_paths_are_built_for_any_system(self):
+        # Mac and Windows: the record and the copies use os.path, never a hard-coded separator
+        with open(ss.__file__, encoding="utf-8") as f:
+            code = f.read()
+        self.assertNotIn("'/'.join", code)
+        self.assertNotIn("\"/\".join", code)
 
 
 if __name__ == "__main__":

@@ -79,6 +79,28 @@ def env_list(ws: str, proj: dict) -> list[dict]:
     return [{"name": n, "set": bool(env.get(n)), "in_project": n in referred} for n in writable_names(ws, proj)]
 
 
+def workbooks(ws: str, proj: dict) -> list[dict]:
+    """The workbooks of an Excel project, each with the batches it takes and whether its file can be opened (a cheap
+    look: present and a zip archive; the adapter reads it fully when a batch is applied)."""
+    import zipfile
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else None
+    if proj.get("tracker") != "excel" or not excel:
+        return []
+    rows = [(str(excel.get("file") or ""), "default: every platform without a workbook of its own")]
+    for key, v in (excel.get("workbooks") or {}).items():
+        if isinstance(v, dict) and v.get("file"):
+            pats = v.get("batches") or []
+            pats = [pats] if isinstance(pats, str) else [str(p) for p in pats]
+            rows.append((str(v["file"]), f"{v.get('platform') or key}: batches {', '.join(pats) or '(none)'}"))
+    out = []
+    for file, role in rows:
+        full = os.path.join(ws, file)
+        state = ("not set" if not file else "missing" if not os.path.isfile(full)
+                 else "ok" if zipfile.is_zipfile(full) else "cannot be opened (not a workbook file)")
+        out.append({"file": file, "for": role, "state": state})
+    return out
+
+
 def overview(ws: str, checks) -> dict:
     """GET /api/p/<id>/overview. A project.yaml that cannot be read is said here, with what can still be shown
     (section 14.2): the Overview is the one screen such a project keeps."""
@@ -102,7 +124,8 @@ def overview(ws: str, checks) -> dict:
                           "purpose": str((v or {}).get("purpose") or "") if isinstance(v, dict) else ""}
                          for k, v in (envs.items() if isinstance(envs, dict) else [])],
         "roles": [str(r) for r in proj.get("roles") or []],
-        "evidence": proj.get("evidence"), "resolved_bugs": proj.get("resolved_bugs")}
+        "evidence": proj.get("evidence"), "resolved_bugs": proj.get("resolved_bugs"),
+        "workbooks": workbooks(ws, proj)}
     out["checks"] = [{"ok": ok, "tool": tool, "detail": detail} for ok, tool, detail in checks(proj)]
     out["env"] = env_list(ws, proj)
     return out

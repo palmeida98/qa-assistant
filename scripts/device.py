@@ -1,8 +1,8 @@
 """
-Drives an Android device or emulator through adb for the conversational mode
-(technique-mobile.md §2 and §4.1; plan, task 9.1).
+Drives an Android device or emulator through adb, or an iPhone through WebDriverAgent (--platform ios,
+technique-mobile.md §1.3), for the conversational mode (technique-mobile.md §2 and §4.1; plan, task 9.1).
 
-    python scripts/device.py <workspace> [--serial S] <subcommand> ...
+    python scripts/device.py <workspace> [--serial S] [--platform android|ios] <subcommand> ...
 
     check [--batch B]                       one report: device, app, driver, build, environment, session; ready or not
     dump [--capture NAME] [--batch B]       visible text, one line per node: [x1,y1][x2,y2] <text>
@@ -15,6 +15,7 @@ Drives an Android device or emulator through adb for the conversational mode
     shot NAME [--batch B]                   screenshot to <workspace>/evidence/<batch>/<NAME>.png
     link URL [--package P]                  opens a deep link or a login callback with `am start`
     swipe X1 Y1 X2 Y2 [--ms 300]            a swipe (e.g. to scroll a long answer)
+    hold TEXT | --xy X Y [--ms 1200]        a long press (WDA touchAndHold; driver longpress; stationary swipe)
     back                                    the system's back
     launch [--restart] [--timeout 60]       opens mobile.app_id, waits for it and prints its screen
     clear [--field LABEL]                   empties the focused field (or the field LABEL, tapped first)
@@ -58,6 +59,11 @@ Drives an Android device or emulator through adb for the conversational mode
   driver; with adb it moves to the end and deletes (as many characters as the
   field shows with --field, else CLEAR_KEYS).
 
+- iPhone (technique-mobile.md §1.5): with --platform ios (or $QA_MOBILE_PLATFORM, or mobile.platform) the section
+  mobile.ios gives app_id (the bundle id), udid and wda_url ($QA_WDA_URL; default http://localhost:8100). The
+  input is always WebDriverAgent (scripts/device_ios.py); the same subcommands and the same privacy rule, the
+  foreground being read from WDA. `back` is a swipe from the left edge; `link` is not available.
+
 Exit codes:
   0  ok
   2  invalid usage or configuration (e.g. no mobile.app_id, several devices
@@ -73,6 +79,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import itertools
 import json
 import os
 import re
@@ -80,6 +87,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -89,10 +97,16 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
+import device_ios as wda
+import ios_diagnose
 from common import (
     MOBILE_INPUTS,
+    SERIAL_ENV,
+    WDA_URL_DEFAULT,
+    WDA_URL_ENV,
     OutsideWorkspace,
     find_adb,
+    mobile_platform,
     mobile_target,
     observed_build,
     read_project,
@@ -105,6 +119,7 @@ DRIVER_SERVICE = "io.qaassistant.driver/"
 PERMISSION_DIALOGS = ("com.google.android.permissioncontroller", "com.android.permissioncontroller")
 SEND_LABELS = ("Send", "Send message", "Submit")
 DUMP_PATH = "/sdcard/qa-device-dump.xml"
+BURST_MAX_FILES, BURST_MIN_INTERVAL, BURST_MAX_SECONDS, BURST_MAX_MB = 200, 0.5, 600, 200
 POLL_S, SETTLE_MIN_S = 5, 15
 BOUNDS = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
 FOCUS = re.compile(r"mCurrentFocus=Window\{([^}]*)\}")
@@ -134,6 +149,24 @@ class NoTarget(Exception):
 
 class NotFound(Exception):
     """Element not found on the screen (code 4)."""
+
+
+# what happened to a text when typing or sending stopped (docs/pilot-improvements-2026-11-07.md D)
+NOTHING_TYPED, PARTLY_TYPED, NOT_SENT, SENT, UNCERTAIN = (
+    "nothing typed", "partly typed", "typed, not sent", "sent", "uncertain")
+FOCUS_WAIT_S = 3.0              # the keyboard after tapping a field
+FIELD_WAIT_S = 3.0              # a field that appears late (the screen still loading)
+SENT_WAIT_S = 3.0               # the field emptied after tapping send
+FOCUS_POLL_S = 0.3              # between the readings of those three waits
+
+
+class Interrupted(Exception):
+    """Typing or sending stopped; `outcome` says what reached the app. Never repeated automatically: a send is only
+    done again by a person who looked at the app (code 3 or 4)."""
+
+    def __init__(self, outcome: str, detail: str, code: int = 4):
+        self.outcome, self.detail, self.code = outcome, detail, code
+        super().__init__(f"{outcome}: {detail}")
 
 
 @dataclass(frozen=True)
@@ -183,12 +216,23 @@ def hide_urls(s: str) -> str:
 
 # --- configuration and target -----------------------------------------------------------------------------------
 
-def configuration(workspace: str, serial: str | None, input_: str | None = None) -> dict:
+def as_list(v) -> list[str]:
+    return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
+
+
+def configuration(workspace: str, serial: str | None, input_: str | None = None,
+                  platform: str | None = None) -> dict:
     try:
         proj = read_project(workspace)
     except FileNotFoundError as e:
         raise UsageError(str(e)) from None
     m = proj.get("mobile") or {}
+    try:
+        platform = mobile_platform(m, platform)
+    except ValueError as e:
+        raise UsageError(str(e)) from None
+    if platform == "ios":
+        return ios_configuration(workspace, m, serial, proj)
     if not m.get("app_id"):
         raise UsageError("mobile.app_id missing in project.yaml (the app under test, e.g. com.demoshop.app)")
 
@@ -197,11 +241,10 @@ def configuration(workspace: str, serial: str | None, input_: str | None = None)
     except ValueError as e:
         raise UsageError(str(e)) from None
 
-    def as_list(v):
-        return [str(x) for x in ([v] if isinstance(v, str) else (v or []))]
-    return {"workspace": workspace, "app_id": str(m["app_id"]), "serial": serial,
+    return {"workspace": workspace, "platform": "android", "app_id": str(m["app_id"]), "serial": serial,
             "input": input_,
             "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
+            "field_labels": as_list(m.get("field_label")),
             "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
             "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
             "browser": m.get("browser"),
@@ -210,6 +253,43 @@ def configuration(workspace: str, serial: str | None, input_: str | None = None)
             "intended_build": str((m.get("build") or {}).get("version") or "") if isinstance(m.get("build"), dict) else "",
             "signed_in": as_list((m.get("session") or {}).get("signed_in")) if isinstance(m.get("session"), dict) else [],
             "signed_out": as_list((m.get("session") or {}).get("signed_out")) if isinstance(m.get("session"), dict) else []}
+
+
+def ios_configuration(workspace: str, m: dict, serial: str | None, proj: dict | None = None) -> dict:
+    """The iPhone target (technique-mobile.md §1.5): mobile.ios, the input always WebDriverAgent."""
+    section = m.get("ios") if isinstance(m.get("ios"), dict) else {}
+    proj = proj or {}
+    build = section.get("build") if isinstance(section.get("build"), dict) else {}
+    app_id = section.get("app_id") or m.get("app_id")
+    if not app_id:
+        raise UsageError("mobile.ios.app_id missing in project.yaml (the bundle id of the app under test)")
+    udid = serial or os.environ.get(SERIAL_ENV, "").strip() or section.get("udid") or ""
+    return {"workspace": workspace, "platform": "ios", "app_id": str(app_id), "serial": str(udid),
+            "input": "wda",
+            "wda_url": os.environ.get(WDA_URL_ENV, "").strip() or str(section.get("wda_url") or WDA_URL_DEFAULT),
+            "send_labels": as_list(m.get("send_label")) or list(SEND_LABELS),
+            "field_labels": as_list(m.get("field_label")),
+            "ignore": {x.casefold() for x in as_list(m.get("ignore_labels"))},
+            "batch": str(m.get("evidence_batch") or datetime.now().strftime("%Y%m%d")),
+            "browser": None,
+            "environments": sorted(str(k) for k in (proj.get("environments") or {})
+                                   if isinstance(proj.get("environments"), dict)),
+            "intended_build": str(build.get("version") or ""),
+            "wda_log": str(section.get("wda_log") or "")}
+
+
+def ios_on(cfg: dict) -> bool:
+    return cfg.get("platform") == "ios"
+
+
+def on_ios(fn, cfg: dict, *args):
+    """Calls device_ios; its errors become the exit codes of this script (no target: 3, no element: 4)."""
+    try:
+        return fn(cfg, *args)
+    except wda.Unreachable as e:
+        raise NoTarget(str(e)) from None
+    except wda.NoElement as e:
+        raise NotFound(str(e)) from None
 
 
 def resolve_serial(wanted: str | None) -> str:
@@ -237,6 +317,13 @@ def foreground(serial: str) -> str:
 
 def guard(cfg: dict, serial: str, action: str, allow_dialogs: bool = False) -> None:
     """Refuses (code 3) unless the app under test (or, when allowed, a permission dialog) is in the foreground."""
+    if ios_on(cfg):
+        bundle = on_ios(wda.foreground, cfg)
+        if bundle == cfg["app_id"] or (allow_dialogs and bundle in wda.SYSTEM_DIALOGS):
+            return
+        raise NoTarget(f"{action} refused: the foreground is {bundle or 'nothing'!r}, not {cfg['app_id']}"
+                       + (" (SpringBoard is never read: it shows notifications and the app switcher)"
+                          if bundle == "com.apple.springboard" else ""))
     window = foreground(serial)
     pkg = window.split("/")[0]
     if pkg == cfg["app_id"] or (allow_dialogs and pkg in PERMISSION_DIALOGS):
@@ -287,6 +374,8 @@ def dump_xml(serial: str, tries: int = 3) -> str:
 
 def read_screen(cfg: dict, serial: str, allow_dialogs: bool = False) -> list[Node]:
     guard(cfg, serial, "dump", allow_dialogs)
+    if ios_on(cfg):
+        return [Node(*t) for t in on_ios(wda.source, cfg)]
     return parse_nodes(dump_xml(serial))
 
 
@@ -355,21 +444,37 @@ def driver(serial: str, method: str, arg: str | None = None) -> dict:
 
 
 def tap_xy(cfg: dict, serial: str, x: int, y: int) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.tap, cfg, x, y)
+    elif cfg.get("input") == "driver":
         driver(serial, "tap", f"{x},{y}")
     else:
         adb(serial, "shell", "input", "tap", str(x), str(y))
 
 
 def swipe_xy(cfg: dict, serial: str, x1: int, y1: int, x2: int, y2: int, ms: int) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.swipe, cfg, x1, y1, x2, y2, ms)
+    elif cfg.get("input") == "driver":
         driver(serial, "swipe", f"{x1},{y1},{x2},{y2},{ms}")
     else:
         adb(serial, "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
 
 
+def hold_xy(cfg: dict, serial: str, x: int, y: int, ms: int) -> None:
+    """A long press: WDA on an iPhone, the companion driver's `longpress` or a stationary `input swipe` on Android."""
+    if ios_on(cfg):
+        on_ios(wda.hold, cfg, x, y, ms)
+    elif cfg.get("input") == "driver":
+        driver(serial, "longpress", f"{x},{y},{ms}")
+    else:
+        adb(serial, "shell", "input", "swipe", str(x), str(y), str(x), str(y), str(ms))
+
+
 def press_back(cfg: dict, serial: str) -> None:
-    if cfg.get("input") == "driver":
+    if ios_on(cfg):
+        on_ios(wda.back, cfg)
+    elif cfg.get("input") == "driver":
         driver(serial, "back")
     else:
         adb(serial, "shell", "input", "keyevent", "4")
@@ -384,6 +489,9 @@ def clear_field(cfg: dict, serial: str, field: str | None) -> str:
         known = len(node.text)
     else:
         guard(cfg, serial, "clear")
+    if ios_on(cfg):
+        on_ios(wda.clear, cfg)
+        return "wda clear"
     if cfg.get("input") == "driver":
         driver(serial, "text")                    # no argument: the empty text
         return "driver set empty text"
@@ -450,9 +558,74 @@ def type_maestro(cfg: dict, serial: str, text: str) -> subprocess.CompletedProce
         return run_maestro([maestro, "--device", serial, "test", flow], env)
 
 
-def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "auto") -> str:
-    """Types the text (after tapping the field, if given); returns the route used."""
+def focus_ios(cfg: dict, serial: str, field: str | None, guarded: bool = False) -> str:
+    """Before typing on an iPhone: the field named by --field, else the keyboard already up, else the one enabled
+    text field of the screen (a late one waited for FIELD_WAIT_S), tapped from the screen just read; then the focus
+    confirmed (the keyboard up within FOCUS_WAIT_S). Several candidates, none, or no focus: Interrupted, nothing
+    typed. Returns which field. `guarded`: the caller has just checked the foreground."""
+    if not guarded:
+        guard(cfg, serial, "type")
+    if field:
+        node = find(read_screen(cfg, serial), field)
+        tap_xy(cfg, serial, *node.centre)
+        chosen = f"--field {field!r}"
+    else:
+        start = time.monotonic()
+        while True:
+            root = on_ios(wda.tree, cfg)
+            if wda.has_keyboard(root):
+                return "the field already focused"
+            fields = wda.editable_fields(root, cfg.get("field_labels") or ())
+            enabled = [f for f in fields if f["enabled"]]
+            if enabled or time.monotonic() - start >= FIELD_WAIT_S:
+                break
+            time.sleep(FOCUS_POLL_S)
+        if len(enabled) > 1:
+            names = ", ".join(repr(f["label"] or f"field at {f['rect'][:2]}") for f in enabled)
+            raise Interrupted(NOTHING_TYPED, f"{len(enabled)} editable fields on the screen ({names}): say which "
+                              "with --field", 4)
+        if not enabled:
+            off = [f for f in fields if not f["enabled"]]
+            extra = f" ({len(off)} disabled: {', '.join(repr(f['label']) for f in off)})" if off else ""
+            hint = "" if cfg.get("field_labels") else (": an app whose input is not exposed as a text field needs "
+                                                        "mobile.field_label (its label), or --field")
+            raise Interrupted(NOTHING_TYPED, f"no enabled text field on the screen{extra}{hint}", 4)
+        x1, y1, x2, y2 = enabled[0]["rect"]
+        tap_xy(cfg, serial, (x1 + x2) // 2, (y1 + y2) // 2)
+        chosen = f"the only text field {enabled[0]['label']!r}" if enabled[0]["label"] else "the only text field"
+    start = time.monotonic()
+    while not wda.has_keyboard(on_ios(wda.tree, cfg)):
+        if time.monotonic() - start >= FOCUS_WAIT_S:
+            raise Interrupted(NOTHING_TYPED, f"{chosen} did not take the focus (no keyboard after "
+                              f"{FOCUS_WAIT_S:.0f} s)", 4)
+        time.sleep(FOCUS_POLL_S)
+    return chosen
+
+
+def type_text(cfg: dict, serial: str, text: str, field: str | None, via: str = "auto", guarded: bool = False,
+              timing: dict | None = None) -> str:
+    """Types the text (after tapping the field, if given); returns the route used. `timing` (iOS) gets the seconds
+    of the focus and of the keys (backlog 3: the time before a send)."""
     refuse_secrets(cfg["workspace"], text)
+    if ios_on(cfg):
+        if via != "auto":
+            raise UsageError(f"--via {via}: on an iPhone the text is typed through WebDriverAgent")
+        began = time.monotonic()
+        chosen = focus_ios(cfg, serial, field, guarded=guarded)
+        focused_at = time.monotonic()
+        try:
+            n = wda.type_text(cfg, text, focused=True)
+        except wda.PartlyTyped as e:
+            raise Interrupted(PARTLY_TYPED, f"{e}; the field holds part of the text (clear it before typing again)",
+                              3) from None
+        except wda.NoElement as e:
+            raise Interrupted(NOTHING_TYPED, str(e), 4) from None
+        except wda.Unreachable as e:
+            raise Interrupted(UNCERTAIN, f"{e}; the first keys got no answer, part of the text may be in the field: "
+                              "look at the app before typing again", 3) from None
+        if timing is not None:
+            timing.update({"focus_s": round(focused_at - began, 2), "keys_s": round(time.monotonic() - focused_at, 2)})
+        return "wda keys" + (f", {n} chunks" if n > 1 else "") + f" into {chosen}"
     if field:
         tap_xy(cfg, serial, *find(read_screen(cfg, serial), field).centre)
     else:
@@ -509,18 +682,36 @@ def text_of(a) -> str:
     return text
 
 
-def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
-    if not name or name != os.path.basename(name) or name in (".", ".."):
-        raise UsageError(f"invalid capture name {name!r}: a file name, without folders")
+def capture_png(cfg: dict, serial: str) -> bytes:
+    """A screenshot of the app under test (the foreground guard first)."""
     guard(cfg, serial, "screenshot")
-    png = adb(serial, "exec-out", "screencap", "-p", binary=True)
+    if ios_on(cfg):
+        png = on_ios(wda.screenshot, cfg)
+    else:
+        png = adb(serial, "exec-out", "screencap", "-p", binary=True)
     if not png.startswith(b"\x89PNG"):
         raise NoTarget("screencap returned no PNG")
+    return png
+
+
+def evidence_folder(cfg: dict, batch: str | None) -> str:
     try:
         folder = workspace_path(cfg["workspace"], "evidence", batch or cfg["batch"])
     except OutsideWorkspace as e:
         raise UsageError(str(e)) from None
     os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def check_name(name: str) -> None:
+    if not name or name != os.path.basename(name) or name in (".", ".."):
+        raise UsageError(f"invalid capture name {name!r}: a file name, without folders")
+
+
+def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
+    check_name(name)
+    png = capture_png(cfg, serial)
+    folder = evidence_folder(cfg, batch)
     path = os.path.join(folder, name if name.lower().endswith(".png") else name + ".png")
     with open(path, "wb") as f:
         f.write(png)
@@ -544,6 +735,70 @@ def sh_quote(s: str) -> str:
 
 
 # --- subcommands ------------------------------------------------------------------------------------------------
+
+# the probes of the iOS diagnosis (scripts/ios_diagnose.py); the tests replace it
+ios_probes = ios_diagnose.Probes
+
+
+def ios_diagnosis(cfg: dict, session: bool = True) -> tuple[str, str, list[str]]:
+    """(key, block, lines) of the read-only diagnosis: the main block and the next action first, then the details."""
+    findings = ios_diagnose.diagnose(cfg, ios_probes(cfg), session=session)
+    key, block, _ = ios_diagnose.verdict(findings)
+    return key, block, ios_diagnose.render(findings)
+
+
+def cmd_check_ios(cfg, serial, a) -> int:
+    """One report of the iPhone target, nothing changed on it (technique-mobile.md §1.3 and §1.5). 0 ready, 3 not ready.
+    When WebDriverAgent does not answer or is not ready, the read-only diagnosis says why and what to do next."""
+    out, blockers, advice = [], [], []
+    envs = f"environment: {', '.join(cfg['environments']) or 'none declared'}, app {cfg['app_id']}"
+    try:
+        st = on_ios(wda.status, cfg)
+    except NoTarget as e:
+        out += [f"device: not reachable ({e})", envs, "session: unknown (no device)"]
+        _, block, lines = ios_diagnosis(cfg)
+        blockers.append(block)
+        out = lines + out
+        st = None
+    if st is not None and not st.get("ready", True):
+        blockers.append(f"WebDriverAgent is not ready ({st.get('message', 'no message')})")
+        _, _, lines = ios_diagnosis(cfg)
+        out = lines + out
+    if st is not None and not blockers:
+        out.append(f"target: {serial or 'iPhone'} · iOS {(st.get('os') or {}).get('version', '?')} · "
+                   f"WebDriverAgent {(st.get('build') or {}).get('version', '?')} ready at {cfg['wda_url']}")
+        out.append(f"foreground: {on_ios(wda.foreground, cfg) or 'nothing'}")
+        version = wda.installed_version(serial, cfg["app_id"])
+        out.append(f"app: {cfg['app_id']} {version or '(version not read: no UDID or devicectl)'}")
+        out.append("input: wda")
+        if version and cfg.get("intended_build"):
+            observed = f"{cfg['app_id']} {version}"
+            verdict = "same" if same_build(observed, cfg["intended_build"]) else "DIFFERS"
+            out.append(f"build: observed {observed}, intended {cfg['intended_build']}: {verdict}")
+        elif not version:
+            out.append("build: not read on the device: confirm it in the app (Conta / About) before recording results")
+        out.append(envs)
+        out.append("session: unknown (the iOS driver does not check the session; look at the app)")
+    out.append("ready: yes" if not blockers else "ready: NOT READY: " + "; ".join(blockers))
+    out += [f"next: {x}" for x in advice]
+    print("\n".join(out))
+    if blockers:
+        print(f"NO TARGET: {blockers[0]}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def cmd_doctor(cfg, serial, a) -> int:
+    """The read-only diagnosis of the iPhone target, whatever WebDriverAgent answers: 0 ready, 3 blocked."""
+    if not ios_on(cfg):
+        raise UsageError("doctor is for --platform ios (an Android target: `check`)")
+    key, block, lines = ios_diagnosis(cfg, session=not a.no_session)
+    print("\n".join(lines))
+    if key != "ready":
+        print(f"NO TARGET: {block}", file=sys.stderr)
+        return 3
+    return 0
+
 
 def driver_report(serial: str) -> dict:
     """The driver as two facts: the setting lists the service, and the service answers a ping. Reads only."""
@@ -651,7 +906,7 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
                     blockers.append(f"the build changed during the batch: {a.batch} started on {observed_in_batch!r} and the "
                                     f"device now has {observed!r}")
                     advice.append("stop this batch (its results stay as they are) and plan a new batch with the right "
-                                  "context (/plan-batch)")
+                                  "context (/plan-tests)")
                 else:
                     out.append(f"batch: {a.batch}: same build as its run log")
         out.append(envs)
@@ -717,11 +972,25 @@ def failure_kind(error: Exception) -> str:
     return "app-not-foreground" if "the foreground is" in str(error) else "capture-failed"
 
 
+# what the readings of a streamed answer could show (Sampler.summary)
+HIDDEN_PARTIAL = "partial text observed, hidden in the tree"
+HIDDEN_READABLE = "answer readable only hidden in the tree, no intermediate state captured"
+PARTIAL_OBSERVED = "partial text observed"
+READABLE_NO_INTERMEDIATE = "answer readable, no intermediate state captured"
+ANSWER_NOT_READABLE = "answer text not readable"
+SAMPLING_INSUFFICIENT = "sampling failed or insufficient"
+
+
 class Sampler:
     """Timed readings of a streamed answer (technique-mobile.md 4.1), limited in number and in time."""
 
-    def __init__(self, text: str, ignore: set[str], samples: int, seconds: float, interval: float):
-        self.text, self.ignore = text, ignore
+    def __init__(self, text: str, ignore: set[str], samples: int, seconds: float, interval: float,
+                 baseline: set[str] | None = None, content=None, hidden=None):
+        # content: a function giving the reading's content texts (iOS: no controls), instead of every line;
+        # hidden: a function giving (text, shown) in the tree's order, to read the invisible answer apart (--read-hidden)
+        self.content, self.hidden = content, hidden
+        # baseline: what was on the screen before the send (buttons, the field's label): never the answer
+        self.text, self.ignore, self.baseline = text, ignore, {x.casefold() for x in baseline or ()}
         self.limits = {"samples": samples, "seconds": seconds, "interval_s": interval}
         self.samples: list[dict] = []
         self.started = time.monotonic()
@@ -742,20 +1011,46 @@ class Sampler:
                 return object()                 # never equal to a reading: a failed one cannot end the wait
             self.last_good = lines
             if self._room():
-                new, _ = after_message(lines, self.text, self.ignore)
-                answer = "\n".join(ln.split("] ", 1)[1] if "] " in ln else ln for ln in new)
-                self.samples.append({"at": datetime.now().isoformat(timespec="milliseconds"),
-                                     "elapsed_s": round(time.monotonic() - self.started, 2), "kind": "read",
-                                     "answer": answer})
+                new, _ = after_message(self.content() if self.content else lines, self.text, self.ignore)
+                texts = [ln.split("] ", 1)[1] if "] " in ln else ln for ln in new]
+                answer = "\n".join(t for t in texts if t.casefold() not in self.baseline)
+                sample = {"at": datetime.now().isoformat(timespec="milliseconds"),
+                          "elapsed_s": round(time.monotonic() - self.started, 2), "kind": "read", "answer": answer}
+                if self.hidden:
+                    items = self.hidden()
+                    shown = {t: v for t, v in items}
+                    after, _ = after_message([t for t, _ in items], self.text, self.ignore)
+                    sample["hidden_answer"] = "\n".join(t for t in after if not shown.get(t)
+                                                        and t.casefold() not in self.baseline)
+                self.samples.append(sample)
             return lines
         return sampled
 
     def summary(self) -> dict:
-        reads = [s["answer"] for s in self.samples if s["kind"] == "read"]
-        partial = any(a and b != a and b.startswith(a) for i, a in enumerate(reads) for b in reads[i + 1:])
+        """What the readings could show (docs/pilot-improvements-2026-11-07.md E). `evidence` is about the tool's
+        reading, never a verdict on the app: an answer the accessibility tree does not expose is "not readable", never
+        "no streaming"."""
+        reads = [s for s in self.samples if s["kind"] == "read"]
+        answers = [s["answer"] for s in reads]
+        readable = [s for s in reads if s["answer"].strip()]
+        partial = any(a and b != a and b.startswith(a) for i, a in enumerate(answers) for b in answers[i + 1:])
+        hidden = [s.get("hidden_answer") or "" for s in reads]
+        hidden_partial = any(a and b != a and b.startswith(a) for i, a in enumerate(hidden) for b in hidden[i + 1:])
+        if len(reads) < 2:
+            evidence, observed = SAMPLING_INSUFFICIENT, None
+        elif not readable and any(h.strip() for h in hidden):
+            evidence, observed = (HIDDEN_PARTIAL, True) if hidden_partial else (HIDDEN_READABLE, False)
+        elif not readable:
+            evidence, observed = ANSWER_NOT_READABLE, None
+        elif partial:
+            evidence, observed = PARTIAL_OBSERVED, True
+        else:
+            evidence, observed = READABLE_NO_INTERMEDIATE, False
         return {"reads": len(reads), "failed_captures": sum(s["kind"] == "capture-failed" for s in self.samples),
                 "app_not_in_foreground": sum(s["kind"] == "app-not-foreground" for s in self.samples),
-                "partial_text_observed": partial}
+                "readable_reads": len(readable), "evidence": evidence, "partial_text_observed": observed,
+                "first_readable_s": readable[0]["elapsed_s"] if readable else None,
+                "limits_hit": not self._room()}
 
     def write(self, cfg: dict, name: str, batch: str | None) -> str:
         try:
@@ -771,30 +1066,234 @@ class Sampler:
         return path
 
 
+class Burst:
+    """Timed screenshots of the app while an answer arrives (docs/pilot-improvements-2026-11-07.md E), for when the
+    accessibility tree does not expose the answer's text. Limited in files, seconds and megabytes; each file written
+    whole (a temporary name, then renamed); a manifest <name>_burst.json ties them to one attempt with their times,
+    the gaps and which limit stopped it. It never sends anything. Sizes or pixels never prove streaming: the content
+    of the images is judged (a waiting indicator, a partial answer, the final answer)."""
+
+    def __init__(self, cfg: dict, serial: str, name: str, batch: str | None, count: int, seconds: float,
+                 interval: float, max_mb: float):
+        check_name(name)
+        if not 1 <= count <= BURST_MAX_FILES:
+            raise UsageError(f"--burst / --count: 1 to {BURST_MAX_FILES} screenshots")
+        if interval < BURST_MIN_INTERVAL or not 0 < seconds <= BURST_MAX_SECONDS or not 0 < max_mb <= BURST_MAX_MB:
+            raise UsageError(f"burst limits: interval >= {BURST_MIN_INTERVAL} s, seconds <= {BURST_MAX_SECONDS}, "
+                             f"megabytes <= {BURST_MAX_MB}")
+        self.cfg, self.serial, self.name = cfg, serial, name.removesuffix(".png")
+        self.folder = evidence_folder(cfg, batch)
+        self.limits = {"files": count, "seconds": seconds, "interval_s": interval, "megabytes": max_mb}
+        self.started_at = datetime.now().isoformat(timespec="milliseconds")
+        self.t0 = time.monotonic()
+        self.attempt = f"{self.name}@{self.started_at}"
+        self.sent_s: float | None = None
+        self.files: list[dict] = []
+        self.failed: list[dict] = []
+        self.bytes = 0
+        self.stopped_by: str | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def elapsed(self) -> float:
+        return round(time.monotonic() - self.t0, 2)
+
+    def mark_sent(self) -> None:
+        self.sent_s = self.elapsed()
+
+    def room(self) -> bool:
+        if self.stopped_by:
+            return False
+        if len(self.files) + len(self.failed) >= self.limits["files"]:     # a failed capture is an attempt too
+            self.stopped_by = "files"
+        elif self.elapsed() > self.limits["seconds"]:
+            self.stopped_by = "seconds"
+        elif self.bytes >= self.limits["megabytes"] * 1024 * 1024:
+            self.stopped_by = "megabytes"
+        return self.stopped_by is None
+
+    def take(self) -> None:
+        if not self.room():
+            return
+        at, elapsed = datetime.now().isoformat(timespec="milliseconds"), self.elapsed()
+        try:
+            png = capture_png(self.cfg, self.serial)
+        except (NoTarget, NotFound) as e:
+            self.failed.append({"at": at, "elapsed_s": elapsed, "reason": str(e)[:200]})
+            return
+        if self.bytes + len(png) > self.limits["megabytes"] * 1024 * 1024:
+            self.stopped_by = "megabytes"
+            return
+        name = f"{self.name}_b{len(self.files) + 1:02d}.png"
+        path = os.path.join(self.folder, name)
+        tmp = path + ".part"
+        try:
+            with open(tmp, "wb") as f:
+                f.write(png)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        self.bytes += len(png)
+        self.files.append({"file": os.path.relpath(path, self.cfg["workspace"]).replace(os.sep, "/"), "at": at,
+                           "elapsed_s": elapsed, "bytes": len(png)})
+
+    # in the background on its own clock; False: one capture per reading of the screen (the tests' fake clock)
+    threaded = True
+
+    def wrap(self, read):
+        def taken():
+            self.take()
+            return read()
+        return taken
+
+    def run(self) -> None:
+        """Captures on its own clock until a limit or stop(): each wait is the interval minus the time the capture
+        took, so the cadence does not depend on the readings of the screen (backlog 1, 07.11.2026)."""
+        while not self._stop.is_set() and self.room():
+            began = time.monotonic()
+            self.take()
+            rest = self.limits["interval_s"] - (time.monotonic() - began)
+            if rest > 0 and not self._stop.is_set() and self.room():
+                time.sleep(rest)
+
+    def start(self) -> None:
+        """The burst in the background (send --burst): the screen is still read for the answer meanwhile."""
+        self._thread = threading.Thread(target=self.run, name="burst", daemon=True)
+        self._thread.start()
+
+    def stop(self, reason: str) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=30)
+        if not self.stopped_by:
+            self.stopped_by = reason
+
+    def manifest(self) -> dict:
+        times = [f["elapsed_s"] for f in self.files]
+        gaps = [{"after": self.files[i]["file"], "seconds": round(b - a, 2)}
+                for i, (a, b) in enumerate(itertools.pairwise(times)) if b - a > 1.5 * self.limits["interval_s"]]
+        return {"attempt": self.attempt, "started_at": self.started_at, "sent_after_s": self.sent_s,
+                "limits": self.limits, "stopped_by": self.stopped_by or "done",
+                "observed_s": [times[0], times[-1]] if times else None, "files": self.files,
+                "failed": self.failed, "gaps": gaps,
+                "note": "screenshots only: judge their content (waiting indicator, partial answer, final answer); "
+                        "file sizes and pixel changes do not prove streaming"}
+
+    def write(self) -> str:
+        path = os.path.join(self.folder, self.name + "_burst.json")
+        atomic_text(path, json.dumps(self.manifest(), ensure_ascii=False, indent=1) + "\n")
+        return path
+
+    def line(self) -> str:
+        m = self.manifest()
+        window = f"{m['observed_s'][0]}-{m['observed_s'][1]} s" if m["observed_s"] else "nothing"
+        return (f"burst: {len(self.files)} screenshot(s), {len(self.failed)} failed, observed {window}"
+                + (f" after the send at {m['sent_after_s']} s" if m["sent_after_s"] is not None else "")
+                + f", stopped by {m['stopped_by']}" + (f", {len(m['gaps'])} gap(s)" if m["gaps"] else ""))
+
+
+def atomic_text(path: str, text: str) -> None:
+    tmp = path + ".part"
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def cmd_shot_burst(cfg, serial, a) -> int:
+    """Timed screenshots of the app, alone (an assisted step: the person sends, the tool watches). Start it BEFORE
+    the action whose answer must be seen."""
+    burst = Burst(cfg, serial, a.name, a.batch, a.count, a.seconds, a.interval, a.max_mb)
+    burst.run()
+    print(burst.line())
+    print(f"manifest: {burst.write()}")
+    return 0 if burst.files else 3
+
+
 def cmd_send(cfg, serial, a) -> int:
     a.text = text_of(a)
+    if a.read_hidden and not (ios_on(cfg) and a.samples):
+        raise UsageError("--read-hidden goes with --samples on an iPhone")       # before anything is typed
     guard(cfg, serial, "send")
-    type_text(cfg, serial, a.text, a.field)
+    burst = (Burst(cfg, serial, a.capture or "send", a.batch, a.burst, a.burst_seconds, a.burst_interval, a.burst_mb)
+             if a.burst else None)          # the limits checked before anything is typed
+    timing: dict = {}
+    began = time.monotonic()
+    type_text(cfg, serial, a.text, a.field, guarded=True, timing=timing)
     labels = [a.send_label] if a.send_label else cfg["send_labels"]
-    nodes = read_screen(cfg, serial)
+    typed_tree = None
+    if ios_on(cfg):         # one reading after typing: the send control, the baseline and the field's label
+        typed_tree = on_ios(wda.tree, cfg)
+        nodes = [Node(*t) for t in wda.nodes(typed_tree)]
+    else:
+        nodes = read_screen(cfg, serial)
     control = next((n for lab in labels for n in nodes if n.text.casefold() == lab.casefold()), None)
     if control is None:   # contains, never the field that still shows the message
         key = a.text[:40].casefold()
         control = next((n for lab in labels for n in nodes
                         if lab.casefold() in n.text.casefold() and key not in n.text.casefold()), None)
+    baseline = {n.text for n in nodes if a.text[:40].casefold() not in n.text.casefold()}
+    held = any(a.text[:40].casefold() in n.text.casefold() for n in nodes)     # the field shows what was typed
+    if typed_tree is not None:          # the field's own label comes back once it is emptied: not the answer
+        baseline |= {f["label"] for f in wda.editable_fields(typed_tree, cfg.get("field_labels") or ()) if f["label"]}
     if control is None:
+        if ios_on(cfg):
+            raise Interrupted(NOT_SENT, f"the text is in the field but the send control was not found (tried {labels}; "
+                              "set mobile.send_label or --send-label)", 4)
         raise NotFound(f"send control not found (tried {labels}; set mobile.send_label or --send-label)")
-    tap_xy(cfg, serial, *control.centre)
+    if ios_on(cfg):
+        try:
+            on_ios(wda.tap, cfg, *control.centre)
+        except (NoTarget, NotFound) as e:
+            raise Interrupted(UNCERTAIN, f"the tap on send got no answer ({e}): the message may or may not have gone; "
+                              "look at the app before sending again", 3) from None
+    else:
+        tap_xy(cfg, serial, *control.centre)
+    if timing:
+        timing["to_send_s"] = round(time.monotonic() - began, 2)
+        print(f"timing: focus {timing['focus_s']} s, keys {timing['keys_s']} s, until the tap on send "
+              f"{timing['to_send_s']} s")
+    if burst:                   # the first screenshot right after the tap, then on the burst's own clock
+        burst.mark_sent()
+        if burst.threaded:
+            burst.start()
+        else:
+            burst.take()
+    if ios_on(cfg):
+        print(f"outcome: {confirm_sent_ios(cfg, a.text, held=held)}")
+
+    last: dict = {}
 
     def read():
+        if ios_on(cfg):         # one read of the tree gives the lines and the content the sampler keeps
+            guard(cfg, serial, "read")
+            last["tree"] = on_ios(wda.tree, cfg)
+            return [Node(*t).line() for t in wda.nodes(last["tree"])]
         return [n.line() for n in read_screen(cfg, serial)]
-    sampler = Sampler(a.text, cfg["ignore"], a.samples, a.sample_seconds, a.sample_interval) if a.samples else None
-    if sampler:
-        lines, stable = wait_stable(sampler.wrap(read), a.timeout, interval=a.sample_interval)
-        if not isinstance(lines, list):
-            lines = sampler.last_good
-    else:
-        lines, stable = wait_stable(read, a.timeout)
+
+    def content():
+        return wda.content_texts(last.get("tree"), cfg.get("field_labels") or ())
+    def hidden():
+        return wda.content_items(last.get("tree"), cfg.get("field_labels") or ())
+    sampler = (Sampler(a.text, cfg["ignore"], a.samples, a.sample_seconds, a.sample_interval, baseline=baseline,
+                       content=content if ios_on(cfg) else None, hidden=hidden if a.read_hidden else None)
+               if a.samples else None)
+    reader = read if not burst or burst.threaded else burst.wrap(read)
+    try:
+        if sampler:
+            lines, stable = wait_stable(sampler.wrap(reader), a.timeout, interval=a.sample_interval)
+            if not isinstance(lines, list):
+                lines = sampler.last_good
+        else:
+            lines, stable = wait_stable(reader, a.timeout,
+                                        interval=a.burst_interval if burst and not burst.threaded else POLL_S)
+    finally:
+        if burst:
+            burst.stop("settled")
     new, found = after_message(lines, a.text, cfg["ignore"])
     if not found:
         print("NOTE: the sent message is not on the screen (scrolled away?): every line follows", file=sys.stderr)
@@ -805,11 +1304,65 @@ def cmd_send(cfg, serial, a) -> int:
     if sampler:
         s = sampler.summary()
         path = sampler.write(cfg, a.capture or "send", a.batch)
+        seen = {True: "yes", False: "no", None: "not known"}[s["partial_text_observed"]]
         print(f"samples: {s['reads']} read, {s['failed_captures']} capture-failed, {s['app_not_in_foreground']} "
-              f"app-not-foreground; partial text observed: {'yes' if s['partial_text_observed'] else 'no'} ({path})")
+              f"app-not-foreground; evidence: {s['evidence']} (partial text observed: {seen}) ({path})")
+        if s["evidence"] in (ANSWER_NOT_READABLE, SAMPLING_INSUFFICIENT):
+            print("NOTE: the readings cannot show whether the answer was streamed (a limit of the reading, not a "
+                  "result of the app): use --burst for timed screenshots and judge their content", file=sys.stderr)
+    if burst:
+        print(burst.line())
+        print(f"manifest: {burst.write()}")
     if not stable:
         raise NoTarget(f"the screen did not settle in {a.timeout:.0f} s (answer still streaming?): "
                        "the lines above are the last reading")
+    return 0
+
+
+def confirm_sent_ios(cfg: dict, text: str, held: bool = True) -> str:
+    """After the tap on send: `sent` once the message is out of the field (when the field showed it: `held`) or shown
+    on the screen outside a field, within SENT_WAIT_S; the text still in the field is Interrupted (typed, not sent);
+    a field that never exposes its text and a message not shown leave it `uncertain`, as does a screen that cannot be
+    read (the answer is still read, nothing is sent again)."""
+    key = text[:40].casefold()
+    start = time.monotonic()
+    while True:
+        try:
+            root = wda.tree(cfg)
+            fields = wda.editable_fields(root, cfg.get("field_labels") or ())
+            shown = [t for *_, t in wda.nodes(root)]
+        except (wda.Unreachable, wda.NoElement) as e:
+            return f"{UNCERTAIN} (the screen could not be read after the tap: {e}; nothing is sent again)"
+        in_field = any(key and key in str(f["value"]).casefold() for f in fields)
+        labels = {str(f["label"]).casefold() for f in fields} | {str(f["value"]).casefold() for f in fields}
+        on_screen = any(key and key in t.casefold() and t.casefold() not in labels for t in shown)
+        if held and not in_field:
+            return f"{SENT} (the field no longer holds the message)"
+        if not held and on_screen:
+            return f"{SENT} (the message is shown on the screen)"
+        if not held and time.monotonic() - start >= SENT_WAIT_S:
+            return (f"{UNCERTAIN} (the field does not expose its text and the message is not shown {SENT_WAIT_S:.0f} s "
+                    "after the tap; nothing is sent again)")
+        if time.monotonic() - start >= SENT_WAIT_S:
+            raise Interrupted(NOT_SENT, f"the message is still in the field {SENT_WAIT_S:.0f} s after the tap on send: "
+                              "look at the app; it is not sent again", 4)
+        time.sleep(FOCUS_POLL_S)
+
+
+def cmd_hold(cfg, serial, a) -> int:
+    if a.ms < 1:
+        raise UsageError("--ms must be a positive number of milliseconds")
+    if a.xy:
+        guard(cfg, serial, "hold", allow_dialogs=True)
+        x, y = a.xy
+        label = f"({x},{y})"
+    elif a.text:
+        node = find(read_screen(cfg, serial, allow_dialogs=True), a.text, a.index)
+        (x, y), label = node.centre, node.line()
+    else:
+        raise UsageError("hold needs a TEXT or --xy X Y")
+    hold_xy(cfg, serial, x, y, a.ms)
+    print(f"held: {label} for {a.ms} ms")
     return 0
 
 
@@ -839,6 +1392,19 @@ def cmd_launch(cfg, serial, a) -> int:
     prints that screen like `dump`. --restart stops it first. The agent on a runner has no other way to open the
     app (11.8 pilot: it tried `adb shell monkey` itself, outside the tools it may use)."""
     app = cfg["app_id"]
+    if ios_on(cfg):
+        on_ios(wda.launch, cfg, app, a.restart)
+        start = time.monotonic()
+        while on_ios(wda.foreground, cfg) != app:
+            if time.monotonic() - start > a.timeout:
+                raise NoTarget(f"{app} did not come to the foreground in {a.timeout:.0f} s")
+            time.sleep(1)
+        lines, stable = wait_stable(lambda: [n.line() for n in read_screen(cfg, serial, allow_dialogs=True)],
+                                    max(a.timeout - (time.monotonic() - start), SETTLE_MIN_S + POLL_S))
+        print(f"launched: {app}" + ("" if stable else " (the screen was still changing)"))
+        for line in lines:
+            print(line)
+        return 0
     if a.restart:
         adb(serial, "shell", "am", "force-stop", app)
     if a.restart or not foreground(serial).startswith(app + "/"):
@@ -879,13 +1445,15 @@ def open_link(cfg: dict, serial: str, url: str, package: str | None = None) -> s
 
 
 def cmd_link(cfg, serial, a) -> int:
+    if ios_on(cfg):
+        raise UsageError("link is not available on an iPhone yet: the person opens the link (technique-mobile.md §1.5)")
     print(f"{open_link(cfg, serial, a.url, a.package)}: opened")   # never the URL: it is a one-time credential
     return 0
 
 
 COMMANDS = {"check": cmd_check, "dump": cmd_dump, "tap": cmd_tap, "type": cmd_type, "send": cmd_send,
-            "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "back": cmd_back,
-            "clear": cmd_clear, "launch": cmd_launch}
+            "shot": cmd_shot, "link": cmd_link, "swipe": cmd_swipe, "hold": cmd_hold, "back": cmd_back,
+            "clear": cmd_clear, "launch": cmd_launch, "doctor": cmd_doctor, "shot-burst": cmd_shot_burst}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -896,12 +1464,19 @@ def parser() -> argparse.ArgumentParser:
                     help="device serial (default: $QA_MOBILE_SERIAL, mobile.serial, or the only device connected)")
     ap.add_argument("--input", choices=INPUTS,
                     help="adb, or the companion driver (default: $QA_MOBILE_INPUT, mobile.input, else adb)")
+    ap.add_argument("--platform", choices=("android", "ios"),
+                    help="android (adb) or ios (WebDriverAgent; default: $QA_MOBILE_PLATFORM, mobile.platform, "
+                         "else android)")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--serial", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     common.add_argument("--input", choices=INPUTS, default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    common.add_argument("--platform", choices=("android", "ios"), default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("check", parents=[common], help="one report: device, app, driver, build, environment, session")
     p.add_argument("--batch", help="also compare the observed build with the run log of this batch")
+    p = sub.add_parser("doctor", parents=[common], help="iOS: why the iPhone target is not ready, read only (§1.5)")
+    p.add_argument("--no-session", action="store_true",
+                   help="strictly passive: do not open and close a WebDriverAgent session (the proof of UI automation)")
     p = sub.add_parser("dump", parents=[common], help="visible text with bounds, one line per node")
     p.add_argument("--capture", metavar="NAME", help="also save a screenshot")
     p.add_argument("--batch", help="evidence folder (default: mobile.evidence_batch or today)")
@@ -927,12 +1502,34 @@ def parser() -> argparse.ArgumentParser:
                    help="keep up to N timed readings of the answer in evidence/<batch>/<capture>_samples.json (default off)")
     p.add_argument("--sample-seconds", type=float, default=60, help="stop sampling after this many seconds (default 60)")
     p.add_argument("--sample-interval", type=float, default=3, help="seconds between readings while sampling (default 3)")
+    p.add_argument("--read-hidden", action="store_true",
+                   help="iOS with --samples: also read the labelled elements WDA reports as invisible after the message "
+                        "(kept apart as hidden_answer; an app whose answers are not exposed as visible text)")
+    p.add_argument("--burst", type=int, default=0, metavar="N",
+                   help="also up to N timed screenshots from the tap on send (evidence/<batch>/<capture>_bNN.png and "
+                        "<capture>_burst.json; default off)")
+    p.add_argument("--burst-interval", type=float, default=1.5, help="seconds between screenshots (default 1.5)")
+    p.add_argument("--burst-seconds", type=float, default=60, help="stop the burst after this many seconds (default 60)")
+    p.add_argument("--burst-mb", type=float, default=25, help="stop the burst at this many megabytes (default 25)")
+    p = sub.add_parser("shot-burst", parents=[common],
+                       help="timed screenshots of the app with a manifest (start it before the action to watch)")
+    p.add_argument("name")
+    p.add_argument("--batch")
+    p.add_argument("--count", type=int, default=20, help="at most this many screenshots (default 20)")
+    p.add_argument("--interval", type=float, default=1.5, help="seconds between screenshots (default 1.5)")
+    p.add_argument("--seconds", type=float, default=60, help="stop after this many seconds (default 60)")
+    p.add_argument("--max-mb", type=float, default=25, help="stop at this many megabytes (default 25)")
     p = sub.add_parser("shot", parents=[common], help="screenshot to evidence/<batch>/<NAME>.png")
     p.add_argument("name")
     p.add_argument("--batch")
     p = sub.add_parser("link", parents=[common], help="open a deep link / login callback (never printed)")
     p.add_argument("url")
     p.add_argument("--package", help="app that opens it (default: mobile.browser, else the system's choice)")
+    p = sub.add_parser("hold", parents=[common], help="a long press by text (exact, then contains) or by coordinates")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--index", type=int, default=0, help="which match, from 0")
+    p.add_argument("--xy", nargs=2, type=int, metavar=("X", "Y"))
+    p.add_argument("--ms", type=int, default=1200, help="duration in milliseconds (default 1200)")
     p = sub.add_parser("swipe", parents=[common], help="a swipe from (X1,Y1) to (X2,Y2)")
     for name in ("x1", "y1", "x2", "y2"):
         p.add_argument(name, type=int)
@@ -949,14 +1546,21 @@ def parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     a = parser().parse_args(argv)
     try:
-        cfg = configuration(a.workspace, a.serial, a.input)
-        if a.command == "check":            # a report: a missing device is a line of it, not the end of it
-            try:
-                serial, reason = resolve_serial(cfg["serial"]), ""
-            except NoTarget as e:
-                serial, reason = None, str(e)
-            return cmd_check(cfg, serial, a, reason)
-        serial = resolve_serial(cfg["serial"])
+        cfg = configuration(a.workspace, a.serial, a.input, a.platform)
+        if ios_on(cfg):
+            if a.command == "check":        # a report: an unreachable WebDriverAgent is a line of it
+                return cmd_check_ios(cfg, cfg["serial"], a)
+            if a.command == "doctor":
+                return cmd_doctor(cfg, cfg["serial"], a)
+            serial = cfg["serial"]
+        else:
+            if a.command == "check":        # a report: a missing device is a line of it, not the end of it
+                try:
+                    serial, reason = resolve_serial(cfg["serial"]), ""
+                except NoTarget as e:
+                    serial, reason = None, str(e)
+                return cmd_check(cfg, serial, a, reason)
+            serial = resolve_serial(cfg["serial"])
         return COMMANDS[a.command](cfg, serial, a)
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -967,6 +1571,10 @@ def main(argv=None) -> int:
     except NotFound as e:
         print(f"NOT FOUND: {e}", file=sys.stderr)
         return 4
+    except Interrupted as e:
+        print(f"STOPPED: {e.detail}", file=sys.stderr)
+        print(f"outcome: {e.outcome} (not repeated automatically)", file=sys.stderr)
+        return e.code
 
 
 if __name__ == "__main__":

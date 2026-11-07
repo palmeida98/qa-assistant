@@ -60,7 +60,7 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 
 1. Publish the build: `python scripts/workspace_build.py <ws> publish <path.apk>` (dry run), then with `--yes` after
    you approve it: a release `build-<versionName>-<versionCode>` with the APK, and `mobile.build` updated.
-2. Plan the batch with `/plan-batch`; the confirmed plan is saved as `batches/<name>.yaml` and pushed.
+2. Plan the batch with `/plan-tests`; the confirmed plan is saved as `batches/<name>.yaml` and pushed.
 3. On GitHub: Actions → "QA mobile" → Run workflow: `batch` (the planned batch's name, or case IDs separated by
    spaces), `build` (empty = `mobile.build`), `mode`, `login` (`issue`; `skip` for a check of the pipeline without you: no login, the
    agent marks every case Blocked — never merge that pull request).

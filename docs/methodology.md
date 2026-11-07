@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.11 · 2026-11-02 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8.
+> Version 2.12 · 2026-11-06 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -101,19 +101,16 @@ Each stage has a corresponding skill in Claude Code, which is also where a reque
 
 | Stage or request | Skill | Result |
 |---|---|---|
-| Onboarding: set up a project | `/project-onboarding` | Configuration and environment validated |
-| Ticket follow-up (at any time; read only) | `/analyze-tickets` | Status, differences, memory and a verification prompt |
-| Analysis: understand a feature | `/analyze-feature` | Rules, behaviours, risks and gaps |
-| Case design | `/generate-cases` | Traceable proposals, without duplicates |
-| Batch planning | `/plan-batch` | A batch with order, dependencies and scope |
-| Execution and classification: test the web | `/run-batch` | Observed results and evidence |
-| Test an API | `/test-api` | Contract checked, results |
-| Test accessibility | `/audit-accessibility` | Findings and limits of coverage |
-| Test mobile | `/test-mobile` | Results per device, platform and build |
-| Bug management | `/log-bug` | Duplicate search and a bug proposal |
-| Checkpoint: save progress | `/checkpoint` | State kept, and application once authorised |
-| Validation and report: close a session | `/end-session` | Consistency, summary and next steps |
-| Follow-up of an Excel project (at any time) | `/dashboard` | The workbook's dashboard |
+| Onboarding or resuming: set up a project, or "where were we?" | `/project-context` | The workspace selected, its state, decisions, blockers, tools verified and next actions |
+| Ticket follow-up (at any time; read only) | `/analyze-ticket` | Acceptance criteria, decisions, dependencies, related bugs, what changed, memory and a verification prompt |
+| Analysis, case design and batch planning | `/plan-tests` | Requirements apart from assumptions, existing cases reused, proposals without duplicates, batches with order and scope |
+| Execution and classification (mobile, web, API, accessibility) | `/run-tests` | Observed results and evidence per platform and build |
+| Bug management | `/manage-bugs` | Duplicate search and bug proposals for one batch review |
+| Validation and report | `/qa-report` | Reconciled totals per platform and build, risks, a summary for the team; the Excel dashboard |
+| Checkpoint: save progress or close a session | `/checkpoint` | State kept, pending application listed, application once authorised |
+| The whole flow for one PBI, resumable | `/test-pbi` | Each step through the skills above, with a record of what is done |
+
+Version 2 of the skills (2026-11-06; `skills-spec.md`, `skills-guide.md`) replaced the thirteen skills of version 1; the long procedures they held are in `procedures/`.
 
 The user need not know these commands. Claude Code matches the request against the skills' descriptions, and each skill starts by finding the framework and the project (§4.3). Each skill's contract (intent, inputs, configuration, tools, outputs, writes, approvals, failures, resume) is in its own frontmatter; `python scripts/workspace_select.py skills` prints the catalogue from there. A skill existing does not prove its tools are available.
 
@@ -124,7 +121,7 @@ The user need not know these commands. Claude Code matches the request against t
 ## 4. Onboarding a project
 
 1. Create the folder `qa-workspaces/<company>/<project>/`.
-2. Run `/project-onboarding`, which copies `context-template.md` and creates `project.yaml`.
+2. Run `/project-context`, which copies `context-template.md` and creates `project.yaml`.
 3. Fill in **only** information specific to the project:
    - environments (URL and purpose; explicitly identify which one is the test environment);
    - roles/profiles and access differences;
@@ -150,11 +147,11 @@ A workspace created before the translation (plan 8.11) is converted once with `p
 
 | Module | Technique | Skill | Section in `project.yaml` |
 |---|---|---|---|
-| `functional-web` | `technique-browser.md` | `/run-batch` | `environments`, `roles` |
-| `exploratory` | `technique-browser.md` (charters, methodology §5.2); in a project with `mobile` and without `functional-web`, the charters run on the app: `technique-mobile.md` §4.2, `/test-mobile` | `/run-batch` (`/test-mobile` on the app) | — |
-| `api` | `technique-api.md` | `/test-api` | `api:` |
-| `accessibility` | `technique-accessibility.md` | `/audit-accessibility` | `accessibility:` |
-| `mobile` | `technique-mobile.md` | `/test-mobile` | `mobile:` |
+| `functional-web` | `technique-browser.md` | `/run-tests` | `environments`, `roles` |
+| `exploratory` | `technique-browser.md` (charters, methodology §5.2); in a project with `mobile` and without `functional-web`, the charters run on the app: `technique-mobile.md` §4.2, `/run-tests` | `/run-tests` (`/run-tests` on the app) | — |
+| `api` | `technique-api.md` | `/run-tests` | `api:` |
+| `accessibility` | `technique-accessibility.md` | `/run-tests` | `accessibility:` |
+| `mobile` | `technique-mobile.md` | `/run-tests` | `mobile:` |
 
 Other variants mentioned in the techniques (smoke, role matrix, visual, cross-browser, forms) are done inside these modules, as design techniques or types of batch, and are not values of `modules:`. A new module first enters this table, with a technique and a skill (process of §15).
 
@@ -164,8 +161,8 @@ Other variants mentioned in the techniques (smoke, role matrix, visual, cross-br
 
 | Tracker | Results | Bugs | Cases | Dashboard |
 |---|---|---|---|---|
-| `excel` | applied by the adapter at `/checkpoint` (`python -m adapters.excel.apply`) | `new_defect` / `bug` in the run log, applied with the results | the workbook itself; the new cases approved in `/generate-cases` added by `python -m adapters.excel.add_cases` | `/dashboard` |
-| `jira`, `azure-devops` | sent by the adapter at `/checkpoint` (`python -m adapters.tracker <workspace> apply`): a dry run first, `--yes` only after the user approves what it showed; one Test Execution (Xray) / test run (Azure DevOps) per batch | the same `new_defect` / `bug` in the run log, created or updated with the results; duplicates searched with `bug-search` (§9.1) | `import-cases` (read only) and `export-cases` (the new cases approved in `/generate-cases`) | none (the tracker's own reports) |
+| `excel` | applied by the adapter at `/checkpoint` (`python -m adapters.excel.apply`) | `new_defect` / `bug` in the run log, applied with the results | the workbook itself; the new cases approved in `/plan-tests` added by `python -m adapters.excel.add_cases` | `/qa-report` |
+| `jira`, `azure-devops` | sent by the adapter at `/checkpoint` (`python -m adapters.tracker <workspace> apply`): a dry run first, `--yes` only after the user approves what it showed; one Test Execution (Xray) / test run (Azure DevOps) per batch | the same `new_defect` / `bug` in the run log, created or updated with the results; duplicates searched with `bug-search` (§9.1) | `import-cases` (read only) and `export-cases` (the new cases approved in `/plan-tests`) | none (the tracker's own reports) |
 
 The configuration is the tracker's section of `project.yaml` (`excel:`, `jira:`, `azure_devops:`), with credentials only as names of `.env` variables; the technique of each adapter (`technique-excel.md`, `technique-jira-xray.md`, `technique-azure-devops.md`) has the details. Version 1 of the Jira and Azure DevOps adapters targets the **cloud** services (Jira Cloud + Xray Cloud, Azure DevOps Services); Server / Data Center stays out until a real project needs it.
 
@@ -176,7 +173,7 @@ The Jira and Azure DevOps adapters were built in phase 10 of the plan (10.2 and 
 A project is selected before a skill acts (`technique-workspaces.md`): an explicit path, then a name, then the current directory, then the configured root of workspaces. Both `<root>/<company>/<project>/` and `<root>/<project>/` are supported, and the root can have any name.
 
 - **Nothing is chosen silently between candidates:** ambiguity is a short question.
-- **A folder found is not a project ready:** each one is `valid`, `incomplete`, `not-configured` or `inaccessible`, and `/project-onboarding` is proposed only when needed.
+- **A folder found is not a project ready:** each one is `valid`, `incomplete`, `not-configured` or `inaccessible`, and `/project-context` is proposed only when needed.
 - **Listing does not authorise reading:** only the selected project's data is loaded, and listing reads no ticket, evidence or secret.
 - **Writes stay inside the selected workspace.** A path that leaves it, through `..` or a link, is refused.
 - **The framework is found explicitly and checked against the skill**, in a main checkout or a worktree. A mismatch stops with an instruction: nothing is installed silently, and a wrongly resolved path never creates an empty root.
@@ -200,7 +197,7 @@ For each feature, identify:
 
 The analysis is kept in the workspace, in `analysis/<feature>_<YYYYMMDD>.md`, with its date, its sources and its status, so another session continues from it. A new version is a new file. What it infers stays under *Proposed*: neither saving it nor the user reviewing it makes it a requirement (§1.3).
 
-A feature often starts as a ticket. `/analyze-tickets` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
+A feature often starts as a ticket. `/analyze-ticket` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
 
 ### 5.2 Design techniques
 
@@ -256,11 +253,13 @@ During the session, the results are written to a run log in `runs/` (one file pe
 
 - `status` uses the project's vocabulary; `actual_result` is what was observed (not the expected result copied); `bug` is an **existing** bug linked to the case.
 - The run's context goes at the top level, `"run": {"environment": "<key of environments>", "build": "<version>"}` (the **Run** of §2); the Jira and Azure DevOps adapters require it, the Excel adapter ignores it.
+- How the batch is executed goes at the top level too, `"mode": "<kind>: <why>"` (kind `conversational`, `flows`, `assisted` or `manual`), written with `run_log.py mode` or `add --mode` before the first result and fixed afterwards; a run log without it (older ones) is valid, and a mode is never added to it later by guess.
 - A **new** bug goes as `new_defect` (fields in the tracker's technique, e.g. `technique-excel.md` §4), only after the user approves it (§9).
 - **A result is written only for a case of the project's library** (the workbook, or `tracker/cases.json`): an unknown ID is refused with the closest known ones, and a library that cannot be read is an error, never a silent acceptance.
 - **The run block is immutable once the batch has results**: another build or environment is refused. A build that changes during a batch ends that batch; a new one is planned with the right context (`technique-mobile.md` §1.4).
 - **A mistaken result is removed, not edited over**: `run_log.py remove` shows the result, keeps the others, never deletes evidence and refuses a batch already applied.
 - Cases in `Question` can stay in the log during the session, but are reclassified before the batch goes to the workbook or tracker (§8.5): the adapter refuses a batch with statuses outside the project's vocabulary.
+- **Execution, application and later decision are three things.** `ts` is the time of the execution, never the time it was recorded or applied. An item that only records an earlier execution in the workbook, perhaps under another status decided later (a Question recorded as Blocked), declares `"applies": "<batch of the execution>"` and has no `ts` of its own; the reports keep the execution as the current result and show the applied status apart (`qa_report.py totals`). A correction of an execution is a new result with its own `ts` and `revision_of`. A time that no source gives is never filled in. A result whose run block has no build has an **unknown** build: it is never attributed to the current build nor counted in a build's coverage.
 
 ### 7.2 Checkpoints
 
@@ -417,7 +416,7 @@ Check especially: case IDs, feature names, statuses, results, bugs, descriptions
 - When resuming: read `context.md`, the latest run log in `runs/` and, for tickets, `memory/` first, identify what was already run and continue from the last valid point.
 - Do not repeat work without need. Do not rebuild the progress from scratch.
 - Two sessions never write the same workspace at the same time: the second one waits, then says so and writes nothing (`technique-workspaces.md` §7).
-- The workspace's git serves as a restore point: one commit per checkpoint. The checkpoint says how many commits are not pushed; the push to the private remote happens only when the user says so, never with `--force`.
+- The workspace's git serves as a restore point. A checkpoint saves the state on disk and lists what is not committed or not pushed; it commits only when the user or the workspace's `CLAUDE.md` asks for it, and the push to the private remote happens only when the user says so, never with `--force`.
 - A run can also happen in the **workspace's CI** (§12.4): it starts from the pushed state of the private remote and comes back as a pull request; its run log is applied only after the merge.
 
 ### 12.2 Structure of `context.md`
@@ -440,7 +439,7 @@ Updated: <date and time>
 
 It stays **short**: the newest entries of the current state and of the execution point, the decisions still valid, the open questions, the blockers and the next steps, each pointing to the detailed record (run log, evidence, memory, `analysis/`). Older entries move to `archive/context/` word for word (`scripts/compact_context.py`, a dry run first, a recoverable copy of the whole file before the change); `history/` and the run logs are never touched, and a decision is never dropped by the tool: only dated entries older than the newest few are moved. A new session finds the last batch, what is pending and where the rest is without reading the older ones.
 
-`/analyze-tickets` keeps one generated block in `context.md`, between its markers, with the resume point of each scope; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference, and analysing an older check never rewinds the current state (`technique-tickets.md` §5).
+`/analyze-ticket` keeps one generated block in `context.md`, between its markers, with the resume point of each scope; every other byte of the file stays. The references it compares against live in `memory/tickets/`, and the dated records of its checks in `memory/checks/`. A failed or partial read never replaces a complete reference, and analysing an older check never rewinds the current state (`technique-tickets.md` §5).
 
 ### 12.3 Resuming on another computer
 
@@ -537,7 +536,7 @@ A change is not "safe" just because it looks logically correct.
 
 Every output must be consistent with the real results, traceable to the test cases, without duplications, organised and easy to continue in a future session.
 
-### 16.2 End of session (`/end-session`)
+### 16.2 End of session (`/qa-report`)
 
 1. **Save:** last checkpoint, with every result kept.
 2. **Bugs:** new ones added, existing ones updated, resolved ones handled by the project's rule.
@@ -593,6 +592,12 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.11 → v2.12 (skills version 2, 06.11.2026)
+- **Changed:** the thirteen skills became eight (`skills-spec.md`, §3): `/project-context` (onboarding and resuming), `/analyze-ticket`, `/plan-tests` (analysis, case design and batches), `/run-tests` (mobile, web, API, accessibility, by a route per module), `/manage-bugs`, `/qa-report` (totals per platform and build, and the dashboard), `/checkpoint` and `/test-pbi` (the flow for one PBI, resumable). The long procedures moved word for word to `procedures/`; the rules every skill shares are in `procedures/rules.md`. The names map in `skills-guide.md` §6.
+- **New:** `scripts/qa_report.py` (reconciled totals, audit of run logs), `scripts/pbi_state.py` (the record of `/test-pbi`), `report.platforms` in `project.yaml`, `requires-docs` and `routes` in a skill's contract.
+- **Changed:** `/checkpoint` no longer commits on its own: a commit only when the user or the workspace's `CLAUDE.md` asks for it (§12.1).
+- **Kept:** every approval, the run log as the source, the statuses, `history/` immutable, the ticket memory and its markers in `context.md`.
 
 ### v2.10 → v2.11 (plan 15.8, 02.11.2026)
 

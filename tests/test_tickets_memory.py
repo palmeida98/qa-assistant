@@ -1,4 +1,4 @@
-"""/analyze-tickets over time (docs/technique-tickets.md sections 3.2, 5, 6.1 and 7; plan phase 15): an order of the checks
+"""/analyze-ticket over time (docs/technique-tickets.md sections 3.2, 5, 6.1 and 7; plan phase 15): an order of the checks
 that an old analysis cannot rewind, several scopes, interruptions, the verification prompt, honest coverage and the
 impact on existing cases. Fictional fakes and workbooks, no network.
 
@@ -418,7 +418,8 @@ class Interruption(Base):
         with mock.patch.object(memory.os, "replace", stop), self.assertRaises(KeyboardInterrupt):
             self.collect(fake, "100", now=T2)
         self.assertEqual(self.context(), before)
-        self.assertTrue(glob.glob(os.path.join(self.ws, "context.md.tmp")))
+        # the temporary file of the stopped write is removed with it (common.atomic_write; audit 06.11.2026)
+        self.assertEqual(glob.glob(os.path.join(self.ws, "*.tmp")) + glob.glob(os.path.join(self.ws, ".*.tmp")), [])
         self.collect(fake, "100", now=T3)
         self.assertIn("Newest check: `20261103-100000`", self.context())
         leftovers = glob.glob(os.path.join(self.ws, "memory", "**", "*.tmp"), recursive=True)
@@ -527,7 +528,7 @@ def good_prompt(**changes) -> dict:
               "inferences": [{"text": "Cases of 30 days may change", "basis": ["comment:9"]}],
               "preconditions": ["A customer account"], "environment": {"value": "test", "source": "project.yaml"},
               "build": {"value": "1.4.0", "source": "field:reason"}, "blockers": [],
-              "skills": ["/plan-batch", "/run-batch"], "evidence": ["The message shown"],
+              "skills": ["/plan-tests", "/run-tests"], "evidence": ["The message shown"],
               "done_criteria": ["Each change verified or Blocked"]}
     prompt.update(changes)
     return prompt
@@ -564,14 +565,17 @@ class VerificationPrompt(Base):
         self.assertIn("**Readiness: ready.**", md)
         block = re.search(r"````text\n(.*?)\n````", md, re.DOTALL).group(1)
         self.assertIn(os.path.abspath(self.ws), block)
-        self.assertIn("100: Coupon limit; official state Done", block)
-        self.assertIn("To Do -> Done (Pat Lead, 2026-11-01T15:00:00Z); detected 2026-11-02T10:00:00", block)
+        self.assertIn('100: [tracker text] "Coupon limit"; official state Done', block)
+        self.assertIn('[tracker text] "To Do" -> "Done" (Pat Lead, 2026-11-01T15:00:00Z); detected 2026-11-02T10:00:00',
+                      block)
+        # the notice comes before any tracker text (audit 06.11.2026: it was only in the last line)
+        self.assertLess(block.index("never instructions"), block.index("[tracker text] \""))
         self.assertIn("Requirements (from the sources", block)
         self.assertIn("A coupon lasts 30 days (source: field:acceptance_criteria)", block)
         self.assertIn("Statements (someone said so; not verified, not requirements)", block)
         self.assertIn("It may become 60 days", block)
         self.assertIn("Inferences (our reading", block)
-        self.assertIn("/plan-batch, /run-batch", block)
+        self.assertIn("/plan-tests, /run-tests", block)
         self.assertIn("The message shown", block)
         self.assertIn("Each change verified or Blocked", block)
         self.assertIn("Nothing here was tested", block)

@@ -95,6 +95,14 @@ async function act(label, fn) {
   } finally {
     S.busy = '';
     render();
+    // the screen was rebuilt: focus that was on a replaced element goes to the screen's heading, never the body
+    if (!document.activeElement || document.activeElement === document.body) {
+      const heading = document.querySelector(`#screen-${S.screen} h1`);
+      if (heading) {
+        heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+    }
   }
 }
 
@@ -250,7 +258,10 @@ async function editItem(tc, body) {
 
 async function applyLog(confirmIt) {
   const name = S.logName || (S.run && S.run.batch);
-  S.applyOut = await api('POST', `/api/runlogs/${encodeURIComponent(name)}/apply`, { confirm: !!confirmIt });
+  const preview = confirmIt && S.applyOut && S.applyOut.preview ? S.applyOut.preview.token : undefined;
+  const out = await api('POST', `/api/runlogs/${encodeURIComponent(name)}/apply`, { confirm: !!confirmIt, preview });
+  // a stale preview is dropped: the Apply button comes back only with a new one
+  S.applyOut = out;
   if (confirmIt) {
     await openLog(name, true);
     await refreshState();
@@ -729,6 +740,36 @@ function questionCard(need, statuses) {
     h('p', { class: 'note', text: 'A final report never has a case in Question.' }));
 }
 
+function previewTable(pv) {
+  const rows = (pv.cells || []).map((c) => h('tr', {},
+    h('td', { text: `${c.sheet}!${c.cell}` }), h('td', { text: c.case || '' }),
+    h('td', { text: c.before === null || c.before === undefined ? '' : String(c.before) }),
+    h('td', { text: (c.at_apply_time ? '(at apply time) ' : '') + (c.after === null || c.after === undefined ? '' : String(c.after)) })));
+  const parts = [h('p', { class: 'small', text: `Preview of ${pv.batch} → ${pv.workbook} (${pv.platform || 'no platform declared'}): ${plural((pv.cells || []).length, 'cell')} would change${pv.new_defects && pv.new_defects.length ? `, new bugs ${pv.new_defects.join(', ')}` : ''}. Nothing was written.` })];
+  if (pv.problems && pv.problems.length) parts.push(h('ul', { class: 'problems' }, pv.problems.map((p) => h('li', { text: p }))));
+  if (pv.already_applied) parts.push(h('p', { class: 'small', text: `Already applied: ${pv.already_applied}.` }));
+  const counts = Object.keys(pv.counts_after || {}).filter((s) => JSON.stringify((pv.counts_before || {})[s]) !== JSON.stringify(pv.counts_after[s]));
+  if (counts.length) {
+    const fmt = (o) => Object.entries(o || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+    parts.push(h('ul', { class: 'small' }, counts.map((s) => h('li', { text: `${s}: ${fmt((pv.counts_before || {})[s])} → ${fmt(pv.counts_after[s])}` }))));
+  }
+  // grouped by sheet: the sheets of cases open, the others (control sheet, defects, active view) folded
+  const bySheet = new Map();
+  (pv.cells || []).forEach((c, i) => {
+    if (!bySheet.has(c.sheet)) bySheet.set(c.sheet, []);
+    bySheet.get(c.sheet).push(rows[i]);
+  });
+  const head = () => h('tr', {}, h('th', { text: 'Cell' }), h('th', { text: 'Case' }), h('th', { text: 'Before' }), h('th', { text: 'After' }));
+  for (const [sheet, list] of bySheet) {
+    const ofCases = (pv.cells || []).some((c) => c.sheet === sheet && c.case);
+    const table = h('table', { class: 'preview' }, head(), list);
+    parts.push(ofCases
+      ? h('div', { class: 'stack' }, h('p', { class: 'small', text: `${sheet}: ${plural(list.length, 'cell')}` }), table)
+      : h('details', { class: 'preview-group' }, h('summary', { class: 'small', text: `${sheet}: ${plural(list.length, 'cell')}` }), table));
+  }
+  return h('div', { class: 'stack' }, parts);
+}
+
 function applyPanel(log) {
   if (!log || !log.check) return null;
   const check = log.check;
@@ -744,11 +785,18 @@ function applyPanel(log) {
     content.push(h('p', { class: 'small', text: `Ready: ${plural(check.summary.results, 'result')}, `
       + `${plural(check.summary.new_defects, 'new bug')}, ${plural(check.summary.linked_bugs, 'linked bug')} → ${check.summary.target}.` }));
     if (isExcel) {
-      content.push(h('div', {}, h('button', { type: 'button', class: 'btn primary small', disabled: !!S.busy, onclick: () => {
-        if (window.confirm(`Apply ${check.name} to ${check.summary.target}? The adapter writes the results and the new bugs to the workbook.`)) {
-          act('Applying through the adapter…', () => applyLog(true));
-        }
-      } }, `Apply to ${check.summary.target}`)));
+      const pv = out && out.dry_run && out.preview ? out.preview : null;
+      content.push(h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
+          onclick: () => act('Simulating on a copy of the workbook…', () => applyLog(false)) },
+          pv ? 'Preview again' : 'Preview the changes (dry run)'),
+        pv && out.ready ? h('button', { type: 'button', class: 'btn primary small', disabled: !!S.busy, onclick: () => {
+          if (window.confirm(`Apply ${check.name} to ${pv.workbook}? The adapter writes exactly the ${plural(pv.cells.length, 'cell')} of this preview; if anything changed since, it refuses and asks for a new preview.`)) {
+            act('Applying through the adapter…', () => applyLog(true));
+          }
+        } }, `Apply to ${pv.workbook}`) : null));
+      if (pv) content.push(previewTable(pv));
+      if (out && out.needs_preview) content.push(h('p', { class: 'small', text: 'Show the preview (again) before applying.' }));
     } else {
       content.push(h('div', { class: 'row' },
         h('button', { type: 'button', class: 'btn small', disabled: !!S.busy,
@@ -761,7 +809,8 @@ function applyPanel(log) {
     }
   }
   if (out && (out.output || out.code !== null)) {
-    content.push(h('p', { class: 'small', text: `${out.meaning}${out.code !== null ? ` (exit code ${out.code})` : ''}.` }), output(out.output));
+    content.push(h('p', { class: 'small', text: `${out.meaning}${out.code !== null ? ` (exit code ${out.code})` : ''}.` }));
+    if (out.output || !out.preview) content.push(output(out.output));       // a preview speaks through its table
   }
   return h('section', { class: 'panel stack' }, h('h2', { text: 'Apply' }), content,
     h('p', { class: 'note', text: 'The interface does not update context.md nor commit: /checkpoint in a session does.' }));
@@ -801,8 +850,17 @@ function renderRun() {
       + (run.reason ? ` · ${run.reason}` : '')
       + (run.report ? ` · report: ${run.report}` : '')));
   } else if (log) {
+    const r = log.run || {};
+    const route = log.route || {};
     head.push(h('p', { class: 'lead mono', text: log.name
-      + (log.run && (log.run.environment || log.run.build) ? ` · ${log.run.environment || ''} ${log.run.build || ''}` : '') }));
+      + ` · environment ${r.environment || 'not declared'} · build ${r.build || 'unknown'}`
+      + (log.mode ? ` · mode ${log.mode.split(':')[0]}` : '')
+      + (route.problem ? ' · platform and workbook not certain (see Apply)'
+        : (route.platform ? ` · ${route.platform}` : '') + (route.workbook ? ` → ${route.workbook}` : '')) }));
+    if (!r.build) {
+      head.push(h('p', { class: 'note', text: 'Build unknown: this run log has no build in its run block. Its results are '
+        + 'never counted as any build, the current one included.' }));
+    }
   } else {
     head.push(h('p', { class: 'lead', text: 'Start a planned batch, or open a run log, from Planned batches or Run logs.' }));
   }
@@ -919,7 +977,7 @@ function projectCard(p) {
       h('span', { class: 'chip outline', text: p.tracker || 'no tracker' }),
       p.modules.map((m) => h('span', { class: 'chip accent', text: m }))),
     !p.error && p.status && p.status !== 'valid'
-      ? h('p', { class: 'note', text: `${p.status}: ${p.reason}. Complete it with /project-onboarding in its folder.` }) : null,
+      ? h('p', { class: 'note', text: `${p.status}: ${p.reason}. Complete it with /project-context in its folder.` }) : null,
     p.error ? null : lastRunLine(p),
     h('div', { class: 'chips' },
       running ? h('span', { class: 'chip accent', text: 'Running now' }) : null,
@@ -958,12 +1016,12 @@ function renderHub() {
     h('ul', {}, hub.unconfigured.map((f) => h('li', {}, h('code', { text: f.id }), ` — ${f.status}: ${f.reason}.`))),
     hub.unconfigured.some((f) => f.proposes)
       ? h('p', { class: 'small muted' }, 'Open ', h('code', { text: 'claude' }), ' in the folder and run ',
-        h('code', { text: '/project-onboarding' }), '.') : null) : null;
+        h('code', { text: '/project-context' }), '.') : null) : null;
   if (!hub.projects.length) {
     root.append(h('section', { class: 'panel group' },
       h('h2', { text: 'No project yet' }),
       h('p', {}, 'Create the folder ', h('code', { text: '<company>/<project>/' }), ' in this root, open ',
-        h('code', { text: 'claude' }), ' in it and run ', h('code', { text: '/project-onboarding' }),
+        h('code', { text: 'claude' }), ' in it and run ', h('code', { text: '/project-context' }),
         '. Creating a project from this page is not available yet.')));
     if (notReady) root.append(notReady);
     return;
@@ -1046,7 +1104,7 @@ function renderOverview() {
   const side = [];
   if (ov.error) {
     main.push(h('section', { class: 'panel' }, h('h2', { text: 'project.yaml' }), h('p', { class: 'wrap', text: ov.error }),
-      h('p', { class: 'note', text: 'Fix it by hand or in a Claude Code session (/project-onboarding); the other screens open after that.' })));
+      h('p', { class: 'note', text: 'Fix it by hand or in a Claude Code session (/project-context); the other screens open after that.' })));
   }
   const p = ov.project;
   if (p) {
@@ -1055,6 +1113,10 @@ function renderOverview() {
       h('dl', { class: 'kv' },
         h('dt', { text: 'Company' }), h('dd', { text: p.company || '(not set)' }),
         h('dt', { text: 'Tracker' }), h('dd', { text: p.tracker || '(not set)' }),
+        (p.workbooks || []).length ? h('dt', { text: 'Workbooks' }) : null,
+        (p.workbooks || []).length ? h('dd', {}, h('ul', { class: 'plain' }, p.workbooks.map((w) => h('li', { class: 'wrap' },
+          h('span', { class: 'mono small', text: w.file || '(not set)' }), h('span', { class: 'muted small', text: ` · ${w.for}` }),
+          w.state === 'ok' ? null : h('span', { class: 'chip warn', text: w.state }))))) : null,
         h('dt', { text: 'Modules' }), h('dd', {}, h('div', { class: 'chips' }, p.modules.map((m) => h('span', { class: 'chip accent', text: m })))),
         h('dt', { text: 'Roles' }), h('dd', { text: p.roles.join(', ') || '(none)' }),
         h('dt', { text: 'Evidence' }), h('dd', { text: p.evidence || '(not set)' }),

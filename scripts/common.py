@@ -20,6 +20,7 @@ import re
 import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -99,10 +100,32 @@ def workspace_path(workspace: str, *parts: str) -> str:
         inside = False
     if not inside:
         raise OutsideWorkspace(f"{path} is outside the workspace {workspace}: nothing was written")
-    history = os.path.join(base, "history")
-    if real == history or real.startswith(history + os.sep):
+    rel = os.path.relpath(real, base)
+    # casefolded: macOS and Windows file systems ignore case, so History/ is history/ (audit 06.11.2026)
+    if rel != "." and rel.split(os.sep)[0].casefold() == "history":
         raise OutsideWorkspace(f"{path} resolves inside history/, which is immutable (methodology 13)")
     return path
+
+
+def atomic_write(path: str, data: bytes | str) -> None:
+    """Writes `path` whole or not at all: a new temporary file next to it (created exclusively, so a link planted at a
+    predictable `<file>.tmp` is never followed), flushed to the disk, then put in place. `path` is one that
+    workspace_path returned. A stopped write leaves only a `.<name>.*.tmp` that the next write ignores."""
+    folder = os.path.dirname(path) or "."
+    os.makedirs(folder, exist_ok=True)
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    fd, tmp = tempfile.mkstemp(prefix="." + os.path.basename(path) + ".", suffix=".tmp", dir=folder)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())        # on the disk before it takes the place of the old one
+        replace_file(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+        raise
 
 
 def replace_file(src: str, dst: str, attempts: int = 20, delay: float = 0.05) -> None:
@@ -121,6 +144,7 @@ def replace_file(src: str, dst: str, attempts: int = 20, delay: float = 0.05) ->
 LOCK_NAME = ".qa-assistant.lock"
 LOCK_STALE_SECONDS = 15 * 60        # no heartbeat for this long: the holder on another machine is gone
 LOCK_HEARTBEAT_SECONDS = 60.0
+LOCK_UNNAMED_SECONDS = 10.0      # a lock file that names no holder after this long is abandoned
 LOCK_WAIT_SECONDS = 30.0
 LOCK_WAIT_ENV = "QA_LOCK_WAIT"      # seconds to wait for another writer before giving up
 _held = threading.local()           # the locks this thread holds: {path: depth}
@@ -152,11 +176,27 @@ def pid_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
-    try:        # a zombie (ended, not yet collected by its parent) still answers kill 0: it holds nothing
+    # a zombie (ended, not yet collected by its parent) still answers kill 0: it holds nothing
+    try:        # Linux
         with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
             return f.read().rpartition(")")[2].split()[0] != "Z"
     except (OSError, IndexError):
-        return True
+        pass
+    return _ps_state(pid) not in ("Z", "")
+
+
+def _ps_state(pid: int) -> str | None:
+    """The first letter of a process's state from `ps` (macOS and the BSDs have no /proc): "Z" for a zombie, "" for no
+    such process, None when ps cannot say (then the process counts as alive: a lock is never taken from a live one)."""
+    import subprocess
+    try:
+        r = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode not in (0, 1):
+        return None
+    state = r.stdout.strip()
+    return state[:1] if state else ""
 
 
 def process_started(pid: int) -> str | None:
@@ -207,6 +247,8 @@ def _lock_is_abandoned(path: str, holder: dict) -> bool:
     holder here is never abandoned, however long it takes. Elsewhere, or with a file nobody can read, only the
     heartbeat can tell."""
     pid = holder.get("pid")
+    if not holder:      # empty or unreadable: a writer stopped between creating the file and naming itself
+        return _lock_age(path) > LOCK_UNNAMED_SECONDS
     if holder.get("host") == socket.gethostname() and isinstance(pid, int):
         if not pid_alive(pid):
             return True
@@ -249,6 +291,31 @@ def _heartbeat(path: str, stop: threading.Event) -> None:
             os.utime(path)
 
 
+def _create_lock(path: str, token: str) -> None:
+    """Creates the lock already naming its holder: the holder is written to a file of its own, then linked to the
+    lock's name, which fails if the lock exists. A lock is therefore never seen empty. Where links are not available,
+    the lock is created exclusively and named right after. FileExistsError when another holder has it."""
+    holder = json.dumps({"pid": os.getpid(), "host": socket.gethostname(), "started": process_started(os.getpid()),
+                         "token": token, "at": time.time()})
+    tmp = f"{path}.{token}.new"
+    with open(tmp, "x", encoding="utf-8") as f:
+        f.write(holder)
+    try:
+        try:
+            os.link(tmp, path)
+            return
+        except FileExistsError:
+            raise
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(holder)
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+
+
 @contextlib.contextmanager
 def workspace_lock(workspace: str, wait: float | None = None):
     """One writer at a time on a workspace's memory and run logs (technique-workspaces.md section 7). A second writer
@@ -257,7 +324,7 @@ def workspace_lock(workspace: str, wait: float | None = None):
     the same lock. The lock file names its holder, and a holder only ever removes its own."""
     path = workspace_path(workspace, LOCK_NAME)
     held = _held.__dict__.setdefault("paths", {})
-    key = os.path.normcase(os.path.abspath(path))
+    key = os.path.normcase(_real(path))     # the same workspace through a link or another case is the same lock
     if key in held:
         held[key] += 1
         try:
@@ -271,9 +338,10 @@ def workspace_lock(workspace: str, wait: float | None = None):
         except ValueError:
             wait = LOCK_WAIT_SECONDS
     deadline = time.monotonic() + wait
+    token = uuid.uuid4().hex
     while True:
         try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            _create_lock(path, token)
             break
         except (FileExistsError, PermissionError):      # PermissionError: Windows, a file being deleted
             holder = _lock_holder(path)
@@ -286,10 +354,6 @@ def workspace_lock(workspace: str, wait: float | None = None):
                     f"{holder.get('host', '?')}). Wait for it to finish and run the same command again; if that "
                     f"process is stuck, stop it, and the lock {path} is recovered by itself.") from None
             time.sleep(0.05)
-    token = uuid.uuid4().hex
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"pid": os.getpid(), "host": socket.gethostname(), "started": process_started(os.getpid()),
-                   "token": token, "at": time.time()}, f)
     stop = threading.Event()
     threading.Thread(target=_heartbeat, args=(path, stop), daemon=True).start()
     held[key] = 1
@@ -398,6 +462,24 @@ def variable_names(proj) -> list[str]:
 MOBILE_INPUTS = ("adb", "driver")
 SERIAL_ENV = "QA_MOBILE_SERIAL"
 INPUT_ENV = "QA_MOBILE_INPUT"
+MOBILE_PLATFORMS = ("android", "ios")
+PLATFORM_ENV = "QA_MOBILE_PLATFORM"
+WDA_URL_ENV = "QA_WDA_URL"
+WDA_URL_DEFAULT = "http://localhost:8100"
+
+
+def mobile_platform(m: dict, platform: str | None = None, environ=None) -> str:
+    """The platform `device.py` drives (technique-mobile.md §1.3): the --platform flag, the environment variable
+    QA_MOBILE_PLATFORM, mobile.platform, else android. An empty variable counts as unset. ValueError for a
+    platform outside android | ios, naming where it came from."""
+    environ = os.environ if environ is None else environ
+    for value, source in ((platform, "--platform"), (environ.get(PLATFORM_ENV, "").strip(), PLATFORM_ENV),
+                          ((m or {}).get("platform"), "mobile.platform")):
+        if value:
+            if value not in MOBILE_PLATFORMS:
+                raise ValueError(f"{source} {value!r}: android or ios (technique-mobile.md §1.3)")
+            return str(value)
+    return "android"
 
 
 def mobile_target(m: dict, serial: str | None = None, input_: str | None = None,

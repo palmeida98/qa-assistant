@@ -101,7 +101,7 @@ class Batch(Base):
         self.batch(cases=("TC-SHOP-001", "TC-SHOP-002"))
         self.wait(self.runner.start_batch(self.proj, "b1"))
         prompt = self.recorded()["prompt"]
-        self.assertTrue(prompt.startswith("/run-batch\n"))
+        self.assertTrue(prompt.startswith("/run-tests\n"))
         self.assertIn(f"Workspace: {rn.posix(self.ws)} (the current folder)", prompt)
         self.assertIn("Cases, in this order: TC-SHOP-001 TC-SHOP-002\n", prompt)
         self.assertIn("Run log: runs/batch_b1.json", prompt)
@@ -152,7 +152,7 @@ class Batch(Base):
         self.assertIn(f"Bash(python {qa}/scripts/api_request.py *)", tools)
         self.assertNotIn("mcp__playwright", tools)
         self.assertNotIn("--mcp-config", rec["args"])
-        self.assertTrue(rec["prompt"].startswith("/test-api\n"))
+        self.assertTrue(rec["prompt"].startswith("/run-tests\n"))
         self.assertEqual(rn.allowed_tools("mobile", "/qa", [])[-2:],
                          ["Bash(python /qa/scripts/device.py *)", "Bash(python /qa/scripts/run_mobile.py *)"])
         self.assertEqual(rn.mcp_servers(self.bin.name), [])
@@ -292,7 +292,7 @@ class Events(unittest.TestCase):
 
     def test_a_prompt_template_with_an_unknown_placeholder_is_refused(self):
         with self.assertRaises(ValueError):
-            rn.template("batch.md", {"skill": "/run-batch"})
+            rn.template("batch.md", {"skill": "/run-tests"})
         text = rn.template("ask.md", {"notes": "{{cases}}", "cases": "[]", "proposals_rule": "none"})
         self.assertIn("{{cases}}", text)                         # a value is never read again for placeholders
 
@@ -444,7 +444,15 @@ class Adapters(Base):
         self.assertEqual((out["ready"], out["dry_run"], out["done"]), (True, True, False))
         self.assertEqual(out["summary"]["new_defects"], 1)
         self.assertEqual(os.path.getmtime(book), before)
-        out = self.runner.apply(self.proj, "b1", confirm=True)
+        preview = out["preview"]
+        self.assertEqual((preview["workbook"], preview["new_defects"]), (kit.EXCEL["file"], ["BUG-4"]))
+        self.assertTrue(any(c["case"] == "TC-SHOP-003" and c["after"] == "Pass" for c in preview["cells"]))
+        refused = self.runner.apply(self.proj, "b1", confirm=True)                 # no preview token: nothing runs
+        self.assertEqual((refused["done"], refused["needs_preview"], refused["code"]), (False, True, None))
+        stale = self.runner.apply(self.proj, "b1", confirm=True, preview="0" * 16)
+        self.assertEqual((stale["done"], stale["needs_preview"]), (False, True), stale)
+        self.assertEqual(os.path.getmtime(book), before)
+        out = self.runner.apply(self.proj, "b1", confirm=True, preview=preview["token"])
         self.assertEqual((out["done"], out["code"], out["meaning"]), (True, 0, "applied"), out)
         self.assertIn("applied to the workbook", wk.read_run_log(self.ws, self.proj, "b1")["applied"])
         again = self.runner.apply(self.proj, "b1", confirm=True)
@@ -485,7 +493,7 @@ class MobileProject(Base):
         self.assertIn(f"Bash(python {qa}/scripts/device.py *)", tools)
         self.assertNotIn("mcp__playwright", tools)
         self.assertNotIn("--mcp-config", rec["args"])
-        self.assertTrue(rec["prompt"].startswith("/test-mobile\n"))
+        self.assertTrue(rec["prompt"].startswith("/run-tests\n"))
         self.assertIn("Module: exploratory, charters on the mobile app", rec["prompt"])
 
     def test_with_a_web_module_too_the_charters_stay_in_the_browser(self):

@@ -85,13 +85,14 @@ Credentials live only in each workspace's `.env` and are referred to by the vari
 
 ```mermaid
 flowchart LR
-  O["/project-onboarding<br/>(once)"] --> A["/analyze-feature<br/>/generate-cases"]
-  T["/analyze-tickets<br/>(at any time, read only)"] -->|"what changed,<br/>verification prompt"| A
-  A --> P["/plan-batch"]
-  P --> E["/run-batch · /test-api<br/>/audit-accessibility · /test-mobile"]
-  E -->|"run log<br/>runs/batch_*.json"| C["/checkpoint<br/>(apply to the workbook)"]
+  O["/project-context<br/>(set up or resume)"] --> T["/analyze-ticket<br/>(read only)"]
+  T -->|"what changed"| P["/plan-tests<br/>(approve)"]
+  P --> E["/run-tests<br/>mobile · web · API · a11y"]
+  E -->|"run log<br/>runs/batch_*.json"| B["/manage-bugs<br/>(batch review)"]
+  B --> R["/qa-report"]
+  R --> C["/checkpoint<br/>(resume point; apply once confirmed)"]
   C -->|next batch| P
-  C --> F["/end-session · /dashboard"]
+  X["/test-pbi<br/>(one PBI, resumable)"] -.-> O
 ```
 
 The generated cases are proposals until the user approves them; a bug is only created once approved; the results go to the workbook only at the checkpoint, through the adapter, and only if the batch is valid and the cross-check gives 0 problems.
@@ -112,37 +113,37 @@ The interface binds to `127.0.0.1` and uses a per-start token. Workspaces and an
 ### Starting a new project
 
 1. Create the folder `qa-workspaces/<company>/<project>/` next to this repository, or `<project>/` under the root you configured (`scripts/workspace_select.py set-root`).
-2. Open `claude` in that folder and run `/project-onboarding`: it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`) or, with Jira or Azure DevOps, fills in the tracker's section and runs `check` and `import-cases`, registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
+2. Open `claude` in that folder and run `/project-context` (a new folder follows `docs/procedures/onboarding.md`): it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`) or, with Jira or Azure DevOps, fills in the tracker's section and runs `check` and `import-cases`, registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
 3. Fill in `.env` locally.
 
 ### Modules
 
 | Module | Technique | Skill | Tool |
 |---|---|---|---|
-| `functional-web`, `exploratory` | browser | `/run-batch` | Playwright MCP |
-| `api` | API | `/test-api` | `scripts/api_request.py` |
-| `accessibility` | WCAG 2.1 AA | `/audit-accessibility` | `scripts/audit_a11y.py` (`qa-audit` engine: axe-core, keyboard, reflow) |
-| `mobile` | Maestro | `/test-mobile` | `scripts/run_mobile.py` |
+| `functional-web`, `exploratory` | browser | `/run-tests` | Playwright MCP |
+| `api` | API | `/run-tests` | `scripts/api_request.py` |
+| `accessibility` | WCAG 2.1 AA | `/run-tests` | `scripts/audit_a11y.py` (`qa-audit` engine: axe-core, keyboard, reflow) |
+| `mobile` | Maestro | `/run-tests` | `scripts/run_mobile.py` |
 
 ### Choosing a project
 
-Skills are central; configuration and data stay in each workspace, under a root of workspaces, as `<company>/<project>/` or `<project>/`. Ask for a task in natural language: each skill finds the framework and the project first, and stops with an instruction when they do not match.
+Eight skills cover the flow (specification: [`docs/skills-spec.md`](docs/skills-spec.md); how to use them: [`docs/skills-guide.md`](docs/skills-guide.md)). Skills are central; configuration and data stay in each workspace, under a root of workspaces, as `<company>/<project>/` or `<project>/`. Ask for a task in natural language: each skill finds the framework and the project first, and stops with an instruction when they do not match.
 
 ```bash
 python scripts/workspace_select.py list                                   # the projects, each valid, incomplete, not-configured or inaccessible
-python scripts/workspace_select.py preflight --skill test-api demo/shop   # the project, task, environment and tools; nothing is written
+python scripts/workspace_select.py preflight --skill run-tests demo/shop   # the project, task, environment and tools; nothing is written
 python scripts/workspace_select.py where                                  # which framework, Python and imports really run
 ```
 
-A new folder is set up with `/project-onboarding`. Listing reads only each `project.yaml`, and two projects never share memory or credentials. Details: [`docs/technique-workspaces.md`](docs/technique-workspaces.md).
+A new folder is set up with `/project-context`. Listing reads only each `project.yaml`, and two projects never share memory or credentials. Details: [`docs/technique-workspaces.md`](docs/technique-workspaces.md).
 
 ### Following tickets
 
-`/analyze-tickets` reads Azure DevOps or Jira (a link, a list, a sprint, a query), says what changed since the last check and gives a QA status apart from the ticket's official state. It writes only to the workspace's `memory/` and to one generated block of `context.md`: every request goes through a transport that cannot write. It needs neither Xray nor `tracker: jira|azure-devops`, and can read through a token or a logged-in browser. Specified in [`docs/technique-tickets.md`](docs/technique-tickets.md), which says what was validated on a real service and what only with fictional fixtures.
+`/analyze-ticket` reads Azure DevOps or Jira (a link, a list, a sprint, a query), says what changed since the last check and gives a QA status apart from the ticket's official state. It writes only to the workspace's `memory/` and to one generated block of `context.md`: every request goes through a transport that cannot write. It needs neither Xray nor `tracker: jira|azure-devops`, and can read through a token or a logged-in browser. Specified in [`docs/technique-tickets.md`](docs/technique-tickets.md), which says what was validated on a real service and what only with fictional fixtures.
 
 ### Trackers
 
-Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, the cases approved in `/generate-cases` are added by the adapter (`python -m adapters.excel.add_cases`, never by hand), and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-batch` and `/run-batch` read the imported cases, `/log-bug` searches duplicates, `/checkpoint` sends, `/generate-cases` exports); their progress view is the tracker's own reports (methodology §4.2).
+Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, the cases approved in `/plan-tests` are added by the adapter (`python -m adapters.excel.add_cases`, never by hand), and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-tests` and `/run-tests` read the imported cases, `/manage-bugs` searches duplicates, `/checkpoint` sends, `/plan-tests` exports); their progress view is the tracker's own reports (methodology §4.2).
 
 ## Demo
 
@@ -178,7 +179,7 @@ Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (wor
 | 11 · Remote execution on GitHub Actions | The runner's side tested run by run on a real workspace; the end-to-end with a real login waits for the user |
 | 12 · `qa-ui` single-workspace interface | Implemented and tested with fixtures; a mobile-workspace pilot was recorded in October; a web-site pilot is still pending |
 | 13 · `qa-ui` multi-project hub | Discovery, Projects, in-hub navigation, Overview, write-only credentials and notes implemented; project creation, Library, History, Inbox and Settings remain planned |
-| 14 · `/analyze-tickets`, read-only ticket analysis | Azure DevOps through a browser: real read pilot done. Azure DevOps with a token, and Jira: implemented and tested with fictional fixtures, real pilot pending |
+| 14 · `/analyze-ticket`, read-only ticket analysis | Azure DevOps through a browser: real read pilot done. Azure DevOps with a token, and Jira: implemented and tested with fictional fixtures, real pilot pending |
 | 15 · Central skills and project workspaces | Finding the framework, selecting a project, the skills' contract, and the impact on cases implemented and tested with fixtures |
 
 **Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.

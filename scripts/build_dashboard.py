@@ -10,7 +10,7 @@ The meaning of each case status comes from the `dashboard:` section of
 project.yaml (pending | ok | fail | blocked | na); without it, the first status of
 excel.cases.statuses counts as pending and the others are neutral.
 
-Use (from the root of qa-assistant; skill /dashboard, plan 5.2):
+Use (from the root of qa-assistant; /qa-report, procedures/report.md section B; plan 5.2):
     python scripts/build_dashboard.py <workspace> [--output dashboard.html] [--open]
 
 Exits with 0 (built) or 2 (invalid configuration: nothing built). --open opens the
@@ -163,6 +163,9 @@ def collect(workspace: str) -> dict:
     data = collect_workbook(ad, types)
     data["project"] = proj.get("project") or os.path.basename(os.path.abspath(workspace))
     data["workbook"] = ad.cfg["file"]
+    # what this page does not show (audit 06.11.2026): the other workbooks of excel.workbooks, one per platform
+    data["other_workbooks"] = [f"{name}: {v.get('file')}" for name, v in ((proj.get("excel") or {}).get("workbooks")
+                                                                       or {}).items() if isinstance(v, dict)]
     data["built"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     data["context"] = read_context(os.path.join(workspace, "context.md"))
     # the dashboard's totals always come from the direct count; the workbook's summary is only checked
@@ -367,7 +370,7 @@ def render(data: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dashboard · {_e(data["project"])}</title>
+<title>Dashboard · {_e(data["project"])} · {_e(os.path.basename(str(data["workbook"])))}</title>
 <style>{CSS}</style>
 </head>
 <body>
@@ -375,6 +378,8 @@ def render(data: dict) -> str:
 <header>
 <h1>{_e(data["project"])}</h1>
 <p>Last checkpoint: {_e(ctx["updated"] or "—")} · dashboard built at {_e(data["built"])} from <code>{_e(data["workbook"])}</code></p>
+<p>Only what was applied to this workbook. Results recorded in run logs and not applied yet, and the other workbooks
+({_e(", ".join(data.get("other_workbooks") or []) or "none")}), are not here: <code>qa_report.py totals</code> lists them.</p>
 {summary_line}
 </header>
 {summary_block}

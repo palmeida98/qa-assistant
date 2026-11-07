@@ -1,7 +1,7 @@
 """
 The workspace as a git repository of its own, with a private remote
 (methodology sections 4, step 4, and 12.1 and 12.3; plan, task 9.4). The one
-helper /project-onboarding and /checkpoint call.
+helper /project-context and /checkpoint call.
 
     python scripts/workspace_git.py <workspace> init
     python scripts/workspace_git.py <workspace> status

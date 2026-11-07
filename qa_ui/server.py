@@ -126,6 +126,8 @@ class App:
         except (ValueError, KeyError, TypeError, OSError, yaml.YAMLError) as e:
             # e.g. a project.yaml that is not valid YAML: said to the user, never a dropped connection
             return 500, {"error": f"the request failed ({type(e).__name__}): {e}"}
+        except Exception as e:      # noqa: BLE001 - anything else (a workbook that is not a zip...): still an answer
+            return 500, {"error": f"the request failed ({type(e).__name__}): {e}"}
 
     def route(self, method: str, parts: list[str], query: str, body: dict, proj: dict) -> dict:
         if parts[:1] != ["api"]:
@@ -216,7 +218,9 @@ class App:
                     raise BadRequest("`action` is needed: approve, edit, link, drop or answer")
                 return workspace.edit_item(self.ws, proj, name, rest[3], action, body)
             if method == "POST" and len(rest) == 3 and rest[2] == "apply":
-                return self.runner.apply(proj, name, confirm=body.get("confirm") is True)
+                preview = body.get("preview")
+                return self.runner.apply(proj, name, confirm=body.get("confirm") is True,
+                                         preview=preview if isinstance(preview, str) else None)
         raise workspace.NotFound("no such route")
 
 
@@ -271,6 +275,8 @@ class HubApp:
         except (workspace.Refused, runs.Refused) as e:
             return 409, {"error": str(e)}
         except (ValueError, KeyError, TypeError, OSError, yaml.YAMLError) as e:
+            return 500, {"error": f"the request failed ({type(e).__name__}): {e}"}
+        except Exception as e:      # noqa: BLE001 - never a dropped connection (the page would say it is not running)
             return 500, {"error": f"the request failed ({type(e).__name__}): {e}"}
 
     def route(self, method: str, parts: list[str], body: dict) -> dict:

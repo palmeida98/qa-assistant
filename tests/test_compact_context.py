@@ -107,6 +107,14 @@ class Dry(Base):
         self.assertFalse(moved["**26.10.2026, 15:10"]["may_hold_a_rule"])
 
 
+class EmptySections(unittest.TestCase):
+    def test_a_section_with_no_dated_entry_or_no_heading_at_all_is_left_alone(self):
+        # found by the skills' flow test (06.11.2026): an empty "## Current state" made plan() raise
+        text = "# Session context\n\n## Current state\n\n## Work done\n\n## Pending work\n\n1. ask for a new time\n"
+        self.assertEqual(cc.plan(text, 5)["new_text"], text)
+        self.assertEqual(cc.plan("just a line\n", 5)["new_text"], "just a line\n")
+
+
 class Apply(Base):
     def run_apply(self, keep=2, now=datetime(2026, 11, 2, 11, 0, 0)):
         return cc.apply(self.ws, keep, now)

@@ -143,7 +143,8 @@ def describe(doc: dict, vocabulary: list[str]) -> dict:
         if question:
             needs.append({"kind": "question", "tc": item["tc"], "text": item["actual_result"]})
     order = [s for s in vocabulary if counts.get(s)] + [s for s in counts if s not in vocabulary]
-    return {"run": doc.get("run") or {}, "items": items, "needs": needs,
+    return {"run": doc.get("run") or {}, "mode": doc.get("mode") if isinstance(doc.get("mode"), str) else None,
+            "items": items, "needs": needs,
             "counts": [{"status": s, "n": counts[s]} for s in order], "total": len(items)}
 
 
@@ -180,6 +181,11 @@ def read_run_log(workspace: str, proj: dict, name: str, with_applied: bool = Tru
     out["statuses"] = run_log.vocabulary(proj)
     if with_applied:
         out["applied"] = run_log.applied(workspace, proj, out["name"])
+    if proj.get("tracker") == "excel":
+        from adapters.excel.base import route_workbook
+        route = route_workbook(proj, out["name"], doc.get("run") if isinstance(doc.get("run"), dict) else None,
+                               workspace=workspace)
+        out["route"] = {"platform": route.platform, "workbook": route.file, "problem": route.problem}
     return out
 
 
@@ -318,11 +324,21 @@ def check_apply(workspace: str, proj: dict, name: str) -> dict:
         problems.append("the run log has no result")
     problems += workspace_ci.refusals(doc)
     if not problems:
-        problems += workspace_ci.adapter_problems(workspace, proj, doc)
+        problems += workspace_ci.adapter_problems(workspace, proj, doc, batch_id)
     tracker = proj.get("tracker")
     new = sum(1 for x in doc["results"] if isinstance(x, dict) and isinstance(x.get("new_defect"), dict))
     linked = sum(1 for x in doc["results"] if isinstance(x, dict) and x.get("bug"))
-    target = ((proj.get("excel") or {}).get("file") if tracker == "excel" else tracker) or "the tracker"
+    if tracker == "excel":
+        from adapters.excel.base import route_workbook
+        route = route_workbook(proj, batch_id, doc.get("run") if isinstance(doc.get("run"), dict) else None,
+                               workspace=workspace)
+        if route.problem and route.problem not in problems:
+            problems.insert(0, route.problem)
+        target = route.file or "the workbook"
+        if route.platform:
+            target = f"{target} ({route.platform})"
+    else:
+        target = tracker or "the tracker"
     return {"name": batch_id, "ready": not problems, "problems": problems, "tracker": tracker,
             "summary": {"results": len(doc["results"]), "new_defects": new, "linked_bugs": linked,
                         "target": str(target)}}

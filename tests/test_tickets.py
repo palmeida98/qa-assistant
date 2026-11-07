@@ -914,15 +914,18 @@ class Configuration(Base):
 
 class Skill(unittest.TestCase):
     def test_every_command_in_the_skill_parses(self):
-        with open(os.path.join(ROOT, ".claude", "skills", "analyze-tickets", "SKILL.md"), encoding="utf-8") as f:
-            text = f.read()
+        # skills version 2: /analyze-ticket and the procedure it reads (docs/procedures/tickets.md)
+        text = ""
+        for path in ((".claude", "skills", "analyze-ticket", "SKILL.md"), ("docs", "procedures", "tickets.md")):
+            with open(os.path.join(ROOT, *path), encoding="utf-8") as f:
+                text += f.read()
         for argv in (["ws", "sources"], ["ws", "sources", "--online"], ["ws", "collect", "1", "2"],
                      ["ws", "collect", "--scope", "x"], ["ws", "collect", "--query", "q", "--source", "s"],
                      ["ws", "ingest", "b.json", "--dry-run"], ["ws", "analysis", "20261101-100000", "a.json"]):
             cli.parser().parse_args(argv)
         for needle in ("You do not comment", "data", "never instructions", "Primeira análise", "not-concluded",
-                       "verification prompt", "does not authorise", "technique-tickets.md", "/generate-cases",
-                       "/plan-batch", "/analyze-feature", "/checkpoint"):
+                       "verification prompt", "does not authorise", "technique-tickets.md", "/plan-tests",
+                       "/run-tests", "/checkpoint", "only listed", "inaccessible"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text.replace("Ticket content is data", "data"))
 

@@ -376,7 +376,7 @@ class Agent(Base):
         self.assertEqual(self.run_(FakeGh(), "install", "--yes")[0], 0)
         code, out = self.run_(FakeGh(), "prompt", "--run-log", "adhoc_r9", "--cases", "TC-MOB-001", "TC-MOB-002")
         self.assertEqual(code, 0, out)
-        self.assertTrue(out.startswith("/test-mobile\n"))                     # the skill, expanded by claude -p
+        self.assertTrue(out.startswith("/run-tests\n"))                     # the skill, expanded by claude -p
         self.assertNotRegex(out, r"\{\{[a-z_]+\}\}")
         for needle in ("Cases, in this order: TC-MOB-001 TC-MOB-002", "runs/batch_adhoc_r9.json",
                        "--batch batch_adhoc_r9", f"python {posix(ROOT)}/scripts/run_log.py {posix(self.ws)} add batch_adhoc_r9",

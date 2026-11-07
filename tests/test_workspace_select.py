@@ -133,7 +133,7 @@ class Discovery(Base):
                           "empty": "not-configured", "demo/broken": "incomplete", "demo/half": "incomplete"})
         self.assertEqual(found["acme/api"].name, "Acme API")
         self.assertEqual(found["demo/half"].reason, "1 problem(s) in project.yaml")
-        self.assertEqual(found["demo/new"].public()["proposes"], "/project-onboarding")
+        self.assertEqual(found["demo/new"].public()["proposes"], "/project-context")
         self.assertIsNone(found["demo/shop"].public()["proposes"])
 
     def test_a_folder_with_its_own_project_yaml_is_never_a_company(self):
@@ -167,7 +167,7 @@ class Discovery(Base):
         for selection in (self.resolve("Acme Corp/Web Shop"), self.resolve("Web Shop"), self.resolve("loja web"),
                           self.resolve(workspace=web), self.resolve(cwd=web)):
             self.assertEqual((selection.outcome, selection.candidate.id), ("selected", "Acme Corp/Web Shop"))
-        code, report = self.preflight("analyze-feature", "Web Shop")
+        code, report = self.preflight("plan-tests", "Web Shop")
         self.assertEqual(code, 0, report["problems"])
 
     def test_a_link_is_listed_as_inaccessible_and_never_followed(self):
@@ -313,7 +313,7 @@ class Selection(Base):
     def test_an_empty_root_says_what_to_do(self):
         got = self.resolve()
         self.assertEqual(got.outcome, "none")
-        self.assertIn("/project-onboarding", got.message)
+        self.assertIn("/project-context", got.message)
 
 
 class TheRoot(Base):
@@ -425,7 +425,7 @@ class SkillAndCode(Base):
         before = tree(self.tmp)
         old = self.old_checkout()
         before_ws = tree(shop)
-        r = self.run_script(old, "preflight", "--skill", "analyze-tickets", "--workspace", shop)
+        r = self.run_script(old, "preflight", "--skill", "analyze-ticket", "--workspace", shop)
         self.assertEqual(r.returncode, ws.MISMATCH, r.stdout + r.stderr)
         self.assertIn("STOP", r.stdout)
         self.assertIn("module adapters.tickets", r.stdout)
@@ -439,10 +439,10 @@ class SkillAndCode(Base):
         os.makedirs(self.target)
         sync_skills.write_record(self.target, {"root": ROOT, "branch": "main", "commit": "abc1234"})
         fake = os.path.join(self.tmp, "fake")
-        os.makedirs(os.path.join(fake, ".claude", "skills", "analyze-tickets"))
-        shutil.copy(os.path.join(ROOT, ".claude", "skills", "analyze-tickets", "SKILL.md"),
-                    os.path.join(fake, ".claude", "skills", "analyze-tickets", "SKILL.md"))
-        code, report = self.preflight("analyze-tickets", "demo/shop", framework=fake)
+        os.makedirs(os.path.join(fake, ".claude", "skills", "analyze-ticket"))
+        shutil.copy(os.path.join(ROOT, ".claude", "skills", "analyze-ticket", "SKILL.md"),
+                    os.path.join(fake, ".claude", "skills", "analyze-ticket", "SKILL.md"))
+        code, report = self.preflight("analyze-ticket", "demo/shop", framework=fake)
         self.assertEqual(code, ws.MISMATCH)
         self.assertIn(f"QA_ASSISTANT_ROOT={ROOT}", report["instruction"])
         self.assertIn("abc1234", report["instruction"])
@@ -453,44 +453,45 @@ class SkillAndCode(Base):
         sync_skills.write_record(self.target, {"root": gone, "branch": "feature", "commit": "abc1234"})
         fake = os.path.join(self.tmp, "fake")
         os.makedirs(fake)
-        code, report = self.preflight("analyze-tickets", framework=fake)
+        code, report = self.preflight("analyze-ticket", framework=fake)
         self.assertEqual(code, ws.MISMATCH)
         self.assertIn("no longer exists", report["instruction"])
 
     def test_a_skill_this_checkout_does_not_have(self):
         code, report = self.preflight("no-such-skill")
         self.assertEqual(code, ws.MISMATCH)
-        self.assertIn("does not exist in this checkout", report["instruction"])
+        self.assertIn("There is no skill /no-such-skill", report["instruction"])     # with the list of the skills
+        self.assertIn("/run-tests", report["instruction"])
 
     def test_a_global_copy_that_differs_stops_outside_the_framework_only(self):
         make_project(self.root, "demo/shop")
-        os.makedirs(os.path.join(self.target, "analyze-feature"))
-        with open(os.path.join(self.target, "analyze-feature", "SKILL.md"), "w", encoding="utf-8") as f:
+        os.makedirs(os.path.join(self.target, "plan-tests"))
+        with open(os.path.join(self.target, "plan-tests", "SKILL.md"), "w", encoding="utf-8") as f:
             f.write("---\nname: analyze-feature\n---\nan older copy\n")
-        code, report = self.preflight("analyze-feature", "demo/shop")
+        code, report = self.preflight("plan-tests", "demo/shop")
         self.assertEqual(code, ws.MISMATCH)
         self.assertIn("differs from this checkout", report["instruction"])
-        self.assertEqual(self.preflight("analyze-feature", "demo/shop", cwd=ROOT)[0], ws.OK)   # the project's own copy runs
+        self.assertEqual(self.preflight("plan-tests", "demo/shop", cwd=ROOT)[0], ws.OK)   # the project's own copy runs
 
     def test_the_same_copy_goes_on(self):
         make_project(self.root, "demo/shop")
-        os.makedirs(os.path.join(self.target, "analyze-feature"))
-        shutil.copy(os.path.join(ROOT, ".claude", "skills", "analyze-feature", "SKILL.md"),
-                    os.path.join(self.target, "analyze-feature", "SKILL.md"))
-        self.assertEqual(self.preflight("analyze-feature", "demo/shop")[0], ws.OK)
+        os.makedirs(os.path.join(self.target, "plan-tests"))
+        shutil.copy(os.path.join(ROOT, ".claude", "skills", "plan-tests", "SKILL.md"),
+                    os.path.join(self.target, "plan-tests", "SKILL.md"))
+        self.assertEqual(self.preflight("plan-tests", "demo/shop")[0], ws.OK)
 
     def test_imports_from_another_checkout(self):
         make_project(self.root, "demo/shop", tickets={"sources": {"boards": BOARDS}})
         elsewhere = os.path.join(self.tmp, "another", "adapters", "tickets", "__init__.py")
         with mock.patch.object(ws, "import_origin", return_value=elsewhere):
-            code, report = self.preflight("analyze-tickets", "demo/shop")
+            code, report = self.preflight("analyze-ticket", "demo/shop")
         self.assertEqual(code, ws.MISMATCH)
         self.assertIn("another checkout", report["instruction"])
         make_project(self.root, "demo/a11y", modules=["accessibility"], accessibility={"pages": [
             {"name": "home", "url": "https://shop.example/"}]})
         with mock.patch.object(ws, "import_origin", return_value=elsewhere), \
                 mock.patch("validate_project.environment", return_value=[]):
-            code, report = self.preflight("audit-accessibility", "demo/a11y")
+            code, report = self.preflight("run-tests", "demo/a11y")
         self.assertEqual(code, ws.OK)              # an editable qa-audit: said, not fatal
         self.assertIn("another checkout", " ".join(report["warnings"]))
 
@@ -499,12 +500,12 @@ class Preflight(Base):
     def test_ready_presents_the_project_task_environment_and_tools(self):
         shop = make_project(self.root, "demo/shop", env=f"DS_PAT={SECRET}\n",
                             tickets={"sources": {"boards": BOARDS}, "scopes": {}})
-        code, report = self.preflight("analyze-tickets", "demo/shop")
+        code, report = self.preflight("analyze-ticket", "demo/shop")
         self.assertEqual(code, ws.OK)
         self.assertEqual(report["project"]["id"], "demo/shop")
         self.assertTrue(sync_skills.same_path(report["project"]["path"], shop))
         self.assertEqual(report["environments"], ["test"])
-        self.assertEqual(report["skill"]["name"], "analyze-tickets")
+        self.assertEqual(report["skill"]["name"], "analyze-ticket")
         self.assertIn("Never the tracker", report["skill"]["writes"])
         self.assertEqual(report["sources"], [{"id": "boards", "service": "azure-devops", "access": "api",
                                               "credentials": {"DS_PAT": True}}])
@@ -515,63 +516,68 @@ class Preflight(Base):
     def test_it_writes_nothing(self):
         make_project(self.root, "demo/shop", env=f"DS_PAT={SECRET}\n", tickets={"sources": {"boards": BOARDS}})
         before = tree(self.root)
-        for skill in ("analyze-tickets", "checkpoint", "run-batch", "plan-batch"):
+        for skill in ("analyze-ticket", "checkpoint", "run-tests", "plan-tests"):
             self.preflight(skill, "demo/shop")
         self.assertEqual(tree(self.root), before)
 
     def test_ambiguous_is_a_question(self):
         make_project(self.root, "demo/shop")
         make_project(self.root, "acme/api")
-        code, report = self.preflight("analyze-feature")
+        code, report = self.preflight("plan-tests")
         self.assertEqual(code, ws.AMBIGUOUS)
         self.assertEqual([c["id"] for c in report["candidates"]], ["acme/api", "demo/shop"])
         self.assertIsNone(report["project"])
 
     def test_a_new_folder_proposes_the_onboarding(self):
         os.makedirs(os.path.join(self.root, "demo", "new"))
-        code, report = self.preflight("run-batch", "demo/new")
+        code, report = self.preflight("run-tests", "demo/new")
         self.assertEqual(code, ws.NOT_USABLE)
         self.assertEqual(report["project"]["status"], "not-configured")
-        self.assertEqual(report["proposes"], "/project-onboarding")
+        self.assertEqual(report["proposes"], "/project-context")
         self.assertIn("no project.yaml", report["problems"])
 
     def test_the_onboarding_itself_starts_from_a_new_folder(self):
         os.makedirs(os.path.join(self.root, "demo", "new"))
-        code, report = self.preflight("project-onboarding", "demo/new")
+        code, report = self.preflight("project-context", "demo/new")
         self.assertEqual(code, ws.OK)
         self.assertEqual(report["project"]["status"], "not-configured")
 
     def test_an_incomplete_project_lists_its_problems(self):
         make_project(self.root, "demo/half", bug_format="", modules=[])
-        code, report = self.preflight("plan-batch", "demo/half")
+        code, report = self.preflight("plan-tests", "demo/half")
         self.assertEqual(code, ws.NOT_USABLE)
         self.assertIn("field 'bug_format' is empty", report["problems"])
-        self.assertEqual(report["proposes"], "/project-onboarding")
+        self.assertEqual(report["proposes"], "/project-context")
 
     def test_the_configuration_the_skill_needs(self):
         make_project(self.root, "demo/shop")
-        for skill, words in (("analyze-tickets", "no ticket source"), ("test-api", "module api is not in modules"),
-                             ("test-mobile", "module mobile is not in modules")):
-            with self.subTest(skill=skill):
-                code, report = self.preflight(skill, "demo/shop")
-                self.assertEqual(code, ws.NOT_USABLE)
-                self.assertIn(words, " ".join(report["problems"]))
-                self.assertEqual(report["proposes"], "/project-onboarding")
+        code, report = self.preflight("analyze-ticket", "demo/shop")
+        self.assertEqual(code, ws.NOT_USABLE)
+        self.assertIn("no ticket source", " ".join(report["problems"]))
+        self.assertEqual(report["proposes"], "/project-context")
+        # /run-tests needs no section of its own: each active module brings its route (and its section, checked by
+        # the project's validation); a web project is ready for the web route
+        with mock.patch("validate_project.environment", return_value=[]):
+            code, report = self.preflight("run-tests", "demo/shop")
+        self.assertEqual(code, ws.OK)
+        self.assertEqual([(r["module"], r["procedure"]) for r in report["routes"]],
+                         [("functional-web", "docs/procedures/run-web.md")])
 
-    def test_the_dashboard_is_for_excel(self):
+    def test_the_report_runs_on_any_tracker_and_the_dashboard_stays_excel_only(self):
         make_project(self.root, "demo/shop", tracker="jira", jira={
             "site": "https://demo-shop.atlassian.net", "project_key": "DS", "user_var": "U", "token_var": "T",
             "xray": {"client_id_var": "C", "client_secret_var": "S"}, "results": {"statuses": {"Pass": "PASSED"}}})
-        code, report = self.preflight("dashboard", "demo/shop")
-        self.assertEqual(code, ws.NOT_USABLE)
-        self.assertIn("tracker: excel", " ".join(report["problems"]))
+        code, _ = self.preflight("qa-report", "demo/shop")
+        self.assertEqual(code, ws.OK)               # totals come from the run logs, whatever the tracker
+        with open(os.path.join(ROOT, "docs", "procedures", "report.md"), encoding="utf-8") as f:
+            self.assertIn("Excel only", f.read())
 
     def test_a_missing_tool_is_shown_and_does_not_stop(self):
         make_project(self.root, "demo/mob", modules=["mobile"], mobile={"platform": "android", "flows": "flows"})
         tools = [(False, "maestro", "install the Maestro CLI"), (True, "adb", "/sdk/adb"), (True, "git", "/bin/git"),
                  (False, "emulator", "install the SDK")]
         with mock.patch("validate_project.environment", return_value=tools):
-            code, report = self.preflight("test-mobile", "demo/mob")
+            code, report = self.preflight("run-tests", "demo/mob")
         self.assertEqual(code, ws.OK)
         self.assertEqual([(t["tool"], t["ok"]) for t in report["tools"]],
                          [("maestro", False), ("adb", True), ("emulator", False)])        # git is not this skill's
@@ -579,59 +585,91 @@ class Preflight(Base):
     def test_a_skill_without_tools_asks_no_tool(self):
         make_project(self.root, "demo/shop", tickets={"sources": {"boards": BOARDS}})
         with mock.patch("validate_project.environment", side_effect=AssertionError("a tool was asked")):
-            self.assertEqual(self.preflight("analyze-tickets", "demo/shop")[0], ws.OK)
+            self.assertEqual(self.preflight("analyze-ticket", "demo/shop")[0], ws.OK)
 
     def test_the_browser_mcp_is_named(self):
         shop = make_project(self.root, "demo/shop")
         with mock.patch("validate_project.environment", return_value=[]):
-            self.assertFalse(self.preflight("run-batch", "demo/shop")[1]["tools"][0]["ok"])
+            self.assertFalse(self.preflight("run-tests", "demo/shop")[1]["tools"][0]["ok"])
             with open(os.path.join(shop, ".mcp.json"), "w", encoding="utf-8") as f:
                 json.dump({"mcpServers": {"playwright": {}}}, f)
-            line = self.preflight("run-batch", "demo/shop")[1]["tools"][0]
+            line = self.preflight("run-tests", "demo/shop")[1]["tools"][0]
         self.assertEqual((line["ok"], line["tool"]), (True, "mcp"))
         self.assertIn("playwright", line["detail"])
 
     MOBILE: ClassVar[dict] = {"modules": ["mobile", "exploratory"],
                               "mobile": {"app_id": "pt.demo.app", "platform": "android", "flows": "flows"}}
 
-    def test_a_mobile_only_project_is_routed_to_test_mobile_and_needs_no_browser_mcp(self):
-        # audit finding D-14: /run-batch on a mobile project listed the Playwright MCP as missing
+    def test_a_mobile_only_project_is_routed_to_the_mobile_procedure_and_needs_no_browser_mcp(self):
+        # audit finding D-14: running tests on a mobile project listed the Playwright MCP as missing
         make_project(self.root, "demo/app", **self.MOBILE)
         with mock.patch("validate_project.environment", return_value=[]):
-            code, report = self.preflight("run-batch", "demo/app")
+            code, report = self.preflight("run-tests", "demo/app")
         self.assertEqual(code, ws.OK)
-        self.assertEqual(report["route"]["skill"], "test-mobile")
+        self.assertEqual([(r["module"], r["procedure"]) for r in report["routes"]],
+                         [("mobile", "docs/procedures/run-mobile.md"), ("exploratory", "docs/procedures/run-mobile.md")])
         self.assertEqual([t["tool"] for t in report["tools"]], [])         # the MCP is not a requirement of that flow
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             ws._print_preflight(code, report)
-        self.assertIn("Route: /test-mobile", out.getvalue())
+        self.assertIn("Route: exploratory -> docs/procedures/run-mobile.md (charters of a mobile project run on the app)",
+                      out.getvalue())
         self.assertNotIn("[missing] mcp", out.getvalue())
+
+    def test_a_route_names_its_missing_tools_and_the_others_go_on(self):
+        make_project(self.root, "demo/both", modules=["functional-web", "mobile"],
+                     mobile={"app_id": "pt.demo.app", "platform": "ios", "flows": "flows"})
+        tools = [(False, "xcrun", "iOS needs macOS with Xcode"), (True, "maestro", "/bin/maestro"),
+                 (True, "node", "/bin/node")]
+        with mock.patch("validate_project.environment", return_value=tools):
+            code, report = self.preflight("run-tests", "demo/both")
+        self.assertEqual(code, ws.OK)                                      # a missing tool never stops the preflight
+        routes = {r["module"]: r for r in report["routes"]}
+        self.assertEqual(routes["mobile"]["missing"], ["xcrun"])
+        self.assertEqual(routes["functional-web"]["missing"], ["mcp"])    # no .mcp.json in the workspace
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ws._print_preflight(code, report)
+        self.assertIn("Route: mobile -> docs/procedures/run-mobile.md [missing: xcrun]", out.getvalue())
+
+    def test_api_routes_to_its_procedure_with_no_browser(self):
+        make_project(self.root, "demo/api", modules=["api"], api={"base_url": "https://api.shop.example/"},
+                     environments={"test": "https://api.shop.example/"})
+        with mock.patch("validate_project.environment", return_value=[]):
+            code, report = self.preflight("run-tests", "demo/api")
+        self.assertEqual(code, ws.OK)
+        self.assertEqual([r["procedure"] for r in report["routes"]], ["docs/procedures/run-api.md"])
+        self.assertEqual(report["tools"], [])
+        self.assertEqual(report["next"], [])                               # no device to check
 
     def test_a_web_or_mixed_project_keeps_its_browser_requirement(self):
         make_project(self.root, "demo/shop")
         make_project(self.root, "demo/both", modules=["functional-web", "mobile"],
                      mobile={"app_id": "pt.demo.app", "platform": "android", "flows": "flows"})
         with mock.patch("validate_project.environment", return_value=[]):
-            for pid in ("demo/shop", "demo/both"):
-                _, report = self.preflight("run-batch", pid)
-                self.assertNotIn("route", report, pid)
+            for pid, procs in (("demo/shop", ["docs/procedures/run-web.md"]),
+                               ("demo/both", ["docs/procedures/run-web.md", "docs/procedures/run-mobile.md"])):
+                _, report = self.preflight("run-tests", pid)
+                self.assertEqual([r["procedure"] for r in report["routes"]], procs, pid)
                 self.assertEqual([t["tool"] for t in report["tools"]], ["mcp"], pid)
 
     def test_test_mobile_names_the_one_check_of_the_target(self):
         make_project(self.root, "demo/app", **self.MOBILE)
         with mock.patch("validate_project.environment", return_value=[]):
-            _, report = self.preflight("test-mobile", "demo/app")
+            _, report = self.preflight("run-tests", "demo/app")
         self.assertTrue(any("device.py" in n and "check" in n for n in report["next"]), report["next"])
 
-    def test_the_route_of_a_skill_is_a_skill_that_exists(self):
+    def test_every_route_of_a_skill_is_a_procedure_that_exists(self):
+        found = 0
         for entry in ws.catalogue():
-            target = entry.get("routes-mobile-only-to")
-            if target:
-                self.assertIn(target, [e["name"] for e in ws.catalogue()])
+            for module, procedure in ws.parse_routes(entry.get("routes")).items():
+                found += 1
+                with self.subTest(skill=entry["name"], module=module):
+                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "docs", *procedure.split("/"))))
+        self.assertGreater(found, 0)
 
     def test_nothing_to_select(self):
-        code, report = self.preflight("plan-batch", root=os.path.join(self.tmp, "missing"))
+        code, report = self.preflight("plan-tests", root=os.path.join(self.tmp, "missing"))
         self.assertEqual(code, ws.NOTHING)
         self.assertIn("does not exist", report["message"])
 
@@ -678,7 +716,7 @@ class CommandLine(Base):
         self.assertEqual(code, 0)
         self.assertIn("valid", out)
         self.assertIn("not-configured", out)
-        self.assertIn("/project-onboarding", out)
+        self.assertIn("/project-context", out)
         self.assertEqual(self.run_("resolve", "shop", "--root", self.root)[0], ws.OK)
         self.assertEqual(self.run_("resolve", "acme/new", "--root", self.root)[0], ws.NOT_USABLE)
         code, out = self.run_("resolve", "nothing", "--root", self.root, "--json")
@@ -824,9 +862,9 @@ class TwoProjects(Base):
 
     def test_the_entry_flow_from_a_neutral_folder(self):
         os.makedirs(self.target, exist_ok=True)
-        self.assertEqual(self.preflight("analyze-tickets")[0], ws.AMBIGUOUS)
-        self.assertEqual(self.preflight("analyze-tickets", "shop")[0], ws.AMBIGUOUS)    # the same folder in two companies
-        code, report = self.preflight("analyze-tickets", "acme/shop")
+        self.assertEqual(self.preflight("analyze-ticket")[0], ws.AMBIGUOUS)
+        self.assertEqual(self.preflight("analyze-ticket", "shop")[0], ws.AMBIGUOUS)    # the same folder in two companies
+        code, report = self.preflight("analyze-ticket", "acme/shop")
         self.assertEqual(code, ws.OK)
         self.assertTrue(sync_skills.same_path(report["project"]["path"], self.b))
         self.assertEqual(report["sources"][0]["credentials"], {"DS_PAT": True})

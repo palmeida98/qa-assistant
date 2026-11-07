@@ -88,6 +88,11 @@ def expand(source, roots: list[str], limits: dict, follow: bool = True) -> tuple
         snap = source.normalize(bundle)
         seen[tid] = {"snapshot": snap, "role": role, "depth": depth, "via": via}
         if not follow:
+            # listed, not read: a change in a child (a task Done, a comment) does not change this ticket's revision,
+            # so what was not expanded is said (audit 06.11.2026: it was left out without a word)
+            for rel in snap["components"]["relations"]:
+                if not rel.get("external") and str(rel["target"]) not in seen:
+                    omit(rel["target"], tid, "not-expanded")
             continue
         for rel in snap["components"]["relations"]:
             target = str(rel["target"])

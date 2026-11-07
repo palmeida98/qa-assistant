@@ -36,11 +36,14 @@ before anything is written (validate_batch, technique-excel.md section 4).
 """
 from __future__ import annotations
 
+import contextlib
 import copy
+import fnmatch
 import hashlib
 import json
 import os
 import re
+import tempfile
 from collections import Counter
 from datetime import datetime
 
@@ -50,6 +53,146 @@ from openpyxl.formula.translate import Translator
 from .recalc import recalc_safe
 
 CONTROL_SHEET_DEFAULT = "_qa_batches"
+WORKBOOK_ENV = "QA_WORKBOOK"   # replaces excel.file for one command (one workbook per platform)
+
+
+def workbook_patterns(excel: dict) -> list[tuple[str, str, list[str]]]:
+    """(name, file, batch patterns) of each extra workbook of `excel.workbooks` (technique-excel.md section 1.1)."""
+    out = []
+    for key, v in ((excel or {}).get("workbooks") or {}).items():
+        if isinstance(v, dict) and v.get("file"):
+            pats = v.get("batches") or []
+            out.append((str(key), str(v["file"]), [pats] if isinstance(pats, str) else [str(p) for p in pats]))
+    return out
+
+
+def configured_workbook(excel: dict, batch_id: str | None) -> tuple[str, str]:
+    """(file, where it comes from) of the workbook a batch belongs to by project.yaml alone: the first entry of
+    `excel.workbooks` whose patterns match the batch's name, else `excel.file`."""
+    for key, file, pats in workbook_patterns(excel):
+        if batch_id and any(fnmatch.fnmatch(batch_id, p) for p in pats):
+            return file, f"excel.workbooks.{key}"
+    return str((excel or {}).get("file") or ""), "excel.file"
+
+
+def workbook_for(excel: dict, batch_id: str | None, environ=None) -> tuple[str, str]:
+    """(file, where it comes from) of the workbook to use for a batch: $QA_WORKBOOK when set (one command), else
+    configured_workbook. The one rule for apply, run_log and the reports (audit 06.11.2026)."""
+    environ = os.environ if environ is None else environ
+    forced = str(environ.get(WORKBOOK_ENV, "")).strip()
+    if forced:
+        return forced, f"${WORKBOOK_ENV}"
+    return configured_workbook(excel, batch_id)
+
+
+class Route(tuple):
+    """The workbook of a batch: (file, source, platform, problem). `problem` is None when the route is certain; any
+    text means the batch must not be applied (nor its application read from one workbook only)."""
+    __slots__ = ()
+
+    def __new__(cls, file: str, source: str, platform: str, problem: str | None):
+        return tuple.__new__(cls, (file, source, platform, problem))
+
+    file = property(lambda s: s[0])
+    source = property(lambda s: s[1])
+    platform = property(lambda s: s[2])
+    problem = property(lambda s: s[3])
+
+
+def _name_platforms(proj: dict, batch_id: str) -> list[str]:
+    """The platforms `report.platforms` gives to a batch name (all that match, in order, without repeats)."""
+    report = proj.get("report") if isinstance(proj.get("report"), dict) else {}
+    out = []
+    for platform, patterns in ((report or {}).get("platforms") or {}).items():
+        for pattern in [patterns] if isinstance(patterns, str) else patterns or []:
+            if fnmatch.fnmatch(batch_id, str(pattern)) and str(platform).lower() not in out:
+                out.append(str(platform).lower())
+    return out
+
+
+def route_workbook(proj: dict, batch_id: str, run: dict | None = None, environ=None, workspace: str = ".") -> Route:
+    """The one rule that chooses the workbook of a batch (technique-excel.md section 1.1), with every reason to stop.
+
+    Each `excel.workbooks` entry is the workbook of one platform: its `platform`, else its key. `excel.file` is the
+    workbook of the platforms without an entry of their own. The batch's platform comes from three places that must
+    agree: the run block's `platform`, the `report.platforms` pattern its name matches, and the `excel.workbooks`
+    entry its name matches. The route stops (problem) when:
+      - the name matches the patterns of more than one workbook, or of more than one platform;
+      - two of the three places name different platforms (e.g. run.platform ios, name of an Android batch);
+      - the batch is of a platform with its own workbook but the name does not match that workbook's patterns;
+      - the project declares several workbooks and nothing says the batch's platform (the default workbook is never
+        chosen by elimination).
+    $QA_WORKBOOK replaces the file for one command only when it names the same workbook or the project declares one."""
+    environ = os.environ if environ is None else environ
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    entries = [(key, file, pats, str(((excel.get("workbooks") or {}).get(key) or {}).get("platform") or key).lower())
+               for key, file, pats in workbook_patterns(excel)]
+    default = str(excel.get("file") or "")
+    declared = str((run or {}).get("platform") or "").strip().lower()
+    by_name = _name_platforms(proj, batch_id)
+    matched = [e for e in entries if any(fnmatch.fnmatch(batch_id, p) for p in e[2])]
+    problem = None
+    if len(matched) > 1:
+        problem = (f"{batch_id} matches the patterns of {len(matched)} workbooks ("
+                   + ", ".join(f"excel.workbooks.{k}: {', '.join(p)}" for k, _, p, _ in matched)
+                   + "): fix the patterns in project.yaml or rename the batch")
+    elif len(by_name) > 1:
+        problem = (f"{batch_id} matches the report.platforms patterns of {' and '.join(by_name)}: fix the patterns "
+                   "in project.yaml or rename the batch")
+    said = {"run.platform": declared, "report.platforms": by_name[0] if by_name else ""}
+    if matched:
+        said[f"excel.workbooks.{matched[0][0]}"] = matched[0][3]
+    said = {k: v for k, v in said.items() if v}
+    platform = next(iter(said.values()), "")
+    if not problem and len(set(said.values())) > 1:
+        problem = (f"{batch_id}: the platforms do not agree ("
+                   + ", ".join(f"{k}: {v}" for k, v in said.items())
+                   + "): correct the run block's platform or rename the batch; nothing is chosen for you")
+    if matched:
+        file, source = matched[0][1], f"excel.workbooks.{matched[0][0]}"
+    else:
+        own = next((e for e in entries if e[3] == platform), None) if platform else None
+        file, source = default, "excel.file"
+        if own and not problem:
+            problem = (f"{batch_id} is of platform {platform} (" + ", ".join(f"{k}" for k in said)
+                       + f"), whose workbook is {own[1]} (excel.workbooks.{own[0]}), but its name matches none of "
+                       f"{', '.join(own[2])}: rename the batch so the name and the platform say the same")
+        elif entries and not platform and not problem:
+            problem = (f"{batch_id}: no platform recognised (no run.platform, and the name matches no pattern of "
+                       "excel.workbooks or report.platforms) while the project has several workbooks: declare "
+                       "\"platform\" in the run block or rename the batch; the default workbook is not chosen by "
+                       "elimination")
+    forced = str(environ.get(WORKBOOK_ENV, "")).strip()
+    if forced:
+        def full(x):
+            return os.path.normcase(os.path.abspath(os.path.join(workspace, x)))
+        if entries and not problem and full(forced) != full(file):
+            problem = (f"${WORKBOOK_ENV}={forced} but {batch_id} belongs to {file} ({source}): unset "
+                       f"{WORKBOOK_ENV} (the workbook is chosen from project.yaml) or rename the batch")
+        file, source = forced, f"${WORKBOOK_ENV}"
+    return Route(file, source, platform or "", problem)
+
+
+def workbook_files(proj: dict) -> list[str]:
+    """Every workbook the project declares: excel.file, then each excel.workbooks entry (no repeats)."""
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    out = [str(excel.get("file") or "")] + [file for _, file, _ in workbook_patterns(excel)]
+    return [f for i, f in enumerate(out) if f and f not in out[:i]]
+
+
+def workbook_conflict(excel: dict, batch_id: str, workspace: str, environ=None) -> str | None:
+    """Why $QA_WORKBOOK cannot be used for this batch, or None: when project.yaml declares several workbooks and the
+    batch belongs to another one, the override would write the results in the wrong workbook."""
+    file, source = workbook_for(excel, batch_id, environ)
+    if not source.startswith("$") or not workbook_patterns(excel):
+        return None
+    own, own_source = configured_workbook(excel, batch_id)
+    same = os.path.normcase(os.path.abspath(os.path.join(workspace, file))) == \
+        os.path.normcase(os.path.abspath(os.path.join(workspace, own)))
+    return None if same else (f"${WORKBOOK_ENV}={file} but {batch_id} belongs to {own} ({own_source}): unset "
+                              f"{WORKBOOK_ENV} (the workbook is chosen from project.yaml) or rename the batch")
+
+
 _CONTROL_HEADERS = ["hash", "applied_at", "label", "items", "new_defects", "batch_id"]
 # control sheets written before the translation (plan 8.11) keep their headers: they are workbook data
 _LEGACY_CONTROL_HEADERS = {"aplicado_em": "applied_at", "etiqueta": "label", "itens": "items",
@@ -156,7 +299,7 @@ class ExcelAdapter:
         return cls(config, base_dir)
 
     @classmethod
-    def from_yaml(cls, path: str, section: str | None = None) -> ExcelAdapter:
+    def from_yaml(cls, path: str, section: str | None = None, file: str | None = None) -> ExcelAdapter:
         import yaml
 
         with open(path, encoding="utf-8-sig") as f:
@@ -165,19 +308,29 @@ class ExcelAdapter:
             if section not in data:
                 raise ConfigError(f"{path}: section '{section}' is missing")
             data = data[section]
+        if file:
+            data = {**data, "file": file}
         return cls(data, base_dir=os.path.dirname(os.path.abspath(path)))
 
     @classmethod
-    def from_project(cls, workspace: str = ".") -> ExcelAdapter:
+    def from_project(cls, workspace: str = ".", file: str | None = None, batch: str | None = None) -> ExcelAdapter:
         """Reads the `excel:` section of the workspace's project.yaml (plan
-        task 1.3). The workbook path is relative to the workspace."""
+        task 1.3). The workbook path is relative to the workspace. `file`, else
+        workbook_for (QA_WORKBOOK, then the `excel.workbooks` entry whose
+        patterns match `batch`, then excel.file)."""
         path = os.path.join(workspace, "project.yaml")
         if not os.path.exists(path):
             old = os.path.join(workspace, "projeto.yaml")
             hint = (" (a workspace from before the translation: convert it with scripts/migrate_workspace.py)"
                     if os.path.exists(old) else "")
             raise ConfigError(f"{path} does not exist{hint}")
-        return cls.from_yaml(path, section="excel")
+        if not file:
+            import yaml
+
+            with open(path, encoding="utf-8-sig") as f:
+                excel = (yaml.safe_load(f) or {}).get("excel") or {}
+            file = workbook_for(excel, batch)[0] or None
+        return cls.from_yaml(path, section="excel", file=file)
 
     @staticmethod
     def _validate(cfg: dict) -> dict:
@@ -333,8 +486,27 @@ class ExcelAdapter:
             raise ConfigError("configuration does not match the workbook:\n - " + "\n - ".join(problems))
 
     def save(self, path: str | None = None) -> str:
+        """Saves to a temporary file next to the target, checks that it opens, then puts it in place: a stop in the
+        middle never leaves a broken workbook (audit 06.11.2026)."""
         out = path or self.path
-        self._need_wb().save(out)
+        folder = os.path.dirname(os.path.abspath(out))
+        fd, tmp = tempfile.mkstemp(prefix=".~qa-", suffix=os.path.splitext(out)[1] or ".xlsx", dir=folder)
+        os.close(fd)
+        try:
+            self._need_wb().save(tmp)
+            openpyxl.load_workbook(tmp, read_only=True).close()
+            for n in range(20):         # Windows: a reader holding the file for a moment
+                try:
+                    os.replace(tmp, out)
+                    break
+                except PermissionError:
+                    if n == 19:
+                        raise
+                    import time
+                    time.sleep(0.05)
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(tmp)
         return out
 
     def reviewed_path(self) -> str:
@@ -517,13 +689,18 @@ class ExcelAdapter:
                     pr = new.get("priority", new.get("severity"))
                     if pr not in prios:
                         problems.append(f"{where}: priority of the new defect {pr!r} outside {prios}")
+                known = set(d["batch_fields"]) | {"related_tc", "severity", "priority", "proposed"}
+                lost = sorted(k for k in new if k not in known)
+                if lost:        # a key with no column was dropped without a word (audit 06.11.2026)
+                    problems.append(f"{where}: new_defect key(s) {lost} have no column in excel.defects.batch_fields "
+                                    f"(known: {sorted(known)}): map them or rename them, nothing would keep them")
         dup = sorted(tc for tc, n in seen.items() if tc and n > 1)
         if dup:
             problems.append(f"case repeated in the batch: {dup}")
         return problems
 
     def apply_batch(self, batch: list, label: str | None = None, reported_by: str | None = None,
-                    batch_id: str | None = None, identity: str | None = None) -> dict:
+                    batch_id: str | None = None, identity: str | None = None, run: dict | None = None) -> dict:
         """Applies the batch: status, actual result and notes per case, and
         creates the new defects. A batch already applied to this workbook (same
         content) is not applied again: returns {"applied": False, ...} without
@@ -605,6 +782,8 @@ class ExcelAdapter:
             if new_defect:
                 last_def_row += 1
                 vals = dict(d["defaults"])
+                if (run or {}).get("build") and "build" in d["batch_fields"]:
+                    vals["build"] = run["build"]        # the build of the run, before a project-wide default
                 vals.update(new_defect)
 
                 def put(col, value, row=last_def_row):

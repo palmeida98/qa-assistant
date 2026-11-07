@@ -68,8 +68,8 @@ Any folder name is accepted, spaces and accents included; a folder starting with
 | Status | Meaning | Proposed |
 |---|---|---|
 | `valid` | `project.yaml` is readable and its base fields are right (`validate_project.base_problems`) | — |
-| `incomplete` | `project.yaml` cannot be parsed or has problems, or the workspace predates plan 8.11 | `/project-onboarding` |
-| `not-configured` | No `project.yaml`: incomplete in the strongest sense, a new folder | `/project-onboarding` |
+| `incomplete` | `project.yaml` cannot be parsed or has problems, or the workspace predates plan 8.11 | `/project-context` |
+| `not-configured` | No `project.yaml`: incomplete in the strongest sense, a new folder | `/project-context` |
 | `inaccessible` | A link, or the system refused to read it | Check the folder |
 
 `valid` says the configuration is well formed, not that the tools are there: that is `preflight`.
@@ -82,7 +82,7 @@ Any folder name is accepted, spaces and accents included; a folder starting with
 
 1. **An explicit path:** normalised with links resolved. It must exist and lie outside the framework (`examples/` is the exception: the demo).
 2. **A name:** matched against the discovery by id, then folder, then the `project:` of `project.yaml`, then a part of the id or name. One match is selected; several are ambiguous.
-3. **The current directory**, or the nearest parent with a `project.yaml`; inside the framework this step is skipped. A new folder inside the root is selected too, as `not-configured`, so `/project-onboarding` can start there.
+3. **The current directory**, or the nearest parent with a `project.yaml`; inside the framework this step is skipped. A new folder inside the root is selected too, as `not-configured`, so `/project-context` can start there.
 4. **The root:** selected only when it holds exactly one project and that project is `valid`. Otherwise the list is shown and the user chooses.
 
 **Nothing is chosen silently between candidates.** Ambiguity is a short question with the name, id and relative path of each one.
@@ -103,7 +103,7 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 | Exit | Meaning | What the skill does |
 |---|---|---|
 | 0 | Ready; missing tools, if any, are listed | Shows the summary and goes on |
-| 1 | Found, not usable: `incomplete`, `not-configured`, `inaccessible`, or a configuration the skill needs is missing | Shows why and proposes `/project-onboarding` |
+| 1 | Found, not usable: `incomplete`, `not-configured`, `inaccessible`, or a configuration the skill needs is missing | Shows why and proposes `/project-context` |
 | 2 | Ambiguous: several candidates | Asks which one, with the list |
 | 3 | The skill and the code do not match | Stops and shows the instruction, which names the checkout that has the code. Nothing is installed or changed |
 | 4 | Nothing to select: the root or the path does not exist, or a usage error | Shows the expected configuration |
@@ -112,10 +112,10 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 
 ## 7. Isolation
 
-- **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/`. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, `qa-ui`'s batches, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
+- **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/` (in any case: `History/` is the same folder on macOS and Windows). A whole file is written by `common.atomic_write`: an exclusive temporary file next to it (a link planted at `<file>.tmp` is never followed), flushed to the disk, then put in place; a stopped write removes its temporary file. Appended files (the context archive) are opened without following a link. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, `qa-ui`'s batches, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
 - **Two explicit exceptions, both stated by configuration or by the runner:** the workbook lives where `excel.file` of `project.yaml` says, possibly a synced folder (`technique-excel.md` §2); on a runner, `run_mobile.py` may keep its report in `$RUNNER_TEMP`, a throwaway folder, as `docs/workspace/ci/mobile.yml` does.
-- **Mobile only.** For a skill that needs a browser MCP, in a project whose modules are only `mobile` and `exploratory`, preflight prints `Route: /test-mobile` and does not list the MCP as missing (§8).
-- **One writer at a time.** The ticket memory (`record_check`, `record_analysis`), `run_log.py add` and the interface's run-log edits read, change and write under `common.workspace_lock`: a file `.qa-assistant.lock` in the workspace, created exclusively, naming its holder (process, its start time, machine, a token). A second writer waits up to 30 seconds (`QA_LOCK_WAIT`), then stops with exit 5 (tickets) or 1 (`run_log.py`), having written nothing. The file is in the workspace's `.gitignore`.
+- **Routes per module.** For a skill with `routes` (`/run-tests`), preflight prints one `Route:` line per active module, with its procedure and whether its tools and configuration are ready. In a project whose modules are only `mobile` and `exploratory`, the charters take the mobile route and the browser MCP is not listed as missing (§8).
+- **One writer at a time.** The ticket memory (`record_check`, `record_analysis`), `run_log.py add` (with the check that the batch is not applied), the Excel apply and the interface's run-log edits read, change and write under `common.workspace_lock`: a file `.qa-assistant.lock` in the workspace, linked into place already naming its holder (process, its start time, machine, a token), so it is never seen empty. A second writer waits up to 30 seconds (`QA_LOCK_WAIT`), then stops with exit 5 (tickets) or 1 (`run_log.py`), having written nothing. The file is in the workspace's `.gitignore`.
 
   | Situation | What happens |
   |---|---|
@@ -123,12 +123,13 @@ Then it presents the project, the task, the environment keys, the tools, the wri
   | The holder died | Taken over at once by the next writer |
   | The id now belongs to another process | Its start time differs: taken over. Where the start time cannot be read, the lock is respected while that process lives |
   | The holder is on another machine (a synced folder) | Its heartbeat touches the file every minute; 15 minutes without one and it is taken over. A file nobody can read is treated the same |
-  | An operation inside another, in one thread | Keeps the same lock; released by the outermost |
+  | An operation inside another, in one thread | Keeps the same lock (the same workspace through a link or another case too); released by the outermost |
+  | A lock file that names nobody (a writer stopped while creating it, before this was linked into place) | Respected for 10 seconds, then taken over |
   | Several waiters on an abandoned lock | One at a time removes it, through a small takeover file, so nobody removes the new lock of another; a holder only removes a lock with its own token |
 
 - **Redaction by value.** A variable is **sensitive** when the caller names it (those `project.yaml` refers to, `--save-secret`, the variables of a mobile flow, a tracker's credentials) or its name says so (`SECRET_KEY` and `SENSITIVE_WORDS` in `scripts/common.py`: `APP_PIN`, `DB_PASS`): its value is hidden **whatever its length**, in text and in JSON numbers. Any other value is left alone under 4 characters (6 in tickets) or when it is a common word (`HEADLESS=1`, `DEBUG=true`). A value under 8 characters is matched as a whole word or number, so a PIN `4821` is hidden and `148210` stays. **Limits:** a short secret in a variable with a neutral name that the project does not refer to is not recognised, nor is one glued to letters or digits (`pin4821`); a legitimate number equal to a PIN is hidden too, on purpose. This is a safety net: evidence is still reviewed, and a secret should not be typed where it can be echoed.
 - **`.env`.** One `KEY=value` per line, `export ` allowed, a line starting with `#` is a comment. A quoted value is what is between the quotes, `#` included, and a comment may follow the closing quote. In an unquoted value a `#` after a space starts a comment; a `#` inside a word or at the start of the value is part of it. An unbalanced quote is kept as it is. Before this rule ` #` was part of the value, so `validate_project.py` warns, by name only, about each variable cut this way; put the value in quotes if it was a password. The interface and the runner's `write-env` quote what needs it.
-- **Credentials** are read from the selected workspace's `.env` only, and the sanitiser of `/analyze-tickets` knows only that file's values.
+- **Credentials** are read from the selected workspace's `.env` only, and the sanitiser of `/analyze-ticket` knows only that file's values.
 - **Memory and sessions** belong to one workspace. Two projects with the same name, ticket id or source never share anything: nothing global holds project data.
 - **Claude's personal or global memory is not a source of truth for a project.** On resuming, the agent loads `context.md`, the relevant records and the configuration. Real results stay in the workspace; the framework receives only generalised improvements and fictional examples.
 
@@ -156,19 +157,23 @@ Each skill's frontmatter has a `metadata` map of plain strings, the **single sou
 | `requires-config` | What `project.yaml` must have: `tickets`, `api`, `accessibility`, `mobile`, `excel` |
 | `requires-tools` | Lines of `validate_project.environment()` it needs, plus `mcp` for a browser MCP named in `.mcp.json` |
 | `requires-project` | `valid` (the default), or `any` for a skill that can start from an empty folder |
+| `requires-docs` | Documents of `<qa>/docs/` it reads (e.g. `procedures/run-mobile.md`); a missing one stops the installation and the preflight |
+| `routes` | `module: procedure; ...`: the procedure of each module (`/run-tests`); the preflight prints the route of each active module |
+| `next-check` | `yes`: the preflight names the one check of the target to run first (`device.py check` for a mobile project) |
 
 A skill existing does not prove its tools are available: that is what `requires-tools` answers.
 
-**Routing is light.** Claude Code matches the request against the skills' descriptions and the skill runs its preflight, so the user need not know the commands. Methodology §3 has the table. No entry skill exists because no gap needs one: what was missing was finding the framework and the project, which this helper does for every skill. A second execution engine, a manual catalogue or a database would add nothing.
+**Routing is light.** Claude Code matches the request against the skills' descriptions and the skill runs its preflight, so the user need not know the commands. Methodology §3 has the table; `skills-spec.md` says what each skill owns and `skills-guide.md` how to ask for it, with the limits of matching by description. `/project-context` is the entry point for "continue", and `/test-pbi` runs the whole flow for one PBI; every skill still finds the framework and the project by itself. A second execution engine, a manual catalogue or a database would add nothing.
 
 Analysis and execution stay apart. "Analyse these tickets" gives an analysis. "Test this feature" may go through planning and execution, respecting the approved batch and the project's rules.
 
 ## 9. Syncing the skills
 
-`python scripts/sync_skills.py --apply` copies each `SKILL.md` to `~/.claude/skills/` and writes `.qa-assistant-source.json` next to them: the root, branch, commit, whether the tree had uncommitted changes, the instant and each skill's hash. So the copy always says which code it belongs to.
+`python scripts/sync_skills.py --apply` copies each `SKILL.md` to `~/.claude/skills/` and writes `.qa-assistant-source.json` next to them: the root, branch, commit, whether the tree had uncommitted changes, the files under `.claude/skills/`, `docs/`, `scripts/` and `adapters/` not committed (and which skills they touch), the instant and each skill's hash. So the copy always says which code it belongs to, and the commit is never shown as the whole content when there are local changes.
 
 - It copies only `SKILL.md`, so **a skill folder holds nothing else** (a test keeps it so). Detail lives in `docs/`, found through `<qa>`. No secret or foreign file can travel this way.
-- It refuses to install a skill whose `requires-modules` or `requires-scripts` are missing from the same checkout.
+- It refuses to install a skill whose `requires-modules`, `requires-scripts` or `requires-docs` are missing from the same checkout.
+- It keeps the global skills of other origins and removes only the framework's retired names (version 1 included).
 - Syncing from a worktree or another branch is allowed and said aloud: workspaces then run that checkout's code until the next sync. It never merges anything.
 - `sync_skills.py` without `--apply` also says when the record names another checkout.
 

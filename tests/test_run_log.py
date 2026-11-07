@@ -57,13 +57,18 @@ class RunLog(unittest.TestCase):
         return code, out.getvalue()
 
     def test_add_then_replace_the_same_case(self):
-        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "cart shows 2 items", now=NOW)
+        # the run block comes with the first result (audit 06.11.2026: a later --build cannot fill it)
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "cart shows 2 items", environment="test",
+               build="1.4.0 (140)", now=NOW)
         path, replaced = rl.add(self.ws, "batch_20260929_01", "TC-SHOP-002", "Fail", "coupon accepted",
                                 bug="BUG-1", evidence=["evidence/b/TC-SHOP-002_t1.png"], environment="test",
                                 build="1.4.0 (140)", now=NOW)
-        self.assertFalse(replaced)
-        _, replaced = rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Question", "is 2 the limit?", now=NOW)
-        self.assertTrue(replaced)
+        self.assertIsNone(replaced)
+        with self.assertRaises(rl.Refused):          # a second result of a case needs --replace
+            rl.add(self.ws, "20260929_01", "TC-SHOP-001", "question", "is 2 the limit?", now=NOW)
+        _, replaced = rl.add(self.ws, "20260929_01", "TC-SHOP-001", "question", "is 2 the limit?", now=NOW,
+                             replace=True)
+        self.assertEqual(replaced["actual_result"], "cart shows 2 items")     # the result replaced is returned
         doc = self.log()
         self.assertEqual(doc["run"], {"environment": "test", "build": "1.4.0 (140)"})
         self.assertEqual(doc["results"], [
@@ -72,6 +77,24 @@ class RunLog(unittest.TestCase):
             {"tc": "TC-SHOP-002", "status": "Fail", "actual_result": "coupon accepted", "ts": "2026-09-29T14:03:00",
              "bug": "BUG-1", "evidence": "evidence/b/TC-SHOP-002_t1.png"}])
         self.assertEqual(path, os.path.join(self.ws, "runs", "batch_20260929_01.json"))
+
+    def test_a_build_cannot_be_filled_in_after_results_without_one(self):
+        # audit 06.11.2026: the third result's --build became the build of the two before it
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
+        with self.assertRaises(rl.Refused):
+            rl.add(self.ws, "20260929_01", "TC-SHOP-002", "Pass", "ok", build="1.0.1 (9)", now=NOW)
+        self.assertNotIn("build", self.log().get("run") or {})
+
+    def test_replacing_shows_the_old_result_and_keeps_its_evidence_files(self):
+        rl.add(self.ws, "20260929_01", "TC-SHOP-002", "Fail", "first", bug="BUG-1",
+               evidence=["evidence/b/x.png"], now=NOW)
+        code, out = self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "second")
+        self.assertEqual(code, 1)
+        self.assertIn("--replace", out)
+        code, out = self.run_("add", "20260929_01", "TC-SHOP-002", "Pass", "second", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertIn("BUG-1", out)
+        self.assertIn("evidence/b/x.png", out)
 
     def test_results_added_at_the_same_time_are_all_kept(self):
         # audit finding D-02: each writer read the file, added its case and wrote the whole file back over the others
@@ -147,7 +170,8 @@ class RunLog(unittest.TestCase):
         self.assertEqual((code, "CHK-1" in out), (2, True))
 
     def test_remove_a_mistaken_result_and_keep_the_rest(self):
-        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", evidence=["evidence/b/a.png"], now=NOW)
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", evidence=["evidence/b/a.png"], environment="test",
+               build="1.0 (1)", now=NOW)
         rl.add(self.ws, "20260929_01", "TC-SHOP-002", "Fail", "wrong case", evidence=["evidence/b/b.png"], now=NOW)
         rl.add(self.ws, "20260929_01", "TC-SHOP-003", "Pass", "ok", environment="test", build="1.0 (1)", now=NOW)
         os.makedirs(os.path.join(self.ws, "evidence", "b"))

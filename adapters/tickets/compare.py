@@ -208,6 +208,9 @@ def suggested_situation(snap: dict, entries_by_id: dict) -> dict | None:
             if state != "done":
                 blockers.append(str(rel["target"]))
     flags = []
+    if str(fields.get("state") or "").strip().casefold() in ("removed", "cut", "won't do", "wont do"):
+        # withdrawn, not delivered: nothing to verify until someone says why (audit 06.11.2026)
+        return {"value": "needs-clarification", "flags": ["removed"], "blockers": blockers}
     if fields.get("state_category") == "done":
         value = "verification-candidate"
         flags.append("closed_without_qa_evidence")

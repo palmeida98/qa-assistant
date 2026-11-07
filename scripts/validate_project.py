@@ -32,7 +32,7 @@ device scripts take them, QA_MOBILE_SERIAL / QA_MOBILE_INPUT over project.yaml
 mobile.build.source. Nothing is started nor installed. A missing tool is a
 warning (exit 0) unless --strict.
 
-With a tickets: section, also how /analyze-tickets can read each source (a token
+With a tickets: section, also how /analyze-ticket can read each source (a token
 set in .env, or a logged-in browser). Read only; never changes anything. Problems
 prevent calling the onboarding done; warnings are shown to the user.
 
@@ -403,6 +403,16 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
         problems.append("resolved_bugs must be 'remove' or 'archive'")
     if proj.get("evidence") not in (None, "text", "text+screenshot"):
         problems.append("evidence must be 'text' or 'text+screenshot'")
+    report = proj.get("report")
+    if report is not None:
+        # /qa-report: which batches belong to which platform (scripts/qa_report.py); never guessed from the results
+        platforms = report.get("platforms") if isinstance(report, dict) else None
+        if not isinstance(report, dict) or not isinstance(platforms, dict) or not all(
+                isinstance(v, str) or (isinstance(v, list) and all(isinstance(x, str) for x in v))
+                for v in platforms.values()):
+            problems.append("report: expected {platforms: {<platform>: [<batch name pattern>, ...]}}")
+        elif set(report) - {"platforms"}:
+            warnings.append(f"report: unknown key(s) {sorted(set(report) - {'platforms'})} (known: ['platforms'])")
 
     modules = proj.get("modules") or []
     if not modules:
@@ -539,6 +549,22 @@ def driver_on_device(adb: str, serial: str | None) -> tuple[bool, str]:
     return True, "installed and its service on (device.py check pings it)"
 
 
+def wda_reachable(url: str | None = None) -> tuple[bool, str, str]:
+    """(answers, "ios-wda", detail): one GET of WebDriverAgent's /status, 3 seconds at most. Reads only; nothing is
+    started or changed on the iPhone (technique-mobile.md §1.5)."""
+    import urllib.request
+
+    from common import WDA_URL_DEFAULT, WDA_URL_ENV
+    base = (os.environ.get(WDA_URL_ENV, "").strip() or str(url or "") or WDA_URL_DEFAULT).rstrip("/")
+    try:
+        with urllib.request.urlopen(base + "/status", timeout=3) as r:
+            ready = (json.loads(r.read().decode("utf-8", "replace")).get("value") or {}).get("ready", True)
+        return (bool(ready), "ios-wda", f"answering at {base}" if ready else f"at {base} but not ready: restart it")
+    except Exception:       # noqa: BLE001 - any failure is "not answering"
+        return (False, "ios-wda", (f"not answering at {base}: connect the iPhone by USB, start WebDriverAgent "
+                                   "(signed, not expired) and `iproxy 8100 8100` (technique-mobile.md §1.5)"))
+
+
 def qa_audit_installed() -> bool:
     return importlib.util.find_spec("qa_audit") is not None
 
@@ -600,7 +626,8 @@ def env_check(workspace: str, proj: dict, ci: bool = False) -> tuple[bool, str]:
         return True, f"the {len(needed)} variable(s) of .env.example and project.yaml are set (values not shown)"
     parts = ([f"misses {', '.join(absent)}"] if absent else []) + \
         ([f"without a value: {', '.join(empty)}"] if empty else [])
-    return False, f"{'; '.join(parts)} — fill them {VALUES_FROM}"
+    return False, (f"{'; '.join(parts)} — only the cases that use them are blocked (the rest can run); fill them "
+                   f"{VALUES_FROM}")
 
 
 def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool, str, str]]:
@@ -658,8 +685,21 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
     if "mobile" in modules:
         m = proj.get("mobile") or {}
         platform = str(m.get("platform") or "")
+        ios_section = m.get("ios") if isinstance(m.get("ios"), dict) else None
         exe = which("maestro")
-        add((bool(exe), "maestro", exe or "install the Maestro CLI (https://maestro.mobile.dev; it needs Java 17+)"))
+        try:
+            from common import mobile_target as _mt
+            input_now = _mt(m)[1] if platform == "android" else None
+        except ValueError:
+            input_now = None
+        if exe:
+            add((True, "maestro", exe))
+        elif platform == "android" and input_now == "adb":
+            add((False, "maestro", ("install the Maestro CLI (https://maestro.mobile.dev; it needs Java 17+): "
+                                    "mobile.input adb runs the flows with it")))
+        else:       # the driver (Android) and WebDriverAgent (iOS) need no Maestro (technique-mobile.md §1.2, §1.5)
+            add((True, "maestro", ("not installed; not needed by this target (input "
+                                   f"{input_now or 'wda'}); only the Maestro flows (mobile.flows, emulator) need it")))
         if platform == "android":
             tools = android_tools()
             sdk = ("install the Android SDK (Android Studio or the command-line tools) and set ANDROID_HOME; then "
@@ -680,9 +720,10 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
                 add((True, "emulator", f"not needed: the target is the device {serial}"))
             else:
                 add((bool(tools.get("emulator")), "emulator", tools.get("emulator") or sdk))
-        elif platform == "ios":
+        if platform == "ios" or ios_section is not None:
             exe = which("xcrun")
             add((bool(exe), "xcrun", exe or "iOS needs macOS with Xcode (xcode-select --install)"))
+            add(wda_reachable((ios_section or {}).get("wda_url")))
         if platform in ("android", "ios"):
             build = m.get("build") if isinstance(m.get("build"), dict) else {}
             source = str(build.get("source") or "").strip()
@@ -698,7 +739,7 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
 
 
 def ticket_sources(workspace: str) -> list[tuple[bool, str, str]]:
-    """How /analyze-tickets can read each source: a token set in .env (names only), or a logged-in session."""
+    """How /analyze-ticket can read each source: a token set in .env (names only), or a logged-in session."""
     try:
         config = tickets_config.load(workspace)
     except tracker_config.ConfigError as e:

@@ -5,6 +5,9 @@ back in time (docs/technique-tickets.md section 7). The verification prompt's ru
 
 from __future__ import annotations
 
+import json
+import re
+
 from .model import text_hash
 
 SITUATIONS = ("needs-clarification", "awaiting-implementation-or-build", "verification-candidate",
@@ -15,7 +18,12 @@ FORBIDDEN_ACTION_KEYS = ("done", "executed", "sent", "applied")
 FORBIDDEN_PROMPT_KEYS = ("results", "result", "executed", "passed", "failed", "tested")
 LISTS = ("facts", "statements", "inferences", "questions", "actions", "conflicts")
 EMPTY = {"qa_situation": None, "facts": [], "statements": [], "inferences": [], "questions": [], "actions": [],
-         "conflicts": [], "comment_classes": {}, "content_read": [], "latest_analysis": None, "analysis_log": []}
+         "conflicts": [], "comment_classes": {}, "content_read": [], "content_unavailable": [], "latest_analysis": None,
+         "analysis_log": []}
+# a source that names one comment: `comment:9`, a link to `#comment-9`, "comment 9", "comentário 9" (the agent writes in
+# the user's language). `component:comments` (the collected list as a whole) is a fact of the collection, not a comment.
+_COMMENT = re.compile(r"^comments?\s*:\s*\S*\d|^comment\s*:|#comment-?\d|\bcomments?\s*[#:-]?\s*\d|"
+                      r"\bcoment[aá]rios?\s*[#:-]?\s*\d|/comments/\d", re.IGNORECASE)
 READY, PARTIAL, BLOCKED = "ready", "partial", "blocked"
 READINESS = (READY, PARTIAL, BLOCKED)
 BLOCKS = ("all", "part")
@@ -41,7 +49,18 @@ def _text_items(entry: dict, name: str, where: str, problems: list[str]) -> list
 
 
 def _is_comment(source) -> bool:
-    return str(source or "").strip().lower().startswith("comment")
+    """Whether a source names a comment (audit 06.11.2026: a prefix test refused `comments component complete` and let
+    `<url>#comment-9` and `ADO comment 9` pass). A list counts when any of its sources does."""
+    if isinstance(source, (list, tuple)):
+        return any(_is_comment(s) for s in source)
+    text = str(source or "").strip()
+    if text.lower().startswith("component:"):
+        return False
+    return bool(_COMMENT.search(text))
+
+
+def _basis_ok(basis) -> bool:
+    return isinstance(basis, list) and bool(basis) and all(isinstance(b, str) and b.strip() for b in basis)
 
 
 def _sourced(entry: dict, where: str, problems: list[str], facts: str, statements: str, inferences: str) -> None:
@@ -55,8 +74,8 @@ def _sourced(entry: dict, where: str, problems: list[str], facts: str, statement
         if not item.get("source"):
             problems.append(f"{where}.{statements}[{n}]: needs a source")
     for n, item in enumerate(_text_items(entry, inferences, where, problems)):
-        if not item.get("basis"):
-            problems.append(f"{where}.{inferences}[{n}]: needs a basis")
+        if not _basis_ok(item.get("basis")):
+            problems.append(f"{where}.{inferences}[{n}]: needs a basis, a list of texts")
 
 
 def validate(doc, known: set[str], check: dict | None = None, skills: set[str] | None = None) -> list[str]:
@@ -79,8 +98,9 @@ def validate(doc, known: set[str], check: dict | None = None, skills: set[str] |
             if value not in SITUATIONS:
                 problems.append(f"{where}.qa_situation: {value!r} outside {list(SITUATIONS)}; these are conclusions, "
                                 "not execution statuses nor tracker states")
-            elif not (isinstance(situation, dict) and situation.get("basis")):
-                problems.append(f"{where}.qa_situation: needs a basis")
+            elif not (isinstance(situation, dict) and _basis_ok(situation.get("basis"))):
+                problems.append(f"{where}.qa_situation: needs a basis, a list of texts (audit 06.11.2026: a number "
+                                "or a string passed and broke the ticket's memory)")
             elif value == "has-validation-evidence":
                 for need in ("scope", "build", "evidence"):
                     if not situation.get(need):
@@ -103,13 +123,23 @@ def validate(doc, known: set[str], check: dict | None = None, skills: set[str] |
             for cid, klass in comments.items():
                 if klass not in COMMENT_CLASSES:
                     problems.append(f"{where}.comments.{cid}: {klass!r} outside {list(COMMENT_CLASSES)}")
-        for n, item in enumerate(entry.get("content_read") or []):
-            url = str(item.get("url") or "") if isinstance(item, dict) else ""
-            if not url:
-                problems.append(f"{where}.content_read[{n}]: needs its url")
-            elif url.lower().startswith("vstfs:"):
-                problems.append(f"{where}.content_read[{n}]: {url} is an identifier, not content: name the page of the "
-                                "PR, commit or build that was opened")
+        seen = json.dumps(check, ensure_ascii=False) if check else ""
+        for name, need in (("content_read", "result"), ("content_unavailable", "reason")):
+            items = entry.get(name) or []
+            if not isinstance(items, list):
+                problems.append(f"{where}.{name}: must be a list")
+                continue
+            for n, item in enumerate(items):
+                url = str(item.get("url") or "") if isinstance(item, dict) else ""
+                if not url:
+                    problems.append(f"{where}.{name}[{n}]: needs its url")
+                elif url.lower().startswith("vstfs:"):
+                    problems.append(f"{where}.{name}[{n}]: {url} is an identifier, not content: name the page of the "
+                                    "PR, commit or build that was opened")
+                elif seen and url not in seen:
+                    problems.append(f"{where}.{name}[{n}]: {url} is not a link or attachment of this check")
+                elif name == "content_unavailable" and not str(item.get(need) or "").strip():
+                    problems.append(f"{where}.{name}[{n}]: needs the reason it could not be opened")
     if doc.get("verification_prompt") is not None:
         _validate_prompt(doc["verification_prompt"], known, check or {}, skills, problems)
     return problems
@@ -268,14 +298,25 @@ def merge(current: dict | None, entry: dict, check_ref: dict, analysis_file: str
             if stored is None:
                 by_key[key] = {**item, "key": key, "first_check": check_ref["id"], "last_check": check_ref["id"]}
             else:
-                by_key[key] = {**stored, **item, "key": key, "first_check": stored["first_check"],
-                               "last_check": check_ref["id"]}
+                merged = {**stored, **item, "key": key, "first_check": stored["first_check"],
+                          "last_check": check_ref["id"]}
+                if "source" in stored and stored.get("source") != item.get("source", stored.get("source")):
+                    # the same text from another source keeps both: an origin is never replaced (audit 06.11.2026)
+                    old = stored["source"] if isinstance(stored["source"], list) else [stored["source"]]
+                    new = item["source"] if isinstance(item["source"], list) else [item["source"]]
+                    merged["source"] = list(dict.fromkeys(old + new))
+                by_key[key] = merged
         out[name] = list(by_key.values())
     out["comment_classes"] = {**out["comment_classes"], **{str(k): v for k, v in (entry.get("comments") or {}).items()}}
     read = {i["url"]: i for i in out["content_read"]}
     for item in entry.get("content_read") or []:
         read[item["url"]] = item
     out["content_read"] = list(read.values())
+    unavailable = {i["url"]: i for i in out.get("content_unavailable") or [] if i["url"] not in read}
+    for item in entry.get("content_unavailable") or []:
+        if item["url"] not in read:
+            unavailable[item["url"]] = {**item, "check": check_ref["id"]}
+    out["content_unavailable"] = list(unavailable.values())
     return out
 
 

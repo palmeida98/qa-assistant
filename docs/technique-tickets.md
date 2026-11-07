@@ -1,6 +1,6 @@
 # Ticket analysis technique
 
-> **Layer 2 — Technique for `/analyze-tickets`**
+> **Layer 2 — Technique for `/analyze-ticket`**
 > Version 1.1 · 2026-11-01 · Plan, phases 14 and 15. Reads Azure DevOps and Jira, works out what changed since the last check, and keeps the result in the workspace. 1.1 (15.1 to 15.3): an explicit order of the checks, so an old analysis never rewinds the current state; one row per scope in `context.md`; a structured verification prompt, shown in Markdown; honest coverage of what was only listed; the impact on existing cases.
 >
 > Project agnostic: the examples use the fictional **Demo Shop**. Subordinate to `methodology.md`. The engine is `adapters/tickets/`, driven by `python -m adapters.tickets <workspace> …`.
@@ -67,7 +67,7 @@ Inputs: a link, an id or key, `<source>:<id>`, several of them, `--scope <name>`
 
 ### 3.1 Expansion
 
-From a root the engine follows: the **parent** (up to `max_depth`), the parent's **children** (so a Task brings its PBI and the sibling BE/FE/QA tasks and bugs), the root's own children, and the root's direct **relations** (blocks, blocked-by, tested-by, related, duplicate). The related items' own relations are not followed. A visited set stops cycles, and `max_items` bounds the read. Everything not followed is listed in `omitted`, with its reason: `max-depth`, `not-followed`, `max-items`, `not-provided`, `external`.
+From a root the engine follows: the **parent** (up to `max_depth`), the parent's **children** (so a Task brings its PBI and the sibling BE/FE/QA tasks and bugs), the root's own children, and the root's direct **relations** (blocks, blocked-by, tested-by, related, duplicate). The related items' own relations are not followed. A visited set stops cycles, and `max_items` bounds the read. Everything not followed is listed in `omitted`, with its reason: `max-depth`, `not-followed`, `not-expanded` (a collect with `--no-expand`, or a scope without expansion: the relations are listed, not read), `max-items`, `not-provided`, `external`. A change in a child (a task Done, a new comment on it) does not change the parent's revision: a check that did not expand says so.
 
 A scope does not expand by default (the sprint is already the context): `expand: true` in the scope, or `--expand`, changes that. `--no-expand` disables it for tickets.
 
@@ -86,7 +86,7 @@ Each ticket has one status per component (`fields`, `comments`, `history`, `rela
 | `not_read` | not attempted, or not provided by the browser route |
 | `listed_only` | (`development` only) PRs, commits or builds are listed from the ticket's links; nothing behind them was read |
 
-Reading a link is not reading its content: every attachment and link has `content_read: false` until the analysis records otherwise (section 7), and `content_not_read` in the check lists them, each with its `kind`. A `vstfs:///` link of Azure DevOps is an **identifier**, never analysed content: the analysis refuses it in `content_read`, and resolving what it points to is a later extension. A check is `complete` only when every component of every ticket is complete and nothing was omitted for lack of budget or access. An item left out by `max-depth` or `not-followed` is declared and does not make it partial.
+Reading a link is not reading its content: every attachment and link has `content_read: false` until the analysis records otherwise (section 7), and `content_not_read` in the check lists them, each with its `kind`. A `vstfs:///` link of Azure DevOps is an **identifier**, never analysed content: the analysis refuses it in `content_read`, and resolving what it points to is a later extension. A check is `complete` only when every component of every ticket is complete and nothing was omitted for lack of budget or access. An item left out by `max-depth`, `not-followed` or `not-expanded` is declared and does not make it partial.
 
 `complete` is about the **collection** in the scope read: it never says that what a ticket points to was opened. A record keeps three things apart: the collection, the content opened and analysed (only what an analysis records), and the links, attachments and relations not consulted, counted and listed.
 
@@ -230,9 +230,13 @@ Enforced by the engine (exit 4, nothing recorded):
 - An inference has a `basis`.
 - A comment's class is one of `decision`, `clarification`, `request`, `blocker`, `evidence`, `opinion`.
 - An action is `local` or `external-proposal`. It cannot say it was done. A `done` or `executed` key is refused, because a recommendation never appears as executed.
-- `content_read` holds what was really read. A `vstfs:///` identifier is refused: name the page of the PR or the build that was opened.
+- `content_read` holds what was really read; `content_unavailable` (`[{"url", "reason"}]`) what could not be opened (no access, a 403, a page that did not load): those stay in `content_not_read`, never marked read. Either URL must be a link or attachment of the check. A `vstfs:///` identifier is refused: name the page of the PR or the build that was opened.
+- Sources are structured where they can be: `field:<name>`, `component:<name>` (the collected component as a whole, e.g. `component:comments` for "there are no comments"), `comment:<id>`. A source that names one comment (`comment:9`, a link with `#comment-9`, "comment 9", "comentário 9") makes the item a **statement**, never a fact; recording the same text again from another source keeps both sources.
+- A `basis` is a list of texts (a number or a single string is refused); everything is validated before anything is written.
 
 Facts, statements, inferences, questions, actions and conflicts are keyed by their normalised text: recording the same analysis, or the same item in a later check, adds nothing. `"resolved": true` closes a question, action or conflict.
+
+**Changed after its analysis.** The context block shows the analysed situation and, when a later check found a change in that ticket, "CHANGED SINCE THAT ANALYSIS: <what>; analyse again". A ticket never analysed shows the engine's suggestion labelled "(suggested, not analysed)" with its flags (`closed_without_qa_evidence`, `removed`). A `Removed` ticket is suggested as `needs-clarification`, never as a verification candidate.
 
 **An analysis stays with its check.** Analysing an older check, when a newer one was already analysed for that ticket, records the analysis and lists it in the ticket's `analysis_log`, but changes neither the ticket's current analysis nor `context.md`'s current state. An older check with no newer analysis is still the best available: it becomes the ticket's analysis, labelled with its check.
 
@@ -256,7 +260,7 @@ The engine gives its own conservative `suggested_situation`: an open blocker, or
  "blockers": [{"text": "…", "source": "…", "blocks": "all"}],
  "existing_cases": [{"id": "CHK-1", "relation": "confirmed"}],
  "proposed_cases": [{"title": "…", "origin": "…"}],
- "skills": ["/plan-batch", "/test-mobile"],
+ "skills": ["/plan-tests", "/run-tests"],
  "evidence": ["…"], "done_criteria": ["…"], "checkpoint": "…"}
 ```
 

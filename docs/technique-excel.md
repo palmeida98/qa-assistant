@@ -13,6 +13,10 @@ Covers the automation of Excel workbooks used as the source of truth for test ca
 
 The configuration lives in the `excel:` section of the workspace's `project.yaml` (fields commented in the template `docs/project.yaml`) and is read with `ExcelAdapter.from_project(<workspace>)`. At the onboarding, it is filled in by inspecting the real workbook with `python -m adapters.excel.inspect <copy.xlsx>`, which only reads the file and proposes the section: what it cannot detect safely stays as `CONFIRM: …` for the user to decide.
 
+**One workbook per platform (or per environment).** `excel.file` is the default workbook: the workbook of every platform without an entry of its own. `excel.workbooks` declares the others, one per platform (the entry's `platform`, else its key), each with its batches by name: `{ios: {file: workbook/app-ios.xlsx, batches: ["batch_ios*"]}}`. The workbook of a batch is decided by one rule, `adapters.excel.base.route_workbook`, used by the apply, `run_log` (whether a batch is applied, so it stays immutable), the audit and totals of `qa_report.py`, the CI's validation and `qa_ui`. The batch's platform comes from three places that must agree: the run block's `platform`, the `report.platforms` pattern its name matches, and the `excel.workbooks` entry its name matches. The apply **stops with exit 4 and writes nothing** when: the name matches the patterns of two workbooks or of two platforms; two of the three places name different platforms; the batch is of a platform with its own workbook but its name is outside that workbook's patterns; the project declares several workbooks and nothing says the batch's platform (the default workbook is never chosen by elimination); the target workbook does not exist or cannot be read; the batch is already listed in the control sheet of another workbook. A project with several workbooks therefore names its batches by platform (`report.platforms`) or declares `run.platform`. `run_log` treats a batch as applied when **any** declared workbook lists it. The environment variable `QA_WORKBOOK` (or the `file` argument of `from_project`) replaces the file for one command (a path relative to the workspace, or absolute; empty counts as unset); when the project declares `excel.workbooks` and the variable names another workbook than the batch's own, the apply refuses it. The workbook must already exist (build it with the project's builder and the same cases). Cases files (`add_cases`) are not batches: they go to `excel.file`, or to `QA_WORKBOOK`.
+
+**One apply at a time, never a broken workbook.** The apply holds the workspace's lock (technique-workspaces.md §7) from reading the workbook to the recalculation: a second apply waits, then is refused with nothing written. The workbook is saved to a temporary file next to it, opened again to check it, and only then put in place. A new defect takes the build of the run block (`run.build`) before `excel.defects.defaults.build`; a `new_defect` key with no column in `excel.defects.batch_fields` is refused (it would be dropped without a word).
+
 ## 1. Flow of applying a batch
 
 The pattern that works in practice, in this order, never writing row by row during the execution (methodology §7.1):
@@ -29,6 +33,23 @@ It is the same "validate before adopting" pattern of the methodology (§15), app
 In the adapter: `load()` → `apply_batch()` → `regenerate_active_defects()` → `save_if_clean()` (includes `cross_check()`) → `recalc()`. `load()` fails straight away if the configuration does not match the workbook (a required sheet or column missing), and `apply_batch()` checks every case ID before writing anything. The optional case columns (actual result, notes) are only used in the sheets where they exist.
 
 To run the whole flow in a workspace: `python -m adapters.excel.apply <workspace> <batch.json>` (from the root of qa-assistant). It exits with 0 (saved, or batch already applied), 2 (cross-check with problems: original untouched, `.REVIEWED.xlsx` separate), 3 (saved, but the recalculation failed), 4 (invalid batch or configuration, or a batch already applied with another content: nothing written; §4 and §5) or 5 (saved and recalculated, but the workbook's summary does not match the direct count; §5).
+
+### 1.1 Simulating an apply (`--dry-run`)
+
+`python -m adapters.excel.apply <workspace> <batch.json> --dry-run [--json] [--no-recalc]` runs the same route,
+validation and transformation as the apply (one code path), on a copy of the target workbook in a temporary folder,
+and lists: the target workbook and platform (and where the rule came from), every cell that would change (sheet,
+cell, case of the row, before → after), the counts per status before and after, the new defects, the row of the
+control sheet, the cross-check and summary problems, the problems that stop the apply, and "already applied". A
+value that only holds the instant of the application (label date, `applied_at`, the view's summary date, the report
+date) is marked `<at apply time>`: the real apply writes its own instant there. Those cells are found by running the same transformation a second time at another instant and comparing (never by looking for a date in the text, which an observed result may quote). Formulas the recalculation only
+rewrites (the same formula with other quoting) are counted apart. The exit code is the one the apply would give
+(4 when a problem stops it). Nothing in the workspace is written (the original's sha256 is unchanged) and the
+temporary folder is removed, also on error.
+
+The dry run ends with a **preview token** (a hash of the batch, `project.yaml` and every declared workbook).
+`apply ... --expect <token>` applies only if none of them changed since that preview; otherwise exit 4 with
+"the preview ... is out of date" and nothing written: run the dry run again and show it again.
 
 **Date of the application.** By default, the adapter uses the clock: the date of the notes' label, the report date of new defects, the date of the active view's summary text and the `applied_at` of the control sheet. With `--now YYYY-MM-DDTHH:MM:SS` in `apply` (attribute `now` of `ExcelAdapter`), it uses that instant in all those places, and the same sequence of batches always produces the same cells. It serves to rebuild a workbook from the batches with the date each batch was run (e.g. `examples/demo/rebuild_workbook.py`, which uses the first `ts` of each batch); in a normal session it is not used.
 
@@ -72,7 +93,7 @@ A case's status always uses the list of valid statuses **of that project** (defi
 
 ### 4.1 Adding approved cases (`add-cases`)
 
-The cases `/generate-cases` proposes only enter the workbook after the user approves them (methodology §5.3), and they enter through the adapter, never by hand: the same load → validate → save-if-clean → recalculate → summary check of a batch.
+The cases `/plan-tests` proposes only enter the workbook after the user approves them (methodology §5.3), and they enter through the adapter, never by hand: the same load → validate → save-if-clean → recalculate → summary check of a batch.
 
     python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run] [--label …] [--no-recalc] [--now …]
 

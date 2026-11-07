@@ -24,7 +24,7 @@ Exit codes: 0 stopped by the user (Ctrl+C) · 2 usage or configuration (no `proj
 |---|---|
 | Reads cases from text, a file or the workspace's library | Invents cases: a new case is a proposal until the user approves it (methodology §5.3) |
 | Suggests a test module per case with deterministic rules, and shows why | Hide a rule: every suggestion names the signals it came from |
-| Plans batches and saves them as `batches/<name>.yaml` (the format of `/plan-batch`) | Reduce coverage: the cases planned equal the cases selected (methodology §6) |
+| Plans batches and saves them as `batches/<name>.yaml` (the format of `/plan-tests`) | Reduce coverage: the cases planned equal the cases selected (methodology §6) |
 | Starts a batch: Claude Code headless with the module's skill, or a script | Run two batches at once in one workspace (they would share a login and the application's state) |
 | Shows the run log as it grows and what needs the user | Classify a result: Pass, Fail, N/A, Blocked and `Question` come from the run (methodology §8) |
 | Records the user's approvals in the run log | Approve anything by itself |
@@ -169,7 +169,7 @@ From the cards the user ticked and the cases assigned to them (methodology §6):
   they first appear; the area is the case's `area`, else its sheet, else the ID up to its last `-`; the cases of an
   area without a role are one batch;
 - inside a batch the cases keep the order of the input (a case that creates state others reuse is ordered by the
-  user, or by `/plan-batch` in a session); a case with `no-expected` or `vague-expected` is named: the run will
+  user, or by `/plan-tests` in a session); a case with `no-expected` or `vague-expected` is named: the run will
   mark it `Question`;
 - a batch holds at most 20 cases (a checkpoint every 15–20, methodology §7.2); a larger group is split;
 - a `not-in-library` case is listed apart, with the reason, and is not in any batch;
@@ -177,7 +177,7 @@ From the cards the user ticked and the cases assigned to them (methodology §6):
 
 A batch is named `<YYYYMMDD>_<module>_<nn>` (`functional-web` as `web`, `accessibility` as `a11y`, `exploratory`
 as `exp`), the first `<nn>` free in `batches/` and `runs/`. The plan is shown before anything is saved; **Save
-plan** writes each batch as `batches/<name>.yaml` with `cases: [<ID>, …]` (what `/plan-batch` writes and
+plan** writes each batch as `batches/<name>.yaml` with `cases: [<ID>, …]` (what `/plan-tests` writes and
 `scripts/workspace_ci.py` reads) and the keys `module:` and, when it has one, `role:`; it is refused whole when a
 name was taken since the plan was shown. The plan warns when the library could not be read (whether a case is in it
 is then not known) and when an ID is not in the form the workspace's CI accepts in a planned batch.
@@ -214,13 +214,13 @@ prompt goes through the command's standard input, never its command line.
 
 | Module | Skill | Tools allowed besides `Read`, `Glob`, `Grep`, `Skill`, `run_log.py`, and writing in `runs/` and `evidence/` |
 |---|---|---|
-| `functional-web`, `exploratory` | `/run-batch` | the Playwright MCP of the workspace's `.mcp.json` (`--mcp-config`) |
-| `api` | `/test-api` | `scripts/api_request.py` |
-| `accessibility` | `/audit-accessibility` | `scripts/audit_a11y.py` and the Playwright MCP |
-| `mobile` | `/test-mobile` | `scripts/device.py`, `scripts/run_mobile.py` |
+| `functional-web`, `exploratory` | `/run-tests` | the Playwright MCP of the workspace's `.mcp.json` (`--mcp-config`) |
+| `api` | `/run-tests` | `scripts/api_request.py` |
+| `accessibility` | `/run-tests` | `scripts/audit_a11y.py` and the Playwright MCP |
+| `mobile` | `/run-tests` | `scripts/device.py`, `scripts/run_mobile.py` |
 
 In a project with `mobile` and without `functional-web` among its modules there is no web site to explore: its
-`exploratory` charters run on the app, with `/test-mobile` and the tools of `mobile` (no Playwright MCP), and the
+`exploratory` charters run on the app, with `/run-tests` and the tools of `mobile` (no Playwright MCP), and the
 prompt says so (methodology §4.1; technique-mobile.md §4.2). The card of the module shows that tool and depends on
 the mobile checks.
 
@@ -266,7 +266,7 @@ the file (its comments and order kept).
 | Automated site audit | `qa-audit <URL> --type accessibility,security,performance,functional`, in the workspace's folder | `qa-output/<timestamp>/` as the engine writes it, and the engine's summary as the run's output |
 
 They are a first pass, not case results: their findings never enter a run log by themselves. A finding the user
-wants as a result goes through a case and `/audit-accessibility` (technique-accessibility.md).
+wants as a result goes through a case and `/run-tests` (technique-accessibility.md).
 
 ### 8.3 Stopping
 
@@ -291,8 +291,11 @@ The step of `/checkpoint` that goes through the adapter. Enabled only when the r
 `"proposed"` left, and the adapter's own validation finds no problem (the check of `scripts/workspace_ci.py`
 `post-check`).
 
-- `excel`: the page says what will be written (results, new defects, the workbook's file) and, after the user
-  confirms, runs `python -m adapters.excel.apply <workspace> <run log>`.
+- `excel`: "Preview the changes" runs `python -m adapters.excel.apply <workspace> <run log> --dry-run --json` and
+  shows the target workbook, the cells before → after (the instant-only ones marked "at apply time"), the new
+  defects and the problems; nothing is written. "Apply" appears only after a preview with no problem, and sends that
+  preview's token: the server runs the apply with `--expect <token>`, and a stale preview (the batch,
+  `project.yaml` or a workbook changed since) is refused with nothing written, asking for a new preview.
 - `jira` / `azure-devops`: `python -m adapters.tracker <workspace> apply <run log>` first (the dry run), its plan
   shown as it is; after the user confirms, the same command with `--yes` (methodology §9.4).
 
@@ -319,7 +322,7 @@ JSON in and out; every route needs the token (§2). An error is `{"error": "<tex
 | `POST /api/runs/<id>/stop` | §8.3 |
 | `GET /api/runlogs/<batch>` | the run log, its counts and what needs the user |
 | `POST /api/runlogs/<batch>/items/<case>` | `{"action": "approve" \| "edit" \| "link" \| "drop" \| "answer", …}` (§9) |
-| `POST /api/runlogs/<batch>/apply` | the dry run or the check of §10; with `"confirm": true` the real run |
+| `POST /api/runlogs/<batch>/apply` | the dry run or the check of §10 (Excel: `"preview"` in the answer, with its `token`); with `"confirm": true` the real run (Excel: also `"preview": "<token>"`) |
 
 ## 12. Tests (methodology §15)
 
@@ -336,7 +339,7 @@ The demo workspace (`examples/demo`) is the fixture of the library and of the st
 - Several runs at once, or a queue: one run, then the next (in the hub, one on the whole computer, §14.3).
 - Starting a remote run in the workspace's CI (`scripts/workspace_ci.py`): it stays a `gh workflow run`.
 - Editing a case of the library, or its steps: proposed to the user and done in the workbook or the tracker.
-- The dashboard: `/dashboard` and `scripts/build_dashboard.py` stay as they are (Excel only).
+- The dashboard: `/qa-report` and `scripts/build_dashboard.py` stay as they are (Excel only).
 - Any access control beyond the loopback address and the token: the interface is one user's, on their computer.
 
 ## 14. The hub: every project in one interface (plan phase 13)
@@ -370,7 +373,7 @@ not have), sorted by company and project. The discovery is `scripts/workspace_se
 use (`technique-workspaces.md` §4).
 
 A folder that is not ready has no card and no routes, but it is named: `unconfigured` in `GET /api/hub`, under the
-projects on the Projects screen, with its status and, when onboarding is what is missing, `/project-onboarding` to run
+projects on the Projects screen, with its status and, when onboarding is what is missing, `/project-context` to run
 there (`proposes` in each item). A route change sets the tab's title (`<screen> · <project> · qa-ui`) and moves the focus
 to the new screen's heading, so the keyboard and a screen reader do not start from a link that is gone.
 
@@ -404,7 +407,7 @@ screen (`#/p/<company>/<project>/test`), so a reload or a bookmark opens the sam
 
 ### 14.5 New project
 
-A form for what `/project-onboarding` asks first (its step 2): company, project, environments (key and URL; one of
+A form for what `/project-context` asks first (its step 2): company, project, environments (key and URL; one of
 them `test` or the only one), roles (name, and the names of the `.env` variables of its user and password),
 tracker (`excel`, `jira`, `azure-devops`), active modules, bug format and evidence. Nothing is written until the
 user confirms what will be created, shown as a list of files. Then, in `<root>/<company>/<project>/`:
@@ -421,7 +424,7 @@ user confirms what will be created, shown as a list of files. Then, in `<root>/<
 
 A folder that already exists is refused (409): the hub never writes over a project. After writing, it runs
 `python scripts/validate_project.py <workspace>` and shows its output and exit code. What needs reading or a
-tracker stays in a Claude Code session and the page says so, with the command to type: **`/project-onboarding`**
+tracker stays in a Claude Code session and the page says so, with the command to type: **`/project-context`**
 in the new folder continues from the files already there (inspecting the workbook, `check` and `import-cases` of a
 tracker, registering the Playwright MCP, `workspace_git.py init`).
 
@@ -510,7 +513,7 @@ the project).
 
 - Projects outside the root (one root at a time, §14.1), or moving and deleting a project.
 - Several runs at once, also across projects (§14.3), or a queue.
-- Editing `project.yaml` after the creation: that is `/project-onboarding` or a session, where the validation and
+- Editing `project.yaml` after the creation: that is `/project-context` or a session, where the validation and
   the methodology's questions are.
 - The parts of the onboarding that need reading or a tracker (§14.5): they stay in Claude Code.
 - Showing a credential, even to its owner: `.env` is opened by hand to read one.

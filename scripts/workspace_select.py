@@ -43,7 +43,7 @@ CONFIG = os.path.join(os.path.expanduser("~"), ".qa-assistant", "config.json")
 ROOT_ENV = "QA_WORKSPACES_ROOT"
 CONFIG_ENV = "QA_ASSISTANT_CONFIG"
 VALID, INCOMPLETE, NOT_CONFIGURED, INACCESSIBLE = "valid", "incomplete", "not-configured", "inaccessible"
-ONBOARDING = "/project-onboarding"
+ONBOARDING = "/project-context"
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
 OK, NOT_USABLE, AMBIGUOUS, MISMATCH, NOTHING = 0, 1, 2, 3, 4
 WALK_UP = 4
@@ -129,7 +129,9 @@ def where(root_arg: str | None = None, environ=None, config_path: str | None = N
             "python": {"version": ".".join(map(str, sys.version_info[:3])), "executable": sys.executable},
             "imports": origins, "imports_from_another_checkout": elsewhere, "versions_that_differ": versions_that_differ(),
             "workspaces_root": {"path": root, "source": source, "exists": os.path.isdir(root)},
-            "skills": {"target": target, "record": sync.read_record(target)}}
+            "skills": {"target": target, "record": sync.read_record(target),
+                       "state": sync.compare(sync.SOURCE, target, sync.read_record(target))
+                       if os.path.isdir(sync.SOURCE) else {}}}
 
 
 def _print_where(info: dict) -> None:
@@ -149,9 +151,19 @@ def _print_where(info: dict) -> None:
     w = info["workspaces_root"]
     print(f"Root of workspaces: {w['path']} (from {w['source']}){'' if w['exists'] else ' -- it does not exist'}")
     record = info["skills"]["record"]
+    extra = ""
+    if record and record.get("uncommitted"):
+        skills = record.get("uncommitted_skills") or []
+        extra = (f" PLUS {len(record['uncommitted'])} file(s) not committed at that moment"
+                 + (f" (skills: {', '.join(skills)})" if skills else "") + ": the commit alone is not what is installed")
+    elif record and record.get("uncommitted") is None and record.get("dirty"):
+        extra = " with changes not committed (not listed): the commit alone is not what is installed"
     print(f"Global skills: {info['skills']['target']}, " + (
         f"last synced from {record.get('root')} (branch {record.get('branch')}, commit {record.get('commit')}) at "
-        f"{record.get('synced_at')}" if record else "no record of where they came from"))
+        f"{record.get('synced_at')}{extra}" if record else "no record of where they came from"))
+    for name, state in (info["skills"].get("state") or {}).items():
+        if state not in ("same", "foreign"):
+            print(f"  skill {name}: {state} against this checkout (python scripts/sync_skills.py --apply)")
 
 
 # --- the root of workspaces ----------------------------------------------------------------------------------------
@@ -472,8 +484,8 @@ def _mcp_line(workspace: str) -> tuple[bool, str, str]:
         servers = []
     if servers:
         return True, "mcp", (f".mcp.json names {', '.join(servers)}; whether it is connected shows in /mcp")
-    return False, "mcp", (".mcp.json names no server: /project-onboarding registers the Playwright MCP, or use another "
-                          "browser and record the difference")
+    return False, "mcp", (".mcp.json names no server: /project-context (procedures/onboarding.md step 5) registers the "
+                          "Playwright MCP, or use another browser and record the difference")
 
 
 def _tool_lines(tokens: list[str], workspace: str, proj: dict) -> list[dict]:
@@ -496,6 +508,43 @@ def _tool_lines(tokens: list[str], workspace: str, proj: dict) -> list[dict]:
 def _mobile_only(proj: dict) -> bool:
     modules = {str(m) for m in proj.get("modules") or []}
     return "mobile" in modules and "functional-web" not in modules
+
+
+# the tools of each module's route, by the names validate_project.environment() gives them (up to the first space)
+ROUTE_TOOLS = {"functional-web": ("node", "mcp"), "exploratory": ("node", "mcp"), "api": (),
+               "accessibility": ("qa-audit", "browser", "mcp"),
+               "mobile": ("maestro", "adb", "emulator", "android-driver", "xcrun", "ios-wda", "build", "mobile")}
+# which tool lines block which platform of the mobile route (the rest block every platform)
+PLATFORM_TOOLS = {"android": ("maestro", "adb", "emulator", "android-driver", "mobile"), "ios": ("xcrun", "ios-wda")}
+# the framework's Python modules a route imports (its scripts import them when the route is taken)
+ROUTE_MODULES = {"accessibility": ("qa_audit",)}
+
+
+def parse_routes(spec) -> dict[str, str]:
+    """`module: procedure; module: procedure` of a skill's metadata, as a dict."""
+    out = {}
+    for part in str(spec or "").split(";"):
+        if ":" in part:
+            module, procedure = part.split(":", 1)
+            if module.strip() and procedure.strip():
+                out[module.strip()] = procedure.strip()
+    return out
+
+
+def routes(spec, proj: dict, framework: str) -> list[dict]:
+    """The procedure of each active module of the project (skills-spec.md section 4). The exploratory charters of a
+    project whose modules are only mobile run on the app: they take the mobile route and need no browser."""
+    table = parse_routes(spec)
+    out = []
+    for module in [str(m) for m in proj.get("modules") or []]:
+        key = "mobile" if module == "exploratory" and _mobile_only(proj) else module
+        procedure = table.get(key)
+        if not procedure:
+            continue
+        why = "charters of a mobile project run on the app" if key != module else ""
+        out.append({"module": module, "procedure": f"docs/{procedure}", "via": key, "why": why,
+                    "exists": os.path.isfile(os.path.join(framework, "docs", *procedure.split("/")))})
+    return out
 
 
 def _ticket_sources(workspace: str) -> list[dict]:
@@ -522,12 +571,29 @@ def _instruction(framework: str, what: str, target: str) -> str:
     return " ".join(parts)
 
 
+# the skills of version 1 and where their work went (docs/skills-guide.md section 6)
+RENAMED = {"project-onboarding": "/project-context", "analyze-tickets": "/analyze-ticket", "analyze-feature": "/plan-tests",
+           "generate-cases": "/plan-tests", "plan-batch": "/plan-tests", "run-batch": "/run-tests", "test-api": "/run-tests",
+           "audit-accessibility": "/run-tests", "test-mobile": "/run-tests", "log-bug": "/manage-bugs",
+           "end-session": "/qa-report and /checkpoint", "dashboard": "/qa-report"}
+
+
 def check_skill(skill: str, framework: str, target: str, cwd: str) -> tuple[dict, str | None, list[dict], list[str]]:
     """The skill against the code: (its frontmatter, what to do if they do not match, imports, warnings). Files only,
     apart from the imports of this very checkout, so it works where the module it looks for does not exist."""
     sync = _sync()
     path = os.path.join(framework, ".claude", "skills", skill, "SKILL.md")
     if not os.path.isfile(path):
+        folder = os.path.join(framework, ".claude", "skills")
+        have = sorted(n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n, "SKILL.md"))) \
+            if os.path.isdir(folder) else []
+        if have and skill not in sync.RETIRED:      # a typo or a name that never existed: no update would help
+            return {}, (f"There is no skill /{skill}. The skills are: {', '.join('/' + n for n in have)}. Nothing was "
+                        "installed or changed."), [], []
+        if skill in sync.RETIRED:
+            return {}, (f"/{skill} was a skill of an older version; its work is now in "
+                        f"{RENAMED.get(skill, 'one of: ' + ', '.join('/' + n for n in have))} (docs/skills-guide.md §6). "
+                        "Nothing was installed or changed."), [], []
         return {}, _instruction(framework, f"The skill /{skill} does not exist in this checkout", target), [], []
     doc = sync.skill_doc(path)
     missing = sync.missing_code(framework, doc)
@@ -597,18 +663,58 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
             report["proposes"] = ONBOARDING
             return NOT_USABLE, report
         tokens = sync.listed(doc, "requires-tools")
-        route = metadata.get("routes-mobile-only-to")
-        if route and _mobile_only(proj):
-            # a mobile project runs through its own skill: the browser the skill asks for is not a requirement of it
-            report["route"] = {"skill": route, "why": "this project's modules are only mobile (and exploratory)"}
-            tokens = [t for t in tokens if t != "mcp"]
+        found = routes(metadata.get("routes"), proj, framework) if metadata.get("routes") else []
+        if metadata.get("routes"):
+            # a tool of a route the project does not take is not a requirement (a mobile project needs no browser MCP)
+            needed = {t for r in found for t in ROUTE_TOOLS.get(r["via"], ())}
+            every = {t for tools in ROUTE_TOOLS.values() for t in tools}
+            tokens = [t for t in tokens if t not in every or t in needed]
         report["tools"] = _tool_lines(tokens, project.path, proj)
-        if skill == "test-mobile" or metadata.get("next-check"):
+        if found:
+            for r in found:
+                lines = [x for x in report["tools"] if x["tool"].split(" ")[0] in ROUTE_TOOLS.get(r["via"], ())]
+                r["missing"] = [x["tool"] for x in lines if not x["ok"]]
+                r["ready"] = _readiness(r["via"], lines)
+                problems = _config_problems([r["module"]], project.path, proj) if r["module"] in (
+                    "api", "accessibility", "mobile") else []
+                r["config"] = problems
+            report["routes"] = found
+            if sync.same_path(framework, ROOT):
+                for module in sorted({m for r in found for m in ROUTE_MODULES.get(r["via"], ())}):
+                    origin = import_origin(module)
+                    report["imports"].append({"module": module, "origin": origin})
+                    if origin is None:
+                        report["warnings"].append(f"{module} is not importable here (pip install -e . from the "
+                                                  "checkout): the cases of its route are Blocked (tool)")
+                    elif not _inside(origin, framework):
+                        report["warnings"].append(f"{module} is imported from {origin}, another checkout: an "
+                                                  "editable install runs the code of where it was installed")
+        if metadata.get("next-check") and "mobile" in [str(m) for m in proj.get("modules") or []]:
             report["next"] = [(f"python {framework}/scripts/device.py {project.path} check [--batch <batch>]: one report of "
                                "the device, the app, the driver, the build, the environment and the session")]
         if "tickets" in sync.listed(doc, "requires-config"):
             report["sources"] = _ticket_sources(project.path)
     return OK, report
+
+
+def _readiness(via: str, lines: list[dict]) -> list[dict]:
+    """Whether the route can run now, per platform for mobile: [{platform, ready, blocked: [(tool, action)]}]. The
+    configuration being valid is not this (audit 06.11.2026): a valid project can have no device answering."""
+    if via != "mobile":
+        blocked = [(x["tool"], x["detail"]) for x in lines if not x["ok"]]
+        return [{"platform": "", "ready": not blocked, "blocked": blocked}]
+    out = []
+    names = {x["tool"].split(" ")[0] for x in lines}
+    shared = [x for x in lines if not any(x["tool"].split(" ")[0] in t for t in PLATFORM_TOOLS.values())]
+    for platform, tools in PLATFORM_TOOLS.items():
+        if platform == "ios" and not names & set(tools):
+            continue
+        if platform == "android" and not names & {"adb", "android-driver", "emulator"}:
+            continue
+        own = [x for x in lines if x["tool"].split(" ")[0] in tools] + shared
+        blocked = [(x["tool"], x["detail"]) for x in own if not x["ok"]]
+        out.append({"platform": platform, "ready": not blocked, "blocked": blocked})
+    return out
 
 
 def _print_preflight(code: int, r: dict) -> None:
@@ -627,14 +733,27 @@ def _print_preflight(code: int, r: dict) -> None:
     if r.get("proposes"):
         print(f"Proposed: {r['proposes']} in that folder")
     if code == OK:
+        print("Configuration: valid for this skill" + (" · ready to run: see the Ready lines" if r.get("routes") else ""))
         print(f"Framework: {r['framework']['root']}")
         print(f"Task: /{r['skill']['name']} -- {r['skill'].get('intent', '')}")
         print(f"Environments: {', '.join(r.get('environments') or []) or 'none declared'}")
         print(f"Tools: {r['skill'].get('tools', '')}")
         for line in r["tools"]:
             print(f"  [{'ok' if line['ok'] else 'missing'}] {line['tool']}: {line['detail']}")
-        if r.get("route"):
-            print(f"Route: /{r['route']['skill']} -- {r['route']['why']}; use it for this request instead")
+        for route in r.get("routes") or []:
+            state = ("ready" if not route["missing"] and not route["config"] else
+                     "; ".join(filter(None, [f"missing: {', '.join(route['missing'])}" if route["missing"] else "",
+                                             "; ".join(route["config"])])))
+            print(f"Route: {route['module']} -> {route['procedure']}"
+                  + (f" ({route['why']})" if route["why"] else "") + f" [{state}]"
+                  + ("" if route["exists"] else " [PROCEDURE MISSING in this checkout]"))
+            for ready in route.get("ready") or []:
+                label = f"Ready{' (' + ready['platform'] + ')' if ready['platform'] else ''}"
+                if ready["ready"] and not route["config"]:
+                    print(f"  {label}: yes")
+                else:
+                    why = "; ".join(f"{tool} — {action}" for tool, action in ready["blocked"]) or "; ".join(route["config"])
+                    print(f"  {label}: NO, its cases would be Blocked (environment) until: {why}")
         for line_ in r.get("next") or []:
             print(f"Next: {line_}")
         for s in r.get("sources") or []:
@@ -657,7 +776,7 @@ def catalogue(framework: str = ROOT) -> list[dict]:
             doc = sync.skill_doc(path)
             metadata = doc.get("metadata") or {}
             out.append({"name": name, "description": doc.get("description", ""), **{k: metadata.get(k, "") for k in CONTRACT},
-                        **{k: v for k, v in metadata.items() if k.startswith("requires-")}})
+                        **{k: v for k, v in metadata.items() if k.startswith("requires-") or k in ("routes", "next-check")}})
     return out
 
 

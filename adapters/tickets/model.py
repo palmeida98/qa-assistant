@@ -39,7 +39,7 @@ def read_only_transport(transport: Transport) -> Transport:
 
     def guarded(req: Request) -> Response:
         if req.method not in ("GET", "HEAD") and not req.read_only:
-            raise WriteRefused(f"refused: {req.method} {req.path} is not a read; /analyze-tickets never writes")
+            raise WriteRefused(f"refused: {req.method} {req.path} is not a read; /analyze-ticket never writes")
         return transport(req)
 
     return guarded

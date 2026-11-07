@@ -591,9 +591,10 @@ class Runner:
                 os.remove(path)
             self.pending_cases = None
 
-    def apply(self, proj: dict, name: str, confirm: bool = False) -> dict:
-        """Applies a run log through the project's adapter (docs/qa-ui.md 10). Without `confirm`: the check, and
-        for Jira / Azure DevOps the adapter's dry run. With `confirm`: the real run."""
+    def apply(self, proj: dict, name: str, confirm: bool = False, preview: str | None = None) -> dict:
+        """Applies a run log through the project's adapter (docs/qa-ui.md 10). Without `confirm`: the check, and the
+        adapter's dry run (for Excel the cell-by-cell preview with its token). With `confirm`: the real run; for Excel
+        only with the token of a preview, and the adapter refuses it when anything changed since that preview."""
         check = workspace.check_apply(self.ws, proj, name)
         if not check["ready"]:
             return {**check, "dry_run": not confirm, "done": False, "output": "", "code": None, "meaning": ""}
@@ -601,12 +602,27 @@ class Runner:
         tracker = proj.get("tracker")
         if tracker == "excel":
             if not confirm:
-                return {**check, "dry_run": True, "done": False, "output": "", "code": None,
-                        "meaning": "ready: nothing was written yet"}
-            code, out = self._once([sys.executable, "-m", "adapters.excel.apply", self.ws, path], self.qa,
-                                   ADAPTER_TIMEOUT)
+                code, out = self._once([sys.executable, "-m", "adapters.excel.apply", self.ws, path, "--dry-run",
+                                        "--json"], self.qa, ADAPTER_TIMEOUT)
+                found = _json_in(out)
+                if not isinstance(found, dict):
+                    return {**check, "ready": False, "dry_run": True, "done": False, "output": out, "code": code,
+                            "meaning": "the preview could not be read", "preview": None}
+                ok = not found.get("problems") and not found.get("already_applied")
+                return {**check, "ready": ok, "dry_run": True, "done": False, "output": "", "code": code,
+                        "meaning": ("preview: nothing was written yet" if ok else
+                                    "the preview found why it cannot be applied"),
+                        "preview": found}
+            if not preview:
+                return {**check, "dry_run": False, "done": False, "output": "", "code": None, "needs_preview": True,
+                        "meaning": "show the preview first: an apply needs the token of the preview it confirms"}
+            code, out = self._once([sys.executable, "-m", "adapters.excel.apply", self.ws, path, "--expect",
+                                    str(preview)], self.qa, ADAPTER_TIMEOUT)
+            stale = code == 4 and "out of date" in out
             return {**check, "dry_run": False, "done": code == 0, "output": out, "code": code,
-                    "meaning": EXCEL_APPLY.get(code, f"exit code {code}")}
+                    "needs_preview": stale,
+                    "meaning": ("the preview is out of date: show it again before applying" if stale
+                                else EXCEL_APPLY.get(code, f"exit code {code}"))}
         cmd = [sys.executable, "-m", "adapters.tracker", self.ws, "apply", path] + (["--yes"] if confirm else [])
         code, out = self._once(cmd, self.qa, ADAPTER_TIMEOUT)
         if not confirm:
@@ -614,6 +630,17 @@ class Runner:
                     "meaning": TRACKER.get(code, f"exit code {code}")}
         return {**check, "dry_run": False, "done": code == 0, "output": out, "code": code,
                 "meaning": TRACKER.get(code, f"exit code {code}")}
+
+
+def _json_in(text: str):
+    """The JSON object a command printed (stdout and stderr come together), or None."""
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end < start:
+        return None
+    try:
+        return json.loads(text[start:end + 1])
+    except ValueError:
+        return None
 
 
 def model_case(case: dict) -> dict:

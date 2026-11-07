@@ -9,6 +9,10 @@ resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"
 modules: [functional-web]     # closed list (methodology 4.1): functional-web | exploratory | api | accessibility | mobile
 run_log: "runs/"             # folder of the session's run log (never history/, which is immutable)
+# report:                      # (opt.) /qa-report: which batches belong to which platform, when the run block has no
+#   platforms:                 # "platform" (scripts/qa_report.py); a batch that matches none is reported as unknown
+#     android: ["batch_android_*"]
+#     ios: ["batch_ios_*"]
 
 # api: only with the api module active (docs/technique-api.md). Never credential values: only variable names.
 api:
@@ -27,7 +31,7 @@ accessibility:
   audit_error_pages: false     # (opt.) true: audit the declared pages that answer 4xx but show
                                #   content (an SPA that answers 404 to a direct link); the report names them
 
-# tickets: (opt.) what /analyze-tickets reads (docs/technique-tickets.md section 2), independent of tracker:. Without
+# tickets: (opt.) what /analyze-ticket reads (docs/technique-tickets.md section 2), independent of tracker:. Without
 # it, a jira or azure-devops tracker's section is used. Only NAMES of .env variables, never values.
 # tickets:
 #   sources:
@@ -84,7 +88,7 @@ dashboard:
 
 # ---------------------------------------------------------------------------
 # excel: layout of the workbook, read by the adapter (adapters/excel/base.py).
-# Fill in ONLY when tracker: "excel". Never guess: /project-onboarding
+# Fill in ONLY when tracker: "excel". Never guess: /project-context (onboarding)
 # runs `python -m adapters.excel.inspect <workbook>` and confirms each value
 # with the user. Filled example (fictional): adapters/excel/example.yaml
 # (req.) = required; (opt.) = optional, the line can be deleted.
@@ -163,7 +167,7 @@ excel:
 # ---------------------------------------------------------------------------
 # jira: Jira Cloud + Xray Cloud, read by the tracker adapter (docs/technique-jira-xray.md;
 # built in plan 10.2). Uncomment ONLY when tracker: "jira". Only NAMES of .env
-# variables, never values. /project-onboarding fills it in with the user and runs
+# variables, never values. /project-context (onboarding) fills it in with the user and runs
 # `python -m adapters.tracker <workspace> check`. Fictional values: the Demo Shop.
 # ---------------------------------------------------------------------------
 # jira:
@@ -204,7 +208,7 @@ excel:
 # azure_devops: Azure DevOps Services (Test Plans + Boards), read by the tracker adapter
 # (docs/technique-azure-devops.md; built in plan 10.3). Uncomment ONLY when
 # tracker: "azure-devops". Only NAMES of .env variables, never values. The project must use the
-# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it). /project-onboarding
+# Agile or Scrum process (Basic has no Bug work item type: `check` refuses it). /project-context (onboarding)
 # fills it in with the user and runs `python -m adapters.tracker <workspace> check`. Area and
 # iteration values are full paths of the project (e.g. "Demo Shop\\Checkout", as in YAML a quoted "\\" is one backslash).
 # ---------------------------------------------------------------------------

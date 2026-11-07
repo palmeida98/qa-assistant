@@ -21,8 +21,8 @@ DEFAULT = "functional-web"
 # is a choice, not a fallback)
 DEFAULT_ORDER = ("functional-web", "mobile", "api", "accessibility", "exploratory")
 
-SKILLS = {"functional-web": "/run-batch", "exploratory": "/run-batch", "api": "/test-api",
-          "accessibility": "/audit-accessibility", "mobile": "/test-mobile"}
+SKILLS = {"functional-web": "/run-tests", "exploratory": "/run-tests", "api": "/run-tests",
+          "accessibility": "/run-tests", "mobile": "/run-tests"}
 TITLES = {"functional-web": "Functional web", "exploratory": "Exploratory", "api": "API",
           "accessibility": "Accessibility (WCAG)", "mobile": "Mobile"}
 TOOLS = {"functional-web": "Playwright MCP", "exploratory": "Playwright MCP", "api": "scripts/api_request.py",
@@ -35,7 +35,7 @@ NEEDS = {"functional-web": (".env", "skills", "node"), "exploratory": (".env", "
 AUDITS = ("audit-a11y", "audit-site")
 
 # exploratory charters on the app, in a project that tests a mobile app and not a web site (exploratory_on_mobile)
-MOBILE_EXPLORATORY_TOOL = "the device driver of /test-mobile (a mobile project: charters on the app)"
+MOBILE_EXPLORATORY_TOOL = "the device driver of /run-tests (a mobile project: charters on the app)"
 
 ID_PARTS = {"API": "api", "MOB": "mobile", "A11Y": "accessibility", "EXP": "exploratory"}
 HTTP_CALL = re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S*")
@@ -132,7 +132,7 @@ def exploratory_on_mobile(proj: dict) -> bool:
 
 
 def skill_for(module: str, proj: dict) -> str:
-    """The skill a batch of the module runs: /test-mobile for exploratory charters on the app."""
+    """The skill a batch of the module runs: /run-tests for exploratory charters on the app."""
     return SKILLS["mobile"] if module == "exploratory" and exploratory_on_mobile(proj) else SKILLS[module]
 
 

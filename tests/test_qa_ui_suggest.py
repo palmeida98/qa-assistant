@@ -132,12 +132,12 @@ class ExploratoryOnTheApp(unittest.TestCase):
         proj = dict(kit.PROJECT, modules=["mobile", "exploratory"])
         self.assertTrue(sg.exploratory_on_mobile(proj))
         self.assertFalse(sg.exploratory_on_mobile(dict(kit.PROJECT, modules=["mobile", "functional-web"])))
-        self.assertEqual(sg.skill_for("exploratory", proj), "/test-mobile")
-        self.assertEqual(sg.skill_for("exploratory", kit.PROJECT), "/run-batch")
+        self.assertEqual(sg.skill_for("exploratory", proj), "/run-tests")
+        self.assertEqual(sg.skill_for("exploratory", kit.PROJECT), "/run-tests")
         out = sg.suggest([case("EXP-001", "Charter: the new chat")], proj,
                          READY + [(False, "adb", "adb not found")], "claude")
         card = {c["key"]: c for c in out["cards"]}["exploratory"]
-        self.assertEqual((card["runs"], card["tool"]), ("/test-mobile", sg.MOBILE_EXPLORATORY_TOOL))
+        self.assertEqual((card["runs"], card["tool"]), ("/run-tests", sg.MOBILE_EXPLORATORY_TOOL))
         self.assertEqual(card["blockers"], ["adb: adb not found"])          # the mobile tools, not node
         self.assertEqual({c["key"]: c for c in out["cards"]}["audit-site"]["level"], "not-suggested")
 
@@ -158,7 +158,7 @@ class Cards(unittest.TestCase):
         self.assertEqual((cards["functional-web"]["level"], cards["functional-web"]["cases"]),
                          ("recommended", ["CHK-011"]))
         self.assertEqual((cards["api"]["level"], cards["api"]["cases"], cards["api"]["runs"]),
-                         ("recommended", ["API-002", "API-003"], "/test-api"))
+                         ("recommended", ["API-002", "API-003"], "/run-tests"))
         self.assertEqual(cards["mobile"]["level"], "not-suggested")
 
     def test_the_site_audit_is_optional_with_a_web_case(self):

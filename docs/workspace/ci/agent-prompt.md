@@ -1,4 +1,4 @@
-/test-mobile
+/run-tests
 
 You are running one test batch on a GitHub Actions runner: remote execution (methodology 12.4, technique-mobile.md
 section 11). No person is watching and nobody can answer a question or approve anything during this run: every
@@ -21,7 +21,7 @@ decision that needs the user waits for the pull request this run opens.
    `cd`, `;`, `&&`, `|`, redirections, `sleep` nor `adb` (anything else is denied in this run and nobody can allow
    it). Waiting is built in (`launch` and `send` wait for the screen to settle); files are read with Read and
    written with Write/Edit, only in runs/, evidence/ and context.md.
-2. Run the cases with /test-mobile in CONVERSATIONAL mode (technique-mobile.md 4.1), one turn per step:
+2. Run the cases with /run-tests in CONVERSATIONAL mode (technique-mobile.md 4.1), one turn per step:
    `device.py {{workspace}} send "<message>" --capture <case>_t<N> --batch {{run_log}}`; a message with emoji or
    several lines goes through a UTF-8 file in evidence/{{run_log}}/ and `send --file`. Read the screenshot
    whenever the dump may miss content: it is the only view the user will have of this run.
@@ -30,7 +30,7 @@ decision that needs the user waits for the pull request this run opens.
    `python {{qa}}/scripts/run_log.py {{workspace}} add {{run_log}} <case> <status> "<note per turn>" --evidence <paths>`
 4. A doubt about the requirement or the expected result: status `Question`, with the concrete question in
    actual_result. Never assume; the user answers in the pull request.
-5. A Fail: look for an existing bug first (/log-bug, read only). The same problem -> "bug": "<id>" in the item.
+5. A Fail: look for an existing bug first (/manage-bugs, read only). The same problem -> "bug": "<id>" in the item.
    A new one -> "new_defect" with "proposed": true (title in the project's format, expected, observed, steps,
    environment and build, the evidence paths), added by editing the item in runs/{{run_log}}.json. It is a
    proposal: the user approves it in the pull request (methodology 9.4). A retest changes a case only when its own

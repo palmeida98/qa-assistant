@@ -244,13 +244,13 @@ class Migrate(unittest.TestCase):
     def test_texts_session_and_gitignore(self):
         self.run_it("--apply")
         claude = self.read("CLAUDE.md")
-        for new in ("docs/methodology.md", "technique-browser.md", "/log-bug", "scripts/validate_project.py",
+        for new in ("docs/methodology.md", "technique-browser.md", "/manage-bugs", "scripts/validate_project.py",
                     "adapters.excel.apply"):
             self.assertIn(new, claude)
         ctx = self.read("context.md")
         self.assertFalse(os.path.exists(os.path.join(self.ws, "contexto.md")))
         for new in ("# Session context — loja-demo", "Updated: 2026-09-20 10:00", "## Current state",
-                    "## Pending work", "/run-batch", "project.yaml", "history/", "/dashboard",
+                    "## Pending work", "/run-tests", "project.yaml", "history/", "/qa-report",
                     "## Execution point (last batch, last case)", "## Known problems / blockers"):
             self.assertIn(new, ctx)
         session = self.read(".api-session.env")

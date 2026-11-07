@@ -379,6 +379,22 @@ class WorkspaceLock(unittest.TestCase):
             pass
         self.assertFalse(os.path.exists(self.path))
 
+    def test_a_zombie_holds_nothing_where_there_is_no_proc(self):
+        # macOS (06.11.2026): without /proc a dead, unreaped holder counted as alive and its lock was never taken over
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and common._ps_state(dead.pid) not in ("Z", ""):
+            time.sleep(0.05)
+        try:
+            with mock.patch("builtins.open", side_effect=OSError("no /proc")):
+                self.assertFalse(common.pid_alive(dead.pid))
+        finally:
+            dead.wait(timeout=10)
+        self.assertTrue(common.pid_alive(os.getpid()))
+        with mock.patch.object(common, "_ps_state", return_value=None), \
+                mock.patch("builtins.open", side_effect=OSError("no /proc")):
+            self.assertTrue(common.pid_alive(os.getpid()))   # ps cannot say: alive, a live lock is never taken
+
     def test_a_lock_in_a_workspace_that_does_not_exist_is_an_error_not_a_hang(self):
         with self.assertRaises(FileNotFoundError), common.workspace_lock(os.path.join(self.ws, "missing"), wait=0.2):
             pass

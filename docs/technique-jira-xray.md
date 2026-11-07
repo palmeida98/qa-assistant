@@ -17,7 +17,7 @@
   - **Xray Cloud API v2** (`https://xray.cloud.getxray.app/api/v2/…`, or the host of the Xray region the site uses): `POST /authenticate` with a **client id and client secret** (an Xray API key) returns the token as a JSON string, used as `Authorization: Bearer`; results through the **import of an execution in Xray JSON** (`POST /import/execution/multipart` for the first chunk, which creates the execution with Jira fields — its label among them —, and `POST /import/execution` with `testExecutionKey` for the next ones); **GraphQL** (`POST /graphql`) where REST has no equivalent (the Xray statuses, reading steps, creating a test with its steps, adding tests to a test plan, reading back the test runs of a test execution).
   - The endpoints were confirmed against the current public documentation in 10.2 (list and links in the plan's note of 10.2): the Jira Cloud REST v3 OpenAPI description and the Xray Cloud REST v2 and GraphQL references. What the documentation cannot show (e.g. the exact error of a JQL with a key that does not exist, whether `createTest`'s folder must exist) is confirmed by the pilot (10.5), and this document is fixed first if it differs.
 - The four directions of version 1: **send results** (§4), **bugs** — search duplicates, create, update (§5), **import cases** (§6), **export new cases** (§7).
-- **Out of scope in version 1** (future, only when a real project needs them): Jira Server / Data Center and Xray Server / Data Center (other APIs: REST v2 and the Xray `raven` API, personal access tokens); OAuth 2.0 (3LO) apps; test types other than `Manual` (`Cucumber`, `Generic` are imported read only, flagged, never exported); creating `Precondition`, `Test Set` or `Test Plan` issues (existing ones are read and linked); results per step (only the test's status, with the actual result as the comment); the dashboard (`/dashboard` stays Excel only: §9); webhooks or any sync that runs without the assistant.
+- **Out of scope in version 1** (future, only when a real project needs them): Jira Server / Data Center and Xray Server / Data Center (other APIs: REST v2 and the Xray `raven` API, personal access tokens); OAuth 2.0 (3LO) apps; test types other than `Manual` (`Cucumber`, `Generic` are imported read only, flagged, never exported); creating `Precondition`, `Test Set` or `Test Plan` issues (existing ones are read and linked); results per step (only the test's status, with the actual result as the comment); the dashboard (`/qa-report` stays Excel only: §9); webhooks or any sync that runs without the assistant.
 
 ---
 
@@ -224,7 +224,7 @@ Defaults proposed at the onboarding, for the methodology's statuses (the user co
 | `N/A` | no default: a custom Xray status (e.g. `NA`) — **asked**; otherwise unmapped (not sent) | there is no built-in N/A |
 | `Question` | never mapped: refused (exit 4) | methodology §8.5 |
 
-**Not sent** (decision of 28.09.2026, plan Phase 10): a status whose value is `skip` or empty (`""` / `null`: *unmapped*) is part of the vocabulary but **is not sent** — the item stays only in the run log, is listed in the dry-run plan, in the summary and in the record (§2.5) as not sent, and it is **not an error**. `/project-onboarding` asks per project for `Blocked` and `N/A` (a custom Xray status or `ABORTED`); when the user chooses none, it writes the key with `skip`, so every status of the vocabulary stays a key of the map. A status that is **not a key** of the map is refused (exit 4, §2.6): only the map decides what is left out, a typo is never dropped silently. `Question` is refused even if someone writes it in the map (`validate_project.py` flags it). `check` confirms that every mapped status exists in Xray.
+**Not sent** (decision of 28.09.2026, plan Phase 10): a status whose value is `skip` or empty (`""` / `null`: *unmapped*) is part of the vocabulary but **is not sent** — the item stays only in the run log, is listed in the dry-run plan, in the summary and in the record (§2.5) as not sent, and it is **not an error**. `/project-context` asks per project for `Blocked` and `N/A` (a custom Xray status or `ABORTED`); when the user chooses none, it writes the key with `skip`, so every status of the vocabulary stays a key of the map. A status that is **not a key** of the map is refused (exit 4, §2.6): only the map decides what is left out, a typo is never dropped silently. `Question` is refused even if someone writes it in the map (`validate_project.py` flags it). `check` confirms that every mapped status exists in Xray.
 
 ### 4.2 Flow
 
@@ -242,7 +242,7 @@ A case run again in a later batch goes into that batch's new execution: Xray kee
 
 ---
 
-## 5. Bugs (`/log-bug` and `apply`)
+## 5. Bugs (`/manage-bugs` and `apply`)
 
 ### 5.1 Duplicate search (`bug-search`)
 
@@ -270,7 +270,7 @@ project = DS AND issuetype = Bug AND statusCategory != Done
 
 ## 6. Importing cases (`import-cases`)
 
-For the onboarding (methodology §4 step 7), `/plan-batch` and `/run-batch`:
+For the onboarding (methodology §4 step 7), `/plan-tests` and `/run-tests`:
 
 1. JQL `cases.jql` (default `project = <project_key> AND issuetype = <issue_type>`), through `POST /rest/api/3/search/jql` with `nextPageToken` pagination (up to 100 issues per page), only the mapped fields.
 2. Steps and test type through GraphQL `getTests(issueIds: […], limit: 100)`, 100 issue ids at a time (the ids of step 1: `getTests` with a `jql` refuses a JQL that matches more than 100 issues): each step's action, data and expected result; linked `Precondition` issues (their definition appended to `preconditions` as text; `preconditions_from` keeps their keys, read only).
@@ -281,9 +281,9 @@ Flags, never silent fixes (methodology §11): a test without steps, a non-`Manua
 
 ---
 
-## 7. Exporting new cases (`export-cases`, after `/generate-cases`)
+## 7. Exporting new cases (`export-cases`, after `/plan-tests`)
 
-- Input: the cases the user approved in `/generate-cases`, as `{"cases": [...]}` with the fields of the model (the same as `cases.json`) and a provisional `id` (`NEW-1`, …) when `id_source` is `key`, or the project's ID pattern otherwise.
+- Input: the cases the user approved in `/plan-tests`, as `{"cases": [...]}` with the fields of the model (the same as `cases.json`) and a provisional `id` (`NEW-1`, …) when `id_source` is `key`, or the project's ID pattern otherwise.
 - Resolution: an internal ID that already exists → exit 2; a test with the same summary in the same folder → a candidate duplicate, listed, not created without the user's decision (methodology §10: re-run with the case removed from the file).
 - Creation, per case: GraphQL `createTest` (test type `Manual`, the steps, `folderPath` = `folder`, and the Jira fields: summary, mapped fields, the marker `qa-batch-<file name>`, and the ID field or label with `field`/`label`); the **rich text** fields (e.g. `description`) go right after through `PUT /rest/api/3/issue/<key>` in ADF, because the format `createTest`'s `jira` object expects for them is not documented; then, with `results.test_plan_key`, one `addTestsToTestPlan` with every new test (idempotent). A `createTest` without an answer is exit 3 and the next run finds the test by its marker and summary (§2.5).
 - The record is `tracker/sent/<cases file name>.json` (§2.5, same rules): it keeps `NEW-1 → DS-140`; `ids.yaml` gets the **final** ID (`DS-140: {key: DS-140, id: …}` with `key`, the project's own ID with `field`/`label`) — a provisional `NEW-<n>` is reused by the next cases file, so it is never a key of the cache —, and the command prints `NEW-1 -> DS-140` for the skill to tell the user.
@@ -300,7 +300,7 @@ Flags, never silent fixes (methodology §11): a test without steps, a non-`Manua
 
 ## 9. What is not done
 
-- `/dashboard` stays Excel only: a tracker's own reports (Xray's test plan and execution reports) are the progress view; building the dashboard from `tracker/cases.json` and the records would show only what this assistant sent. Revisited only if a real project asks for it.
+- `/qa-report` stays Excel only: a tracker's own reports (Xray's test plan and execution reports) are the progress view; building the dashboard from `tracker/cases.json` and the records would show only what this assistant sent. Revisited only if a real project asks for it.
 - No bulk edit of existing tests (steps, fields): `export-cases` only creates. A change to an existing case is proposed to the user and done in Jira.
 
 ---

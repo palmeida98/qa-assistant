@@ -29,7 +29,7 @@ The cases, as the project's library has them (read only; the source of each expe
    The status is one of the project's vocabulary; what was observed is never the expected result copied.
 4. A doubt about the requirement or the expected result: status `Question`, with the concrete question as what
    was observed. Never assume; the user answers in the interface.
-5. A Fail: look for an existing bug first (/log-bug, read only). The same problem: add `--bug <id>`. A new one:
+5. A Fail: look for an existing bug first (/manage-bugs, read only). The same problem: add `--bug <id>`. A new one:
    write the bug as a JSON object in evidence/{{run_log}}/<case>_defect.json with `"proposed": true` (the title in
    the project's format, the expected and the observed behaviour, the steps, the environment and the build, the
    evidence paths; the fields of the tracker's technique) and add `--new-defect evidence/{{run_log}}/<case>_defect.json`.

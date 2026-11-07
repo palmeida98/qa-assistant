@@ -46,7 +46,7 @@ them — they read project.yaml.
   `python -m adapters.tracker <ws> apply <log> --yes`: the merge was the approval). The workbook (only after exit 0
   or 5) or tracker/ is committed and pushed to the branch that was pushed, and the result is commented on the pull
   request of the merge. Exit 1 when a run log was refused or its application failed.
-- A planned batch is batches/<name>.yaml ({cases: [ID, ...]}, written by /plan-batch); otherwise the input is a list
+- A planned batch is batches/<name>.yaml ({cases: [ID, ...]}, written by /plan-tests); otherwise the input is a list
   of case IDs (name "adhoc"). The run log is runs/batch_<name>_r<run id>.json, the branch run/<name>-<run id>.
 
 Exit codes: 0 ok · 1 problems (check) or refused (install) · 2 usage or configuration · 3 gh failed
@@ -214,7 +214,7 @@ def resolve_batch(workspace: str, text: str) -> tuple[str, list[str]]:
             doc = yaml.safe_load(f) or {}
         cases = doc.get("cases") if isinstance(doc, dict) else None
         if not (isinstance(cases, list) and cases and all(isinstance(c, str) and CASE.fullmatch(c) for c in cases)):
-            raise UsageError(f"batches/{text}.yaml: expected cases: [<case ID>, ...] (written by /plan-batch)")
+            raise UsageError(f"batches/{text}.yaml: expected cases: [<case ID>, ...] (written by /plan-tests)")
         return text, list(dict.fromkeys(cases))
     ids = [x for x in re.split(r"[\s,]+", text) if x]
     bad = [x for x in ids if not CASE.fullmatch(x)]
@@ -296,7 +296,8 @@ def cmd_import_flows(workspace: str, a) -> int:
         note = f"flow {r.get('flow')} on {report.get('target')}" + (f": {r['message']}" if r.get("message") else "")
         try:
             status = run_log.project_status(read_project(workspace), r["suggested_status"].lower())
-            run_log.add(workspace, a.run_log, r["case"], status, note)
+            # the flow's own result replaces what the runner wrote before it ran (a Blocked placeholder)
+            run_log.add(workspace, a.run_log, r["case"], status, note, replace=True)
         except (run_log.UsageError, run_log.Refused) as e:
             raise UsageError(str(e)) from None
         n += 1
@@ -544,7 +545,7 @@ def leaks(workspace: str, files: list[str]) -> list[str]:
     return found
 
 
-def adapter_problems(workspace: str, proj: dict, doc: dict) -> list[str]:
+def adapter_problems(workspace: str, proj: dict, doc: dict, batch: str | None = None) -> list[str]:
     """The adapter's own validation of the run log, without applying it; Question items and "proposed" aside."""
     items = [dict(x) for x in doc.get("results") or [] if isinstance(x, dict)
              and not str(x.get("status") or "").lower().startswith("question")]
@@ -555,12 +556,18 @@ def adapter_problems(workspace: str, proj: dict, doc: dict) -> list[str]:
         return []
     tracker = proj.get("tracker")
     if tracker == "excel":
-        from adapters.excel import ConfigError, ExcelAdapter
+        from adapters.excel import ExcelAdapter
+        from adapters.excel.base import route_workbook
+        route = route_workbook(proj, batch or "", doc.get("run") if isinstance(doc.get("run"), dict) else None,
+                               workspace=workspace)
+        if route.problem:
+            return [route.problem]
         try:
-            ad = ExcelAdapter.from_project(workspace)
+            ad = ExcelAdapter.from_project(workspace, file=route.file)      # the batch's own workbook
             ad.load()
-        except (ConfigError, FileNotFoundError, KeyError, OSError) as e:
-            return [f"the workbook could not be read to validate the run log: {e}"]
+        except Exception as e:      # noqa: BLE001 - missing, not a workbook, another layout: a problem, never a crash
+            return [(f"the workbook {route.file} ({route.source}) could not be read to validate the run log "
+                     f"({type(e).__name__}: {e})")]
         return ad.validate_batch(items)
     if tracker in ("jira", "azure-devops"):
         from adapters.tracker import base, config, errors
@@ -589,7 +596,7 @@ def cmd_post_check(workspace: str, a) -> int:
             report["proposed_added"].append(str(item.get("tc")))
     if report["proposed_added"] and os.path.isfile(path):
         run_log.write_log(path, doc)
-    report["problems"] = adapter_problems(workspace, proj, doc)
+    report["problems"] = adapter_problems(workspace, proj, doc, name)
     report["safe"] = not report["leaks"]
     if a.report:
         with open(a.report, "w", encoding="utf-8") as f:

@@ -1,4 +1,5 @@
-"""Project skills (.claude/skills): valid and consistent frontmatter.
+"""Project skills (.claude/skills, version 2: docs/skills-spec.md): valid and consistent frontmatter, contracts that
+name only what exists, and the procedures they moved to docs/procedures/.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
 A frontmatter with invalid YAML (e.g. ': ' in the description without quotes) makes
@@ -7,6 +8,7 @@ Claude Code show the first line of the body instead of the description.
 
 import os
 import re
+import shlex
 import sys
 import unittest
 from unittest import mock
@@ -19,8 +21,14 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 import sync_skills
 
 SKILLS = os.path.join(ROOT, ".claude", "skills")
+DOCS = os.path.join(ROOT, "docs")
+PROCEDURES = os.path.join(DOCS, "procedures")
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
-METHODOLOGY = os.path.join(ROOT, "docs", "methodology.md")
+METHODOLOGY = os.path.join(DOCS, "methodology.md")
+EIGHT = ["analyze-ticket", "checkpoint", "manage-bugs", "plan-tests", "project-context", "qa-report", "run-tests",
+         "test-pbi"]
+VERSION_1 = ("project-onboarding", "analyze-tickets", "analyze-feature", "generate-cases", "plan-batch", "run-batch",
+             "test-api", "audit-accessibility", "test-mobile", "log-bug", "end-session", "dashboard")
 
 
 def frontmatter(path: str) -> dict:
@@ -32,12 +40,35 @@ def frontmatter(path: str) -> dict:
     return yaml.safe_load(m.group(1))
 
 
+def skill_text(name: str) -> str:
+    with open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8-sig") as f:
+        return f.read().replace("\r\n", "\n")
+
+
+def procedure(name: str) -> str:
+    with open(os.path.join(PROCEDURES, name), encoding="utf-8-sig") as f:
+        return f.read().replace("\r\n", "\n")
+
+
+def flat(text: str) -> str:
+    """The text with its line breaks and repeated blanks as one space: a phrase may be wrapped anywhere."""
+    return " ".join(text.split())
+
+
+def names() -> list[str]:
+    return sorted(d for d in os.listdir(SKILLS) if os.path.isfile(os.path.join(SKILLS, d, "SKILL.md")))
+
+
+def all_procedures() -> list[str]:
+    return sorted(f for f in os.listdir(PROCEDURES) if f.endswith(".md"))
+
+
 class Skills(unittest.TestCase):
-    def names(self):
-        return sorted(d for d in os.listdir(SKILLS) if os.path.isfile(os.path.join(SKILLS, d, "SKILL.md")))
+    def test_the_eight_skills_and_nothing_else(self):
+        self.assertEqual(names(), EIGHT)
 
     def test_valid_frontmatter_with_name_and_description(self):
-        for name in self.names():
+        for name in names():
             with self.subTest(skill=name):
                 fm = frontmatter(os.path.join(SKILLS, name, "SKILL.md"))
                 self.assertIsInstance(fm, dict)
@@ -45,17 +76,26 @@ class Skills(unittest.TestCase):
                 self.assertIsInstance(fm.get("description"), str)
                 self.assertGreater(len(fm["description"]), 20)
 
+    def test_each_description_says_when_to_use_it_in_natural_language(self):
+        # routing is by description (skills-guide.md section 3): each one carries the requests it answers
+        for name in names():
+            with self.subTest(skill=name):
+                self.assertRegex(frontmatter(os.path.join(SKILLS, name, "SKILL.md"))["description"], r"Use (for|when)")
+
     def test_each_skill_is_in_the_work_cycle_of_the_methodology(self):
-        # the methodology's stage table (section 3) is the list of the skills; CLAUDE.md no longer repeats it
-        # (Claude Code lists the skills, with their descriptions, in every session)
+        # the methodology's stage table (section 3) is the list of the skills; CLAUDE.md does not repeat it
         with open(METHODOLOGY, encoding="utf-8-sig") as f:
             commands = f.read()
-        for name in self.names():
+        table = commands[commands.index("| Stage or request | Skill | Result |"):commands.index("The user need not know")]
+        for name in names():
             with self.subTest(skill=name):
-                self.assertIn(f"/{name}", commands)
+                self.assertIn(f"`/{name}`", table)
+        for old in VERSION_1:
+            with self.subTest(retired=old):
+                self.assertNotIn(f"/{old}`", table)
 
     def test_each_skill_has_its_whole_contract_in_the_frontmatter(self):
-        for name in self.names():
+        for name in names():
             metadata = frontmatter(os.path.join(SKILLS, name, "SKILL.md")).get("metadata") or {}
             for key in CONTRACT:
                 with self.subTest(skill=name, key=key):
@@ -67,8 +107,8 @@ class Skills(unittest.TestCase):
     def test_each_requirement_can_be_checked(self):
         import validate_project
         known_tools = {"git", "python", ".env", "skills", "libreoffice", "node", "qa-audit", "browser", "maestro", "adb",
-                       "emulator", "android-driver", "xcrun", "build", "mcp"}
-        for name in self.names():
+                       "emulator", "android-driver", "mobile", "xcrun", "ios-wda", "build", "mcp"}
+        for name in names():
             doc = sync_skills.skill_doc(os.path.join(SKILLS, name, "SKILL.md"))
             with self.subTest(skill=name):
                 self.assertEqual(sync_skills.missing_code(ROOT, doc), [])
@@ -77,89 +117,171 @@ class Skills(unittest.TestCase):
                                      {"tickets", "excel", *(s for s, _ in validate_project.MODULES.values() if s)})
                 self.assertIn((doc.get("metadata") or {}).get("requires-project", "valid"), ("valid", "any"))
 
+    def test_every_skill_reads_the_shared_rules_and_declares_its_documents(self):
+        for name in names():
+            doc = sync_skills.skill_doc(os.path.join(SKILLS, name, "SKILL.md"))
+            declared = set(sync_skills.listed(doc, "requires-docs"))
+            text = skill_text(name)
+            with self.subTest(skill=name):
+                self.assertIn("procedures/rules.md", declared)
+                self.assertIn("<qa>/docs/procedures/rules.md apply", text)
+                # every procedure the body names is declared, so a missing one stops the installation
+                for named in set(re.findall(r"procedures/[a-z-]+\.md", text)):
+                    self.assertIn(named, declared, f"{name} names {named} without requires-docs")
+
     def test_each_skill_starts_by_finding_the_framework_and_the_project(self):
         import workspace_select
-        for name in self.names():
+        for name in names():
             text = skill_text(name)
             m = re.search(r"python <qa>/scripts/workspace_select\.py (preflight --skill (\S+)) ", text)
             with self.subTest(skill=name):
                 self.assertIsNotNone(m)
                 self.assertEqual(m.group(2), name)
                 workspace_select.parser().parse_args(m.group(1).split())
-                self.assertLess(text.index("preflight"), text.index("\n1. ") if "\n1. " in text else len(text))
-
-    def test_a_skill_says_where_the_documents_it_names_are(self):
-        # audit finding S-01: a workspace is outside the repository, so a bare `technique-browser.md` led nowhere
-        for name in self.names():
-            text = skill_text(name)
-            named = re.search(r"(?<![/\w-])(?:methodology|heuristics|technique-[a-z-]+)\.md", text)
-            with self.subTest(skill=name):
-                if named:
-                    self.assertLess(text.index("<qa>/docs/"), text.index("\n1. "), "say where the documents are in step 0")
-
-    def test_an_analysis_outlives_the_session_and_stays_a_proposal(self):
-        # audit finding S-03: /generate-cases read the analysis from the conversation
-        feature, cases = skill_text("analyze-feature"), skill_text("generate-cases")
-        for word in ("analysis/", "Date:", "Sources:", "Status:", "Open questions"):
-            self.assertIn(word, feature)
-        self.assertIn("analysis/", cases)
-        self.assertIn("never a requirement", cases)
-        self.assertIn("analysis/", skill_text("checkpoint"))
+                self.assertLess(text.index("preflight"), text.index("\n1. "))
+                self.assertLess(text.index("<qa>/docs/"), text.index("\n1. "), "say where the documents are in step 0")
 
     def test_nothing_in_a_skill_depends_only_on_the_old_relative_path(self):
-        for name in self.names():
-            text = skill_text(name)
+        for name in names():
             with self.subTest(skill=name):
-                self.assertEqual(text.count("../../../qa-assistant"), 1)    # the last option of the preflight, and nowhere else
+                self.assertEqual(skill_text(name).count("../../../qa-assistant"), 1)   # the last option, nowhere else
 
     def test_a_skill_folder_holds_only_its_skill(self):
         # scripts/sync_skills.py copies SKILL.md alone: a helper file here would never reach a workspace
-        for name in self.names():
+        for name in names():
             with self.subTest(skill=name):
                 self.assertEqual(os.listdir(os.path.join(SKILLS, name)), ["SKILL.md"])
 
+    def test_no_skill_or_procedure_sends_to_a_version_1_skill(self):
+        for label, text in [(n, skill_text(n)) for n in names()] + [(p, procedure(p)) for p in all_procedures()]:
+            body = re.sub(r"\(from /[a-z-]+\)", "", text)       # the headings that say where a procedure came from
+            for old in VERSION_1:
+                with self.subTest(file=label, old=old):
+                    self.assertNotRegex(body, rf"(?<![\w/.-])/{re.escape(old)}(?![\w-])")
 
-def skill_text(name: str) -> str:
-    with open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8-sig") as f:
-        return f.read().replace("\r\n", "\n")
+    def test_the_scripts_and_documents_named_exist(self):
+        for label, text in [(n, skill_text(n)) for n in names()] + [(p, procedure(p)) for p in all_procedures()]:
+            for script in set(re.findall(r"scripts/([a-z_]+\.py)", text)):
+                with self.subTest(file=label, script=script):
+                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "scripts", script)))
+            for doc in set(re.findall(r"(?:technique-[a-z-]+|methodology|heuristics|skills-(?:spec|guide))\.md", text)):
+                with self.subTest(file=label, doc=doc):
+                    self.assertTrue(os.path.isfile(os.path.join(DOCS, doc)))
+            for doc in set(re.findall(r"procedures/([a-z-]+\.md)", text)):
+                with self.subTest(file=label, doc=doc):
+                    self.assertTrue(os.path.isfile(os.path.join(PROCEDURES, doc)))
+
+
+class Routing(unittest.TestCase):
+    def test_run_tests_has_a_route_for_every_module_and_each_exists(self):
+        import validate_project
+        import workspace_select
+        doc = sync_skills.skill_doc(os.path.join(SKILLS, "run-tests", "SKILL.md"))
+        table = workspace_select.parse_routes(doc["metadata"]["routes"])
+        self.assertEqual(set(table), set(validate_project.MODULES))
+        for module, proc in table.items():
+            with self.subTest(module=module):
+                self.assertTrue(os.path.isfile(os.path.join(DOCS, *proc.split("/"))))
+                self.assertIn(proc, sync_skills.listed(doc, "requires-docs"))
+        self.assertEqual(doc["metadata"].get("next-check"), "yes")
+
+    def test_run_tests_keeps_app_tool_block_and_inconclusive_apart(self):
+        text = flat(skill_text("run-tests") + procedure("rules.md"))
+        for needle in ("Blocked (environment)", "Blocked (tool)", "never a defect", "Question", "OBSERVED",
+                       "intended", "a new batch"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+
+class Flow(unittest.TestCase):
+    def test_test_pbi_coordinates_the_other_skills_without_copying_them(self):
+        text = skill_text("test-pbi")
+        for other in EIGHT:
+            if other != "test-pbi":
+                with self.subTest(skill=other):
+                    self.assertIn(f"/{other}", text)
+        self.assertNotIn("adapters.excel.apply", text)         # applying is /checkpoint's (procedures/apply.md)
+        self.assertNotIn("bug-search", text)                    # the search is /manage-bugs'
+
+    def test_the_helpers_named_in_the_skills_parse(self):
+        import pbi_state
+        import qa_report
+        for name in names():
+            for script, mod in (("pbi_state.py", pbi_state), ("qa_report.py", qa_report)):
+                for rest in re.findall(rf"python <qa>/scripts/{script} <workspace> ([^\n]+)", skill_text(name)):
+                    line = re.sub(r"<[^>]+>", "x", rest.replace("[", " ").replace("]", " ").replace("...", " "))
+                    argv = ["ws"] + shlex.split(line.split("|")[0] if "|" in line.split()[0] else line)
+                    with self.subTest(skill=name, line=rest):
+                        try:
+                            mod.parser().parse_args(argv)
+                        except SystemExit:
+                            self.fail(f"{name}: {script} {rest} does not parse")
+
+    def test_checkpoint_does_not_commit_on_its_own(self):
+        text = flat(skill_text("checkpoint"))
+        self.assertIn("does not commit or push", text)
+        self.assertIn("a past time is history", text)
+
+    def test_project_context_never_turns_a_past_time_into_a_schedule(self):
+        text = flat(skill_text("project-context"))
+        self.assertIn("never turn it into a schedule", text)
+        self.assertIn("configured, not verified", text)
+
+    def test_analyze_ticket_keeps_four_lists_and_never_concludes_from_a_partial_read(self):
+        text = flat(skill_text("analyze-ticket"))
+        for needle in ("content read", "only listed", "inaccessible", "out of scope", "first analysis",
+                       "never proves that something was removed"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_manage_bugs_one_bug_for_both_platforms_and_similar_is_not_same(self):
+        text = flat(skill_text("manage-bugs"))
+        for needle in ("one bug with the platforms", "Similar symptoms do not prove the same defect",
+                       "Present all items together", "pbi_state.py published"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+    def test_qa_report_never_adds_platforms(self):
+        text = flat(skill_text("qa-report"))
+        for needle in ("denominator", "never added into one figure", "historical", "retests", "coverage still missing"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
 
 
 TRACKER_LINE = re.compile(r"python -m adapters\.tracker <workspace> (\S+)([^\n]*)")
 
 
-class TrackerSkills(unittest.TestCase):
-    """Plan 10.4: the skills drive `python -m adapters.tracker` the way its command line and the techniques say."""
+class Procedures(unittest.TestCase):
+    """The rules of version 1 (plan 10.4 and later) live on in docs/procedures/: the same checks, on their new home."""
 
-    def test_every_tracker_command_in_the_skills_parses(self):
+    def test_every_tracker_command_parses(self):
         from adapters.tracker.cli import parser
         found = set()
-        for name in sorted(os.listdir(SKILLS)):
-            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
-                continue
-            for command, rest in TRACKER_LINE.findall(skill_text(name)):
+        for name in all_procedures():
+            for command, rest in TRACKER_LINE.findall(procedure(name)):
                 found.add(command)
                 argv = ["ws", command] + (["input.json"] if command in ("apply", "export-cases", "bug-search") else [])
                 argv += re.findall(r"--[a-z][a-z-]*", rest)
-                with self.subTest(skill=name, command=command):
+                with self.subTest(procedure=name, command=command):
                     try:
                         parser().parse_args(argv)
                     except SystemExit:
                         self.fail(f"{name}: 'python -m adapters.tracker <workspace> {command}{rest}' does not parse")
         self.assertEqual(found, {"check", "import-cases", "export-cases", "apply", "bug-search"})
 
-    def test_the_skills_that_use_each_direction(self):
-        expected = {"project-onboarding": ("> check", "> import-cases"), "checkpoint": ("> apply",),
-                    "log-bug": ("> bug-search",), "generate-cases": ("> export-cases",),
-                    "plan-batch": ("> import-cases", "tracker/cases.json"), "run-batch": ("tracker/cases.json",),
-                    "end-session": ("tracker/sent/",)}
+    def test_the_procedures_that_use_each_direction(self):
+        expected = {"onboarding.md": ("> check", "> import-cases"), "apply.md": ("> apply",),
+                    "bugs.md": ("> bug-search",), "planning.md": ("> export-cases", "> import-cases",
+                                                                  "tracker/cases.json"),
+                    "run-web.md": ("tracker/cases.json",), "report.md": ("tracker/sent/",)}
         for name, needles in expected.items():
             for needle in needles:
-                with self.subTest(skill=name, needle=needle):
-                    self.assertIn(needle, skill_text(name))
+                with self.subTest(procedure=name, needle=needle):
+                    self.assertIn(needle, procedure(name))
 
-    def test_generate_cases_adds_excel_cases_through_the_adapter(self):
+    def test_planning_adds_excel_cases_through_the_adapter(self):
         # plan 10.6 (technique-excel.md 4.1): the dry run first, never by hand
-        text = skill_text("generate-cases")
+        text = procedure("planning.md")
         m = re.search(r"python -m adapters\.excel\.add_cases <workspace> (\S+)( --dry-run)", text)
         self.assertIsNotNone(m)
         from adapters.excel import add_cases
@@ -170,18 +292,24 @@ class TrackerSkills(unittest.TestCase):
             self.assertIn(code, text[text.index("10. With the excel tracker"):])
         self.assertIn("Never add a case by hand", text)
 
+    def test_an_analysis_outlives_the_session_and_stays_a_proposal(self):
+        # audit finding S-03: case design read the analysis from the conversation
+        text = procedure("planning.md")
+        for word in ("analysis/", "Date:", "Sources:", "Status:", "Open questions", "never a requirement"):
+            self.assertIn(word, text)
+        self.assertIn("analysis/", skill_text("plan-tests"))
+
     def test_writing_commands_dry_run_first_then_yes_after_approval(self):
-        for name in ("checkpoint", "generate-cases"):
-            text = skill_text(name)
-            with self.subTest(skill=name):
+        for name in ("apply.md", "planning.md"):
+            text = procedure(name)
+            with self.subTest(procedure=name):
                 self.assertIn("--yes", text)
                 self.assertRegex(text, r"(?i)dry run")
                 self.assertRegex(text, r"(?i)approv")
-                # the command as written in the skill never sends: --yes only after the approval
                 self.assertNotRegex(text, r"adapters\.tracker <workspace> (apply|export-cases) \S+ --yes")
 
-    def test_checkpoint_explains_every_exit_code_of_apply(self):
-        text = skill_text("checkpoint")
+    def test_apply_explains_every_exit_code(self):
+        text = procedure("apply.md")
         block = text[text.index("7a."):text.index("\n8.")]
         for code in range(6):
             with self.subTest(code=code):
@@ -189,40 +317,27 @@ class TrackerSkills(unittest.TestCase):
         self.assertIn('"run"', text)
 
     def test_onboarding_asks_for_blocked_and_na_and_the_process(self):
-        text = skill_text("project-onboarding")
+        text = procedure("onboarding.md")
         for needle in ("Blocked and N/A", "skip", "Basic", "Agile or Scrum", "results.configurations", "*_var",
                        "technique-jira-xray.md", "technique-azure-devops.md"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
-    def test_dashboard_says_excel_only_for_the_other_trackers(self):
-        text = skill_text("dashboard")
+    def test_the_dashboard_says_excel_only_for_the_other_trackers(self):
+        text = procedure("report.md")
         self.assertIn("jira or azure-devops", text)
         self.assertIn("Excel only", text)
 
-    def test_log_bug_retest_changes_a_case_only_when_its_own_expected_result_was_checked(self):
+    def test_bugs_retest_changes_a_case_only_when_its_own_expected_result_was_checked(self):
         # plan 11.2: a real retest turned six Pass cases into Fail by linking maintained bugs to them
-        text = skill_text("log-bug")
+        text = procedure("bugs.md")
         for needle in ("changes a CASE only", "own expected result was checked again", '"proposed": true',
                        "scripts/run_log.py"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
-    def test_the_scripts_the_skills_run_exist(self):
-        for name in sorted(os.listdir(SKILLS)):
-            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
-                continue
-            for script in set(re.findall(r"scripts/([a-z_]+\.py)", skill_text(name))):
-                with self.subTest(skill=name, script=script):
-                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "scripts", script)))
-
-    def test_referenced_techniques_exist(self):
-        for name in sorted(os.listdir(SKILLS)):
-            if not os.path.isfile(os.path.join(SKILLS, name, "SKILL.md")):
-                continue
-            for doc in set(re.findall(r"technique-[a-z-]+\.md", skill_text(name))):
-                with self.subTest(skill=name, doc=doc):
-                    self.assertTrue(os.path.isfile(os.path.join(ROOT, "docs", doc)))
+    def test_run_mobile_names_the_one_check_of_the_target(self):
+        self.assertIn("device.py <workspace> check", procedure("run-mobile.md"))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,13 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
     python scripts/run_log.py <workspace> add <batch> <case> <status> <actual>
         [--bug ID] [--new-defect FILE.json] [--evidence PATH ...] [--environment KEY] [--build VERSION]
     python scripts/run_log.py <workspace> remove <batch> <case>
+    python scripts/run_log.py <workspace> mode <batch> "<kind>: <why>"
+
+- mode: how the batch is executed and why (procedures/run-mobile.md step 2), the run log's top-level "mode", written
+  before the first result: `mode` on its own (it creates the run log when there is none), or `add ... --mode`. The kind
+  is one of conversational, flows, assisted, manual, and a reason follows the colon. The same value again changes
+  nothing; another value is refused once the batch has results, and a batch with results and no mode never gets one
+  afterwards (it is not guessed). Old run logs without "mode" stay valid.
 
 - The case must be in the project's library (the workbook, or tracker/cases.json): an unknown ID is exit 2 with the
   closest known ones, and a library that cannot be read is exit 2 too. The run block does not change once the batch
@@ -11,13 +18,14 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 - remove: takes one mistaken result out of a batch not yet applied. It shows the result, keeps the others, never
   deletes evidence (it lists the files), and refuses a batch already applied (exit 1) or a result that is not there (2).
 
-- add: appends the result of <case> to runs/batch_<batch>.json, or replaces it when the case is already there (one
-  item per case, the adapter refuses a case repeated); "ts" is now. <batch> may be given with or without the
+- add: appends the result of <case> to runs/batch_<batch>.json; a case already there is refused unless --replace is
+  given, and then the previous result is printed (one item per case, the adapter refuses a case repeated); "ts" is now. <batch> may be given with or without the
   "batch_" prefix. --new-defect reads a JSON object (the bug approved by the user, or on a runner a proposal with
   "proposed": true, methodology 9.4); --environment/--build set the run block (the Jira and Azure DevOps adapters
   need it). The file is written whole and atomically.
 - The status must be in the project's vocabulary (excel.cases.statuses, jira.results.statuses or
-  azure_devops.results.outcomes) or be `Question` (reclassified before the checkpoint, methodology 8.5).
+  azure_devops.results.outcomes) or be `Question`, in any case (stored as `Question`; reclassified before the
+  checkpoint, methodology 8.5). A batch that has results without a build or environment cannot get one later.
 - A batch already applied is never touched: its name is in the workbook's control sheet (the Excel adapter's
   applied_batches) or it has a record in tracker/sent/ (Jira, Azure DevOps). Appending to it made the adapter refuse
   it ("already applied ... with a DIFFERENT content"); a correction goes to a new batch, whose name is suggested.
@@ -42,14 +50,16 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 from common import (
     OutsideWorkspace,
     WorkspaceBusy,
+    atomic_write,
     read_project,
-    replace_file,
     same_build,
     workspace_lock,
     workspace_path,
 )
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+# how a batch is executed (procedures/run-mobile.md step 2; technique-mobile.md 4.1): "<kind>: <why>"
+MODE_KINDS = ("conversational", "flows", "assisted", "manual")
 
 
 class Refused(Exception):
@@ -74,6 +84,65 @@ def run_log_path(workspace: str, batch: str) -> str:
         return workspace_path(workspace, "runs", batch_id(batch) + ".json")
     except OutsideWorkspace as e:
         raise UsageError(str(e)) from None
+
+
+def check_mode(value: str) -> str:
+    """The mode as written: "<kind>: <why>", the kind one of MODE_KINDS (lower case), a non-empty reason."""
+    kind, sep, why = str(value or "").partition(":")
+    kind, why = kind.strip().lower(), why.strip()
+    if kind not in MODE_KINDS or not sep or not why:
+        raise UsageError(f"mode {value!r}: expected \"<kind>: <why>\" with the kind one of {', '.join(MODE_KINDS)} "
+                         "(e.g. \"conversational: generated answers\")")
+    return f"{kind}: {why}"
+
+
+def mode_kind(doc: dict) -> str | None:
+    """The kind of a run log's mode (conversational, flows...), or None when it has none (an old run log)."""
+    value = doc.get("mode") if isinstance(doc, dict) else None
+    if not isinstance(value, str):
+        return None
+    kind = value.partition(":")[0].strip().lower()
+    return kind if kind in MODE_KINDS else None
+
+
+def _with_mode(doc: dict, mode: str) -> tuple[dict, bool]:
+    """The doc with `mode` as its first key; (doc, changed). Refused when the batch has results and no mode or another
+    mode: the mode is the record of how those results were obtained."""
+    current = doc.get("mode")
+    if current == mode:
+        return doc, False
+    if doc.get("results"):
+        if current in (None, ""):
+            raise Refused("this batch already has results recorded without a mode: it is not filled in afterwards. "
+                          "Record the next results in a new batch with --mode")
+        raise Refused(f"this batch's mode is {current!r} and it already has results: it does not change during the "
+                      f"batch. A run in another mode ({mode!r}) is a new batch")
+    return {"mode": mode, **{k: v for k, v in doc.items() if k != "mode"}}, True
+
+
+def set_mode(workspace: str, batch: str, mode: str) -> tuple[str, str | None, bool]:
+    """Writes the run log's mode before its first result: (path, previous mode, changed). Refused when the batch was
+    applied, or has results (another mode, or none)."""
+    mode = check_mode(mode)
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    name = batch_id(batch)
+    path = run_log_path(workspace, name)
+    try:
+        with workspace_lock(workspace):
+            where = applied(workspace, proj, name)
+            if where:
+                raise Refused(f"{name} was already {where}: it is never changed")
+            doc = read_log(path)
+            previous = doc.get("mode")
+            doc, changed = _with_mode(doc, mode)
+            if changed:
+                write_log(path, doc)
+            return path, previous, changed
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
 
 
 def vocabulary(proj: dict) -> list[str]:
@@ -115,16 +184,23 @@ def applied(workspace: str, proj: dict, name: str) -> str | None:
         path = os.path.join(workspace, "tracker", "sent", f"{name}.json")
         return f"sent to {tracker} (record {os.path.relpath(path, workspace)})" if os.path.isfile(path) else None
     if tracker == "excel":
-        from adapters.excel import ConfigError, ExcelAdapter
-        try:
-            ad = ExcelAdapter.from_project(workspace)
-            ad.load()
-        except (ConfigError, FileNotFoundError, KeyError, OSError) as e:
-            print(f"warning: the workbook could not be read to check whether {name} was applied ({e})",
-                  file=sys.stderr)
-            return None
-        hit = next((b for b in ad.applied_batches() if b.get("batch_id") == name), None)
-        return f"applied to the workbook on {hit.get('applied_at')}" if hit else None
+        # every workbook the project declares, not only the batch's own: a batch applied anywhere is immutable,
+        # whatever its name says now (a renamed pattern, an old override)
+        from adapters.excel import ExcelAdapter
+        from adapters.excel.base import workbook_files
+        base = {k: v for k, v in (proj.get("excel") or {}).items() if k != "workbooks"}
+        for file in workbook_files(proj):
+            try:
+                ad = ExcelAdapter({**base, "file": file}, base_dir=workspace)
+                ad.load()
+            except Exception as e:      # noqa: BLE001 - unreadable: say so, the other workbooks are still read
+                print(f"warning: the workbook {file} could not be read to check whether {name} was applied ({e})",
+                      file=sys.stderr)
+                continue
+            hit = next((b for b in ad.applied_batches() if b.get("batch_id") == name), None)
+            if hit:
+                return f"applied to the workbook {file} on {hit.get('applied_at')}"
+        return None
     return None
 
 
@@ -166,32 +242,31 @@ def read_log(path: str) -> dict:
 
 
 def write_log(path: str, doc: dict) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
-        f.flush()
-        os.fsync(f.fileno())        # on the disk before it takes the place of the old one
-    replace_file(tmp, path)
+    atomic_write(path, json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
 
 
 def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: str | None = None,
         new_defect: dict | None = None, evidence: list[str] | None = None, environment: str | None = None,
-        build: str | None = None, now: datetime | None = None) -> tuple[str, bool]:
-    """Appends or replaces the result of `case`; (path, replaced?). Refused / UsageError as in the header."""
+        build: str | None = None, now: datetime | None = None, replace: bool = False,
+        mode: str | None = None) -> tuple[str, dict | None]:
+    """Appends the result of `case`, or replaces it with `replace`; (path, the result replaced or None). Refused /
+    UsageError as in the header. `mode`: as `set_mode`, checked before the result is written."""
+    mode = check_mode(mode) if mode is not None else None
     try:
         proj = read_project(workspace)
     except FileNotFoundError as e:
         raise UsageError(str(e)) from None
     name = batch_id(batch)
-    where = applied(workspace, proj, name)
+    where = applied(workspace, proj, name)          # early, for a clear answer; checked again under the lock
     if where:
         raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
                       f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
     statuses = vocabulary(proj)
     if not case.strip():
         raise UsageError("the case ID is empty")
-    if statuses and status not in statuses and not status.lower().startswith("question"):
+    if status.strip().casefold() == "question":
+        status = "Question"         # one spelling, the one the audit and the adapters look for
+    elif statuses and status not in statuses:
         raise UsageError(f"status {status!r} is not in the project's vocabulary {statuses} (or Question)")
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
@@ -200,20 +275,26 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         close = difflib.get_close_matches(case.strip(), sorted(known), n=3, cutoff=0.6)
         raise UsageError(f"case {case.strip()!r} is not in the project's library ({source})"
                          + (f"; did you mean {', '.join(close)}?" if close else "")
-                         + ": nothing was written. A new case is added first (/generate-cases)")
+                         + ": nothing was written. A new case is added first (/plan-tests)")
     path = run_log_path(workspace, name)
     try:
         with workspace_lock(workspace):         # read, change and write the file as one step (audit finding D-02)
+            where = applied(workspace, proj, name)      # under the lock: an apply cannot start in between
+            if where:
+                raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
+                              f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
             return _add(path, doc_for=path, case=case, status=status, actual=actual, bug=bug, new_defect=new_defect,
-                        evidence=evidence, environment=environment, build=build, now=now)
+                        evidence=evidence, environment=environment, build=build, now=now, replace=replace, mode=mode)
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
 
 
 def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
-         now) -> tuple[str, bool]:
+         now, replace: bool = False, mode: str | None = None) -> tuple[str, dict | None]:
     doc = read_log(doc_for)
     _same_context(doc, environment, build)
+    if mode is not None:
+        doc, _ = _with_mode(doc, mode)
     item = {"tc": case.strip(), "status": status, "actual_result": actual,
             "ts": (now or datetime.now()).isoformat(timespec="seconds")}
     if bug:
@@ -230,12 +311,18 @@ def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, n
         doc = {**{k: v for k, v in doc.items() if k != "results"}, "run": run, "results": doc["results"]}
     at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict) and
                str(x.get("tc") or "").strip() == item["tc"]), None)
+    old = None
     if at is None:
         doc["results"].append(item)
     else:
+        old = doc["results"][at]
+        if not replace:
+            raise Refused(f"{item['tc']} already has a result in this batch ({old.get('status')}, {old.get('ts')}): "
+                          "add --replace to replace it (its evidence, bug and new defect are not carried over), "
+                          "or record the new result in a new batch")
         doc["results"][at] = item
     write_log(path, doc)
-    return path, at is not None
+    return path, old
 
 
 def _same_context(doc: dict, environment: str | None, build: str | None) -> None:
@@ -244,13 +331,17 @@ def _same_context(doc: dict, environment: str | None, build: str | None) -> None
     if not doc.get("results"):
         return
     run = doc.get("run") or {}
+    for key, value in (("build", build), ("environment", environment)):
+        if value and not run.get(key):
+            raise Refused(f"this batch already has results recorded without a {key}: their {key} cannot be filled in "
+                          f"afterwards. Record this result in a new batch with --{key}")
     if build and run.get("build") and not same_build(str(run["build"]), build):
         raise Refused(f"the build changed during the batch: it started on {run['build']!r} and this result says "
                       f"{build!r}. Stop this batch (its results stay as they are) and plan a new batch with the right "
-                      "context (/plan-batch)")
+                      "context (/plan-tests)")
     if environment and run.get("environment") and str(run["environment"]) != environment:
         raise Refused(f"the environment changed during the batch: it started on {run['environment']!r} and this result "
-                      f"says {environment!r}. Plan a new batch (/plan-batch)")
+                      f"says {environment!r}. Plan a new batch (/plan-tests)")
 
 
 def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
@@ -297,11 +388,27 @@ def main(argv=None) -> int:
     p.add_argument("--evidence", nargs="+", metavar="PATH", help="paths under evidence/")
     p.add_argument("--environment", help="run.environment (a key of environments)")
     p.add_argument("--build", help="run.build (the version tested)")
+    p.add_argument("--replace", action="store_true",
+                   help="replace the case's result already in this batch (shown); without it a second result is refused")
+    p.add_argument("--mode", help='how the batch runs, "<kind>: <why>" (kind: ' + ", ".join(MODE_KINDS)
+                   + "); only before the first result, or the same value again")
+    p = sub.add_parser("mode", help="write the run log's mode before its first result")
+    p.add_argument("batch")
+    p.add_argument("value", help='"<kind>: <why>", kind one of ' + ", ".join(MODE_KINDS))
     p = sub.add_parser("remove", help="take one mistaken result out of a batch not yet applied")
     p.add_argument("batch")
     p.add_argument("case")
     a = ap.parse_args(argv)
     try:
+        if a.command == "mode":
+            path, previous, changed = set_mode(a.workspace, a.batch, a.value)
+            if not changed:
+                print(f"unchanged: the mode of {path} is already {previous!r}")
+            elif previous:
+                print(f"mode changed before any result: {previous!r} -> {check_mode(a.value)!r} in {path}")
+            else:
+                print(f"mode: {check_mode(a.value)!r} in {path}")
+            return 0
         if a.command == "remove":
             path, gone = remove(a.workspace, a.batch, a.case)
             print(f"removed: {gone.get('tc')} {gone.get('status')} from {path}")
@@ -319,7 +426,7 @@ def main(argv=None) -> int:
             except (OSError, ValueError) as e:
                 raise UsageError(f"--new-defect {a.new_defect}: {e}") from None
         path, replaced = add(a.workspace, a.batch, a.case, a.status, a.actual, a.bug, new, a.evidence,
-                             a.environment, a.build)
+                             a.environment, a.build, replace=a.replace, mode=a.mode)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1
@@ -327,6 +434,13 @@ def main(argv=None) -> int:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     print(f"{'replaced' if replaced else 'added'}: {a.case} {a.status} in {path}")
+    if replaced:
+        print("previous result (kept only in this output and in git history):")
+        print(json.dumps(replaced, ensure_ascii=False, indent=1))
+        files = [e for e in ([replaced.get("evidence")] if isinstance(replaced.get("evidence"), str)
+                             else replaced.get("evidence") or []) if isinstance(e, str)]
+        if files:
+            print("its evidence was not deleted: " + ", ".join(files))
     return 0
 
 

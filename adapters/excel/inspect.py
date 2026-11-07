@@ -1,6 +1,6 @@
 """
 Inspects a workbook and proposes the `excel:` section of project.yaml
-(plan, task 1.3; used by /project-onboarding).
+(plan, task 1.3; used by /project-context, procedures/onboarding.md).
 
 Only READS the workbook -- never saves it. Does not guess: what it detects
 safely is filled in; the rest stays as "CONFIRM: ..." with the options found,

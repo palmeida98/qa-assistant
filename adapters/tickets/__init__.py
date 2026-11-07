@@ -1,5 +1,5 @@
 """
-Read-only ticket analysis (docs/technique-tickets.md; plan phase 14): the deterministic part of `/analyze-tickets`.
+Read-only ticket analysis (docs/technique-tickets.md; plan phase 14): the deterministic part of `/analyze-ticket`.
 
     config.py        the `tickets:` section of project.yaml, independent of `tracker:`
     model.py         the normalised snapshot, its coverage, redaction, paged reads and the read-only transport

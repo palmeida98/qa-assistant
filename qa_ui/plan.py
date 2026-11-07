@@ -1,6 +1,6 @@
 """
 Batch plan (docs/qa-ui.md section 6; methodology 6): the cases of the ticked cards grouped per module, area and
-role, at most 20 per batch, and saved as batches/<name>.yaml in the format /plan-batch writes.
+role, at most 20 per batch, and saved as batches/<name>.yaml in the format /plan-tests writes.
 
     build(workspace, cases, assignments, cards, today) -> {"batches": [...], "apart": [...], "selected": n, ...}
     save(workspace, plan)                              -> the paths written
@@ -60,7 +60,7 @@ def build(workspace: str, cases: list[dict], assignments: dict, cards: list[str]
           proj: dict | None = None) -> dict:
     """The batches of the ticked module cards. `assignments` is {case ID: {"module": ...}} (suggest.suggest) and
     `cards` the keys ticked; the automated audits need no batch and are ignored here. `proj` gives each batch's
-    skill (suggest.skill_for: exploratory charters of a mobile project run with /test-mobile)."""
+    skill (suggest.skill_for: exploratory charters of a mobile project run with /run-tests)."""
     today = today or date.today()
     ticked = [m for m in MODULES if m in set(cards)]
     selected = [c for c in cases if assignments.get(c["id"], {}).get("module") in ticked]
@@ -102,7 +102,7 @@ def build(workspace: str, cases: list[dict], assignments: dict, cards: list[str]
 
 
 def save(workspace: str, plan: dict) -> list[str]:
-    """Writes each batch as batches/<name>.yaml: cases (what /plan-batch writes), module and, when it has one,
+    """Writes each batch as batches/<name>.yaml: cases (what /plan-tests writes), module and, when it has one,
     role. Refused whole when a name is not valid or was taken since the plan was built."""
     for b in plan["batches"]:
         if not NAME.fullmatch(str(b["name"])):

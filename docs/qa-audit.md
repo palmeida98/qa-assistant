@@ -23,9 +23,9 @@ It lives **alongside** the workspace layer (methodology, skills, Excel adapter; 
 | Layer | Use it for |
 |---|---|
 | `qa-audit` (this document) | A first, automated pass over any site: discovery, accessibility, and later functional, performance, security and visual checks. No project setup needed. |
-| Workspace layer (`/project-onboarding`, `/run-batch`, …) | A real project: designed test cases, roles, tracker, checkpoints. |
+| Workspace layer (`/project-context`, `/run-tests`, …) | A real project: designed test cases, roles, tracker, checkpoints. |
 
-A workspace skill may call `qa-audit`: `/audit-accessibility` runs it through `scripts/audit_a11y.py`, which
+A workspace skill may call `qa-audit`: `/run-tests` runs it through `scripts/audit_a11y.py`, which
 translates the workspace's `accessibility:` section into an engine configuration (`docs/technique-accessibility.md` §2).
 
 ---

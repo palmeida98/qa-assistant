@@ -133,7 +133,7 @@ class Discovery(Root):
         state = self.hub.state()
         self.assertNotIn("demo/empty", [p["id"] for p in state["projects"]])
         self.assertEqual(state["unconfigured"], [{"id": "demo/empty", "status": "not-configured",
-                                                  "reason": "no project.yaml", "proposes": "/project-onboarding"}])
+                                                  "reason": "no project.yaml", "proposes": "/project-context"}])
         with self.assertRaises(hub.NotFound):
             hub.find(self.root, "demo/empty")
 

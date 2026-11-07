@@ -77,5 +77,25 @@ class Denylist(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout)
 
 
+    def test_without_a_list_it_says_nothing_was_checked(self):
+        env = {**os.environ, "QA_DENYLIST": os.path.join(self.tmp.name, "missing.txt")}
+        path = self.file("notes.txt", f"about {TERM}")
+        r = subprocess.run([sys.executable, SCRIPT, path], env=env, capture_output=True, text=True, check=False)
+        self.assertEqual(r.returncode, 0)                       # a commit without a list still goes through
+        self.assertIn("NOT CONFIGURED", r.stderr)
+        self.assertIn("were NOT checked", r.stderr)
+        self.assertNotIn("clean", r.stdout)
+        r = subprocess.run([sys.executable, SCRIPT, "--require", path], env=env, capture_output=True, text=True,
+                           check=False)
+        self.assertEqual(r.returncode, 3)                       # a validation never reports it as passed
+
+    def test_a_clean_run_says_what_it_checked(self):
+        r = self.run_it("--require", self.file("ok.txt", "nothing here"))
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("1 term(s) checked in 1 file(s): clean", r.stdout)
+        r = self.run_it("--require", self.file("bad.txt", f"made for {TERM}"))
+        self.assertEqual(r.returncode, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
