@@ -3,10 +3,41 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 
     python scripts/run_log.py <workspace> add <batch> <case> <status> <actual>
         [--bug ID] [--new-defect FILE.json] [--evidence PATH ...] [--environment KEY] [--build VERSION]
+        [--executed-at "YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]" | unknown --executed-source "<where the time comes from>"]
+    python scripts/run_log.py <workspace> defect-rule
+    python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason "<why>" --decided-by "<who>"
+        [--decision-source "<where the decision is written>"] [--into <new batch>]
     python scripts/run_log.py <workspace> attach <batch> <case> [--bug ID | --new-defect FILE.json]
         [--evidence PATH ...] [--replace-link]
     python scripts/run_log.py <workspace> remove <batch> <case>
     python scripts/run_log.py <workspace> mode <batch> "<kind>: <why>"
+
+- Times. Every item has "ts", the time of the EXECUTION (methodology 7.1), and "recorded_at", the time the item was
+  written. `add` without --executed-at records an execution that is happening now: ts = recorded_at = the clock. An
+  observation made EARLIER (a tester's notes, a run the day before) is recorded with --executed-at and
+  --executed-source (where the time comes from: "tester notes of 05.11"): ts is that time, recorded_at is now, and
+  "executed_source" says where it comes from. A time that is not known is `--executed-at unknown` with a source: the
+  item has NO ts (and "ts_unknown": true), is listed by the audit as without ts and ordered as the oldest; it is never
+  made current by the clock. The time needs a date and a time (a bare date is refused); a time without a zone stays
+  without one (as every ts already recorded: the machine's clock), a zone given (Z, +01:00) is kept as written; a time
+  in the future or not valid is exit 2 and nothing is written. Old run logs (ts only) stay valid and are never filled in.
+
+- resolve: records the decision about a `Question` (methodology 8.5) without losing the observation. It is NOT a new
+  execution: the item keeps its tc, observed text, ts, recorded_at and evidence, and gets the new status and a
+  "resolution" {from_status, original {status, actual_result, ts, evidence}, reason, decided_by, decided_at, source}.
+  In a batch not yet applied the item is changed in place (the original is kept inside "resolution"). A batch already
+  applied is never touched: the decision goes to a NEW batch (--into, a free name is suggested), whose item carries the
+  same observed text, ts, evidence and run block, "revision_of": {"batch", "tc"} and the "resolution"; that batch is
+  then applied like any other (dry run, approval, --expect). --reason and --decided-by are required: the decision is
+  the user's (or the project's), never the agent's; it does not replace an approval the project asks for. Refused (exit
+  2/1, nothing written): a result that is not a Question, one already resolved, a status outside the vocabulary or
+  Question, an unknown batch or case, a batch name that leaves the workspace. A later real execution of the case
+  (a later ts) is current over the resolution: the resolution keeps the time of the observation it decides.
+
+- Priority of a new bug. When the project's schema requires one (`defect-rule` says so and lists the accepted values;
+  Excel: `excel.defects.priorities`), a new defect is recorded as approved only with a priority from that list, decided
+  by the user: otherwise it is exit 2 and the bug stays a proposal ("proposed": true), which may wait for the decision.
+  The audit lists the proposals still waiting for it. The adapter keeps its own final check.
 
 - attach: adds evidence, an existing bug (--bug) or an approved new bug (--new-defect) to a result already in the
   batch, and keeps everything else of it: status, observed text, "ts" (the time of the execution, methodology 7.1),
@@ -59,6 +90,9 @@ from common import (
     OutsideWorkspace,
     WorkspaceBusy,
     atomic_write,
+    defect_priority_problem,
+    defect_priority_rule,
+    parse_when,
     read_project,
     same_build,
     workspace_lock,
@@ -151,6 +185,39 @@ def set_mode(workspace: str, batch: str, mode: str) -> tuple[str, str | None, bo
             return path, previous, changed
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
+
+
+UNKNOWN_TIME = "unknown"
+
+
+def check_defect(proj: dict, new_defect: dict | None) -> None:
+    """An APPROVED new bug (no "proposed") needs the priority the project's schema asks for, decided by the user: the
+    adapter would refuse it at the dry run, so it is refused here, before it counts as ready (methodology 9.2). A
+    proposal ("proposed": true) may wait for it."""
+    if not isinstance(new_defect, dict) or new_defect.get("proposed"):
+        return
+    problem = defect_priority_problem(proj, new_defect)
+    if problem:
+        raise UsageError(f"--new-defect: {problem}. Keep it as a proposal (\"proposed\": true) until the user decides")
+
+
+def check_executed(executed_at: str | None, source: str | None, now: datetime | None = None):
+    """(executed_at as stored or UNKNOWN_TIME or None, source or None). A time given needs a source: an observation
+    made earlier says where its time comes from. A source alone, with no time, is a mistake."""
+    source = " ".join(str(source or "").split()) or None
+    if executed_at is None:
+        if source:
+            raise UsageError("--executed-source says where an execution time comes from: give --executed-at too")
+        return None, None
+    if not source:
+        raise UsageError("--executed-at needs --executed-source: where the time comes from (the tester's notes, a "
+                         "log, a message), so an observation made earlier stays identified")
+    if str(executed_at).strip().casefold() == UNKNOWN_TIME:
+        return UNKNOWN_TIME, source
+    try:
+        return parse_when(executed_at, now), source
+    except ValueError as e:
+        raise UsageError(f"--executed-at: {e}") from None
 
 
 def vocabulary(proj: dict) -> list[str]:
@@ -256,10 +323,12 @@ def write_log(path: str, doc: dict) -> None:
 def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: str | None = None,
         new_defect: dict | None = None, evidence: list[str] | None = None, environment: str | None = None,
         build: str | None = None, now: datetime | None = None, replace: bool = False,
-        mode: str | None = None) -> tuple[str, dict | None]:
+        mode: str | None = None, executed_at: str | None = None,
+        executed_source: str | None = None) -> tuple[str, dict | None]:
     """Appends the result of `case`, or replaces it with `replace`; (path, the result replaced or None). Refused /
     UsageError as in the header. `mode`: as `set_mode`, checked before the result is written."""
     mode = check_mode(mode) if mode is not None else None
+    executed_at, executed_source = check_executed(executed_at, executed_source, now)
     try:
         proj = read_project(workspace)
     except FileNotFoundError as e:
@@ -278,6 +347,7 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         raise UsageError(f"status {status!r} is not in the project's vocabulary {statuses} (or Question)")
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
+    check_defect(proj, new_defect)
     known, source = library_cases(workspace, proj)
     if case.strip() not in known:
         close = difflib.get_close_matches(case.strip(), sorted(known), n=3, cutoff=0.6)
@@ -292,19 +362,30 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
                 raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
                               f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
             return _add(path, doc_for=path, case=case, status=status, actual=actual, bug=bug, new_defect=new_defect,
-                        evidence=evidence, environment=environment, build=build, now=now, replace=replace, mode=mode)
+                        evidence=evidence, environment=environment, build=build, now=now, replace=replace, mode=mode,
+                        executed_at=executed_at, executed_source=executed_source)
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
 
 
 def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
-         now, replace: bool = False, mode: str | None = None) -> tuple[str, dict | None]:
+         now, replace: bool = False, mode: str | None = None, executed_at: str | None = None,
+         executed_source: str | None = None) -> tuple[str, dict | None]:
     doc = read_log(doc_for)
     _same_context(doc, environment, build)
     if mode is not None:
         doc, _ = _with_mode(doc, mode)
-    item = {"tc": case.strip(), "status": status, "actual_result": actual,
-            "ts": (now or datetime.now()).isoformat(timespec="seconds")}
+    recorded = (now or datetime.now()).isoformat(timespec="seconds")
+    item = {"tc": case.strip(), "status": status, "actual_result": actual}
+    if executed_at is None:
+        item["ts"] = recorded                       # executed now: the execution and its record are one instant
+    elif executed_at == UNKNOWN_TIME:
+        item["ts_unknown"] = True                   # no ts: a time nobody gave is never filled in
+    else:
+        item["ts"] = executed_at
+    item["recorded_at"] = recorded
+    if executed_source:
+        item["executed_source"] = executed_source
     if bug:
         item["bug"] = bug
     if new_defect:
@@ -375,6 +456,7 @@ def attach(workspace: str, batch: str, case: str, bug: str | None = None, new_de
         proj = read_project(workspace)
     except FileNotFoundError as e:
         raise UsageError(str(e)) from None
+    check_defect(proj, new_defect)
     name = batch_id(batch)
     where = applied(workspace, proj, name)
     if where:
@@ -454,6 +536,114 @@ def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
     return path, gone
 
 
+def _is_question(status) -> bool:
+    return str(status or "").strip().casefold().startswith("question")
+
+
+def _revisions_of(workspace: str, name: str, case: str) -> list[str]:
+    """The batches (other run logs of the workspace) that already hold a revision of this result."""
+    import glob
+    found = []
+    for path in sorted(glob.glob(os.path.join(workspace, "runs", "*.json"))):
+        other = os.path.splitext(os.path.basename(path))[0]
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                doc = json.load(f)
+        except (OSError, ValueError):
+            continue
+        for x in doc.get("results", []) if isinstance(doc, dict) and isinstance(doc.get("results"), list) else []:
+            link = x.get("revision_of") if isinstance(x, dict) else None
+            if isinstance(link, dict) and link.get("batch") == name and str(link.get("tc") or "").strip() == case:
+                found.append(other)
+    return found
+
+
+def resolve(workspace: str, batch: str, case: str, status: str, reason: str, decided_by: str,
+            decision_source: str | None = None, into: str | None = None,
+            now: datetime | None = None) -> tuple[str, str, dict, dict]:
+    """Records the decision about a Question: (path written, "in place" | "new batch", the Question as it was, the item
+    now). The observation (text, ts, evidence) is kept; see the header. Refused / UsageError as in the header."""
+    reason, decided_by = " ".join(str(reason or "").split()), " ".join(str(decided_by or "").split())
+    decision_source = " ".join(str(decision_source or "").split()) or None
+    if not reason or not decided_by:
+        raise UsageError("a resolution needs --reason (why this status) and --decided-by (who decided): the decision "
+                         "is the user's, it is not made here")
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    statuses = vocabulary(proj)
+    if _is_question(status):
+        raise UsageError("a resolution gives the Question's final status, not Question again: an unanswered "
+                         "Question stays as it is")
+    if statuses and status not in statuses:
+        raise UsageError(f"status {status!r} is not in the project's vocabulary {statuses}")
+    name = batch_id(batch)
+    src_path = run_log_path(workspace, name)
+    if not os.path.isfile(src_path):
+        raise UsageError(f"{name} has no run log (runs/{os.path.basename(src_path)})")
+    target = batch_id(into) if into else None
+    if target == name:
+        raise UsageError("--into is another batch than the one that holds the Question")
+    stamp = (now or datetime.now()).isoformat(timespec="seconds")
+    try:
+        with workspace_lock(workspace):
+            where = applied(workspace, proj, name)
+            if where and not target:
+                raise Refused(f"{name} was already {where}: it is never changed. The decision goes to a new batch "
+                              f"with --into, e.g. {next_name(workspace, proj, name)} (applied afterwards with its own "
+                              "dry run and approval)")
+            doc = read_log(src_path)
+            at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict)
+                       and str(x.get("tc") or "").strip() == case.strip()), None)
+            if at is None:
+                have = ", ".join(str(x.get("tc")) for x in doc["results"] if isinstance(x, dict)) or "none"
+                raise UsageError(f"{case.strip()!r} has no result in {name} (results: {have})")
+            before = doc["results"][at]
+            if not _is_question(before.get("status")):
+                raise UsageError(f"{case.strip()!r} in {name} is {before.get('status')!r}, not a Question: only a "
+                                 "Question is resolved (a mistaken result is removed, a new execution is added)")
+            if before.get("resolution") or before.get("revision_of"):
+                raise Refused(f"{case.strip()!r} in {name} is itself a resolution or a revision: it is not resolved again")
+            held = _revisions_of(workspace, name, case.strip())
+            if held:
+                raise Refused(f"the Question of {case.strip()} in {name} was already resolved in {', '.join(held)}")
+            original = {"status": before.get("status"), "actual_result": before.get("actual_result")}
+            for key in ("ts", "ts_unknown", "recorded_at", "evidence", "executed_source"):
+                if before.get(key) not in (None, "", []):
+                    original[key] = before[key]
+            resolution = {"from_status": "Question", "original": original, "reason": reason,
+                          "decided_by": decided_by, "decided_at": stamp}
+            if decision_source:
+                resolution["source"] = decision_source
+            if not target:
+                item = {**before, "status": status, "resolution": resolution}
+                doc["results"][at] = item
+                write_log(src_path, doc)
+                return src_path, "in place", before, item
+            if applied(workspace, proj, target):
+                raise Refused(f"{target} was already {applied(workspace, proj, target)}: use another batch name, e.g. "
+                              f"{next_name(workspace, proj, target)}")
+            dst = run_log_path(workspace, target)
+            new = read_log(dst)
+            if any(isinstance(x, dict) and str(x.get("tc") or "").strip() == case.strip() for x in new["results"]):
+                raise Refused(f"{target} already has a result for {case.strip()}: one item per case in a batch")
+            source_run = {k: v for k, v in (doc.get("run") or {}).items() if k in ("environment", "build", "platform")}
+            _same_context(new, source_run.get("environment"), source_run.get("build"))
+            item = {k: before[k] for k in ("tc", "actual_result", "ts", "ts_unknown", "evidence", "executed_source")
+                    if before.get(k) not in (None, "", [])}
+            item = {"tc": item["tc"], "status": status, **{k: v for k, v in item.items() if k != "tc"},
+                    "recorded_at": stamp, "revision_of": {"batch": name, "tc": case.strip()}, "resolution": resolution}
+            if not new["results"]:
+                new = {"mode": f"manual: resolution of a Question of {name} (a decision, not an execution)",
+                       **({"run": source_run} if source_run else {}), "results": []}
+            new["results"].append(item)
+            write_log(dst, new)
+            return dst, "new batch", before, item
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+
+
 def _read_defect(path: str):
     try:
         with open(path, encoding="utf-8-sig") as f:
@@ -480,6 +670,20 @@ def main(argv=None) -> int:
                    help="replace the case's result already in this batch (shown); without it a second result is refused")
     p.add_argument("--mode", help='how the batch runs, "<kind>: <why>" (kind: ' + ", ".join(MODE_KINDS)
                    + "); only before the first result, or the same value again")
+    p.add_argument("--executed-at", metavar="WHEN",
+                   help="when the case was EXECUTED, if not now: YYYY-MM-DDTHH:MM[:SS] (optionally Z or +HH:MM; a time "
+                        "without zone stays without one), or 'unknown'. Needs --executed-source. Not in the future")
+    p.add_argument("--executed-source", metavar="TEXT",
+                   help="where --executed-at comes from (e.g. 'tester notes of 05.11')")
+    p = sub.add_parser("defect-rule", help="what the project's schema says about the priority of a new bug")
+    p = sub.add_parser("resolve", help="record the decision about a Question, keeping the observation")
+    p.add_argument("batch")
+    p.add_argument("case")
+    p.add_argument("status", help="the final status (the project's vocabulary; not Question)")
+    p.add_argument("--reason", required=True, help="why this status (the decision, in the decider's words)")
+    p.add_argument("--decided-by", required=True, help="who decided (the user, the PO...)")
+    p.add_argument("--decision-source", help="where the decision is written (a message, a ticket comment, a meeting)")
+    p.add_argument("--into", metavar="BATCH", help="record it in this NEW batch (required when the batch was applied)")
     p = sub.add_parser("mode", help="write the run log's mode before its first result")
     p.add_argument("batch")
     p.add_argument("value", help='"<kind>: <why>", kind one of ' + ", ".join(MODE_KINDS))
@@ -509,6 +713,22 @@ def main(argv=None) -> int:
                 print("previous link (kept only in this output and in git history): "
                       + json.dumps(gone, ensure_ascii=False))
             return 0
+        if a.command == "defect-rule":
+            try:
+                rule = defect_priority_rule(read_project(a.workspace))
+            except FileNotFoundError as e:
+                raise UsageError(str(e)) from None
+            print(f"priority of a new bug: {'REQUIRED' if rule['required'] else 'optional'}; accepted values "
+                  f"({rule['where']}): {', '.join(rule['accepted']) or 'none listed'}")
+            print("the user decides it: ask at the bug review; a suggestion is only a proposal for approval")
+            return 0
+        if a.command == "resolve":
+            path, how, before, _item = resolve(a.workspace, a.batch, a.case, a.status, a.reason, a.decided_by,
+                                              a.decision_source, a.into)
+            print(f"resolved ({how}): {a.case} Question -> {a.status} in {path}; observation, ts and evidence kept")
+            print("the resolution is a record of a decision: a workbook or tracker change still needs its dry run "
+                  "and approval (/checkpoint)")
+            return 0
         if a.command == "mode":
             path, previous, changed = set_mode(a.workspace, a.batch, a.value)
             if not changed:
@@ -529,7 +749,8 @@ def main(argv=None) -> int:
             return 0
         new = _read_defect(a.new_defect) if a.new_defect else None
         path, replaced = add(a.workspace, a.batch, a.case, a.status, a.actual, a.bug, new, a.evidence,
-                             a.environment, a.build, replace=a.replace, mode=a.mode)
+                             a.environment, a.build, replace=a.replace, mode=a.mode,
+                             executed_at=a.executed_at, executed_source=a.executed_source)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1

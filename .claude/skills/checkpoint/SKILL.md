@@ -13,7 +13,7 @@ metadata:
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py"
+  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/apply.md, methodology.md, technique-excel.md"
   requires-tools: "git"
 ---
@@ -23,7 +23,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill checkpoint [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
@@ -34,7 +34,11 @@ metadata:
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Save every result of the session not yet in a run log, with run_log.py (procedures/apply.md steps 1 to 3); evidence
    or a bug for a result already there with run_log.py attach, which keeps the rest of it. Never write to history/.
-   A Question stays Question, with its concrete question. Steps 1 to 4 are local and need no approval; applying
+   A Question stays Question, with its concrete question, until the user answers it (the answer, its reason and who
+   decided it are asked, never assumed): then python <qa>/scripts/run_log.py <workspace> resolve <batch> <case>
+   <status> --reason "<why>" --decided-by "<who>" [--decision-source "<where>"] [--into <new batch>] keeps the
+   observation, its time and evidence and records the decision (procedures/apply.md section "Resolving a Question");
+   a batch already applied needs --into, and that batch is applied with its own dry run and approval. Steps 1 to 4 are local and need no approval; applying
    (step 5) and publishing are separate acts with their own.
 2. Validate, read only:
    python <qa>/scripts/qa_report.py <workspace> audit --since <date of the session>
@@ -51,8 +55,9 @@ metadata:
    (git status, read only); commits not pushed (python <qa>/scripts/workspace_git.py <workspace> status).
 5. Applying to the workbook or the tracker only after the user confirms that batch: procedures/apply.md steps 7 and
    7a. Excel: python -m adapters.excel.apply <workspace> <batch> --dry-run, show the cells, counts and problems it
-   lists, then after the approval the apply with --expect <token> (a stale preview is refused: preview again, and
-   ask again; an approval of that same preview, still valid, is not asked a second time).
+   lists, then after the approval the apply with --expect <token>, repeating the SAME --label, --reported-by, --now and
+   --no-recalc the dry run was given (the token `v2-...` covers them: a different one, or a token from before it, is
+   refused before any write: preview again, and ask again; an approval of that same preview, still valid, is not asked a second time).
    Jira / Azure DevOps: dry run, approval, --yes. The exit codes as written there. The workspace's own rule on
    workbooks wins when stricter.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes

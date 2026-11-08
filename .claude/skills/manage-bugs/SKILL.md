@@ -13,7 +13,7 @@ metadata:
   failures: "The tracker out of reach: said, and the search stays pending, never skipped silently. Not reproducible or unclear: Question, not a bug."
   resume: "The review file and the run log; an item already approved or published (memory/pbi/ record, tracker key) is never proposed or published again."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/run_log.py"
+  requires-scripts: "scripts/run_log.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/bugs.md, methodology.md"
 ---
 
@@ -22,7 +22,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill manage-bugs [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
@@ -50,8 +50,11 @@ metadata:
    more (rules.md section 8).
 5. Write the batch review in runs/<batch>_bugs_review.md: per item the proposal in the project's bug format
    (CLAUDE.md order of fields, steps, expected -> observed, environment, device, build, evidence path with the bug id
-   once it has one). Severity and priority only when the user asks. Present all items together at the end of the
-   batch and wait.
+   once it has one). Present all items together at the end of the batch and wait. Priority: run
+   python <qa>/scripts/run_log.py <workspace> defect-rule. When the project's schema REQUIRES a priority (Excel with
+   excel.defects.priorities), each bug in the review shows the accepted values and a line "priority: waiting for your
+   decision"; the bug is not ready to apply until the user gives one of them (a suggestion with its reason only if the
+   user asks, as a proposal to approve, never applied on its own). Severity only when the user asks.
 6. After the user approves an item, record it in the run log (procedures/bugs.md steps 6 to 10). A case that already
    has its result in the batch keeps it (status, observed text, time, evidence, run block):
    python <qa>/scripts/run_log.py <workspace> attach <batch> <case> --new-defect <draft.json>

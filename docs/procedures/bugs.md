@@ -23,14 +23,17 @@
    the same defect on each: then per platform the environment, device or browser, OS, build observed, steps,
    observed result and evidence; a platform not tested is never listed as affected. Relevant differences: separate
    bugs, related when a link is known; a link not shown is said to be uncertain. The cause may be unknown: say so.
-   Severity and priority only if the user asks for them or decides them (section 9.2).
+   Severity only if the user asks for it. The priority: `python <qa>/scripts/run_log.py <workspace> defect-rule` says
+   whether the project's schema requires one and the accepted values; when it does, the bug stays "waiting for the
+   user's priority" in the review until the user gives one (section 9.2), and is never filled in by the assistant.
 5. Put the bug in the batch's review: /manage-bugs shows every proposal of the batch at once and the user approves,
    changes or drops each one there (section 9.4). Nothing is recorded before that review, and nothing is asked bug
    by bug in the middle of the work.
 6. Once approved, with the excel tracker, the bug is NOT written straight into the workbook: it goes in the
    batch's run log, in the item of the Fail case (technique-excel.md section 4):
    - new bug -> "new_defect": {keys of excel.defects.batch_fields, "severity", "priority"};
-     the priority must be in excel.defects.priorities;
+     the priority, decided by the user, must be in excel.defects.priorities (run_log.py refuses an approved bug
+     without it; a proposal with "proposed": true may wait);
    - existing bug -> "bug": "<id>".
    It reaches the workbook at the next /checkpoint (adapters.excel.apply).
 7. With the jira or azure-devops tracker, the same: nothing is sent now, the bug goes in the Fail item of the run

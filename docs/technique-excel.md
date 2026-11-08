@@ -47,9 +47,17 @@ rewrites (the same formula with other quoting) are counted apart. The exit code 
 (4 when a problem stops it). Nothing in the workspace is written (the original's sha256 is unchanged) and the
 temporary folder is removed, also on error.
 
-The dry run ends with a **preview token** (a hash of the batch, `project.yaml` and every declared workbook).
-`apply ... --expect <token>` applies only if none of them changed since that preview; otherwise exit 4 with
-"the preview ... is out of date" and nothing written: run the dry run again and show it again.
+The dry run ends with a **preview token** `v2-<hash>`: the batch (its name, which routes it to a workbook, and its
+content), `project.yaml`, every declared workbook, and the options that change what is written: `--label` (as given; the
+default label is a marker, because its date is the apply's own), the reporter actually written (`--reported-by`, else
+`excel.defects.reported_by`, else the default), `--no-recalc` and a fixed `--now`. The dry run prints them
+("Options covered by the token"). `apply ... --expect <token>` applies only if the same options are given and none of
+those things changed; otherwise exit 4 with "the preview ... is out of date" and nothing written (checked before any
+write): run the dry run again and show it again. **The real clock is not in the token**: the seconds that pass never
+invalidate a preview, and the cells that take the instant of the apply (label date, `applied_at`, report date, the view's
+date) are exactly the ones the dry run marks `<at apply time>`; to fix them in the approval, give `--now` to both. A
+token without the `v2-` prefix is from before this rule (it did not cover the options): it is refused with a message and
+the dry run is repeated. Dry runs left pending when this change is adopted must be repeated.
 
 **Date of the application.** By default, the adapter uses the clock: the date of the notes' label, the report date of new defects, the date of the active view's summary text and the `applied_at` of the control sheet. With `--now YYYY-MM-DDTHH:MM:SS` in `apply` (attribute `now` of `ExcelAdapter`), it uses that instant in all those places, and the same sequence of batches always produces the same cells. It serves to rebuild a workbook from the batches with the date each batch was run (e.g. `examples/demo/rebuild_workbook.py`, which uses the first `ts` of each batch); in a normal session it is not used.
 

@@ -22,7 +22,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill analyze-ticket [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and

@@ -12,7 +12,7 @@ metadata:
   approvals: "The user's request to test covers the run on the platforms, environment and targets it names, with no second approval of a plan made for it (rules.md section 5); another platform, environment or target is asked. A workspace whose CLAUDE.md asks for more (an approval of each platform's run) keeps it (rules.md section 8). Steps the project assigns to the user (logins, links, permissions, airplane mode) stay theirs."
   failures: "No target or a missing tool: those cases Blocked (environment), never Pass, the others go on. A tool failure (capture, driver, timeout): one retry, then Blocked (tool), never a defect on its own. A doubt: Question."
   resume: "The run log of the batch: a case with a result and enough evidence is not run again; a build that changed means a new batch."
-  requires-scripts: "scripts/run_log.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py"
+  requires-scripts: "scripts/run_log.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
   requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, qa-audit, browser, mcp, .env"
   routes: "functional-web: procedures/run-web.md; exploratory: procedures/run-web.md; api: procedures/run-api.md; accessibility: procedures/run-accessibility.md; mobile: procedures/run-mobile.md"
@@ -24,7 +24,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill run-tests [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
@@ -52,7 +52,11 @@ metadata:
 4. Run each case by its procedure and record it right away:
    python <qa>/scripts/run_log.py <workspace> add <batch> <case> <status> "<observed>" --evidence <path> [--build
    <observed build>] [--environment <key>]
-   One item per case (a second execution of it: --replace); the run block is fixed by the first result and a
+   One item per case (a second execution of it: --replace); `ts` is the time of the execution: the clock when the
+   case is run now. An observation made EARLIER (a tester's notes, a run recorded afterwards) is recorded with its time
+   and where it comes from: --executed-at "YYYY-MM-DDTHH:MM" --executed-source "<where>" (a zone only if the source
+   gives one; a time not known is --executed-at unknown, never a guess; a future time is refused). Ask the user for the
+   time when it is not clear; the run block is fixed by the first result and a
    different build is refused: that is a new batch. The observed text is what was seen, never the expected result
    copied. Evidence by risk (rules.md section 6): what lets the result be verified; more context and sequence for a
    Fail, a block or an intermittent result; one artefact shared by several cases is named by each, with its own part

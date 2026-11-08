@@ -13,7 +13,7 @@ metadata:
   approvals: "The request to test the PBI covers analysing, planning and running it on the platforms named, with no approval of the same plan or run twice (rules.md section 5); the bug review, each application to a workbook or tracker and each publication keep their own. A workspace whose CLAUDE.md asks for more (the plan confirmed, each platform's run approved) keeps it (rules.md section 8)."
   failures: "A blocked step is marked blocked with the reason; the independent steps go on and the missing ones are listed. A changed requirement, build or environment since the plan is reported before going on."
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan and the bugs published."
-  requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py"
+  requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, skills-guide.md, methodology.md"
 ---
 
@@ -22,7 +22,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill test-pbi [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and

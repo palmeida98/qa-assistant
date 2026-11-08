@@ -24,6 +24,7 @@ import tempfile
 import threading
 import time
 import uuid
+from datetime import datetime
 
 import yaml
 
@@ -611,3 +612,84 @@ class Redactor:
         except ValueError:
             t = self.text(text)
             return t if len(t) <= max_chars else t[:max_chars] + f"… (+{len(t) - max_chars} characters)"
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Times of a run log (methodology 7.1): "ts" is the time of the execution, "recorded_at" the time it was written.
+# ---------------------------------------------------------------------------------------------------------------
+WHEN = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?")
+
+
+def parse_when(text: str, now: datetime | None = None) -> str:
+    """An execution time given by the user, as the string a run log keeps (ISO 8601, to the second).
+
+    A time needs a date AND a time (`2026-11-05T16:21`, `2026-11-05 16:21:00`): a bare date is refused, it is not
+    guessed. A time without a zone stays WITHOUT one (the same convention as every `ts` already recorded: the clock of the
+    machine that wrote it); a zone is neither assigned nor converted: `Z` or `+01:00` are kept as written (`Z` as
+    `+00:00`). A time later than `now` is refused. A ValueError says what is wrong."""
+    raw = str(text or "").strip()
+    if not WHEN.fullmatch(raw):
+        raise ValueError(f"{raw!r} is not a date and time (expected YYYY-MM-DDTHH:MM[:SS], optionally with Z or +HH:MM; "
+                         "a date alone is not enough, and 'unknown' says the time is not known)")
+    try:
+        when = datetime.fromisoformat(raw)
+    except ValueError:
+        raise ValueError(f"{raw!r} is not a valid date and time") from None
+    now = now or datetime.now()
+    limit = now.astimezone() if now.tzinfo is None and when.tzinfo is not None else now
+    if when > limit:
+        raise ValueError(f"{raw!r} is in the future (now is {limit.isoformat(timespec='seconds')}): an execution has "
+                         "already happened when it is recorded")
+    return when.isoformat(timespec="seconds")
+
+
+def ts_key(value) -> str:
+    """What a result is ordered by: the time as a string that compares correctly. A time without a zone is kept as it
+    is (the existing convention); one with a zone is expressed in the local time of this machine so both compare in
+    the same scale. A value that is not a time (an old run log) keeps its text: ordering as before. Empty stays empty
+    (no time: ordered as the oldest)."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return text
+    if when.tzinfo is not None:
+        when = when.astimezone().replace(tzinfo=None)
+    return when.isoformat(timespec="seconds")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# The priority of a new bug (A-04): the project's schema decides whether it is required; the user decides its value.
+# ---------------------------------------------------------------------------------------------------------------
+def defect_priority_rule(proj: dict) -> dict:
+    """What the project's schema says about the priority of a NEW bug: {"required": bool, "accepted": [...],
+    "where": the project.yaml key}. Excel: required as soon as `excel.defects.priorities` lists values (the adapter
+    refuses a new defect without one); Jira / Azure DevOps: optional, checked against `bugs.priorities` when given."""
+    tracker = proj.get("tracker")
+    if tracker == "excel":
+        excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+        values = (excel.get("defects") or {}).get("priorities") or []
+        return {"required": bool(values), "accepted": [str(v) for v in values], "where": "excel.defects.priorities"}
+    section = {"jira": "jira", "azure-devops": "azure_devops"}.get(tracker)
+    bugs = (proj.get(section) or {}).get("bugs") if section else None
+    values = (bugs or {}).get("priorities") if isinstance(bugs, dict) else None
+    values = list(values) if isinstance(values, (list, dict)) else []
+    return {"required": False, "accepted": [str(v) for v in values], "where": f"{section}.bugs.priorities"}
+
+
+def defect_priority_problem(proj: dict, new_defect: dict) -> str | None:
+    """Why this new bug has no valid priority yet, or None. The same test as the Excel adapter's (the priority, else
+    the severity, must be one of the accepted values), made before the bug is shown as ready."""
+    rule = defect_priority_rule(proj)
+    value = new_defect.get("priority", new_defect.get("severity")) if isinstance(new_defect, dict) else None
+    accepted = rule["accepted"]
+    if value in (None, ""):
+        if rule["required"]:
+            return (f"the project requires a priority for a new bug ({rule['where']}: {', '.join(accepted)}): ask the "
+                    "user to decide it; it is never filled in by the assistant")
+        return None
+    if accepted and str(value) not in accepted:
+        return f"priority {value!r} is not one of the project's ({rule['where']}: {', '.join(accepted)})"
+    return None

@@ -40,6 +40,8 @@ A skill in `~/.claude/skills/` runs in a workspace that knows nothing about the 
 
 Whatever the order gives is **checked, not trusted**: `python <qa>/scripts/workspace_select.py preflight` compares it with what the skill needs (§6). A missing folder or script means the skills are newer than that checkout: the skill stops and says so.
 
+**Which Python.** `python3 <qa>/scripts/qa_python.py` (standard library only; `<qa>` is where the file lives) prints the interpreter to use where the docs say `python`: `$QA_PYTHON`, else `<qa>/.venv` (the main checkout's in a worktree), else the running one, else PATH, the first with Python >= 3.12 and PyYAML and openpyxl. None found: exit 3 and the commands that create a `.venv` for the checkout; nothing is installed and the system Python is not touched. The sync record's `commit` is the commit the skills were copied from, not necessarily the checkout's current HEAD: it moves only with `sync_skills.py --apply`, which is not run to make the two match when the skills' content is the same (the dry run says "in sync").
+
 `python scripts/workspace_select.py where` shows the framework as it really runs: its root; the main checkout when this one is a worktree (read from `.git`, without running git); branch, commit and uncommitted files; the Python interpreter; the **real origin of each import** (`adapters`, `qa_audit`, `openpyxl`, `yaml`); the installed versions that differ from the pinned ones, as information; the skills' sync record.
 
 An editable `qa-audit` points at the checkout it was installed from, which may not be this one: `where` and `preflight` report it. A different version than the CI's is not called incompatible: it is reported, and the isolated run of §11 is what decides.

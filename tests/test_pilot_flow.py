@@ -13,6 +13,7 @@ import os
 import shutil
 import sys
 import unittest
+from datetime import datetime
 from unittest import mock
 
 import openpyxl
@@ -113,12 +114,13 @@ class PilotFlow(unittest.TestCase):
 
         # 6. the dry run picks the iOS workbook and writes nothing
         before = {f: self.cells(f) for f in (kit.EXCEL["file"], IOS)}
-        res = ap.dry_run(self.ws, f"runs/{name}.json", recalc=False)
+        fixed = datetime(2026, 11, 7, 12, 0, 0)         # fixed in the preview and in the apply: the token covers --now
+        res = ap.dry_run(self.ws, f"runs/{name}.json", recalc=False, now=fixed)
         self.assertEqual((res["workbook"], res["platform"], res["problems"], res["code"]), (IOS, "ios", [], 0))
         self.assertEqual({f: self.cells(f) for f in before}, before)
 
         # 7. the apply with the preview's token writes exactly what the preview showed
-        rc, out = self.quiet(ap.main, [self.ws, f"runs/{name}.json", "--no-recalc", "--now", res["now"],
+        rc, out = self.quiet(ap.main, [self.ws, f"runs/{name}.json", "--no-recalc", "--now", fixed.isoformat(),
                                        "--expect", res["token"]])
         self.assertEqual(rc, 0, out)
         after = self.cells(IOS)

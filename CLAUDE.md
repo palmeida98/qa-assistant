@@ -29,6 +29,7 @@ References:
 
 ## Scripts (from the root of qa-assistant)
 Each script's docstring and `--help` give its flags and exit codes: read them before using one. What they do:
+- `scripts/qa_python.py` (standard library only) — prints the Python that can run the framework (`$QA_PYTHON`, `.venv`, the running one, PATH) or the commands that create one; `run <script|-m module> ...` runs with it. `python` below means that interpreter
 - `scripts/validate_project.py <workspace> [--environment]` — validates `project.yaml` and, with `--environment`, the tools this computer needs
 - `scripts/workspace_git.py <workspace> init|status|remote|push` — the workspace as its own git repository with a private remote; `push` never forces and refuses a public remote
 - `scripts/migrate_workspace.py <workspace> [--apply]` — converts a workspace from before the translation (plan 8.11)

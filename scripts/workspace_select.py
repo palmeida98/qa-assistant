@@ -909,8 +909,9 @@ def main(argv=None) -> int:
         return _run(parser().parse_args(argv))
     except ImportError as e:
         print(f"STOP: this checkout ({ROOT}) cannot run this: {e}. Install its requirements (pip install -r "
-              "requirements.txt from its root), or use the checkout the skills came from (QA_ASSISTANT_ROOT). Nothing "
-              "was installed or changed.", file=sys.stderr)
+              "requirements.txt from its root), or use the checkout the skills came from (QA_ASSISTANT_ROOT); "
+              "`python3 scripts/qa_python.py` (standard library only) prints an interpreter that can run it, or the "
+              "commands that create one. Nothing was installed or changed.", file=sys.stderr)
         return MISMATCH
 
 

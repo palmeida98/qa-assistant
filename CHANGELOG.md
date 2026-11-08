@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (traceability of applications and results, branch `claude/melhorias-rastreabilidade`, 2026-11-08)
+- **Excel preview token (A-02)**: `adapters.excel.apply` tokens are `v2-<hash>` and cover `--label`, the reporter actually
+  written (`--reported-by` or the configured one), `--no-recalc`, a fixed `--now` and the batch name, besides the batch,
+  `project.yaml` and the workbooks; the real clock is not in them. A token from before (16 hex digits) is refused: **dry runs
+  pending at the upgrade must be repeated**. The dry run prints the options covered.
+- **Execution time (A-01)**: `run_log.py add --executed-at WHEN --executed-source TEXT` (or `unknown`); every new item has
+  `recorded_at`; `ts` stays the time of the execution. Zones are never assigned; future and date-only values are refused.
+  `qa_report.py` orders by a comparable form of `ts` (`common.ts_key`). Older run logs are read as before.
+- **Resolving a Question (A-03)**: `run_log.py resolve` (in place before applying, `--into` a new batch with
+  `revision_of` after); the audit lists resolved Questions and dangling revisions; totals count the case once.
+- **Priority of a new bug (A-04)**: `run_log.py defect-rule`; an approved bug without a valid priority (when the schema
+  requires one) is refused before the dry run, a proposal may wait, the audit lists it; `/manage-bugs` asks the user.
+- **Interpreter (A-08)**: `scripts/qa_python.py` (standard library only) finds the Python with the dependencies or prints how
+  to create it; the skills' step 0 and `procedures/rules.md` §11 say so.
+
 ### Changed (consolidation for the proof of concept, 2026-11-08; methodology v2.14, development plan phase 16)
 - **Privacy guard** (`scripts/check_denylist.py`): a missing, empty or unreadable list is said explicitly (exit 3 when the
   check is required, 4 when the list cannot be read); a file that cannot be read, or a corrupt or encrypted Office file, is

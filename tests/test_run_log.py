@@ -73,9 +73,9 @@ class RunLog(unittest.TestCase):
         self.assertEqual(doc["run"], {"environment": "test", "build": "1.4.0 (140)"})
         self.assertEqual(doc["results"], [
             {"tc": "TC-SHOP-001", "status": "Question", "actual_result": "is 2 the limit?",
-             "ts": "2026-09-29T14:03:00"},
+             "ts": "2026-09-29T14:03:00", "recorded_at": "2026-09-29T14:03:00"},
             {"tc": "TC-SHOP-002", "status": "Fail", "actual_result": "coupon accepted", "ts": "2026-09-29T14:03:00",
-             "bug": "BUG-1", "evidence": "evidence/b/TC-SHOP-002_t1.png"}])
+             "recorded_at": "2026-09-29T14:03:00", "bug": "BUG-1", "evidence": "evidence/b/TC-SHOP-002_t1.png"}])
         self.assertEqual(path, os.path.join(self.ws, "runs", "batch_20260929_01.json"))
 
     def test_a_build_cannot_be_filled_in_after_results_without_one(self):
@@ -335,7 +335,8 @@ class RunLog(unittest.TestCase):
         before = self.log()
         draft = os.path.join(self.ws, "draft.json")
         with open(draft, "w", encoding="utf-8") as f:
-            json.dump({"title": "Expired coupon accepted", "expected": "refused", "observed": "accepted"}, f)
+            json.dump({"title": "Expired coupon accepted", "expected": "refused", "observed": "accepted",
+                       "priority": "P2"}, f)
         code, out = self.run_("attach", "20260929_01", "TC-SHOP-002", "--new-defect", draft,
                               "--evidence", "evidence/b/session.log")
         self.assertEqual(code, 0, out)
