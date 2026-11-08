@@ -6,7 +6,7 @@ the Question answered -> dry run -> an apply with other options refused -> the a
 nothing -> report -> resume in a "new session" (the files are all that is left).
 
 Two layouts and rule sets: the demo workbook (English words, `Critical..Low`) and the golden fixture configured like a
-project that writes in Portuguese (`Crítica..Baixa`), as the project does. The approvals are simulated inputs of the test:
+project that writes in Portuguese (`Crítica..Baixa`). The approvals are simulated inputs of the test:
 this is not a human approval and not an evaluation of the agent.
 """
 
