@@ -365,6 +365,24 @@ class RunLog(unittest.TestCase):
             rl.attach(self.ws, "20260929_01", case, evidence=["evidence/b/session.log"])
         self.assertEqual([r["evidence"] for r in self.log()["results"]], ["evidence/b/session.log"] * 2)
 
+    def test_evidence_already_recorded_as_a_list_of_one_is_left_as_it_is(self):
+        # run logs written by hand keep one path in a list: naming it again is a no-op, never a rewrite into a string
+        os.makedirs(os.path.join(self.ws, "runs"))
+        path = os.path.join(self.ws, "runs", "batch_20260929_01.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"run": {"environment": "test", "build": "1.0 (1)"},
+                       "results": [{"tc": "TC-SHOP-001", "status": "Pass", "actual_result": "ok",
+                                    "evidence": ["evidence/b/a.png"], "ts": "2026-09-29T14:00:00"}]}, f)
+        with open(path, "rb") as f:
+            raw = f.read()
+        code, out = self.run_("attach", "20260929_01", "TC-SHOP-001", "--evidence", "evidence/b/a.png")
+        self.assertEqual(code, 0, out)
+        self.assertIn("unchanged", out)
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), raw)
+        rl.attach(self.ws, "20260929_01", "TC-SHOP-001", evidence=["evidence/b/a.png", "evidence/b/b.png"])
+        self.assertEqual(self.log()["results"][0]["evidence"], ["evidence/b/a.png", "evidence/b/b.png"])
+
     def test_attach_refuses_what_it_cannot_do_and_writes_nothing(self):
         self.assertEqual(self.run_("attach", "20260929_01", "TC-SHOP-001", "--bug", "BUG-1")[0], 2)  # no run log
         rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
