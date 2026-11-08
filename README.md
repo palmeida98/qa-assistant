@@ -4,89 +4,88 @@
 
 **Active development · Python 3.12+ · Claude Code · Playwright · QA automation**
 
-QA Assistant is a personal framework for planning, executing and reviewing quality-assurance work. It combines **Claude Code-assisted testing workflows**, a standalone **website audit engine (`qa-audit`)**, and a **local QA interface (`qa-ui`)**. The aim is repeatable test execution with traceable evidence and explicit human approval for decisions and tracker updates.
+QA Assistant is a personal framework for planning, executing and reviewing quality-assurance work. It combines
+**eight Claude Code skills** that drive a versioned QA method over project workspaces, a standalone **website audit
+engine (`qa-audit`)** and a **local QA interface (`qa-ui`)**. The aim is repeatable test execution with traceable
+evidence and explicit human approval before anything is written to a workbook or a tracker.
 
-Built as a practical quality-engineering project: **source code, tests, a fictional demo, CI and technical documentation are included**. Real client workspaces, credentials, reports and evidence are intentionally kept outside this public repository.
+Source code, tests, a fictional demo, CI and technical documentation are included. Real client workspaces,
+credentials, reports and evidence are kept outside this public repository, in private workspaces of their own.
 
-> **Development status (October 2026):** This is an actively evolving project, **not a finished commercial product**. The workspace layer reached v1.0 after a controlled pilot; `qa-audit` has its own v0.2.0 release; the one-workspace UI exists, while the multi-project hub is being delivered in phases. The last verified main-branch CI run before this documentation change was successful on 21 October 2026. See [development status](#state) and the [development plan](docs/development-plan.md) for limitations.
+> **Development status (November 2026):** an actively evolving project, **not a finished commercial product**. The
+> workspace layer reached v1.0 after a controlled pilot and its skills are at version 2 (eight skills, methodology
+> v2.13); `qa-audit` has its own v0.2.0 release; the single-workspace UI is implemented and the multi-project hub is
+> being delivered in phases. See [state](#state) and the [development plan](docs/development-plan.md).
 
-> **License:** Publicly viewable **proprietary source**, not an open-source project. See [LICENSE](LICENSE) before copying, adapting or redistributing any part of it. Third-party components retain their own licences.
+> **License:** publicly viewable **proprietary source**, not an open-source project. See [LICENSE](LICENSE) before
+> copying, adapting or redistributing any part of it. Third-party components keep their own licences.
 
 ## At a glance
 
 | Component | What it offers | Current evidence / boundary |
 | --- | --- | --- |
-| **QA workspaces** | A central library of Claude Code skills for analysis, test cases, batches, run logs, checkpoints and dashboards | Versioned methodology and a documented public-site pilot; client data remains in separate workspaces |
-| **`qa-audit` CLI** | Browser-based accessibility, passive security, functional, performance and opt-in visual checks | Python implementation, example configuration and browser integration tests in CI; not a security penetration test or accessibility certification |
-| **`qa-ui`** | Local intake, test suggestions, batch execution, approval flows and results | One-workspace mode implemented; new Projects hub supports discovery and pinning, with other multi-project screens still planned |
-| **Trackers** | Excel, Jira/Xray and Azure DevOps adapters | Unit tests, fakes and golden fixtures; real pilots of the remote tracker adapters are still pending |
-| **Mobile / remote execution** | Mobile workflows and GitHub Actions workspace templates | Implemented tooling and tests; a full runner-based mobile pilot remains pending |
+| **Skills and workspaces** | Eight Claude Code skills for context, ticket analysis, planning, execution, bugs, reports and checkpoints over a workspace per project | Versioned methodology, a documented public-site pilot and an iOS device pilot; client data stays in separate workspaces |
+| **`qa-audit` CLI** | Browser-based accessibility, passive security, functional, performance and opt-in visual checks | Python implementation, example configuration and browser integration tests in CI; not a penetration test or an accessibility certification |
+| **`qa-ui`** | Local intake, test suggestions, batch execution, approval flows and results | Single-workspace mode implemented; the hub has discovery, pinning, in-hub navigation, Overview, write-only credentials and notes; other screens are planned |
+| **Trackers** | Excel, Jira (Xray) and Azure DevOps (Test Plans + Boards) adapters | Excel used on real projects; Jira and Azure DevOps validated only against fakes and fictional goldens |
+| **Mobile / remote execution** | Android (Maestro, emulator, companion driver), iPhone through WebDriverAgent, GitHub Actions workspace templates | Implemented tooling and tests; a full runner-based mobile pilot remains pending |
 
-## Start here
+## Requirements
 
-- **Try `qa-audit`:** Follow the [installation and user guide](docs/qa-audit-guide.md) and run only against sites you own or are authorised to test.
-- **See an example:** Explore the [fictional demo workspace](examples/demo/) and its [Playwright specs](examples/demo/e2e/specs/).
-- **Understand the design:** Read the [methodology](docs/methodology.md), [architecture](#layered-architecture), [interface specification](docs/qa-ui.md), and [development plan](docs/development-plan.md).
-- **Inspect quality controls:** [GitHub Actions CI](.github/workflows/ci.yml), [tests](tests/), [privacy and secret guards](#privacy-boundary), and [changelog](CHANGELOG.md).
+| For | Tool |
+|---|---|
+| Everything | git, Python 3.12+, Claude Code; GitHub CLI (`gh`) for a workspace's private remote |
+| Tracker `excel` | LibreOffice (workbook recalculation and the golden test) |
+| `functional-web`, `exploratory` | Node.js 22+ (Playwright MCP with a fixed version) |
+| `accessibility`, `qa-audit` | Playwright browsers (`python -m playwright install chromium`) |
+| `mobile` | Maestro CLI; Android SDK (adb, emulator) for Android; Xcode and WebDriverAgent for an iPhone ([technique-mobile.md §1.5](docs/technique-mobile.md)) |
 
+Install only what the active modules of your projects need: `python scripts/validate_project.py <workspace>
+--environment` says what is still missing on this computer. Step by step: [docs/workspace/setup.md](docs/workspace/setup.md).
 
----
-
-## qa-audit — automated audit engine
-
-An automated first pass over any website, from its URL alone. It lives alongside the workspace layer.
+## Installation and skill sync
 
 ```bash
-./scripts/install.sh            # Windows: .\scripts\install.ps1  (.venv, package, Chromium, then qa-audit doctor)
-. .venv/bin/activate            # Windows: .\.venv\Scripts\Activate.ps1
-qa-audit https://example.com                         # every available module
-qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
+git clone https://github.com/palmeida98/qa-assistant.git
+cd qa-assistant
+pip install -r requirements.txt              # the Excel adapter and the scripts (exact versions)
+pip install -e .                             # qa-audit; or ./scripts/install.sh (a .venv and Chromium)
+python scripts/sync_skills.py --apply        # copies the eight skills to ~/.claude/skills/ and records this checkout
+python scripts/workspace_select.py where     # which framework, Python, imports and skill copy really run
 ```
 
-It can log in first (a form, or you log in by hand for Active Directory / 2FA). It crawls the start origin with GET navigation only (never clicks, types or submits; skips logout/delete-style
-links, respects `robots.txt`), runs the selected modules on each page, and writes `qa-output/<timestamp>/` with
-screenshots, `results.json`, `results.csv`, `report.md` and a self-contained `report.html`. No telemetry; nothing
-is sent anywhere but to the target. Only audit sites you own or are authorized to test.
+The workspaces live outside this repository, so Claude Code uses the **global copy** of the skills in
+`~/.claude/skills/`. Run `python scripts/sync_skills.py` (a dry run) to compare, and `--apply` after changing a skill,
+preferably from the main checkout; the record next to the copies says which checkout and commit they came from. A
+new Claude Code session is needed to see changed skills.
 
-Modules today: **accessibility** (axe-core 4.13.0 bundled, keyboard walk with focus visibility decided by pixels,
-reflow, manual checklist) and **security** (passive: HTTPS/TLS, security headers, cookie flags, mixed content) and
-**performance** (TTFB, FCP, LCP, CLS against the web.dev thresholds; sizes and timings measured) and **functional**
-(broken links and resources, JavaScript errors, redirect chains, form checks; forms are submitted only with
-`--allow-submit` and when listed in the configuration) and **visual** (screenshots per viewport against baselines
-kept outside any repository, horizontal overflow; `pip install -e .[visual]`). Pages behind a login: a login form,
-a person logging in (Active Directory, second factor), or a session saved once with `qa-audit login`. User guide:
-[`docs/qa-audit-guide.md`](docs/qa-audit-guide.md) (install, run, results, new projects, new modules, client data);
-example: [`examples/qa-audit/`](examples/qa-audit/). Specification: [`docs/qa-audit.md`](docs/qa-audit.md);
-contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md); changes: [`CHANGELOG.md`](CHANGELOG.md).
+## The eight skills
 
----
+Ask in natural language or type the skill's name. Each skill first finds the framework and selects the project
+(preflight), and stops with an instruction when they do not match.
 
-## Layered architecture
+| Skill | Purpose |
+|---|---|
+| `/project-context` | Select or set up a workspace and resume it: state, decisions, blockers, tools really available, next actions |
+| `/analyze-ticket` | Read a PBI, story, task or bug in Azure DevOps or Jira (read only), say what changed since the last check, give a QA analysis |
+| `/plan-tests` | Plan by risk: coverage per requirement and platform, reuse of existing cases, new case proposals, batches |
+| `/run-tests` | Run approved cases or a planned batch on mobile, web, API or accessibility, and record results and evidence in the run log |
+| `/manage-bugs` | Investigate failures, search existing bugs, prepare proposals or updates for one batch review |
+| `/qa-report` | Audit the run logs and report reconciled totals by platform, build, feature, result and risk; the Excel dashboard |
+| `/checkpoint` | Save the session's state and resume point; apply a batch to the workbook or tracker only after confirmation |
+| `/test-pbi` | Test one PBI end to end through the skills above, with a resume record (`memory/pbi/<id>.json`) |
 
-| Layer | What it is | Where it lives |
-|---|---|---|
-| **1. Methodology** | The method: analysis, case design, batches, decision rules (Pass/Fail/N/A/Blocked/Question), bugs, checkpoints; anonymised heuristics for *error guessing* | [`docs/methodology.md`](docs/methodology.md), [`docs/heuristics.md`](docs/heuristics.md) |
-| **2. Techniques** | How to test each type: [browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md), [mobile](docs/technique-mobile.md), [Excel workbooks](docs/technique-excel.md), [ticket analysis](docs/technique-tickets.md), [workspaces and skills](docs/technique-workspaces.md) | `docs/` |
-| **3. Adapters and tools** | Universal Excel adapter, scripts for API, accessibility, mobile, dashboard and validation; skills. They are the framework's engine: there is no separate core | `adapters/`, `scripts/`, `.claude/skills/` |
-| **4. Workspace** | The project: `CLAUDE.md`, `project.yaml`, `context.md`, workbook, `.env`, run log | `qa-workspaces/<company>/<project>/` (outside this repository) |
+Contracts (inputs, writes, approvals, failures) are in each skill's frontmatter: `python scripts/workspace_select.py
+skills` prints the catalogue. Specification: [docs/skills-spec.md](docs/skills-spec.md); how to use them:
+[docs/skills-guide.md](docs/skills-guide.md); the long procedures and the rules they share:
+[docs/procedures/](docs/procedures/) ([rules.md](docs/procedures/rules.md)).
 
-The hierarchy of sources of truth, the generalisation rule (what is universal vs. what belongs to a project) and the process for changing the framework are in the methodology (§1.3, §1.4, §15).
-
-## Privacy boundary
-
-Nothing that identifies a client enters this repository: names, environment URLs, accounts, credentials, workbooks, results or bugs of real projects. Two barriers in `pre-commit`, never worked around:
-
-- **detect-secrets**, with a baseline;
-- **personal denylist** (`~/.qa-denylist.txt`, outside the repository): blocks client names in the text, in the file names and **inside** Office files (`.xlsx`, `.docx`, `.pptx`), and in the commit message.
-
-Credentials live only in each workspace's `.env` and are referred to by the variable's name. The scripts pass them through environment variables, never on the command line, and redact the evidence (e.g. `scripts/api_request.py` replaces tokens and passwords with `«redacted»`). In the workspace, `validate_project` warns if `.env` and the like are not in `.gitignore`, and `.claude/settings.json` forbids Claude Code from editing `history/`, which is immutable.
-
-## How to work
+### What a request authorises
 
 ```mermaid
 flowchart LR
   O["/project-context<br/>(set up or resume)"] --> T["/analyze-ticket<br/>(read only)"]
-  T -->|"what changed"| P["/plan-tests<br/>(approve)"]
+  T -->|"what changed"| P["/plan-tests"]
   P --> E["/run-tests<br/>mobile · web · API · a11y"]
   E -->|"run log<br/>runs/batch_*.json"| B["/manage-bugs<br/>(batch review)"]
   B --> R["/qa-report"]
@@ -95,93 +94,169 @@ flowchart LR
   X["/test-pbi<br/>(one PBI, resumable)"] -.-> O
 ```
 
-The generated cases are proposals until the user approves them; a bug is only created once approved; the results go to the workbook only at the checkpoint, through the adapter, and only if the batch is valid and the cross-check gives 0 problems.
+- A **request to test** covers the work inside its scope (platforms, environment and targets it names): analysis, a
+  plan by risk, the run and the local records (run log, evidence, checkpoint), without approving the same plan twice.
+- **Every write to a workbook or a tracker** (cases, results, bugs, comments, attachments) shows its exact content
+  (a dry run) and waits for its approval. Another platform, environment or target is asked; a commit, a push or a
+  sync of the skills is never a side effect.
+- **A project's own rules win when they ask for more** (for example a confirmation of the plan or an approval of each
+  platform's run); `/project-context` names the rules in force ([rules.md §5 and §8](docs/procedures/rules.md)).
+- Generated cases are proposals until approved; one bug per problem, with platforms grouped only when the evidence
+  shows the same defect; a result is written only for a case of the library, and its build, time and evidence are
+  kept when a bug or evidence is attached later (`scripts/run_log.py attach`).
 
-### The local interface (`qa-ui`)
+## Using it
 
-`qa-ui` is a **local-only interface** for planning and supervising QA work, with user approval before changes are applied to the project's tracker. In the current single-workspace mode, it supports case intake, test-module suggestions, batch planning, runs, review of proposed bugs/questions and applying approved results through the configured adapter.
+### Choosing a project
+
+Workspaces live under a root of workspaces (by default `../qa-workspaces/` next to the main checkout), as
+`<company>/<project>/` or `<project>/`.
 
 ```bash
-python -m qa_ui ../qa-workspaces/<company>/<project>  # One workspace: complete existing flow
-python -m qa_ui                                   # Multi-project hub: Projects view and pinning
+python scripts/workspace_select.py list                                    # each project: valid, incomplete, not-configured or inaccessible
+python scripts/workspace_select.py preflight --skill plan-tests demo/shop  # project, task, environment and tools; nothing is written
+python scripts/workspace_select.py set-root <folder>                       # another root of workspaces
 ```
 
-The interface binds to `127.0.0.1` and uses a per-start token. Workspaces and any sensitive project data remain outside this repository. Run logs and tracker updates are controlled by the workflow's approval rules; `qa-ui` does not commit project history.
-
-**Multi-project hub — work in progress (phase 13):** Project discovery, the Projects screen, pinning and a shared one-run-at-a-time guard are implemented. As of 21 October 2026, opening a project from the hub still uses its single-workspace view; integrated navigation, project creation and the remaining management screens are planned, **not yet presented as completed**. See [the hub specification](docs/qa-ui.md#14-the-hub-every-project-in-one-interface-plan-phase-13) and [phase 13 of the development plan](docs/development-plan.md#phase-13--the-hub-every-project-in-qa-ui).
+Listing reads only each `project.yaml`; two projects never share memory or credentials. Details:
+[docs/technique-workspaces.md](docs/technique-workspaces.md).
 
 ### Starting a new project
 
-1. Create the folder `qa-workspaces/<company>/<project>/` next to this repository, or `<project>/` under the root you configured (`scripts/workspace_select.py set-root`).
-2. Open `claude` in that folder and run `/project-context` (a new folder follows `docs/procedures/onboarding.md`): it creates `CLAUDE.md`, `project.yaml` and `.claude/settings.json` (protection of `history/`), asks about environments, roles, tracker and modules, inspects the real workbook (`python -m adapters.excel.inspect`) or, with Jira or Azure DevOps, fills in the tracker's section and runs `check` and `import-cases`, registers the Playwright MCP with a fixed version and ends with `python scripts/validate_project.py <workspace>` without problems (it also checks that the modules' URLs belong to declared test environments).
-3. Fill in `.env` locally.
+1. Create the folder `qa-workspaces/<company>/<project>/` (or `<project>/` under your root).
+2. Open `claude` in that folder and run `/project-context` ([docs/procedures/onboarding.md](docs/procedures/onboarding.md)):
+   it creates `CLAUDE.md`, `project.yaml`, `context.md` and `.claude/settings.json` (protection of `history/`), asks
+   about environments, roles, tracker and modules, inspects the workbook or checks the tracker, and ends with
+   `python scripts/validate_project.py <workspace>` without problems.
+3. Fill in `.env` locally (variable names only in `.env.example`). The workspace is a git repository of its own with a
+   **private** remote (`scripts/workspace_git.py`; `push` never forces and refuses a public remote).
 
 ### Modules
 
 | Module | Technique | Skill | Tool |
 |---|---|---|---|
-| `functional-web`, `exploratory` | browser | `/run-tests` | Playwright MCP |
-| `api` | API | `/run-tests` | `scripts/api_request.py` |
-| `accessibility` | WCAG 2.1 AA | `/run-tests` | `scripts/audit_a11y.py` (`qa-audit` engine: axe-core, keyboard, reflow) |
-| `mobile` | Maestro | `/run-tests` | `scripts/run_mobile.py` |
-
-### Choosing a project
-
-Eight skills cover the flow (specification: [`docs/skills-spec.md`](docs/skills-spec.md); how to use them: [`docs/skills-guide.md`](docs/skills-guide.md)). Skills are central; configuration and data stay in each workspace, under a root of workspaces, as `<company>/<project>/` or `<project>/`. Ask for a task in natural language: each skill finds the framework and the project first, and stops with an instruction when they do not match.
-
-```bash
-python scripts/workspace_select.py list                                   # the projects, each valid, incomplete, not-configured or inaccessible
-python scripts/workspace_select.py preflight --skill run-tests demo/shop   # the project, task, environment and tools; nothing is written
-python scripts/workspace_select.py where                                  # which framework, Python and imports really run
-```
-
-A new folder is set up with `/project-context`. Listing reads only each `project.yaml`, and two projects never share memory or credentials. Details: [`docs/technique-workspaces.md`](docs/technique-workspaces.md).
-
-### Following tickets
-
-`/analyze-ticket` reads Azure DevOps or Jira (a link, a list, a sprint, a query), says what changed since the last check and gives a QA status apart from the ticket's official state. It writes only to the workspace's `memory/` and to one generated block of `context.md`: every request goes through a transport that cannot write. It needs neither Xray nor `tracker: jira|azure-devops`, and can read through a token or a logged-in browser. Specified in [`docs/technique-tickets.md`](docs/technique-tickets.md), which says what was validated on a real service and what only with fictional fixtures.
+| `functional-web`, `exploratory` | [browser](docs/technique-browser.md) | `/run-tests` | Playwright MCP |
+| `api` | [API](docs/technique-api.md) | `/run-tests` | `scripts/api_request.py` |
+| `accessibility` | [WCAG 2.1 AA](docs/technique-accessibility.md) | `/run-tests` | `scripts/audit_a11y.py` (`qa-audit` engine) |
+| `mobile` | [mobile](docs/technique-mobile.md) | `/run-tests` | `scripts/run_mobile.py`, `scripts/device.py` (Maestro, Android driver, iOS WebDriverAgent) |
 
 ### Trackers
 
-Each tracker has an adapter. Excel: the results and the bugs go to the workbook at `/checkpoint`, the cases approved in `/plan-tests` are added by the adapter (`python -m adapters.excel.add_cases`, never by hand), and there is a dashboard. Jira with Xray and Azure DevOps Test Plans (`python -m adapters.tracker`, specified in `docs/technique-jira-xray.md` and `docs/technique-azure-devops.md`): results, bugs (with a duplicate search), importing and exporting cases — always a dry run first and `--yes` only after the user's approval, a batch never sent twice; the skills use them the same way (`/plan-tests` and `/run-tests` read the imported cases, `/manage-bugs` searches duplicates, `/checkpoint` sends, `/plan-tests` exports); their progress view is the tracker's own reports (methodology §4.2).
+- **Excel** ([technique-excel.md](docs/technique-excel.md)): results and bugs applied at `/checkpoint` with
+  `python -m adapters.excel.apply` (`--dry-run` first, then `--expect <token>`); approved cases added with
+  `python -m adapters.excel.add_cases`; a dashboard with `scripts/build_dashboard.py`.
+- **Jira (Xray) and Azure DevOps** ([technique-jira-xray.md](docs/technique-jira-xray.md),
+  [technique-azure-devops.md](docs/technique-azure-devops.md)): `python -m adapters.tracker <workspace>
+  check|import-cases|export-cases|apply|bug-search`; every writing command is a dry run without `--yes`, a batch is
+  never sent twice.
+
+### Following tickets
+
+`/analyze-ticket` (`python -m adapters.tickets`) reads Azure DevOps or Jira through a transport that cannot write,
+compares with the last check and writes only to the workspace's `memory/` and one generated block of `context.md`.
+It needs neither Xray nor a `tracker:` of that kind. Specified in [docs/technique-tickets.md](docs/technique-tickets.md),
+which says what was validated on a real service and what only with fictional fixtures.
+
+### The local interface (`qa-ui`)
+
+```bash
+python -m qa_ui ../qa-workspaces/<company>/<project>   # one workspace: intake, suggestions, batches, runs, approvals
+python -m qa_ui                                        # the hub: every project under the root
+```
+
+Local only: it binds to `127.0.0.1` with a per-start token and does not commit project history. Runs started from it
+are unattended: new bugs are written as proposals and approved in the interface before anything is applied.
+Specification: [docs/qa-ui.md](docs/qa-ui.md).
+
+### `qa-audit` — automated website audit
+
+```bash
+./scripts/install.sh                     # Windows: .\scripts\install.ps1 (.venv, package, Chromium, qa-audit doctor)
+qa-audit doctor
+qa-audit https://example.com --type accessibility --browser firefox --max-pages 5
+```
+
+A first pass over a website from its URL: **accessibility** (axe-core 4.13.0 bundled, keyboard walk, reflow),
+passive **security** (HTTPS/TLS, headers, cookies, mixed content), **performance** (TTFB, FCP, LCP, CLS),
+**functional** (broken links and resources, JavaScript errors, redirects, forms submitted only with `--allow-submit`)
+and opt-in **visual** (`pip install -e .[visual]`). It crawls with GET navigation only, respects `robots.txt`, can log
+in first, and writes `qa-output/<timestamp>/` with `report.html`, `results.json` and screenshots. No telemetry. Only
+audit sites you own or are authorised to test. Guide: [docs/qa-audit-guide.md](docs/qa-audit-guide.md); specification:
+[docs/qa-audit.md](docs/qa-audit.md); example: [examples/qa-audit/](examples/qa-audit/).
+
+## Layered architecture
+
+| Layer | What it is | Where it lives |
+|---|---|---|
+| **Engine** | Skills, adapters, scripts, tests and guards; `qa-audit` next to it | `.claude/skills/`, `adapters/`, `scripts/`, `src/qa_audit/` |
+| **1. Methodology** | The method: analysis, case design, batches, decision rules (Pass/Fail/N/A/Blocked/Question), bugs, checkpoints | [docs/methodology.md](docs/methodology.md), [docs/heuristics.md](docs/heuristics.md) |
+| **2. Techniques** | How to test each type of test and use each tool | `docs/technique-*.md` |
+| **3. Adapters** | Excel, Jira (Xray), Azure DevOps, tickets | `adapters/` |
+| **4. Workspace** | The project: `CLAUDE.md`, `project.yaml`, `context.md`, workbook, `.env`, run logs, evidence | `qa-workspaces/<company>/<project>/` (outside this repository) |
+
+The hierarchy of sources of truth, the generalisation rule and the process for changing the framework (specification
+first, then code, then tests) are in the methodology (§1.3, §1.4, §15).
+
+## Privacy boundary
+
+Nothing that identifies a client enters this repository: names, environment URLs, accounts, credentials, workbooks,
+results or bugs of real projects. Two barriers in `pre-commit`, never worked around:
+
+- **detect-secrets**, with a baseline;
+- a **personal denylist** (`~/.qa-denylist.txt`, outside the repository) of client names in the text, in file names,
+  **inside** Office files and in the commit message.
+
+Credentials live only in each workspace's `.env` and are referred to by the variable's name; the scripts pass them
+through environment variables and redact the evidence. In a workspace, `.claude/settings.json` forbids Claude Code
+from editing `history/`, which is immutable.
 
 ## Demo
 
-[`examples/demo/`](examples/demo) is a complete workspace against public practice sites ([saucedemo.com](https://www.saucedemo.com) and the [restful-booker](https://restful-booker.herokuapp.com) API), with 38 cases in 6 areas, batches run in `runs/`, 3 example bugs, Maestro flows and Playwright regression specs (`e2e/`). The workbook is rebuilt from the builder and the batches (`python examples/demo/rebuild_workbook.py`), with each batch's execution date, and always gives the same cells (the CI checks it against the versioned workbook); `python scripts/build_dashboard.py examples/demo --open` shows the progress dashboard.
+[examples/demo/](examples/demo) is a complete fictional workspace against public practice sites
+([saucedemo.com](https://www.saucedemo.com) and the [restful-booker](https://restful-booker.herokuapp.com) API): 38
+cases in 6 areas, batches in `runs/`, example bugs, Maestro flows and Playwright regression specs (`e2e/`). The
+workbook is rebuilt from the builder and the batches (`python examples/demo/rebuild_workbook.py`);
+`python scripts/build_dashboard.py examples/demo --open` shows the dashboard.
 
-## Tests and CI
+## Validation
 
-- `python -m unittest discover -s tests` — the unit tests (adapter, inspection, recalculation, dashboard, summary, API, accessibility, mobile, validation, workspace migration, ticket analysis, selecting a project, the scripts' common code, denylist, guards, skills, console, language, reproducible demo, real golden, and the `qa-audit` engine's unit tests). Those that need LibreOffice are *skipped* without it. The `qa-audit` integration tests (a real browser against a local site) run with `python -m unittest discover -s tests/integration`.
-- `python scripts/golden_check.py` — golden test of the Excel adapter (needs LibreOffice). With `--dir <workspace>/golden/<batch>` it also runs a project's **real** golden: a historical batch applied to a copy of the workbook from before must give, cell by cell, the workbook saved afterwards (the data stays in the workspace).
-- The CI (GitHub Actions, Ubuntu 24.04) runs 7 jobs on each push: `lint` (ruff), `tests`, `secrets` (detect-secrets), `golden` (golden, summary with real formulas, reproducible demo and real golden with fictional data, with LibreOffice), `demo-e2e` (the demo's Playwright specs against the public site), `qa-audit` (engine integration in Chromium, Firefox and WebKit) and `install` (clean clone, install, audit of the local site). `pre-commit` runs the same locally, plus the denylist on the files and on the commit message.
-- Fixed versions: exact Python dependencies (`requirements.txt`), ruff, detect-secrets and Playwright MCP; a test prevents going back to loose versions.
+| Command | What |
+|---|---|
+| `python -m unittest discover -s tests` | Unit tests of the framework and the engine (those needing LibreOffice are skipped without it) |
+| `python scripts/golden_check.py` | Golden test of the Excel adapter (needs LibreOffice); `--dir <workspace>/golden/<batch>` runs a project's real golden, whose data stays in the workspace |
+| `python -m unittest discover -s tests/integration` | `qa-audit` against the local fixture site in real browsers (`QA_AUDIT_TEST_ENGINES`, default `chromium,firefox`) |
+| `ruff check .` | Lint (ruff 0.16.8, `pip install -e .[dev]`) |
+| `pre-commit run --all-files` | detect-secrets, ruff, the denylist, the golden and the unit tests, as on each commit |
+| `python scripts/validate_project.py <workspace>` | A workspace's `project.yaml`, workbook and git settings; `--environment` adds the tools of this computer |
+| `python scripts/qa_report.py <workspace> totals\|audit` | Reconciled totals per platform and build, and the audit of run logs, evidence and application (read only) |
 
-The skills run from the global copy in `~/.claude/skills/` (the workspaces live outside this repository): after changing a skill, `python scripts/sync_skills.py --apply` (it also removes the skills' old names, and records which checkout the copies came from, so each skill finds the code that matches it).
-
-Requirements: Python 3.12+ (`pip install -r requirements.txt`), LibreOffice (workbook recalculation), Node.js 22+ (accessibility and specs), Maestro CLI (mobile).
+The CI (GitHub Actions, Ubuntu 24.04) runs `lint`, `tests`, `secrets`, `golden` (with LibreOffice), `qa-audit`
+(Chromium, Firefox, WebKit), `install` (clean clone and audit of the local site) and `demo-e2e` on each pull request
+and on `main`. Python dependencies, ruff, detect-secrets and the Playwright MCP have exact versions; a test prevents
+loose ones.
 
 ## State
 
-**Active development (October 2026).** The workspace workflow has a v1.0 milestone (25 September 2026) and `qa-audit` is separately versioned at v0.2.0. The local `qa-ui` work and the multi-project hub are newer and ongoing. Completed items in the plan are not a claim that every adapter has been piloted against a live external tracker or that every multi-project UI feature is already implemented.
-
 | Phase | State |
 |---|---|
-| 0–1 · Base and core (skills, Excel adapter, golden) | Done |
-| 2 · Browser (Playwright MCP, demo, N2 regression, pilot) | Done |
-| 3 · API, accessibility and mobile modules | Done |
-| 4 · The framework's CI | Done |
-| 5 · Dashboard per workspace | Done |
-| 6 · Portfolio (README, demo, visibility: public) | Done |
-| 7 · Closing (general review, CI on Linux, pilot, real golden, protected `history/`, fixed versions, reproducible demo) | Done: **v1.0** |
-| 8 · `qa-audit` engine and translation | 8.0–8.17 (0.2.0: login, saved sessions, sitemap, several browsers; `check`, focus by pixels; 8.11 everything in English) |
+| 0–7 · Base, Excel adapter, golden, browser, API/accessibility/mobile modules, CI, dashboard, closing | Done: **v1.0** (25.09.2026) |
+| 8 · `qa-audit` engine and translation to English | 0.2.0: login, saved sessions, sitemap, several browsers |
 | 9 · Conversational apps on a device, portable workspaces | Done |
-| 10 · Jira (Xray) and Azure DevOps adapters | Implemented, validated only against fakes and fictional goldens; the pilot on real services is postponed |
-| 11 · Remote execution on GitHub Actions | The runner's side tested run by run on a real workspace; the end-to-end with a real login waits for the user |
-| 12 · `qa-ui` single-workspace interface | Implemented and tested with fixtures; a mobile-workspace pilot was recorded in October; a web-site pilot is still pending |
-| 13 · `qa-ui` multi-project hub | Discovery, Projects, in-hub navigation, Overview, write-only credentials and notes implemented; project creation, Library, History, Inbox and Settings remain planned |
-| 14 · `/analyze-ticket`, read-only ticket analysis | Azure DevOps through a browser: real read pilot done. Azure DevOps with a token, and Jira: implemented and tested with fictional fixtures, real pilot pending |
-| 15 · Central skills and project workspaces | Finding the framework, selecting a project, the skills' contract, and the impact on cases implemented and tested with fixtures |
+| 10 · Jira (Xray) and Azure DevOps adapters | Implemented, validated only against fakes and fictional goldens; a pilot on real services is pending |
+| 11 · Remote execution on GitHub Actions | The runner's side tested on a real workspace; the end-to-end with a real login is pending |
+| 12 · `qa-ui` single-workspace interface | Implemented and tested with fixtures; a mobile-workspace pilot recorded; a web-site pilot is pending |
+| 13 · `qa-ui` hub | Discovery, Projects, in-hub navigation, Overview, write-only credentials and notes done; project creation, Library, History, Inbox and Settings planned |
+| 14 · `/analyze-ticket` | Azure DevOps through a browser: real read pilot done; Azure DevOps by token and Jira tested with fictional fixtures only |
+| 15 · Central skills and project workspaces | Finding the framework, selecting a project, the skills' contract: implemented and tested with fixtures |
+| Skills v2 (06–08.11.2026) | Eight skills with shared procedures; a request to test authorises its scope; `run_log.py attach`; iOS pilot improvements ([pilot-improvements-2026-11-07.md](docs/pilot-improvements-2026-11-07.md)) |
 
-**Pilot** (25.09.2026): in a workspace outside the repository, with a public practice site (no access to company projects). A batch of 16 cases, 10 new and 6 retests, run by a `claude` session in the workspace with the Playwright MCP and applied to the workbook at `/checkpoint`: the retests gave the same status as before; real golden passing; protection of `history/` confirmed. Lessons incorporated: Playwright MCP with `--secrets .env` (the assistant never sees the credentials) and `--isolated` (the persistent profile lost clicks), warnings of `validate_project` for `.mcp.json`, and the denylist also on the commit message.
+A completed phase is not a claim that every adapter was piloted against a live external tracker or that every hub
+screen exists. History of changes: [CHANGELOG.md](CHANGELOG.md).
 
-Scope decisions: the adapters and the scripts are the workspace layer's engine, and `qa-audit` is a separate engine, next to it (25.09.2026); the `executor-web` subagent is not created (the pilot ran in its own session without filling the main context); Jira and Azure DevOps stayed as manual logging until the user's decision of 28.09.2026 to build their adapters (plan phase 10).
+## Documentation
+
+Start with the [documentation index](docs/README.md). The main references: [methodology](docs/methodology.md),
+[skills guide](docs/skills-guide.md) and [specification](docs/skills-spec.md), [shared rules](docs/procedures/rules.md),
+[workspaces and skills](docs/technique-workspaces.md), [setup](docs/workspace/setup.md) and
+[resume on another computer](docs/workspace/resume.md), [contributing](CONTRIBUTING.md) and the
+[development plan](docs/development-plan.md).

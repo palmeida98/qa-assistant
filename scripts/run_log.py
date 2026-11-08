@@ -407,8 +407,15 @@ def attach(workspace: str, batch: str, case: str, bug: str | None = None, new_de
                 item.pop("bug" if key == "new_defect" else "new_defect", None)
                 item[key] = value
             if evidence:
-                merged = list(dict.fromkeys(_paths(before.get("evidence")) + list(evidence)))
-                item["evidence"] = merged[0] if len(merged) == 1 else merged
+                # only the paths not recorded yet are added, after the recorded ones, which stay as they were
+                # written (a list of one stays a list); naming a recorded path again changes nothing
+                old = before.get("evidence")
+                new = [e for e in dict.fromkeys(evidence) if e and e not in _paths(old)]
+                if new:
+                    if old in (None, "", []):
+                        item["evidence"] = new[0] if len(new) == 1 else new
+                    else:
+                        item["evidence"] = (old if isinstance(old, list) else [old]) + new
             if item != before:
                 doc["results"][at] = item
                 write_log(path, doc)

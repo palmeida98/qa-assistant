@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Fixed (final validation of 2026-11-08)
+- `run_log.py attach --evidence` with a path already recorded no longer rewrites the run log: evidence kept as a list
+  of one path stays a list, and only the paths not recorded yet are added after the recorded ones.
+
+### Changed (documentation, 2026-11-08)
+- `README.md`: the eight skills and what each is for, requirements, installation and skill sync, what a request
+  authorises, the validation commands and the current state; the repository's links point to `palmeida98/qa-assistant`.
+
 ### Changed (skills configuration of 2026-11-08; methodology v2.13, skills-spec 2.1)
 - A request to test authorises its own scope: analysis, a plan by risk (negative, boundary and directly affected
   regression; covered, missing and residual risk), the run on the platforms, environment and targets it names, and
