@@ -166,10 +166,25 @@ scenarios prepared, not yet run).
 | `ruff check .` | Lint (ruff 0.16.8) |
 | `pre-commit run --all-files` | detect-secrets, ruff, the private denylist, the golden and the unit tests |
 
-**Measured on 08.11.2026**, macOS, Python 3.12, from the exact versions of `requirements.txt` and `pip install -e
-.[dev,visual]`: **1292 unit tests, 0 failures, 3 skipped** (Windows- and Linux-only cases), and the Excel golden passes.
-The browser integration tests ran in CI on Linux; they were not run locally for this POC. Numbers change with the code:
-the CI writes the current counts and every skip with its reason in each run's summary.
+**Validation environments (confirmed on 08.11.2026).** The same code was checked in two environments that are *not* identical:
+
+| | Local (the machine this was developed on) | CI (GitHub Actions) |
+|---|---|---|
+| OS | macOS | Ubuntu 24.04 |
+| Python | 3.12.16 | 3.12.16 |
+| `openpyxl` / `et-xmlfile` / `pyyaml` (pinned in `requirements.txt`) | 3.1.5 / 2.0.0 / 6.0.3 | the same |
+| `playwright`, `ruff` (pinned) | 1.63.0, 0.16.8 | the same |
+| **Pillow** | **13.0.0** (the shared virtual environment also serves a mobile tool, `pymobiledevice3`, which requires Pillow with no version limit) | **12.3.0** (pinned by the `visual` extra) |
+| LibreOffice | 26.8.2.2 (Homebrew) | 24.2.7 (Ubuntu package) |
+| Unit tests (`tests/`) | 1292 run, 0 failures, 3 skipped (two Windows-only, one Linux-only) | `tests` job: 1292 run, 0 failures, 16 skipped (the same two Windows-only, plus 14 that need LibreOffice) |
+| LibreOffice-dependent tests | run in the same pass | run in the `golden` job (28 tests plus the Excel golden, which passes) |
+
+The Pillow difference was **not forced away**: a downgrade in the shared environment could break the mobile tool. The suite
+also passed in a clean throwaway environment built from the pinned versions (Pillow 12.3.0): 1292 tests, the same three skips.
+So the difference is known and has shown no effect on the results, but it is a difference: `python scripts/workspace_select.py
+where` prints it ("a difference, not an incompatibility"), the pin stays the reference, and moving it is a change of its own,
+with the tests. The browser integration tests (`qa-audit`) ran only in the CI, on Linux; they were not run locally for this POC.
+Numbers change with the code: the CI writes the current counts and every skip with its reason in each run's summary.
 
 GitHub Actions (Ubuntu 24.04) runs on each pull request and on `main`: `lint`, `tests`, `secrets`, `golden` (with
 LibreOffice), `qa-audit` (Chromium, Firefox and WebKit in parallel, a cross-engine comparison, one aggregate status),
