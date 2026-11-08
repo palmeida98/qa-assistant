@@ -25,6 +25,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   `/test-pbi` with no credentials); `docs/demo-walkthrough.md` is run by a test; `docs/skills-evals.md` prepares ten
   agent-behaviour scenarios (not run); the tests of the skills are described as contract tests.
 
+### Changed (documentation, 2026-11-08)
+- `README.md`: the validation section distinguishes the local environment from the CI's (Pillow 13.0.0 against 12.3.0, LibreOffice
+  26.8.2.2 against 24.2.7, 3 skipped tests locally against 16 in the `tests` job, 14 of them run in the `golden` job) and says the
+  Pillow difference was not forced away because it could break a mobile tool.
+
 ### Removed (2026-11-08, approved by the owner)
 - `qa_ui/`, `tests/test_qa_ui_*.py` and `docs/qa-ui.md` (the local interface and the hub). The skills, adapters and scripts did not import
   them; the shared coverage lives in `tests/workspace_kit.py` and `tests/test_excel_recalc_flows.py`. The skills no longer mention the
