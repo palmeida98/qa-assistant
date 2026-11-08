@@ -73,6 +73,19 @@ def main_checkout(root: str = ROOT) -> str | None:
     return os.path.dirname(parent) if os.path.basename(parent) == ".git" else None
 
 
+def which_all(name: str, path: str | None) -> list[str]:
+    """EVERY executable called `name` on PATH, in order (shutil.which gives only the first, and the first may be a
+    Python without the dependencies that shadows a good one: a pre-commit hook puts its own environment first)."""
+    found = []
+    exts = [e for e in os.environ.get("PATHEXT", "").split(os.pathsep) if e] if os.name == "nt" else [""]
+    for folder in (path if path is not None else os.environ.get("PATH", "")).split(os.pathsep):
+        for ext in exts or [""]:
+            candidate = os.path.join(folder, name + ext) if folder else name + ext
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK) and candidate not in found:
+                found.append(candidate)
+    return found
+
+
 def candidates(environ=None, root: str = ROOT) -> list[tuple[str, list[str]]]:
     environ = os.environ if environ is None else environ
     out: list[tuple[str, list[str]]] = []
@@ -85,8 +98,7 @@ def candidates(environ=None, root: str = ROOT) -> list[tuple[str, list[str]]]:
         out.append((".venv of the main checkout (this is a worktree)", [venv_python(main)]))
     out.append(("the interpreter running this file", [sys.executable]))
     for name in ("python3.13", "python3.12", "python3", "python"):
-        path = shutil.which(name, path=environ.get("PATH"))
-        if path:
+        for path in which_all(name, environ.get("PATH")):
             out.append((f"{name} on PATH", [path]))
     if os.name == "nt" and shutil.which("py", path=environ.get("PATH")):
         out.append(("py -3 on PATH", [shutil.which("py", path=environ.get("PATH")), "-3"]))

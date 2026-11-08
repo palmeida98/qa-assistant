@@ -116,7 +116,7 @@ def preview_token(workspace: str, batch_path: str, proj: dict | None = None, lab
     parts += [("label", label if label else "<default: [date of the apply, batch]>"),
               ("reported_by", effective_reported_by(proj, reported_by)),
               ("recalc", bool(recalc)),
-              ("now", now.replace(microsecond=0).isoformat() if now else "<clock of the apply>")]
+              ("now", now.isoformat() if now else "<clock of the apply>")]
     return f"{TOKEN_VERSION}-" + hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
 
 
@@ -445,7 +445,10 @@ def print_dry_run(res: dict) -> None:
             print(" -", p)
     if not res.get("problems"):
         print(f"\nThe apply would exit with code {res['code']}. Values marked <at apply time> take the instant of the "
-              "real apply.")
+              "real apply (the date of the notes' label, the application time in the control sheet, the report date of "
+              "new defects, the date in the active view's summary): they are not part of the preview token, so this "
+              "preview can be applied later. To approve exact values, give the same --now to this dry run and to the "
+              "apply.")
     if res.get("token"):
         print(f"Preview token: {res['token']}  (apply with --expect {res['token']}: refused if anything changed since)")
 

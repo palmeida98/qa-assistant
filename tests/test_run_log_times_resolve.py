@@ -341,7 +341,7 @@ class ResolveQuestion(Base):
             (rl.UsageError, {"into": "20261105_01"}),                         # into itself
             (rl.UsageError, {"into": "../elsewhere"}),                        # a path out of the workspace
             (rl.UsageError, {"batch": "../elsewhere"}),
-            (rl.Refused, {"into": "other"}),                                  # the target already has the case
+            (rl.UsageError, {"into": "other"}),                                  # the target already has the case
         ]
         for exc, kw in cases:
             with self.assertRaises(exc, msg=kw):
@@ -372,7 +372,8 @@ class ResolveQuestion(Base):
                                           "revision_of": {"batch": "batch_ghost", "tc": "TC-SHOP-001"},
                                           "resolution": {"from_status": "Question", "reason": "r"}}])
         entry = self.audit()["batch_20261108_01"]
-        self.assertEqual(entry["dangling_revisions"], ["TC-SHOP-001"])
+        self.assertEqual(len(entry["invalid_revisions"]), 1)
+        self.assertIn("does not exist", entry["invalid_revisions"][0])
         self.assertTrue(entry["to_fix"])
 
     def test_the_cli_resolves_and_says_the_workbook_still_needs_its_approval(self):

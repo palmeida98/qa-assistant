@@ -81,6 +81,18 @@ class Find(unittest.TestCase):
         missing = self.find(QA_PYTHON=os.path.join(self.tmp.name, "absent"))
         self.assertEqual(missing["tried"][0][2], "not found")
 
+    def test_a_python_without_the_dependencies_first_on_path_does_not_shadow_a_good_one_later(self):
+        # a pre-commit hook puts its own environment first on the PATH: its `python3.12` has no PyYAML
+        hook_env = os.path.join(self.tmp.name, "hook-env", "bin")
+        activated = os.path.join(self.tmp.name, "activated", "bin")
+        fake(os.path.join(hook_env, "python3.12"), ok=False)
+        fake(os.path.join(hook_env, "python"), ok=False)
+        good = fake(os.path.join(activated, "python3.12"))
+        found = qp.find({"PATH": os.pathsep.join([hook_env, activated])}, self.root)
+        self.assertEqual(found["command"], [good])
+        self.assertEqual(qp.which_all("python3.12", os.pathsep.join([hook_env, activated])),
+                         [os.path.join(hook_env, "python3.12"), good])
+
     def test_a_worktree_uses_the_main_checkouts_venv_without_touching_it(self):
         main = os.path.join(self.tmp.name, "main")
         os.makedirs(os.path.join(main, ".git", "worktrees", "wt"))
@@ -135,6 +147,19 @@ class Launcher(unittest.TestCase):
         self.assertEqual(done.returncode, 3)
         self.assertIn("QA_PYTHON", done.stderr)
         self.assertIn("-m venv", done.stderr)
+
+    def test_the_hook_entries_work_in_a_shell_with_no_python_on_the_path_and_nothing_activated(self):
+        # what pre-commit runs for the golden and unit-test hooks: `python scripts/qa_python.py run <args>`; here with
+        # an empty PATH, no QA_PYTHON, no VIRTUAL_ENV, a fresh HOME and a different working directory
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as empty:
+            env = {"PATH": empty, "HOME": home, "USERPROFILE": home}
+            done = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "qa_python.py"), "run", "-c",
+                                   "import yaml, openpyxl; print('hook ok')"],
+                                  capture_output=True, text=True, cwd=empty, env=env, timeout=120, check=False)
+        # the checkout's .venv, or the interpreter running this test, or a clear exit 3 with what to do: never a bare
+        # "Executable python not found". The test's own interpreter has the dependencies, so it must succeed.
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("hook ok", done.stdout)
 
     def test_a_usage_error_is_exit_4(self):
         self.assertEqual(self.run_launcher("nonsense").returncode, 4)

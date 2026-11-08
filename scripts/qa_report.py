@@ -157,19 +157,60 @@ def revision_target(batch: dict, result: dict):
     return None
 
 
-def _exists(batches: list[dict], name: str, case: str) -> bool:
-    return any(b["name"] == name and any(str(r.get("tc")) == case for r in b["results"]) for b in batches)
+def _item(batches: list[dict], name: str, case: str):
+    for b in batches:
+        if b["name"] == name:
+            for r in b["results"]:
+                if str(r.get("tc")) == case:
+                    return b, r
+    return None, None
 
 
-def superseded_results(batches: list[dict]) -> dict[tuple[str, str], str]:
-    """The (batch, case) results that a later revision of the SAME observation took the place of (a Question and its
-    resolution in another batch): they stay in the history but are not a retest nor an older execution."""
-    found = {}
+def revision_links(batches: list[dict], proj: dict) -> tuple[dict, set, dict]:
+    """Checks every resolution of a Question that points to another batch ("revision_of": {"batch", "tc"} with a
+    "resolution"). Returns (superseded, valid, problems):
+    - superseded {(batch, case): resolver batch}: the Questions a VALID resolution took the place of: they stay in the
+      history but are neither a retest nor an older execution;
+    - valid: the (batch, case) of the resolutions that passed every check;
+    - problems {(batch, case): why}: a link that does not hold is shown by the audit and changes NOTHING in the totals
+      (it hides no result and gets no advantage in a tie).
+    A link holds when its target exists, is a Question of the same case on the same platform, is not itself a resolution
+    or revision, is in another batch, and no other resolution claims the same target."""
+    claims: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
+    problems: dict[tuple[str, str], str] = {}
     for b in batches:
         for r in b["results"]:
-            if isinstance(r.get("resolution"), dict) and (target := revision_target(b, r)):
-                found[target] = b["name"]
-    return found
+            if not isinstance(r.get("resolution"), dict) or not (target := revision_target(b, r)):
+                continue
+            key, case = (b["name"], str(r["tc"])), str(r["tc"])
+            link = r.get("revision_of")
+            tb, tr = _item(batches, *target)
+            if isinstance(link, dict) and str(link.get("tc") or case) != case:
+                why = f"revision_of names another case ({link.get('tc')})"
+            elif target[0] == b["name"]:
+                why = "revision_of points to its own batch"
+            elif tr is None:
+                why = f"revision_of points to a result that does not exist ({target[0]}/{target[1]})"
+            elif not is_question(tr.get("status")):
+                why = f"the result it resolves is {tr.get('status')!r}, not a Question ({target[0]})"
+            elif isinstance(tr.get("resolution"), dict) or tr.get("revision_of"):
+                why = f"the result it resolves is itself a resolution or revision ({target[0]})"
+            elif platform_of(tb, proj) != platform_of(b, proj):
+                why = (f"it is read as {platform_of(b, proj)} and the Question of {target[0]} as "
+                       f"{platform_of(tb, proj)}: the batch name must match report.platforms")
+            else:
+                claims[(target[0], target[1])].append(key)
+                continue
+            problems[key] = why
+    superseded, valid = {}, set()
+    for target, keys in claims.items():
+        if len(keys) == 1:
+            superseded[target] = keys[0][0]
+            valid.add(keys[0])
+        else:
+            for key in keys:
+                problems[key] = f"{target[1]} of {target[0]} is resolved more than once ({', '.join(k[0] for k in keys)})"
+    return superseded, valid, problems
 
 
 def _executions(runs: list[dict]) -> list[dict]:
@@ -214,7 +255,7 @@ def totals(workspace: str, proj: dict, batches: list[dict], platform: str | None
                                                         "applied": b["applied"], "applied_at": b["applied_at"]})
                 continue
             per_platform[p].append((ts_key(r.get("ts")), b, r))
-    superseded = superseded_results(batches)
+    superseded, valid_links, _ = revision_links(load_batches(workspace, proj), proj)
     report = {"platforms": {}, "rule": "the newest result per case and platform is current (by ts; on the same "
               "instant, a result that declares revision_of the other wins, then the batch applied later; a tie with "
               "nothing to decide it is listed as ambiguous); the older ones are historical; platforms are never "
@@ -222,7 +263,10 @@ def totals(workspace: str, proj: dict, batches: list[dict], platform: str | None
     for p, items in sorted(per_platform.items()):
         # never the file's modification time: touching a file changed which result was current (audit 06.11.2026)
         def revises(b, r):
-            return 1 if (r.get("revision_of") or (b.get("run") or {}).get("revision_of")) else 0
+            link = r.get("revision_of") or (b.get("run") or {}).get("revision_of")
+            if isinstance(r.get("resolution"), dict) and isinstance(link, dict):
+                return 1 if (b["name"], str(r["tc"])) in valid_links else 0     # a link that does not hold wins nothing
+            return 1 if link else 0
         items.sort(key=lambda x: (x[0], revises(x[1], x[2]), str(x[1].get("applied_at") or ""), x[1]["name"]))
         by_case: dict[str, list] = defaultdict(list)
         for ts, b, r in items:
@@ -404,7 +448,7 @@ def _applied_view(workspace: str, proj: dict):
 
 def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
     view = _applied_view(workspace, proj)
-    superseded = superseded_results(batches)
+    superseded, _, bad_links = revision_links(load_batches(workspace, proj), proj)   # all of them, not a filter
     out = {"batches": [], "problems": 0}
     for b in batches:
         counts = Counter(str(r["tc"]) for r in b["results"])
@@ -415,8 +459,8 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
                           and not revision_target(b, r))
         resolved += sorted(f"{r['tc']} (in {superseded[(b['name'], str(r['tc']))]})" for r in b["results"]
                            if (b["name"], str(r["tc"])) in superseded)
-        dangling = sorted(str(r["tc"]) for r in b["results"] if (t := revision_target(b, r))
-                          and not _exists(batches, *t))
+        dangling = sorted(f"{r['tc']}: {bad_links[(b['name'], str(r['tc']))]}" for r in b["results"]
+                          if (b["name"], str(r["tc"])) in bad_links)
         without_ts = sorted(str(r["tc"]) for r in b["results"] if not r.get("ts") and not applies_of(b, r))
         proposed = sorted(str(r["tc"]) for r in b["results"]
                           if isinstance(r.get("new_defect"), dict) and r["new_defect"].get("proposed"))
@@ -437,7 +481,7 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
                  "results": len(b["results"]), "applied": applied if applied else "no",
                  "questions": questions, "repeated": repeated, "missing_evidence": missing,
                  "without_evidence": without, "proposed_bugs": proposed, "without_ts": without_ts,
-                 "resolved": resolved, "dangling_revisions": dangling, "bugs_without_priority": no_priority}
+                 "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority}
         settled = bool(applied) and not is_unknown(applied)     # unknown is not applied (audit 06.11.2026)
         entry["to_fix"] = bool(repeated or missing or dangling or ((questions or proposed or no_priority) and not settled))
         out["problems"] += int(entry["to_fix"])
@@ -453,8 +497,8 @@ def render_audit(report: dict) -> str:
             flags.append(f"Question open: {', '.join(e['questions'])}")
         if e.get("resolved"):
             flags.append(f"Question resolved (decision recorded, observation kept): {', '.join(e['resolved'])}")
-        if e.get("dangling_revisions"):
-            flags.append(f"revision_of points to a result that does not exist: {', '.join(e['dangling_revisions'])}")
+        if e.get("invalid_revisions"):
+            flags.append(f"resolution that does not hold (it changes no total): {'; '.join(e['invalid_revisions'])}")
         if e["repeated"]:
             flags.append(f"case repeated: {', '.join(e['repeated'])}")
         if e["missing_evidence"]:

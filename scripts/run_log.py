@@ -558,6 +558,25 @@ def _revisions_of(workspace: str, name: str, case: str) -> list[str]:
     return found
 
 
+def _same_place(proj: dict, name: str, run, target: str, target_run: dict) -> None:
+    """The decision must be read where the Question was: the same platform (the reports take it from the run block or
+    from the batch name, `report.platforms`) and, with Excel, the same workbook. Otherwise a resolution of an iOS Question
+    could be counted on Android or applied to the other workbook."""
+    from qa_report import platform_of
+    here = platform_of({"name": name, "run": run if isinstance(run, dict) else {}}, proj)
+    there = platform_of({"name": target, "run": target_run}, proj)
+    if here != there:
+        raise UsageError(f"--into {target} would be read as platform {there!r}, but the Question is {here!r}: name the "
+                         f"batch so that report.platforms gives {here!r} (e.g. keep the prefix of {name})")
+    if proj.get("tracker") == "excel":
+        from adapters.excel.base import route_workbook
+        a = route_workbook(proj, name, run if isinstance(run, dict) else None, environ={})
+        b = route_workbook(proj, target, target_run or None, environ={})
+        if a.problem or b.problem or a.file != b.file:
+            raise UsageError(f"--into {target} would go to the workbook {b.file or b.problem!r}, but the Question's batch "
+                             f"goes to {a.file or a.problem!r}: name it so that both route to the same workbook")
+
+
 def resolve(workspace: str, batch: str, case: str, status: str, reason: str, decided_by: str,
             decision_source: str | None = None, into: str | None = None,
             now: datetime | None = None) -> tuple[str, str, dict, dict]:
@@ -616,6 +635,9 @@ def resolve(workspace: str, batch: str, case: str, status: str, reason: str, dec
                           "decided_by": decided_by, "decided_at": stamp}
             if decision_source:
                 resolution["source"] = decision_source
+            if target and not where:
+                raise UsageError(f"{name} is not applied: its Question is resolved in place (leave out --into). --into "
+                                 "is for a batch already applied, which is never touched")
             if not target:
                 item = {**before, "status": status, "resolution": resolution}
                 doc["results"][at] = item
@@ -629,6 +651,7 @@ def resolve(workspace: str, batch: str, case: str, status: str, reason: str, dec
             if any(isinstance(x, dict) and str(x.get("tc") or "").strip() == case.strip() for x in new["results"]):
                 raise Refused(f"{target} already has a result for {case.strip()}: one item per case in a batch")
             source_run = {k: v for k, v in (doc.get("run") or {}).items() if k in ("environment", "build", "platform")}
+            _same_place(proj, name, doc.get("run"), target, source_run)
             _same_context(new, source_run.get("environment"), source_run.get("build"))
             item = {k: before[k] for k in ("tc", "actual_result", "ts", "ts_unknown", "evidence", "executed_source")
                     if before.get(k) not in (None, "", [])}

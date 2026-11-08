@@ -27,7 +27,11 @@ repos:
     hooks:
       # language python (not system): the script uses only the standard library, and a machine where `python` is
       # not on the PATH (a Mac with python3 only) must not lose this guard -- or be tempted to skip the hook.
-      # The golden and the tests below need the framework's dependencies, so they stay `system` (an active venv).
+      # The golden and the tests below need the framework's dependencies, which the hook's own environment does not
+      # have: they are `language: python` too (so `python` exists, from the hook's environment) and call
+      # scripts/qa_python.py (standard library only), which finds the interpreter that has them: $QA_PYTHON, the
+      # checkout's .venv, the active environment on PATH... or stops with the commands that create one. No activation
+      # and no `python` on the PATH are needed; nothing is installed.
       # `git config --global qa-assistant.denylistRequired true` makes a missing list a failure (check_denylist.py)
       - id: denylist
         name: client names
@@ -50,8 +54,8 @@ repos:
       # Without LibreOffice it exits with 2 and blocks the commit -- install it, never --no-verify.
       - id: golden
         name: Excel adapter golden
-        entry: python scripts/golden_check.py
-        language: system
+        entry: python scripts/qa_python.py run scripts/golden_check.py
+        language: python
         pass_filenames: false
         files: ^(adapters/|tests/golden/|docs/technique-excel\.md$|scripts/golden_check\.py$|scripts/migrate_workspace\.py$)
 
@@ -61,7 +65,7 @@ repos:
       # LICENSE: tests/unit/test_engine_guards.py); the documents (test_language)
       - id: tests
         name: unit tests
-        entry: python -m unittest discover -s tests
-        language: system
+        entry: python scripts/qa_python.py run -m unittest discover -s tests
+        language: python
         pass_filenames: false
         files: ^(adapters/|scripts/|src/|tests/|examples/|integrations/|docs/|\.claude/skills/|CLAUDE\.md$|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|\.github/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)
