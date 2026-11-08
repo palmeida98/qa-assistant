@@ -51,7 +51,9 @@ from common import (
     BUILD_PARTS,
     OutsideWorkspace,
     atomic_write,
+    defect_priority_problem,
     read_project,
+    ts_key,
     workspace_path,
 )
 
@@ -88,7 +90,7 @@ def load_batches(workspace: str, proj: dict, names: list[str] | None = None, sin
             continue
         results = [r for r in doc["results"] if isinstance(r, dict) and r.get("tc")]
         if since:
-            results = [r for r in results if str(r.get("ts") or "") >= since]
+            results = [r for r in results if ts_key(r.get("ts")) >= since]
             if not results:
                 continue
         out.append({"name": name, "path": path, "written": os.path.getmtime(path),
@@ -145,6 +147,78 @@ def is_unknown(applied) -> bool:
     return isinstance(applied, str) and applied.startswith(UNKNOWN)
 
 
+def revision_target(batch: dict, result: dict):
+    """(batch, case) a result revises ("revision_of": {"batch", "tc"}, or the older plain batch name), or None."""
+    link = result.get("revision_of") or (batch.get("run") or {}).get("revision_of")
+    if isinstance(link, dict) and link.get("batch"):
+        return str(link["batch"]), str(link.get("tc") or result.get("tc"))
+    if isinstance(link, str) and link.strip():
+        return link.strip(), str(result.get("tc"))
+    return None
+
+
+def _item(batches: list[dict], name: str, case: str):
+    for b in batches:
+        if b["name"] == name:
+            for r in b["results"]:
+                if str(r.get("tc")) == case:
+                    return b, r
+    return None, None
+
+
+def revision_links(batches: list[dict], proj: dict) -> tuple[dict, set, dict]:
+    """Checks every resolution of a Question that points to another batch ("revision_of": {"batch", "tc"} with a
+    "resolution"). Returns (superseded, valid, problems):
+    - superseded {(batch, case): resolver batch}: the Questions a VALID resolution took the place of: they stay in the
+      history but are neither a retest nor an older execution;
+    - valid: the (batch, case) of the resolutions that passed every check;
+    - problems {(batch, case): why}: a link that does not hold is shown by the audit and changes NOTHING in the totals
+      (it hides no result and gets no advantage in a tie).
+    A link holds when its target exists, is a Question of the same case on the same platform, is not itself a resolution
+    or revision, is in another batch, and no other resolution claims the same target."""
+    claims: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
+    problems: dict[tuple[str, str], str] = {}
+    for b in batches:
+        for r in b["results"]:
+            if not isinstance(r.get("resolution"), dict) or not (target := revision_target(b, r)):
+                continue
+            key, case = (b["name"], str(r["tc"])), str(r["tc"])
+            link = r.get("revision_of")
+            tb, tr = _item(batches, *target)
+            if isinstance(link, dict) and str(link.get("tc") or case) != case:
+                why = f"revision_of names another case ({link.get('tc')})"
+            elif target[0] == b["name"]:
+                why = "revision_of points to its own batch"
+            elif tr is None:
+                why = f"revision_of points to a result that does not exist ({target[0]}/{target[1]})"
+            elif not is_question(tr.get("status")):
+                why = f"the result it resolves is {tr.get('status')!r}, not a Question ({target[0]})"
+            elif isinstance(tr.get("resolution"), dict) or tr.get("revision_of"):
+                why = f"the result it resolves is itself a resolution or revision ({target[0]})"
+            elif platform_of(tb, proj) != platform_of(b, proj):
+                why = (f"it is read as {platform_of(b, proj)} and the Question of {target[0]} as "
+                       f"{platform_of(tb, proj)}: the batch name must match report.platforms")
+            else:
+                claims[(target[0], target[1])].append(key)
+                continue
+            problems[key] = why
+    superseded, valid = {}, set()
+    for target, keys in claims.items():
+        if len(keys) == 1:
+            superseded[target] = keys[0][0]
+            valid.add(keys[0])
+        else:
+            for key in keys:
+                problems[key] = f"{target[1]} of {target[0]} is resolved more than once ({', '.join(k[0] for k in keys)})"
+    return superseded, valid, problems
+
+
+def _executions(runs: list[dict]) -> list[dict]:
+    """The runs of a case that are executions of their own: a result superseded by its revision is the same
+    observation, counted once (by the revision)."""
+    return [r for r in runs if not r.get("superseded")]
+
+
 def planned_cases(workspace: str, plans: list[str]) -> list[str]:
     import yaml
     cases = []
@@ -180,7 +254,8 @@ def totals(workspace: str, proj: dict, batches: list[dict], platform: str | None
                 applications[(p, str(r["tc"]))].append({"source": link, "batch": b["name"], "status": r.get("status"),
                                                         "applied": b["applied"], "applied_at": b["applied_at"]})
                 continue
-            per_platform[p].append((str(r.get("ts") or ""), b, r))
+            per_platform[p].append((ts_key(r.get("ts")), b, r))
+    superseded, valid_links, _ = revision_links(load_batches(workspace, proj), proj)
     report = {"platforms": {}, "rule": "the newest result per case and platform is current (by ts; on the same "
               "instant, a result that declares revision_of the other wins, then the batch applied later; a tie with "
               "nothing to decide it is listed as ambiguous); the older ones are historical; platforms are never "
@@ -188,11 +263,16 @@ def totals(workspace: str, proj: dict, batches: list[dict], platform: str | None
     for p, items in sorted(per_platform.items()):
         # never the file's modification time: touching a file changed which result was current (audit 06.11.2026)
         def revises(b, r):
-            return 1 if (r.get("revision_of") or (b.get("run") or {}).get("revision_of")) else 0
+            link = r.get("revision_of") or (b.get("run") or {}).get("revision_of")
+            if isinstance(r.get("resolution"), dict) and isinstance(link, dict):
+                return 1 if (b["name"], str(r["tc"])) in valid_links else 0     # a link that does not hold wins nothing
+            return 1 if link else 0
         items.sort(key=lambda x: (x[0], revises(x[1], x[2]), str(x[1].get("applied_at") or ""), x[1]["name"]))
         by_case: dict[str, list] = defaultdict(list)
         for ts, b, r in items:
-            by_case[str(r["tc"])].append({"batch": b["name"], "build": build_of(b), "status": r.get("status"), "ts": ts,
+            by_case[str(r["tc"])].append({"batch": b["name"], "build": build_of(b), "status": r.get("status"),
+                                          "ts": str(r.get("ts") or ""),
+                                          "superseded": (b["name"], str(r["tc"])) in superseded,
                                           "applied": b.get("applied", "no"), "_order": (ts, revises(b, r),
                                                                                        str(b.get("applied_at") or ""))})
         ambiguous = sorted(case for case, runs in by_case.items()
@@ -231,8 +311,10 @@ def totals(workspace: str, proj: dict, batches: list[dict], platform: str | None
             "statuses": dict(sorted(status_total.items())),
             "by_build": {build: {"cases": sum(c.values()), "statuses": dict(sorted(c.items()))}
                          for build, c in sorted(by_build.items())},
-            "retests": {case: runs for case, runs in sorted(by_case.items()) if len(runs) > 1},
-            "historical_results": sum(len(r) - 1 for r in by_case.values()),
+            "retests": {case: runs for case, runs in sorted(by_case.items()) if len(_executions(runs)) > 1},
+            "historical_results": sum(max(len(_executions(r)) - 1, 0) for r in by_case.values()),
+            "resolved_questions": {case: [r["batch"] for r in runs if r["superseded"]]
+                                   for case, runs in sorted(by_case.items()) if any(r["superseded"] for r in runs)},
             "batches": sorted({b["name"] for _, b, _ in items}),
             "current_applied": sum(1 for c in current.values() if c["applied"] == "yes"),
             "current_not_applied": sorted(c for c, v in current.items() if v["applied"] == "no"),
@@ -366,14 +448,24 @@ def _applied_view(workspace: str, proj: dict):
 
 def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
     view = _applied_view(workspace, proj)
+    superseded, _, bad_links = revision_links(load_batches(workspace, proj), proj)   # all of them, not a filter
     out = {"batches": [], "problems": 0}
     for b in batches:
         counts = Counter(str(r["tc"]) for r in b["results"])
         repeated = sorted(c for c, n in counts.items() if n > 1)
-        questions = sorted(str(r["tc"]) for r in b["results"] if is_question(r.get("status")))
+        questions = sorted(str(r["tc"]) for r in b["results"] if is_question(r.get("status"))
+                           and (b["name"], str(r["tc"])) not in superseded)
+        resolved = sorted(str(r["tc"]) for r in b["results"] if isinstance(r.get("resolution"), dict)
+                          and not revision_target(b, r))
+        resolved += sorted(f"{r['tc']} (in {superseded[(b['name'], str(r['tc']))]})" for r in b["results"]
+                           if (b["name"], str(r["tc"])) in superseded)
+        dangling = sorted(f"{r['tc']}: {bad_links[(b['name'], str(r['tc']))]}" for r in b["results"]
+                          if (b["name"], str(r["tc"])) in bad_links)
         without_ts = sorted(str(r["tc"]) for r in b["results"] if not r.get("ts") and not applies_of(b, r))
         proposed = sorted(str(r["tc"]) for r in b["results"]
                           if isinstance(r.get("new_defect"), dict) and r["new_defect"].get("proposed"))
+        no_priority = sorted(str(r["tc"]) for r in b["results"] if isinstance(r.get("new_defect"), dict)
+                             and defect_priority_problem(proj, r["new_defect"]))
         missing, without = [], []
         for r in b["results"]:
             ev = _evidence(r)
@@ -388,9 +480,10 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
         entry = {"batch": b["name"], "platform": platform_of(b, proj), "build": build_of(b), "mode": b.get("mode"),
                  "results": len(b["results"]), "applied": applied if applied else "no",
                  "questions": questions, "repeated": repeated, "missing_evidence": missing,
-                 "without_evidence": without, "proposed_bugs": proposed, "without_ts": without_ts}
+                 "without_evidence": without, "proposed_bugs": proposed, "without_ts": without_ts,
+                 "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority}
         settled = bool(applied) and not is_unknown(applied)     # unknown is not applied (audit 06.11.2026)
-        entry["to_fix"] = bool(repeated or missing or ((questions or proposed) and not settled))
+        entry["to_fix"] = bool(repeated or missing or dangling or ((questions or proposed or no_priority) and not settled))
         out["problems"] += int(entry["to_fix"])
         out["batches"].append(entry)
     return out
@@ -402,10 +495,17 @@ def render_audit(report: dict) -> str:
         flags = []
         if e["questions"]:
             flags.append(f"Question open: {', '.join(e['questions'])}")
+        if e.get("resolved"):
+            flags.append(f"Question resolved (decision recorded, observation kept): {', '.join(e['resolved'])}")
+        if e.get("invalid_revisions"):
+            flags.append(f"resolution that does not hold (it changes no total): {'; '.join(e['invalid_revisions'])}")
         if e["repeated"]:
             flags.append(f"case repeated: {', '.join(e['repeated'])}")
         if e["missing_evidence"]:
             flags.append(f"evidence named but missing: {'; '.join(e['missing_evidence'])}")
+        if e.get("bugs_without_priority"):
+            flags.append("bug(s) waiting for the user's priority decision (the project requires one): "
+                         + ", ".join(e["bugs_without_priority"]))
         if e["proposed_bugs"]:
             flags.append(f"bugs proposed, to review: {', '.join(e['proposed_bugs'])}")
         if e["build"] == UNKNOWN:

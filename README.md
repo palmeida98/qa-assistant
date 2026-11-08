@@ -122,6 +122,8 @@ python scripts/sync_skills.py --apply                  # copies the eight skills
 python scripts/workspace_select.py where               # which framework, Python, imports, skill copy and commit guards run
 ```
 
+No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (standard library only) prints the interpreter that can run the framework, or the commands that create a `.venv` for it; `python3 scripts/qa_python.py run scripts/qa_report.py <workspace> audit` runs a command with it from any directory.
+
 `sync_skills.py` without `--apply` is a dry run, and `--target <folder>` installs somewhere else (used by the tests). Skills
 of other origins are kept. A new Claude Code session is needed to load changed skills. Workspaces use the global copy, so
 sync from the main checkout once the change is integrated.

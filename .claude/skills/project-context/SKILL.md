@@ -13,7 +13,7 @@ metadata:
   failures: "Ambiguous project: one short question with the candidates. A record that cannot be read: said, the rest goes on. A tool not checked now is 'configured, not verified'."
   resume: "context.md is the resume summary; archive/context/, runs/ and analysis/ are opened only for the detail a point needs."
   requires-project: "any"
-  requires-scripts: "scripts/workspace_select.py, scripts/validate_project.py, scripts/qa_report.py, scripts/workspace_git.py"
+  requires-scripts: "scripts/workspace_select.py, scripts/validate_project.py, scripts/qa_report.py, scripts/workspace_git.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/onboarding.md, technique-workspaces.md, methodology.md"
   requires-tools: "git, python, .env, skills"
 ---
@@ -23,7 +23,7 @@ metadata:
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
    python <qa>/scripts/workspace_select.py preflight --skill project-context [<project id or name>] [--workspace <path>]
    Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and

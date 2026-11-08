@@ -15,8 +15,11 @@ The configuration comes from the `excel:` section of the workspace's project.yam
 The dry run (technique-excel.md section 1.1) routes, validates and transforms exactly as the apply, on a copy of the
 target workbook in a temporary folder, then lists every cell that would change (before -> after), the counts per
 status, the new defects, the row of the control sheet and the problems. Values that only hold the instant of the
-application are marked "at apply time". It ends with a preview token (batch, project.yaml and workbooks): a later
-`--expect <token>` refuses to apply when any of them changed since.
+application are marked "at apply time". It ends with a preview token `v2-...` (batch, project.yaml, workbooks and the options that change what is written:
+--label, --reported-by or the configured reporter, --no-recalc, --now): a later `--expect <token>` refuses to apply,
+before writing, when any of them changed since. The real clock is not in the token: the cells that take the instant
+of the apply are marked "at apply time" in the dry run. A token from before this rule (without `v2-`) is refused:
+repeat the dry run.
 
 Exit codes:
   0  applied and saved (or batch already applied before: nothing changes)
@@ -45,6 +48,7 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 from .base import (
+    REPORTED_BY_DEFAULT,
     ConfigError,
     ExcelAdapter,
     InvalidBatch,
@@ -85,14 +89,35 @@ def _sha(path: str) -> str:
     return h.hexdigest()
 
 
-def preview_token(workspace: str, batch_path: str, proj: dict | None = None) -> str:
-    """What a dry run saw: the batch file, project.yaml and every declared workbook (the target and the ones checked
-    for "applied elsewhere"). Any change to one of them gives another token."""
+TOKEN_VERSION = "v2"
+
+
+def effective_reported_by(proj: dict, reported_by: str | None) -> str:
+    """The reporter the apply writes in new defects: the option, else `excel.defects.reported_by`, else the default."""
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    defects = excel.get("defects") if isinstance(excel.get("defects"), dict) else {}
+    return str(reported_by or defects.get("reported_by") or REPORTED_BY_DEFAULT)
+
+
+def preview_token(workspace: str, batch_path: str, proj: dict | None = None, label: str | None = None,
+                  reported_by: str | None = None, recalc: bool = True, now: datetime | None = None) -> str:
+    """What a dry run saw, as `v2-<hash>`: the batch file, project.yaml and every declared workbook (the target and the
+    ones checked for "applied elsewhere"), plus what the options change in the cells written: the label (as given; the
+    default label is a marker, its date is the apply's own), the reporter actually written (option or configured
+    default), whether the workbook is recalculated, and a fixed date (`--now`). The real clock is NOT part of it: the
+    seconds that pass never invalidate a preview; the cells that take the instant of the apply are the ones the dry run
+    marks "at apply time". Any other change gives another token. A token without the `v2-` prefix is from before this
+    rule and covered less: it is refused and the dry run is repeated."""
     proj = _project(workspace) if proj is None else proj
-    parts = [("batch", _sha(batch_path)), ("project.yaml", _sha(os.path.join(workspace, "project.yaml")))]
+    parts = [("batch", os.path.splitext(os.path.basename(batch_path))[0]), ("batch content", _sha(batch_path)),
+             ("project.yaml", _sha(os.path.join(workspace, "project.yaml")))]
     for file in sorted(set(workbook_files(proj))):
         parts.append((file, _sha(os.path.join(workspace, file))))
-    return hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
+    parts += [("label", label if label else "<default: [date of the apply, batch]>"),
+              ("reported_by", effective_reported_by(proj, reported_by)),
+              ("recalc", bool(recalc)),
+              ("now", now.isoformat() if now else "<clock of the apply>")]
+    return f"{TOKEN_VERSION}-" + hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
 
 
 def apply(workspace: str, batch_path: str, label: str | None = None,
@@ -110,11 +135,15 @@ def apply(workspace: str, batch_path: str, label: str | None = None,
         # one writer at a time: two applies at once corrupted the workbook (audit 06.11.2026)
         with workspace_lock(workspace):
             if expect is not None:
-                current = preview_token(workspace, batch_path, proj)
+                if not str(expect).startswith(TOKEN_VERSION + "-"):
+                    raise ConfigError(f"the preview {expect} is from before the token covered --label, --reported-by, "
+                                      "--now and --no-recalc: it cannot authorise this apply. Run --dry-run again and "
+                                      "review it. Nothing was written.")
+                current = preview_token(workspace, batch_path, proj, label, reported_by, recalc, now)
                 if current != expect:
-                    raise ConfigError(f"the preview {expect} is out of date (now {current}): the batch, project.yaml or "
-                                      "a workbook changed since the dry run. Run --dry-run again and review it. "
-                                      "Nothing was written.")
+                    raise ConfigError(f"the preview {expect} is out of date (now {current}): the batch, project.yaml, "
+                                      "a workbook or an option (--label, --reported-by, --now, --no-recalc) changed "
+                                      "since the dry run. Run --dry-run again and review it. Nothing was written.")
             elsewhere = _applied_elsewhere(workspace, proj, batch_id, route.file)
             if elsewhere:
                 raise ConfigError(f"{batch_id} was already applied to {elsewhere}, not to {route.file} where it "
@@ -288,6 +317,7 @@ def dry_run(workspace: str, batch_path: str, label: str | None = None, reported_
     written; the temporary folder goes away even on error."""
     batch_path = _resolve(workspace, batch_path)
     batch_id = os.path.splitext(os.path.basename(batch_path))[0]
+    fixed_now = now             # only an explicit --now enters the token; the clock does not
     now = now or datetime.now().replace(microsecond=0)
     res = {"batch": batch_id, "dry_run": True, "problems": [], "cells": [], "code": 4, "now": now.isoformat()}
     proj = _project(workspace)
@@ -306,7 +336,10 @@ def dry_run(workspace: str, batch_path: str, label: str | None = None, reported_
     try:
         try:
             with workspace_lock(workspace):         # a consistent snapshot: no apply writes while we copy
-                res["token"] = preview_token(workspace, batch_path, proj)
+                res["token"] = preview_token(workspace, batch_path, proj, label, reported_by, recalc, fixed_now)
+                res["options"] = {"label": label or "<default: [date of the apply, batch]>",
+                                  "reported_by": effective_reported_by(proj, reported_by), "recalc": bool(recalc),
+                                  "now": fixed_now.isoformat() if fixed_now else "<clock of the apply>"}
                 elsewhere = _applied_elsewhere(workspace, proj, batch_id, route.file)
                 if elsewhere:
                     res["problems"].append(f"{batch_id} was already applied to {elsewhere}, not to {route.file} "
@@ -374,6 +407,10 @@ def print_dry_run(res: dict) -> None:
     print(f"DRY RUN of {res['batch']} -- nothing is written.")
     if res.get("workbook"):
         print(f"Target: {res['workbook']} (platform: {res.get('platform') or 'not declared'}; from {res.get('source')})")
+    if res.get("options"):
+        o = res["options"]
+        print(f"Options covered by the token: label {o['label']!r}, reported by {o['reported_by']!r}, recalculation "
+              f"{'on' if o['recalc'] else 'off'}, date {o['now']}")
     if res.get("problems"):
         print("\nProblems that stop the apply:")
         for p in res["problems"]:
@@ -408,7 +445,10 @@ def print_dry_run(res: dict) -> None:
             print(" -", p)
     if not res.get("problems"):
         print(f"\nThe apply would exit with code {res['code']}. Values marked <at apply time> take the instant of the "
-              "real apply.")
+              "real apply (the date of the notes' label, the application time in the control sheet, the report date of "
+              "new defects, the date in the active view's summary): they are not part of the preview token, so this "
+              "preview can be applied later. To approve exact values, give the same --now to this dry run and to the "
+              "apply.")
     if res.get("token"):
         print(f"Preview token: {res['token']}  (apply with --expect {res['token']}: refused if anything changed since)")
 

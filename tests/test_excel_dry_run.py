@@ -237,23 +237,125 @@ class DryRun(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(doc, f)
         before = self.digests()
-        rc, out = self.cli(path, "--no-recalc", "--expect", token)
+        rc, out = self.cli(path, "--no-recalc", "--now", NOW.isoformat(), "--expect", token)
         self.assertEqual(rc, 4)
         self.assertIn("out of date", out)
         self.assertEqual(self.digests(), before)
         token = self.dry(path)["token"]
-        rc, _ = self.cli(path, "--no-recalc", "--expect", token)
+        rc, _ = self.cli(path, "--no-recalc", "--now", NOW.isoformat(), "--expect", token)
         self.assertEqual(rc, 0)
 
     def test_a_change_to_the_workbook_or_the_configuration_makes_the_preview_stale(self):
         path = self.batch("batch_ios_09")
         token = self.dry(path)["token"]
         self.cli(self.batch("batch_20261107_10"), "--no-recalc")        # another batch changes the other workbook
-        self.assertNotEqual(ap.preview_token(self.ws, path), token)
-        token = ap.preview_token(self.ws, path)
+        self.assertNotEqual(ap.preview_token(self.ws, path, now=NOW, recalc=False), token)
+        token = ap.preview_token(self.ws, path, now=NOW, recalc=False)
         self.proj["environments"]["test"] = "https://shop.demo/other"
         self.write_project()
-        self.assertNotEqual(ap.preview_token(self.ws, path), token)
+        self.assertNotEqual(ap.preview_token(self.ws, path, now=NOW, recalc=False), token)
+
+    # ------------------------------------------------------------------ the options are part of the approval (A-02)
+
+    def token(self, path, **kw):
+        kw.setdefault("recalc", False)
+        return ap.preview_token(self.ws, path, **kw)
+
+    def test_every_option_that_changes_what_is_written_changes_the_token(self):
+        path = self.batch("batch_20261107_12")
+        base = self.token(path)
+        self.assertTrue(base.startswith("v2-"))
+        for kw in ({"label": "[other]"}, {"reported_by": "Someone else"}, {"now": NOW}, {"recalc": True}):
+            self.assertNotEqual(self.token(path, **kw), base, kw)
+        self.assertNotEqual(self.token(path, now=NOW), self.token(path, now=datetime(2026, 11, 8, 10, 30, 0)))
+
+    def test_the_default_reporter_is_the_effective_value_not_the_absence_of_the_option(self):
+        path = self.batch("batch_20261107_13")
+        configured = self.proj["excel"]["defects"].get("reported_by")
+        self.assertEqual(self.token(path), self.token(path, reported_by=configured or "Automated QA"))
+
+    def test_the_passing_of_time_does_not_invalidate_a_preview(self):
+        path = self.batch("batch_20261107_14")
+        first = self.token(path)
+        with mock.patch.object(ap, "datetime") as clock:
+            clock.now.return_value = datetime(2030, 1, 1)
+            self.assertEqual(self.token(path), first)
+        self.assertEqual(self.dry(path)["token"], self.dry(path)["token"])
+
+    def test_an_apply_with_another_option_than_the_preview_is_refused_before_any_write(self):
+        path = self.batch("batch_20261107_15")
+        res = ap.dry_run(self.ws, path, label="[approved]", reported_by="Reviewer", recalc=False, now=NOW)
+        self.assertEqual(res["options"]["reported_by"], "Reviewer")
+        before = self.digests()
+        for extra in (["--label", "[other]"], ["--reported-by", "Intruder"], ["--now", "2026-11-09T09:00:00"]):
+            args = ["--no-recalc", "--label", "[approved]", "--reported-by", "Reviewer", "--now", NOW.isoformat()]
+            for i in range(0, len(extra), 2):
+                k = args.index(extra[i])
+                args[k + 1] = extra[i + 1]
+            rc, out = self.cli(path, *args, "--expect", res["token"])
+            self.assertEqual(rc, 4, extra)
+            self.assertIn("out of date", out)
+            self.assertEqual(self.digests(), before, extra)
+        rc, out = self.cli(path, "--no-recalc", "--label", "[approved]", "--reported-by", "Reviewer", "--now",
+                           NOW.isoformat(), "--expect", res["token"])
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Reviewer", str(list(self.cells(CFG["file"]).values())))
+        # the same parameters again: the batch is already applied, nothing changes (idempotent)
+        after = self.digests()
+        rc, _ = self.cli(path, "--no-recalc", "--label", "[approved]", "--reported-by", "Reviewer", "--now",
+                         NOW.isoformat())
+        self.assertEqual((rc, self.digests()), (0, after))
+
+    def test_a_token_from_before_the_rule_never_authorises_silently(self):
+        path = self.batch("batch_20261107_16")
+        old = hashlib.sha256(b"whatever").hexdigest()[:16]         # the old format: 16 hex, no prefix
+        before = self.digests()
+        rc, out = self.cli(path, "--no-recalc", "--expect", old)
+        self.assertEqual(rc, 4)
+        self.assertIn("from before", out)
+        self.assertIn("--dry-run", out)
+        self.assertEqual(self.digests(), before)
+
+    def test_the_dry_run_states_the_options_and_which_cells_take_the_clock(self):
+        path = self.batch("batch_20261107_17")
+        rc, out = self.cli(path, "--dry-run", "--no-recalc")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Options covered by the token", out)
+        self.assertIn("clock of the apply", out)
+        self.assertIn("<at apply time>", out)
+
+    def test_two_workbook_layouts_get_their_own_tokens_and_both_apply(self):
+        android, ios = self.batch("batch_20261107_18"), self.batch("batch_ios_19")
+        ta, ti = self.dry(android)["token"], self.dry(ios)["token"]
+        self.assertNotEqual(ta, ti)
+        rc, out = self.cli(android, "--no-recalc", "--now", NOW.isoformat(), "--expect", ta)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.cli(ios, "--no-recalc", "--now", NOW.isoformat(), "--expect", ti)   # the Android apply changed
+        self.assertEqual(rc, 4, out)                    # a workbook the token covers: the preview is stale
+        rc, out = self.cli(ios, "--no-recalc", "--now", NOW.isoformat(), "--expect", self.dry(ios)["token"])
+        self.assertEqual(rc, 0, out)
+
+    def test_a_dry_run_applies_later_with_the_clock_advanced_and_a_protected_option_still_refuses(self):
+        path = self.batch("batch_20261107_20")
+        rc, out = self.cli(path, "--dry-run", "--no-recalc")                     # the clock, no fixed --now
+        self.assertEqual(rc, 0, out)
+        token = next(line.split()[2] for line in out.splitlines() if line.startswith("Preview token:"))
+        before = self.digests()
+        later = datetime(2026, 12, 20, 9, 0, 0)
+
+        class Later(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return later
+        with mock.patch("adapters.excel.base.datetime", Later), mock.patch.object(ap, "datetime", Later):
+            for extra in (["--label", "[other]"], ["--reported-by", "Intruder"], ["--now", "2026-12-20T09:00:00"]):
+                rc, out = self.cli(path, "--no-recalc", *extra, "--expect", token)
+                self.assertEqual(rc, 4, extra)
+                self.assertIn("out of date", out)
+                self.assertEqual(self.digests(), before, extra)
+            rc, out = self.cli(path, "--no-recalc", "--expect", token)           # only time has passed
+        self.assertEqual(rc, 0, out)
+        self.assertIn("2026-12-20", str(list(self.cells(CFG["file"]).values())))   # the real apply used its own instant
 
     def test_the_options_go_together(self):
         path = self.batch("batch_20261107_11")

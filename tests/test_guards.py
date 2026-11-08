@@ -79,6 +79,16 @@ class Guards(unittest.TestCase):
                 self.assertEqual(hooks()[hook]["language"], "python")
                 self.assertTrue(hooks()[hook].get("verbose"))
 
+    def test_golden_and_unit_test_hooks_find_their_interpreter_without_activation(self):
+        # `language: system` + `python` failed with `Executable python not found` unless an environment was active
+        # (the hook scripts run through the interpreter that installed pre-commit, but do not put it on the PATH)
+        for hook, script in (("golden", "scripts/golden_check.py"), ("tests", "-m unittest discover -s tests")):
+            with self.subTest(hook=hook):
+                h = hooks()[hook]
+                self.assertEqual(h["language"], "python")
+                self.assertEqual(h["entry"], f"python scripts/qa_python.py run {script}")
+                self.assertFalse(h["pass_filenames"])
+
     def test_playwright_mcp_gets_the_env_as_secrets(self):
         # technique-browser.md section 3: the assistant writes the variable's NAME and the MCP puts the value
         with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:

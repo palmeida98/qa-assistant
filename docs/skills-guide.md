@@ -96,6 +96,10 @@ runs, its preflight prints the project and the framework, and the answer is the 
 | Is this skill usable here, and is each route ready to run? | `scripts/workspace_select.py preflight --skill <skill> --workspace <ws>` (exit 0 = configuration valid; `Ready:` lines per platform) |
 | The device, the app and the build, before a batch | `scripts/device.py <ws> check [--batch <batch>]`; an iPhone: `--platform ios` |
 | Record one result | `scripts/run_log.py <ws> add <batch> <case> <status> "<observed>" --evidence <file> --build "<build>" --environment <env>` (a second execution of a case needs `--replace`) |
+| Record an observation made EARLIER (its time and where it comes from) | `scripts/run_log.py <ws> add <batch> <case> <status> "<observed>" --executed-at "2026-11-05T16:21" --executed-source "tester notes of 05.11"` (a time not known: `--executed-at unknown`; no zone is assumed; not in the future) |
+| Record the user's decision about a Question | `scripts/run_log.py <ws> resolve <batch> <case> <status> --reason "<why>" --decided-by "<who>" [--decision-source "<where>"]`; a batch already applied: add `--into <new batch>` (applied afterwards with its own dry run and approval) |
+| Does the project require a priority for a new bug? | `scripts/run_log.py <ws> defect-rule` (the user decides the value at the bug review) |
+| Which Python runs the scripts | `python3 <qa>/scripts/qa_python.py` (prints it, or the commands that create one) |
 | Add evidence or a bug to a recorded result, keeping it | `scripts/run_log.py <ws> attach <batch> <case> --bug <id> \| --new-defect <draft.json> [--evidence <file>]` |
 | Where each result stands (applied or not, per platform and build) | `scripts/qa_report.py <ws> totals` (`--detail` for every retest), `audit` |
 | The resume record of a PBI | `scripts/pbi_state.py <ws> show <pbi>`; after a change: `check … --reopen` |

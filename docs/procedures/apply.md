@@ -10,7 +10,22 @@
    linked bug and timestamp (section 7.1). Use the project's format, if defined. With the jira or azure-devops
    tracker the run log also needs the "run" block at the top level, {"environment": "<key of environments>",
    "build": "<version>"}: if it is missing, ask the user for the build (never guess it).
-3. Cases in Question stay as Question, with the concrete question (section 8.5).
+3. Cases in Question stay as Question, with the concrete question (section 8.5), until the user answers it.
+
+### Resolving a Question
+Ask the user for the final status, the reason and who decided it (and where the decision is written); never decide it.
+   python <qa>/scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason "<why>" --decided-by "<who>"
+       [--decision-source "<where>"] [--into <new batch>]
+- Batch NOT applied: the item is changed in place; its observed text, `ts`, `recorded_at` and evidence stay, and the
+  Question is kept inside `resolution.original`. The audit then lists it as "Question resolved", and the batch can go
+  to the dry run.
+- Batch ALREADY applied (never touched): `--into <new batch>` (a free name is suggested). The new batch has the same
+  observed text, `ts`, evidence and run block, `"revision_of": {"batch": ..., "tc": ...}` and the `resolution`. Apply it
+  like any batch: dry run, the user's approval, `--expect <token>`. The totals count the case once; a later real
+  execution is current over the resolution.
+- Refused, nothing written: a result that is not a Question, one already resolved, Question as the new status, a
+  status outside the vocabulary, an unknown batch or case, a name that leaves the workspace.
+- Recording a decision is not applying it, and it does not replace an approval the project's rules ask for.
 4. Update context.md with the structure of section 12.2: current state, execution point
    (last batch, last case), work done, decisions (and who made them), open questions,
    blockers, pending work and validation state. Update the date and time.
@@ -38,6 +53,8 @@
    <at apply time> take the instant of the real apply), counts, new defects, problems, "already applied". A problem
    or "already applied" means no apply. Once the user confirms THAT preview, apply with its token:
    python -m adapters.excel.apply <workspace> <run_log>/<batch>.json --expect <token>
+   (with the SAME --label, --reported-by, --now and --no-recalc the dry run had: the `v2-` token covers them, and an
+   apply with others, or a token from before this rule, is refused before any write)
    An "out of date" refusal (exit 4, nothing written) means the batch, project.yaml or a workbook changed since the
    preview: run the dry run again and ask again. Never copy the workspace by hand to simulate.
    Only continue if the apply exits with 0. The other codes:

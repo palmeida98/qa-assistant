@@ -102,3 +102,12 @@ a batch, a stricter evidence format), the project's rule applies, and the skill 
 it is written. Where it says nothing, the defaults apply. A project's rule never removes the approval of a write to a
 workbook or a tracker (methodology §9.4). The project's rules are read, never copied into the framework, and one
 project's rules are never applied to another.
+
+
+## 11. The interpreter
+`python` in the commands of the skills and procedures is the interpreter that `python3 <qa>/scripts/qa_python.py` prints:
+an environment with Python >= 3.12 and the framework's dependencies, preferring `$QA_PYTHON`, then `<qa>/.venv`, then
+the running interpreter, then PATH. The launcher uses only the standard library, so it works where `python` is missing
+or PyYAML is not installed. With none usable it exits 3 and prints the commands that create an environment for the
+checkout; nothing is installed for the user and the system Python is never used silently or modified.
+`python3 <qa>/scripts/qa_python.py run <script or -m module> ...` runs a command with it from any directory.

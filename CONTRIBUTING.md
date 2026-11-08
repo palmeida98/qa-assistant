@@ -33,9 +33,13 @@ qa-audit doctor
 
 `pre-commit install` writes the hooks into the repository's git directory, which every worktree of the checkout shares.
 Check them with `python scripts/workspace_select.py where` ("Commit guards"). The two denylist hooks run in their own
-environment, so they need no `python` on the PATH; the golden and the unit-test hooks use the `python` of an active
-environment (activate the one with `requirements.txt` before committing, or the hook stops with `Executable python not
-found`: a stop, never a silent pass; `--no-verify` is not the answer).
+environment, so they need no `python` on the PATH. The golden and the unit-test hooks are `language: python` too and call
+`scripts/qa_python.py`, which finds the interpreter that has the framework's dependencies (`$QA_PYTHON`, the checkout's
+`.venv`, or an environment on the PATH, such as an active one): **no activation and no `python` on the PATH are needed**
+when the checkout has its `.venv` (`python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`). With none
+usable the hook stops with the commands that create one (exit 3): a stop, never a silent pass; `--no-verify` is not the
+answer. Hooks installed before this change keep working: the hook scripts call `pre-commit` through the interpreter that
+installed them, and the configuration is read at each commit.
 
 The denylist is the owner's private list (`~/.qa-denylist.txt`). Without one the guard says `NOT CONFIGURED` and checks
 nothing; to make that a failure on your computer: `git config --global qa-assistant.denylistRequired true` (or
