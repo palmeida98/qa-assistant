@@ -38,7 +38,10 @@ metadata:
    decided it are asked, never assumed): then python <qa>/scripts/run_log.py <workspace> resolve <batch> <case>
    <status> --reason "<why>" --decided-by "<who>" [--decision-source "<where>"] [--into <new batch>] keeps the
    observation, its time and evidence and records the decision (procedures/apply.md section "Resolving a Question");
-   a batch already applied needs --into, and that batch is applied with its own dry run and approval. Steps 1 to 4 are local and need no approval; applying
+   a batch already applied needs --into, and that batch is applied with its own dry run and approval. Recording the
+   decision is not applying it, and it never replaces an approval the project's own rules ask for (for example the
+   workspace's CLAUDE.md or context.md requiring a specific decision, a dry run review or an approval per platform):
+   those rules still prevail and are asked as written. Steps 1 to 4 are local and need no approval; applying
    (step 5) and publishing are separate acts with their own.
 2. Validate, read only:
    python <qa>/scripts/qa_report.py <workspace> audit --since <date of the session>

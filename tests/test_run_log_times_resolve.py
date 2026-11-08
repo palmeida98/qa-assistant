@@ -390,5 +390,210 @@ class ResolveQuestion(Base):
             self.run_("resolve", "20261105_01", "TC-SHOP-001", "Pass")
 
 
+class RevisionsThatDoNotHold(Base):
+    """Repeated, invalid, cyclic or misdirected revisions are shown by the audit and change NOTHING in the totals."""
+
+    def setUp(self):
+        super().setUp()
+        self.write("batch_20261105_01", [
+            {"tc": "TC-SHOP-001", "status": "Question", "actual_result": "q", "ts": "2026-11-05T16:21:00"},
+            {"tc": "TC-SHOP-002", "status": "Pass", "actual_result": "ok", "ts": "2026-11-05T16:22:00"}])
+
+    def revision(self, name, target, status="Pass", tc="TC-SHOP-001", ts="2026-11-05T16:21:00"):
+        self.write(name, [{"tc": tc, "status": status, "actual_result": "q", "ts": ts, "revision_of": target,
+                           "resolution": {"from_status": "Question", "reason": "r", "decided_by": "x",
+                                          "decided_at": "2026-11-08T19:43:00"}}])
+
+    def platform(self):
+        return next(iter(self.totals()["platforms"].values()))
+
+    def test_a_valid_resolution_is_the_baseline(self):
+        self.revision("batch_20261108_01", {"batch": "batch_20261105_01", "tc": "TC-SHOP-001"})
+        platform = self.platform()
+        self.assertEqual((platform["cases"], platform["statuses"]), (2, {"Pass": 2}))
+        self.assertEqual(platform["resolved_questions"], {"TC-SHOP-001": ["batch_20261105_01"]})
+        self.assertEqual(self.audit()["batch_20261108_01"]["invalid_revisions"], [])
+
+    def test_the_same_question_resolved_twice_holds_for_none_and_is_shown(self):
+        self.revision("batch_20261108_01", {"batch": "batch_20261105_01", "tc": "TC-SHOP-001"}, status="Pass")
+        self.revision("batch_20261108_02", {"batch": "batch_20261105_01", "tc": "TC-SHOP-001"}, status="Fail")
+        audit = self.audit()
+        for name in ("batch_20261108_01", "batch_20261108_02"):
+            self.assertIn("more than once", audit[name]["invalid_revisions"][0])
+            self.assertTrue(audit[name]["to_fix"])
+        self.assertEqual(audit["batch_20261105_01"]["questions"], ["TC-SHOP-001"])
+        platform = self.platform()
+        self.assertEqual(platform["cases"], 2)
+        self.assertEqual(sum(platform["statuses"].values()), 2)
+        self.assertTrue(platform["reconciled"])
+        self.assertEqual(platform["resolved_questions"], {})
+
+    def test_every_kind_of_invalid_reference_is_shown_and_the_totals_do_not_move(self):
+        base = self.platform()
+        cases = {
+            "batch_20261108_01": ({"batch": "batch_ghost", "tc": "TC-SHOP-001"}, "does not exist"),
+            "batch_20261108_02": ({"batch": "batch_20261105_01", "tc": "TC-SHOP-009"}, "another case"),
+            "batch_20261108_04": ({"batch": "batch_20261108_04", "tc": "TC-SHOP-001"}, "own batch"),
+        }
+        for name, (target, _) in cases.items():
+            self.revision(name, target)
+        self.revision("batch_20261108_05", {"batch": "batch_20261105_01", "tc": "TC-SHOP-002"}, tc="TC-SHOP-002")
+        audit = self.audit()
+        for name, (_, why) in cases.items():
+            self.assertIn(why, " ".join(audit[name]["invalid_revisions"]), name)
+            self.assertTrue(audit[name]["to_fix"], name)
+        self.assertIn("not a Question", audit["batch_20261108_05"]["invalid_revisions"][0])
+        self.assertEqual(audit["batch_20261105_01"]["questions"], ["TC-SHOP-001"])
+        platform = self.platform()
+        self.assertEqual(platform["cases"], base["cases"])
+        self.assertEqual(platform["resolved_questions"], {})
+        self.assertTrue(platform["reconciled"])
+
+    def test_a_cycle_is_two_revisions_that_do_not_hold(self):
+        self.revision("batch_20261108_01", {"batch": "batch_20261108_02", "tc": "TC-SHOP-001"}, status="Question")
+        self.revision("batch_20261108_02", {"batch": "batch_20261108_01", "tc": "TC-SHOP-001"}, status="Question")
+        audit = self.audit()
+        for name in ("batch_20261108_01", "batch_20261108_02"):
+            self.assertTrue(audit[name]["invalid_revisions"], name)
+            self.assertTrue(audit[name]["to_fix"])
+        self.assertEqual(self.platform()["resolved_questions"], {})
+        self.assertEqual(self.platform()["cases"], 2)
+
+    def test_an_invalid_revision_gets_no_advantage_in_a_tie_with_a_real_execution(self):
+        self.write("batch_20261106_01", [{"tc": "TC-SHOP-001", "status": "Fail", "actual_result": "real",
+                                          "ts": "2026-11-05T16:21:00"}])
+        self.revision("batch_20261108_01", {"batch": "batch_ghost", "tc": "TC-SHOP-001"})
+        self.assertIn("TC-SHOP-001", self.platform()["ambiguous_order"])
+
+    def test_a_resolution_read_on_another_platform_does_not_hold(self):
+        self.proj["report"] = {"platforms": {"android": ["batch_2026*"], "ios": ["batch_ios*"]}}
+        with open(os.path.join(self.ws, "project.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump(self.proj, f)
+        os.rename(os.path.join(self.ws, "runs", "batch_20261105_01.json"),
+                  os.path.join(self.ws, "runs", "batch_ios_01.json"))
+        self.revision("batch_20261108_01", {"batch": "batch_ios_01", "tc": "TC-SHOP-001"})
+        self.assertIn("report.platforms", self.audit()["batch_20261108_01"]["invalid_revisions"][0])
+        totals = self.totals()["platforms"]
+        self.assertEqual((totals["ios"]["cases"], totals["android"]["cases"]), (2, 1))
+
+    def test_the_validation_uses_every_batch_even_when_the_report_is_filtered(self):
+        self.revision("batch_20261108_01", {"batch": "batch_20261105_01", "tc": "TC-SHOP-001"})
+        proj = qr.read_project(self.ws)
+        for kwargs in ({"names": ["batch_20261108_01"]}, {"names": ["batch_20261105_01"]}, {"since": "2026-11-05"}):
+            batches = qr.load_batches(self.ws, proj, **kwargs)
+            entries = {b["batch"]: b for b in qr.audit(self.ws, proj, batches)["batches"]}
+            for entry in entries.values():
+                self.assertEqual(entry["invalid_revisions"], [], kwargs)
+            if "batch_20261105_01" in entries:
+                self.assertEqual(entries["batch_20261105_01"]["questions"], [], kwargs)
+                self.assertEqual(entries["batch_20261105_01"]["resolved"], ["TC-SHOP-001 (in batch_20261108_01)"])
+            totals = qr.totals(self.ws, proj, batches)
+            for platform in totals["platforms"].values():
+                self.assertTrue(platform["reconciled"], kwargs)
+
+    def test_a_later_real_execution_is_current_over_an_old_revision(self):
+        self.revision("batch_20261108_01", {"batch": "batch_20261105_01", "tc": "TC-SHOP-001"}, status="Pass")
+        self.write("batch_20261107_01", [{"tc": "TC-SHOP-001", "status": "Fail", "actual_result": "later",
+                                          "ts": "2026-11-07T09:00:00"}])
+        platform = self.platform()
+        self.assertEqual(platform["statuses"], {"Fail": 1, "Pass": 1})
+        self.assertEqual(platform["cases"], 2)
+
+
+class ZonesAndUnknownTimes(Base):
+    def with_zone(self, tz):
+        import time
+        old = os.environ.get("TZ")
+        os.environ["TZ"] = tz
+        time.tzset()
+
+        def restore():
+            if old is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old
+            time.tzset()
+        self.addCleanup(restore)
+
+    @unittest.skipUnless(os.name == "posix", "time.tzset")
+    def test_zone_and_no_zone_compare_in_the_machines_scale_and_no_zone_is_never_assigned(self):
+        self.with_zone("Asia/Tokyo")
+        self.assertEqual(ts_key("2026-11-05T16:21:00Z"), "2026-11-06T01:21:00")
+        self.assertEqual(ts_key("2026-11-06T01:00:00"), "2026-11-06T01:00:00")
+        self.assertLess(ts_key("2026-11-06T01:00:00"), ts_key("2026-11-05T16:21:00Z"))
+        self.assertEqual(parse_when("2026-11-05T16:21", NOW), "2026-11-05T16:21:00")
+        self.assertNotIn("+", parse_when("2026-11-05T16:21", NOW))
+        self.assertEqual(parse_when("2026-11-05T16:21+09:00", NOW), "2026-11-05T16:21:00+09:00")
+        self.with_zone("America/Sao_Paulo")
+        self.assertEqual(ts_key("2026-11-05T16:21:00Z"), "2026-11-05T13:21:00")
+        self.assertEqual(ts_key("2026-11-05T13:21:00"), "2026-11-05T13:21:00")
+
+    @unittest.skipUnless(os.name == "posix", "time.tzset")
+    def test_the_future_check_judges_a_zoned_time_against_the_same_instant(self):
+        self.with_zone("Asia/Tokyo")
+        now = datetime(2026, 11, 8, 19, 43)                 # 19:43 in Tokyo = 10:43Z
+        self.assertEqual(parse_when("2026-11-08T10:43:00Z", now), "2026-11-08T10:43:00+00:00")
+        with self.assertRaises(ValueError):
+            parse_when("2026-11-08T10:44:00Z", now)
+
+    @unittest.skipUnless(os.name == "posix", "time.tzset")
+    def test_a_zoned_and_an_unzoned_result_are_ordered_in_the_machines_scale_by_the_report(self):
+        self.with_zone("Asia/Tokyo")
+        rl.add(self.ws, "20261105_01", "TC-SHOP-001", "Fail", "x", environment="test", build="1 (1)", now=NOW,
+               executed_at="2026-11-05T16:21:00Z", executed_source="log in UTC")      # 01:21 on 06.11 in Tokyo
+        rl.add(self.ws, "20261105_02", "TC-SHOP-001", "Pass", "x", environment="test", build="1 (1)", now=NOW,
+               executed_at="2026-11-06T00:30", executed_source="notes, machine clock")  # earlier than 01:21
+        platform = next(iter(self.totals()["platforms"].values()))
+        self.assertEqual(platform["statuses"], {"Fail": 1})
+
+    def test_two_results_of_unknown_time_are_an_ambiguity_not_a_choice_and_are_reported(self):
+        # criterion: no time = ordered as the oldest; two of them with different statuses tie, and the report says
+        # "ambiguous" and "without ts" instead of picking the later record (recorded_at never decides)
+        for name, status in (("20261105_01", "Pass"), ("20261105_02", "Fail")):
+            rl.add(self.ws, name, "TC-SHOP-001", status, "x", environment="test", build="1 (1)",
+                   executed_at="unknown", executed_source="notes", now=NOW)
+        platform = next(iter(self.totals()["platforms"].values()))
+        self.assertEqual((platform["ambiguous_order"], platform["without_ts"]), (["TC-SHOP-001"], ["TC-SHOP-001"]))
+        text = qr.render_totals(self.totals(), "test")
+        self.assertIn("without ts", text)
+        self.assertIn("TC-SHOP-001", text)
+
+    def test_an_unknown_time_alone_is_current_and_flagged_but_never_dated(self):
+        rl.add(self.ws, "20261105_01", "TC-SHOP-001", "Pass", "x", environment="test", build="1 (1)",
+               executed_at="unknown", executed_source="notes", now=NOW)
+        platform = next(iter(self.totals()["platforms"].values()))
+        self.assertEqual((platform["statuses"], platform["without_ts"]), ({"Pass": 1}, ["TC-SHOP-001"]))
+        item = self.log("batch_20261105_01")["results"][0]
+        self.assertNotIn("ts", item)
+        self.assertEqual(item["recorded_at"], "2026-11-08T19:43:00")
+
+
+class DocumentedCommands(unittest.TestCase):
+    """The documents name real commands and flags (a consistency check of TEXT against the CLI, not an evaluation of how
+    an agent follows the skills)."""
+
+    def test_every_flag_the_documents_show_for_the_new_commands_exists_in_the_cli(self):
+        help_text = {}
+        for sub in ("add", "resolve", "attach"):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+                rl.main(["ws", sub, "--help"])
+            help_text[sub] = out.getvalue()
+        docs = ["docs/skills-guide.md", "docs/procedures/run-mobile.md", "docs/procedures/apply.md",
+                ".claude/skills/run-tests/SKILL.md", ".claude/skills/checkpoint/SKILL.md"]
+        text = ""
+        for rel in docs:
+            with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
+                text += f.read()
+        for flag in ("--executed-at", "--executed-source"):
+            self.assertIn(flag, text)
+            self.assertIn(flag, help_text["add"])
+        for flag in ("--reason", "--decided-by", "--decision-source", "--into"):
+            self.assertIn(flag, text)
+            self.assertIn(flag, help_text["resolve"])
+        with open(os.path.join(ROOT, ".claude/skills/manage-bugs/SKILL.md"), encoding="utf-8") as f:
+            self.assertIn("defect-rule", f.read())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -335,6 +335,28 @@ class DryRun(unittest.TestCase):
         rc, out = self.cli(ios, "--no-recalc", "--now", NOW.isoformat(), "--expect", self.dry(ios)["token"])
         self.assertEqual(rc, 0, out)
 
+    def test_a_dry_run_applies_later_with_the_clock_advanced_and_a_protected_option_still_refuses(self):
+        path = self.batch("batch_20261107_20")
+        rc, out = self.cli(path, "--dry-run", "--no-recalc")                     # the clock, no fixed --now
+        self.assertEqual(rc, 0, out)
+        token = next(line.split()[2] for line in out.splitlines() if line.startswith("Preview token:"))
+        before = self.digests()
+        later = datetime(2026, 12, 20, 9, 0, 0)
+
+        class Later(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return later
+        with mock.patch("adapters.excel.base.datetime", Later), mock.patch.object(ap, "datetime", Later):
+            for extra in (["--label", "[other]"], ["--reported-by", "Intruder"], ["--now", "2026-12-20T09:00:00"]):
+                rc, out = self.cli(path, "--no-recalc", *extra, "--expect", token)
+                self.assertEqual(rc, 4, extra)
+                self.assertIn("out of date", out)
+                self.assertEqual(self.digests(), before, extra)
+            rc, out = self.cli(path, "--no-recalc", "--expect", token)           # only time has passed
+        self.assertEqual(rc, 0, out)
+        self.assertIn("2026-12-20", str(list(self.cells(CFG["file"]).values())))   # the real apply used its own instant
+
     def test_the_options_go_together(self):
         path = self.batch("batch_20261107_11")
         with self.assertRaises(SystemExit):
