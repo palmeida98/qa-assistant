@@ -1,6 +1,6 @@
 """
-The headers a column of test cases is recognised by, in the common languages (qa-ui's intake and the Excel adapter's
-inspection). A project's own mapping (excel.cases.fields) always wins: these names are the fallback for a column the
+The headers a column of test cases is recognised by, in the common languages (the Excel adapter's inspection and
+its case import). A project's own mapping (excel.cases.fields) always wins: these names are the fallback for a column the
 project did not map, and the proposal `adapters.excel.inspect` makes at the onboarding.
 
     field_of("Resultado Esperado") -> "expected"      norm("Título") -> "titulo"

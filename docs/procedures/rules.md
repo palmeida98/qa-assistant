@@ -64,7 +64,7 @@ The defaults below hold in every workspace whose own rules do not ask for more (
 - An approval covers the concrete set of changes it was given for, never the next one. It is reused, in this skill or
   the next, while that same set and its preview are still valid (the same dry run, its token not stale); a changed set
   or a stale preview is asked again.
-- A run started by a launcher with nobody to approve (the workspace's CI, the local interface) applies nothing: its
+- A run started by a launcher with nobody to approve (the workspace's CI) applies nothing: its
   bugs are `"proposed": true` and its doubts `Question`, for the review after it (methodology §9.4).
 
 ## 6. Privacy and evidence

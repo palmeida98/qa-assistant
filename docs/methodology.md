@@ -381,7 +381,7 @@ The assistant prepares the bug. Sending it to the external tracker only happens 
 
 In a **remote run** (§12.4) nobody is there to approve during the session, so the approval moves to the **pull request**: the agent writes every new bug as a `new_defect` with `"proposed": true`; the user reviews the run log in the pull request and edits it before the merge (removes a proposed bug, changes it, links an existing bug instead, or drops `"proposed"` to approve it) and answers each `Question`. The merge is the approval: only then is the run log applied (by the workspace's apply workflow, with `--yes` for Jira / Azure DevOps). A run log sent by the runner never has a `new_defect` applied before that, and every adapter refuses a `new_defect` that still has `"proposed"`.
 
-A run started from the **local interface** (`docs/qa-ui.md`; the interface left the product's active scope on 08.11.2026, the rule stays for any unattended run) is unattended in the same way: the agent runs headless on the user's computer, writes each new bug as a `new_defect` with `"proposed": true` and each doubt as `Question`, and applies nothing. The approval happens in the interface, which records it in the run log (the same edits as in the pull request); only a run log with nothing proposed and no `Question` left is applied, and only after the user confirms it.
+A run started from a **local interface** (an earlier one, removed on 08.11.2026; the rule stays for any unattended run) is unattended in the same way: the agent runs headless on the user's computer, writes each new bug as a `new_defect` with `"proposed": true` and each doubt as `Question`, and applies nothing. The approval happens in the interface, which records it in the run log (the same edits as in the pull request); only a run log with nothing proposed and no `Question` left is applied, and only after the user confirms it.
 
 ---
 
@@ -648,7 +648,7 @@ When a doubt could significantly change the results of the tests, **stop and ask
 
 ### v2.4 → v2.5 (plan phase 12, 08.10.2026)
 
-- **New:** a run can be started from the local interface (`docs/qa-ui.md`); it is unattended like a remote run, and the approval of new bugs and the answers to `Question` happen in the interface, as edits of the run log (§9.4).
+- **New:** a run can be started from the local interface (since removed, 08.11.2026); it is unattended like a remote run, and the approval of new bugs and the answers to `Question` happen in the interface, as edits of the run log (§9.4).
 - **Kept:** the run log as the source, approval before any bug reaches the workbook or a tracker, the adapters' refusal of a `new_defect` with `"proposed"`, and `/checkpoint` for `context.md` and the commit.
 
 ### v2.3 → v2.4 (plan 10.6, 04.10.2026)

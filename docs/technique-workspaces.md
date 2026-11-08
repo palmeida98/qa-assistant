@@ -23,7 +23,7 @@ The user picks a project, asks for a task in natural language, and gets traceabl
 | Execution tools | Browser, APIs, device, Excel, trackers | Only what the authorised action needs |
 
 ```text
-<framework>/qa-assistant/      .claude/skills/<skill>/SKILL.md, docs/, adapters/, scripts/, tests/, qa_ui/
+<framework>/qa-assistant/      .claude/skills/<skill>/SKILL.md, docs/, adapters/, scripts/, tests/
 <workspace-root>/<company>/<project>/   or   <workspace-root>/<project>/
     CLAUDE.md, project.yaml, context.md, memory/, batches/, runs/, evidence/, tracker/ or workbook/, history/
 ```
@@ -40,7 +40,7 @@ A skill in `~/.claude/skills/` runs in a workspace that knows nothing about the 
 
 Whatever the order gives is **checked, not trusted**: `python <qa>/scripts/workspace_select.py preflight` compares it with what the skill needs (§6). A missing folder or script means the skills are newer than that checkout: the skill stops and says so.
 
-`python scripts/workspace_select.py where` shows the framework as it really runs: its root; the main checkout when this one is a worktree (read from `.git`, without running git); branch, commit and uncommitted files; the Python interpreter; the **real origin of each import** (`adapters`, `qa_ui`, `qa_audit`, `openpyxl`, `yaml`); the installed versions that differ from the pinned ones, as information; the skills' sync record.
+`python scripts/workspace_select.py where` shows the framework as it really runs: its root; the main checkout when this one is a worktree (read from `.git`, without running git); branch, commit and uncommitted files; the Python interpreter; the **real origin of each import** (`adapters`, `qa_audit`, `openpyxl`, `yaml`); the installed versions that differ from the pinned ones, as information; the skills' sync record.
 
 An editable `qa-audit` points at the checkout it was installed from, which may not be this one: `where` and `preflight` report it. A different version than the CI's is not called incompatible: it is reported, and the isolated run of §11 is what decides.
 
@@ -108,11 +108,11 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 | 3 | The skill and the code do not match | Stops and shows the instruction, which names the checkout that has the code. Nothing is installed or changed |
 | 4 | Nothing to select: the root or the path does not exist, or a usage error | Shows the expected configuration |
 
-**Unattended runs skip this step.** The prompts of `qa-ui` (`qa_ui/prompts/batch.md`) and of the runner (`docs/workspace/ci/agent-prompt.md`) already name the workspace and `<qa>`, and their tool lists allow only the commands they need.
+**Unattended runs skip this step.** The prompt of the runner (`docs/workspace/ci/agent-prompt.md`) already names the workspace and `<qa>`, and its tool list allows only the commands it needs.
 
 ## 7. Isolation
 
-- **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/` (in any case: `History/` is the same folder on macOS and Windows). A whole file is written by `common.atomic_write`: an exclusive temporary file next to it (a link planted at `<file>.tmp` is never followed), flushed to the disk, then put in place; a stopped write removes its temporary file. Appended files (the context archive) are opened without following a link. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, `qa-ui`'s batches, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
+- **Writes** go through `common.workspace_path(workspace, ...)`: the path, with links resolved, must stay inside the workspace and outside `history/` (in any case: `History/` is the same folder on macOS and Windows). A whole file is written by `common.atomic_write`: an exclusive temporary file next to it (a link planted at `<file>.tmp` is never followed), flushed to the disk, then put in place; a stopped write removes its temporary file. Appended files (the context archive) are opened without following a link. A traversal, an absolute path elsewhere or a link pointing out is refused before anything is written. It guards the ticket memory, the tracker's records, `run_log.py`, the `--output` of `api_request.py`, `audit_a11y.py` and `run_mobile.py`, the evidence folder of `device.py` and the `--dest` of `workspace_build.py`.
 - **Two explicit exceptions, both stated by configuration or by the runner:** the workbook lives where `excel.file` of `project.yaml` says, possibly a synced folder (`technique-excel.md` §2); on a runner, `run_mobile.py` may keep its report in `$RUNNER_TEMP`, a throwaway folder, as `docs/workspace/ci/mobile.yml` does.
 - **Routes per module.** For a skill with `routes` (`/run-tests`), preflight prints one `Route:` line per active module, with its procedure and whether its tools and configuration are ready. In a project whose modules are only `mobile` and `exploratory`, the charters take the mobile route and the browser MCP is not listed as missing (§8).
 - **One writer at a time.** The ticket memory (`record_check`, `record_analysis`), `run_log.py add` (with the check that the batch is not applied), the Excel apply and the interface's run-log edits read, change and write under `common.workspace_lock`: a file `.qa-assistant.lock` in the workspace, linked into place already naming its holder (process, its start time, machine, a token), so it is never seen empty. A second writer waits up to 30 seconds (`QA_LOCK_WAIT`), then stops with exit 5 (tickets) or 1 (`run_log.py`), having written nothing. The file is in the workspace's `.gitignore`.

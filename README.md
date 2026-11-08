@@ -167,7 +167,7 @@ scenarios prepared, not yet run).
 | `pre-commit run --all-files` | detect-secrets, ruff, the private denylist, the golden and the unit tests |
 
 **Measured on 08.11.2026**, macOS, Python 3.12, from the exact versions of `requirements.txt` and `pip install -e
-.[dev,visual]`: **1453 unit tests, 0 failures, 3 skipped** (Windows- and Linux-only cases), and the Excel golden passes.
+.[dev,visual]`: **1292 unit tests, 0 failures, 3 skipped** (Windows- and Linux-only cases), and the Excel golden passes.
 The browser integration tests ran in CI on Linux; they were not run locally for this POC. Numbers change with the code:
 the CI writes the current counts and every skip with its reason in each run's summary.
 
@@ -194,7 +194,7 @@ penetration test or an accessibility certification, and only sites you are autho
 ## Limitations and next steps
 
 - **No interface of its own, by decision.** The product is the skills in Claude Code. An earlier local web interface and a
-  multi-project hub were retired from the scope; their code is legacy ([docs/qa-ui.md](docs/qa-ui.md)).
+  multi-project hub were retired from the scope and their code removed (it stays in the git history).
 - **Trackers:** Azure DevOps and Jira + Xray writes still need a pilot on a test instance (next step for the proof of concept).
 - **Agent behaviour is not formally evaluated.** The tests check the contracts, the scripts and the documents; whether an
   agent follows a skill in a real session is covered by prepared scenarios that have not been run.

@@ -16,11 +16,11 @@ References:
 - docs/heuristics.md — anonymised failure patterns for error guessing (methodology §17; read when generating cases)
 - docs/development-plan.md — the framework's roadmap (read in development sessions)
 - docs/qa-audit.md — `qa-audit` automated audit engine (read when working on `src/qa_audit`); user guide: docs/qa-audit-guide.md
-- docs/qa-ui.md — LEGACY: the local web interface `qa-ui`, retired from the active scope on 08.11.2026 (no interface of its own: the product is the eight skills in Claude Code); kept until its removal is approved; do not develop it
 - docs/tracker-validation.md — what each tracker (Excel, Azure DevOps, Jira + Xray) has implemented, tested with fakes and piloted for real, and what a real pilot needs (read when touching a tracker adapter or reporting its state)
 - docs/demo-walkthrough.md, docs/skills-evals.md — the reproducible fictional walkthrough (run by a test) and the agent-behaviour scenarios prepared but not yet run
 
 ## Fixed rules
+- The product is the eight skills used through Claude Code. It has no hub, web interface, graphical application or launcher of its own, and none is promised for a later phase (decision of 08.11.2026; the earlier `qa-ui` was removed and stays in the git history). Reports a command produces (HTML, Excel) are outputs, not an interface.
 - Never write client data (URLs, accounts, names, credentials) in this repository.
 - Follow the hierarchy of sources of truth of the methodology (section 1.3).
 - A project workspace always lives outside this repository, under the root of workspaces (qa-workspaces/ by default).
@@ -46,7 +46,6 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/pbi_state.py <workspace> start|show|mark|baseline|check|published` — the resume record of `/test-pbi` (`memory/pbi/<id>.json`)
 - `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`, and the record next to it says which checkout it came from
 - `qa-audit …` (`pip install -e .` first; `qa-audit doctor`, or `python -m qa_audit doctor` when the `qa-audit` launcher points at a Python that is gone), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
-- `python -m qa_ui <workspace>` — LEGACY local web interface, retired from the active scope (docs/qa-ui.md); not developed
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `--dir <workspace>/golden/<batch>` (methodology §15). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
 
 ## Environment

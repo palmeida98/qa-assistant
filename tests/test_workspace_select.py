@@ -397,7 +397,6 @@ class Worktree(Base):
         info = json.loads(r.stdout)
         self.assertTrue(sync_skills.same_path(info["framework"]["root"], ROOT))
         self.assertTrue(ws._inside(info["imports"]["adapters"], ROOT))
-        self.assertTrue(ws._inside(info["imports"]["qa_ui"], ROOT))
         self.assertEqual(info["workspaces_root"]["source"], "--root")
 
     def test_where_reports_the_commit_guards_without_the_terms(self):

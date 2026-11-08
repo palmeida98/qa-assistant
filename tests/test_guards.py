@@ -39,8 +39,7 @@ class Guards(unittest.TestCase):
                      ".claude/skills/checkpoint/SKILL.md", "CLAUDE.md", "examples/demo/project.yaml",
                      "docs/project.yaml", "docs/workspace/settings.json", ".pre-commit-config.yaml",
                      "integrations/playwright/qa-audit.ts", "docs/methodology.md", "README.md",
-                     "src/qa_audit/cli.py", "pyproject.toml", ".gitignore", "qa_ui/server.py",
-                     "qa_ui/static/app.js", "qa_ui/prompts/batch.md"):
+                     "src/qa_audit/cli.py", "pyproject.toml", ".gitignore"):
             with self.subTest(path=path):
                 self.assertTrue(pattern.search(path))
         self.assertFalse(pattern.search("requirements.txt"))

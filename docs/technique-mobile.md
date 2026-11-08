@@ -162,8 +162,8 @@ A project with `mobile` and without `functional-web` among its modules has no we
 charters (methodology §5.2) run on the app with `/run-tests`, in conversational mode (§4.1) — the device driver,
 one note per turn, a screenshot whenever the dump may miss content — and each charter is judged by its expected
 result. A step only a person can do (airplane mode, an incoming call, a system dialog of another app) is an assisted
-step: an unattended run says it did not cover it, and the charter's result says what was explored. The local
-interface (`docs/qa-ui.md` §8.1) gives such a batch the mobile tools.
+step: an unattended run says it did not cover it, and the charter's result says what was explored. A run on the
+workspace's CI gives such a batch the mobile tools.
 
 ## 5. What to test on mobile (beyond the functional)
 

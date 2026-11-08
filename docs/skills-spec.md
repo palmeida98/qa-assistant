@@ -57,7 +57,7 @@ The frontmatter keeps the contract of `technique-workspaces.md` §8 (`intent`, `
 The body starts with step 0 (find `<qa>`, run the preflight), then numbered steps. A skill folder holds only
 `SKILL.md`. Step 0 is written in each skill, not referred to: it is what finds `<qa>`, so an installed copy can
 resolve every other document. Paths named in a prompt skip the search, never the checks; only a launcher that
-validated the workspace and allows no other command (the local interface, the workspace's CI) replaces the
+validated the workspace and allows no other command (the workspace's CI) replaces the
 preflight, and the skill's own steps check what it did not (the target, the build observed).
 
 ## 5. Deterministic helpers

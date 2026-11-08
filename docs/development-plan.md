@@ -37,8 +37,8 @@
 | 9 | Conversational apps on a device and portable workspaces: drive an Android device/emulator from the framework, and clone a project's workspace on any computer and keep testing | Done (28.09.2026) |
 | 10 | Jira (Xray) and Azure DevOps adapters: results, bugs, importing and exporting cases, with approval and without duplicates (revises 7.7) | Done; 10.5 (pilot) postponed by the user (29.09.2026), and moved to the end of the project (user, 12.10.2026) — validated only against fakes and fictional goldens: 10.0 (specification), 10.1 (common base) and 10.2 (Jira + Xray) done (28.09.2026); 10.3 (Azure DevOps) and 10.4 (skills) done (29.09.2026); the global copy of the skills synced after the merge; 10.6 (adding approved cases to an Excel workbook) done (04.10.2026) |
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | **Outside this version's scope (08.11.2026):** not a requirement of the assistant used through Claude Code; the code and tests stay, unvalidated and not developed further here. History: 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026), then started on a real workspace (13.10.2026): in progress, the end-to-end waits for the user; its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
-| 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | **Retired from the active scope (08.11.2026):** no interface of its own is part of the product, and none is promised for a later phase; the legacy code stays until its removal is approved (phase 16). History: 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
-| 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | **Retired (08.11.2026):** the hub is not developed; 13.4–13.7 are cancelled, not postponed. History: 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
+| 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | **Retired (08.11.2026):** no interface of its own is part of the product, and none is promised for a later phase; the code, its tests and its specification were removed (phase 16; they stay in the git history). History: 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
+| 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | **Retired (08.11.2026):** the hub is not developed and its code is removed; 13.4–13.7 are cancelled, not postponed. History: 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
 | 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4 |
 | 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026); 15.8 daily use of the mobile flow done (02.11.2026) |
 
@@ -57,8 +57,8 @@ Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 →
   `scripts/qa_report.py`, `qa-audit`'s report) remain outputs, not a management interface.
 - **Trackers:** Excel, Azure DevOps and Jira with Xray, writes included. Code tested with fakes is not a validated
   integration: [tracker-validation.md](tracker-validation.md) says which is which.
-- **Outside this version:** remote execution (phase 11), `qa-ui` and the hub (phases 12 and 13). Their code stays, unvalidated
-  and not developed, until the user approves a concrete removal list.
+- **Outside this version:** remote execution (phase 11): its code stays, unvalidated and not developed. **Removed:** `qa-ui` and
+  the hub (phases 12 and 13), by the owner's approval of a concrete list (phase 16.3); phases 12 and 13 below are history.
 - **Not decided here:** the project names, credentials, personal data, internal information and evidence stay in the private
   workspaces; a project's name is not a secret in itself.
 
@@ -1908,14 +1908,14 @@ findings relevant to the framework are recorded here, in generic terms.
 | Leaked temporary remote of the suite | — | Cause confirmed (a `tmp/../x-remote.git` path no longer resolved after `tmp` was removed); fixed; the suite leaves nothing in a private `TMPDIR` | Done |
 | `demo-e2e` states: skipped without its secrets, failed, or passed with the number of specs | — | `ci.yml` (`demo-secrets` + `demo-e2e`); the real workflow is validated on the pull request | Implemented; the external demo itself stays off until the user supplies practice-account secrets |
 | CI counts and skips of the unit tests in the run summary | — | `ci.yml` (`tests` job) | Done |
-| LibreOffice tests of the interface's runner | qa-ui scope | `tests.test_qa_ui_runs` added to the `golden` job until the interface code is removed | Interim; ends with the removal (16.3) |
+| LibreOffice tests of the interface's runner | qa-ui scope | the shared logic they protected (cases added and a batch applied with the real recalculation) moved to `tests/test_excel_recalc_flows.py`, run in the `golden` job | Done |
 | Install, sync and preflight smoke | — | `tests/test_install_smoke.py`; the `install` job runs it on a clean clone | Done |
 | Fictional ticket demo (`/analyze-ticket`, `/test-pbi`) | — | `examples/demo/tickets/`, the `tickets:` source, `tests/test_tickets_demo.py` | Done |
 | Reproducible walkthrough | — | `docs/demo-walkthrough.md`, `tests/test_demo_walkthrough.py` | Done |
 | Permanent rules in an imported `context.md` | — | methodology §12.2 (v2.14), `tests/test_compact_context.py`; the compactor needed no change | Done |
 | Skills' agent-behaviour evaluation | the user: model, budget | `docs/skills-evals.md` (ten scenarios) | Prepared, **not run** |
 | Tracker validation | test instances | `docs/tracker-validation.md`; suites run in the pinned environment | Fixtures validated; the real pilots are **blocked** (no test instance) |
-| `qa-ui` and the hub out of the active scope | — | scope above; legacy banner in `docs/qa-ui.md`; the shared test helper renamed (`tests/workspace_kit.py`) and two shared tests decoupled | Scope done; **removal of the code waits for the user's approval** |
+| `qa-ui` and the hub out of the product | — | scope above; the shared test helper renamed (`tests/workspace_kit.py`) and two shared tests decoupled first; then `qa_ui/`, its 7 test modules and `docs/qa-ui.md` removed with the owner's approval; the full suite and the CI re-run on the final content | Done |
 
 ### 16.2 The 26 findings of the analysis, in generic terms
 
@@ -1926,11 +1926,11 @@ findings relevant to the framework are recorded here, in generic terms.
 | F03 (a CI job green without running specs) | Implemented; validated on the pull request; activating the external demo needs credentials the user holds |
 | F04, F22 (roadmap versus changelog and evidence) | Resolved: scope, summary table and this phase |
 | F05 (what the skills' tests prove) | Resolved in the wording; the agent evaluation is prepared and not run |
-| F06 (LibreOffice tests of the interface) | Interim in CI; closes with the removal |
+| F06 (LibreOffice tests of the interface) | Resolved: the shared coverage moved to `tests/test_excel_recalc_flows.py`; the interface-only tests went with the interface |
 | F07, F12 (platforms) | macOS: the suite runs; Windows, Firefox and WebKit on macOS: not confirmed here; no support claimed beyond the CI's Linux |
 | F08, F09, F26 (trackers on real instances) | **Pending/blocked**: fixtures validated; no test instance |
 | F10 (remote execution) | Outside this version |
-| F11, F16 (`qa-ui`, the hub, cleanup) | Scope done; the removal list is prepared and waits for approval |
+| F11, F16 (`qa-ui`, the hub, cleanup) | Done for the interface and the branches; see 16.3 for what is left |
 | F13 (mobile measurements) | Not in this phase: device work of the project concerned |
 | F14 (environment) | Resolved for the tools the guards need; `qa-audit` editable install is done from the integrated checkout after the merge |
 | F15 (skills copies) | No change needed; synced from the integrated checkout after the merge |
@@ -1942,10 +1942,18 @@ findings relevant to the framework are recorded here, in generic terms.
 | F23 (large files) | No action: size is not a defect |
 | F24, F25 (parallel CI, comparison across engines) | Preserved |
 
-### 16.3 Removal of the retired interface and branches: prepared, not applied
+### 16.3 Removal of the retired interface and branches (approved by the owner on 08.11.2026)
 
-The exact list (paths, dependencies, what is preserved, how to recover) is prepared for a single approval and is in the pull
-request of this phase. Nothing is removed by this document.
+- Removed: `qa_ui/` (15 files), `tests/test_qa_ui_*.py` (7 files) and `docs/qa-ui.md`. Nothing outside `qa_ui/` imported it; the shared
+  test helper and the shared LibreOffice coverage were kept first (`tests/workspace_kit.py`, `tests/test_excel_recalc_flows.py`).
+  Recovery: the git history of `main`.
+- Removed: the worktree of the old iOS branch (clean, no process) and the branches `feat/ios-wda-backend` (kept reachable by the
+  annotated tag `archive/ios-wda-backend-20261031`, which holds both of its commits), `claude/ci-optimisation`,
+  `claude/qa-assistant-final-validation-5c433a`, `claude/qa-assistant-skills-051be5`, `reset-skills` and `plan/qa-hub` on the remote,
+  and the merged local ones.
+- **Not removed (still open):** the worktree `.claude/worktrees/qa-assistant-skills-config-a2fbfd` and its branch
+  `claude/qa-assistant-analysis-7549a1`, because a session was working in it; and the local branches `plan/qa-hub` and `reset-skills`,
+  whose remote branches are gone (the approval named the remote ones).
 
 ## Change log of this plan
 

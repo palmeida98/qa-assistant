@@ -15,15 +15,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   the list. The hooks are installed in the checkout in use.
 - **CI**: `demo-e2e` is skipped (not green) without its secrets, and when it runs it reports its executed specs; the
   unit tests' counts and skips go to the run's summary; the `install` job also syncs the eight skills to a temporary folder
-  and runs their preflight on the fictional demo; `tests.test_qa_ui_runs` runs with LibreOffice in the `golden` job.
+  and runs their preflight on the fictional demo; `tests.test_excel_recalc_flows` (cases added and a batch applied with the real recalculation) runs in the `golden` job.
 - **Scope**: the product is the eight skills used through Claude Code, with no interface of its own. `qa-ui` and the hub
-  are retired from the active scope (legacy banner in `docs/qa-ui.md`); remote execution is outside this version. The
+  were retired and their code removed (`qa_ui/`, its 7 test modules, `docs/qa-ui.md`; they stay in the git history); remote execution is outside this version. The
   three trackers stay in scope; `docs/tracker-validation.md` separates implemented, tested with fakes and piloted for real.
 - **Method**: a project may use `context.md` as its main document, imported by `CLAUDE.md`, with the permanent rules in
   headed sections that compaction never touches (methodology §12.2, v2.14).
 - **Demo and documentation**: the fictional demo has a `tickets:` source and two ticket bundles (`/analyze-ticket`,
   `/test-pbi` with no credentials); `docs/demo-walkthrough.md` is run by a test; `docs/skills-evals.md` prepares ten
   agent-behaviour scenarios (not run); the tests of the skills are described as contract tests.
+
+### Removed (2026-11-08, approved by the owner)
+- `qa_ui/`, `tests/test_qa_ui_*.py` and `docs/qa-ui.md` (the local interface and the hub). The skills, adapters and scripts did not import
+  them; the shared coverage lives in `tests/workspace_kit.py` and `tests/test_excel_recalc_flows.py`. The skills no longer mention the
+  interface (`/qa-report`, `/analyze-ticket`, `/project-context`, `/test-pbi`, `/checkpoint`, `/manage-bugs`, `/run-tests`, `/plan-tests`).
 
 ### Fixed (consolidation, 2026-11-08)
 - The test suite no longer leaves a `*-remote.git` repository in the temporary folder (`test_validate_project`).
