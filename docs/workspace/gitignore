@@ -16,7 +16,7 @@
 # generated from the workbook (scripts/build_dashboard.py)
 dashboard.html
 
-# output of the runs started from the local interface (docs/qa-ui.md): redacted, but raw run output
+# output of the runs started from the retired local interface (kept so older workspaces stay clean): raw run output
 .qa-ui/
 
 # exchanges with Jira / Azure DevOps saved by `python -m adapters.tracker ... --record` (redacted, but raw

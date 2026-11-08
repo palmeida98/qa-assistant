@@ -19,8 +19,7 @@ metadata:
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
-   same. A run started by a launcher that already validated the workspace (the prompt of the local interface or
-   of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
+   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
    instead; the steps below still check what the launcher did not (the target, the build observed), and a check
    that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the

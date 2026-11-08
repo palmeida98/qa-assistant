@@ -1,7 +1,6 @@
 """Shared by the tests that need a workspace: a fictional workspace in a temporary folder (the Excel adapter's golden
 fixture as its workbook), a second writer holding its lock, and fake executables, so no test ever starts a real Claude
-session, a browser or a site. All data is the fictional Demo Shop. (Called qa_ui_kit while the local interface used
-it; the interface leaves the active scope and these helpers serve the skills' tests.)"""
+session, a browser or a site. All data is the fictional Demo Shop. (Called qa_ui_kit while the retired local interface used it.)"""
 
 import contextlib
 import copy
@@ -92,7 +91,7 @@ def executable(folder: str, name: str, body: str) -> str:
     return path
 
 
-# A fake Claude Code (docs/qa-ui.md section 12): it records how it was called, and behaves by QA_FAKE_CLAUDE.
+# A fake Claude Code: it records how it was called, and behaves by QA_FAKE_CLAUDE.
 # A batch run (stream-json) appends results to the run log named in the prompt, as the real agent would through
 # scripts/run_log.py; an ask (json) prints an answer. No network, no model.
 FAKE_CLAUDE = r'''

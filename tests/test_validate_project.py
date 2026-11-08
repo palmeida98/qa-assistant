@@ -82,7 +82,7 @@ class Validate(unittest.TestCase):
         self.assertFalse(any("fictional" in w for w in warnings))
 
     def test_excel_cases_fields_without_title_or_expected_is_warned(self):
-        # the first real batch of qa-ui: a workbook in another language, its title and expected columns unmapped,
+        # the first real batch of a mobile project: a workbook in another language, its title and expected columns unmapped,
         # reached the agent empty and every case came back Question
         import workspace_kit as kit
         tmp = kit.workspace()

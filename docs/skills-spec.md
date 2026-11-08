@@ -57,7 +57,7 @@ The frontmatter keeps the contract of `technique-workspaces.md` §8 (`intent`, `
 The body starts with step 0 (find `<qa>`, run the preflight), then numbered steps. A skill folder holds only
 `SKILL.md`. Step 0 is written in each skill, not referred to: it is what finds `<qa>`, so an installed copy can
 resolve every other document. Paths named in a prompt skip the search, never the checks; only a launcher that
-validated the workspace and allows no other command (the local interface, the workspace's CI) replaces the
+validated the workspace and allows no other command (the workspace's CI) replaces the
 preflight, and the skill's own steps check what it did not (the target, the build observed).
 
 ## 5. Deterministic helpers
@@ -74,6 +74,11 @@ preflight, and the skill's own steps check what it did not (the target, the buil
 Writes go through `common.workspace_path` and, for shared files, `common.workspace_lock` (technique-workspaces.md §7).
 
 ## 6. Behaviour that must hold (and its test)
+
+These are **contract tests**: they prove that the contracts are complete, that the scripts and adapters the skills call do
+what the contract says, and that the documents agree. They do not prove that an agent obeys a skill: its choices (which
+skill, what it asks, whether it stops for an approval) are a separate evaluation, prepared in
+[skills-evals.md](skills-evals.md) and not yet run.
 
 | Behaviour | Test |
 |---|---|
@@ -95,6 +100,9 @@ Writes go through `common.workspace_path` and, for shared files, `common.workspa
 | A bug added after the run keeps the result's evidence, time and run block; one artefact shared by cases is named by each | `test_run_log.py` |
 | Bugs grouped across platforms only on evidence; differences kept apart; a tool block is never a defect | `test_skills.py` (`Autonomy`) |
 | A web-only project is asked for no mobile tool | `test_workspace_select.py` |
+| The eight skills install into a temporary folder and their preflight runs on a fictional workspace, with nothing outside it touched | `test_install_smoke.py` (and the CI's `install` job) |
+| `/analyze-ticket` and `/test-pbi` run on the fictional demo's two ticket checks, with no credentials | `test_tickets_demo.py` |
+| The documented walkthrough (preflight, tickets, run log, dry run, totals) runs as written | `test_demo_walkthrough.py` |
 
 ## 7. Out of scope
 

@@ -155,8 +155,8 @@ def where(root_arg: str | None = None, environ=None, config_path: str | None = N
     from common import git_state, main_checkout
     sync = _sync()
     main = main_checkout(ROOT)
-    origins = {m: import_origin(m) for m in ("adapters", "qa_ui", "qa_audit", "openpyxl", "yaml")}
-    framework_modules = ("adapters", "qa_ui", "qa_audit")
+    origins = {m: import_origin(m) for m in ("adapters", "qa_audit", "openpyxl", "yaml")}
+    framework_modules = ("adapters", "qa_audit")
     elsewhere = [m for m in framework_modules if origins[m] and not _inside(origins[m], ROOT)]
     root, source = workspaces_root(root_arg, environ, config_path)
     target = target or sync.TARGET

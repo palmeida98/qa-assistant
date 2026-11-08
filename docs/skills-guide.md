@@ -59,7 +59,7 @@ preflight, which selects the workspace and checks the tools. Limits seen in prac
 | Methodology, techniques, procedures | `docs/`, `docs/procedures/` | — |
 | Skills | `.claude/skills/<name>/SKILL.md`, installed in `~/.claude/skills/` | — |
 | Scripts, adapters | `scripts/`, `adapters/` | — |
-| Permanent rules of the project | — | `CLAUDE.md` |
+| Permanent rules of the project | — | `CLAUDE.md`, or the headed rule sections of `context.md` when the project's `CLAUDE.md` imports it as its main document (methodology §12.2); never both |
 | Configuration | — | `project.yaml` (credentials only by name; values in `.env`) |
 | Resume summary | — | `context.md` (older entries in `archive/context/`) |
 | Ticket memory, PBI progress | — | `memory/tickets/`, `memory/checks/`, `memory/pbi/` |

@@ -83,10 +83,9 @@ jobs:
       # tests that recalculate real formulas (summary vs direct count), the rebuild of the demo
       # (versioned workbook = builder + batches; plan 7.6) and the real golden's mechanism with fictional
       # data (plan 7.3); in the tests job they are skipped
-      # tests.test_qa_ui_runs: its two LibreOffice tests (cases added and results applied through the interface's
-      # runner) are skipped in the tests job; the interface is leaving the active scope (docs/development-plan.md),
-      # and until its code goes they run here with the recalculation, never silently skipped
-      - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_qa_ui_runs -v
+      # tests.test_excel_recalc_flows: cases added and a batch applied with the real recalculation, through the commands
+      # the skills call; skipped in the tests job (no LibreOffice), so they run here and are never silently skipped
+      - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_excel_recalc_flows -v
 
   qa-audit-engine:
     # qa-audit engine (plan 8.2): integration tests against the local site, one job per engine in parallel (in
