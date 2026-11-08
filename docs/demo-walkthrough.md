@@ -65,7 +65,7 @@ python -m adapters.excel.apply "$WORK" runs/batch_poc01.json --dry-run --no-reca
 Exit code 4: the proposed bug is refused (`still a proposal ("proposed")`). The user approves it by removing
 `"proposed"` (here: `run_log.py remove`, then add the result again with the edited file). The dry run then exits 0, lists
 the cells that would change (`Cells that would change (44): …`, the new `Defects!B5`, …) and prints a **preview token**.
-The workbook is byte for byte the same as before. A real apply is `python -m adapters.excel.apply … --expect <token>`,
+The workbook is byte for byte the same as before. A real apply is `python -m adapters.excel.apply … --expect <token>` (a `v2-…` token, which also covers `--label`, `--reported-by`, `--now` and `--no-recalc`: give the same ones; a token from before version 2 is refused and the dry run is repeated),
 refused if anything changed since the preview, and only after the user confirms it; it is not part of this walkthrough.
 
 ## 5. The report: totals that reconcile, apart from what is not applied
