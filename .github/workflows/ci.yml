@@ -1,8 +1,8 @@
 # The framework's CI (plan 4.1): lint, unit tests, secrets and golden test on each pull request and on main.
 # The personal denylist does not run here on purpose -- it lives only in the local pre-commit.
-# Minutes (a private repository shares 2 000 a month with the workspaces' runs; each job rounds up to the minute):
-# a branch runs once, through its pull request (not also on push), and a newer push cancels the older run
-# (11.8 pilot: the month's minutes ran out).
+# A branch runs once, through its pull request (not also on push), and a newer push cancels the older run (11.8
+# pilot: the minutes of a private repository ran out; the repository is public now, where standard runners are free,
+# and the rule stays to keep each pull request's checks in one run). main runs every job again after a merge.
 name: CI
 
 on:
@@ -21,8 +21,8 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install ruff==0.16.8
@@ -31,8 +31,8 @@ jobs:
   tests:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -44,8 +44,8 @@ jobs:
   secrets:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install pre-commit
@@ -55,8 +55,8 @@ jobs:
   golden:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -71,31 +71,82 @@ jobs:
       # data (plan 7.3); in the tests job they are skipped
       - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real -v
 
-  qa-audit:
-    # qa-audit engine (plan 8.2): integration tests against the local site, in the three engines
+  qa-audit-engine:
+    # qa-audit engine (plan 8.2): integration tests against the local site, one job per engine in parallel (in
+    # series they took 17-19 minutes, about 5-6 per engine). Together the three jobs run every test of the suite:
+    # - chromium: the whole discovery with QA_AUDIT_TEST_ENGINES=chromium, so the tests that are not per engine
+    #   (CheckOpenPage, ReportInBrowser, and any new one) run here; then the cross-engine CompatibilityRun with the
+    #   three engines (skipped in the first command, which has one engine only)
+    # - firefox, webkit: only that engine's classes (matrix.classes: -k Firefox, -k Webkit; the test module generates
+    #   them as <Engine><Suffix>)
+    # An engine that cannot start is a failure (QA_AUDIT_REQUIRE_ENGINES), and a -k that selects nothing exits 5.
+    name: qa-audit (${{ matrix.engine }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: chromium
+          - engine: firefox
+            classes: Firefox
+          - engine: webkit
+            classes: Webkit
+    env:
+      QA_AUDIT_REQUIRE_ENGINES: "1"
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -e .[visual]
-      - run: python -m playwright install --with-deps chromium firefox webkit
+      # the browser downloads take about 10 s of this step and the system libraries the rest: no browser cache
+      - name: Playwright browsers
+        run: |
+          if [ "${{ matrix.engine }}" = chromium ]; then
+            python -m playwright install --with-deps chromium firefox webkit
+          else
+            python -m playwright install --with-deps "${{ matrix.engine }}"
+          fi
       - run: qa-audit doctor --no-color
       # xvfb: the manual login method opens the browser visibly (docs/qa-audit.md 20)
       - run: sudo apt-get install -y -q xvfb
-      - run: xvfb-run -a python -m unittest discover -s tests/integration -v
+      - name: Integration tests (${{ matrix.engine }})
+        env:
+          QA_AUDIT_TEST_ENGINES: ${{ matrix.engine }}
+          CLASSES: ${{ matrix.classes }}
+        run: |
+          if [ -z "$CLASSES" ]; then
+            xvfb-run -a python -m unittest discover -s tests/integration -v
+          else
+            xvfb-run -a python -m unittest discover -s tests/integration -v -k "$CLASSES"
+          fi
+      - name: Cross-engine comparison (chromium, firefox, webkit)
+        if: matrix.engine == 'chromium'
         env:
           QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
-          QA_AUDIT_REQUIRE_ENGINES: "1"
+        run: xvfb-run -a python -m unittest discover -s tests/integration -v -k CompatibilityRun
+
+  qa-audit:
+    # one status under the job's former name, whatever the matrix: success only when every engine succeeded
+    # (a run cancelled by a newer push is not reported as a failure)
+    needs: qa-audit-engine
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every engine passed
+        env:
+          RESULT: ${{ needs.qa-audit-engine.result }}
+        run: |
+          echo "qa-audit-engine: $RESULT"
+          test "$RESULT" = success
 
   install:
     # plan 8.9: clean checkout -> scripts/install.sh -> audit of the local fixture site
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: ./scripts/install.sh --with-deps
@@ -122,17 +173,19 @@ jobs:
       run:
         working-directory: examples/demo/e2e
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Demo secrets present?
         id: secrets
         run: |
           if [ -z "$DEMO_SAUCE_PASSWORD" ] || [ -z "$DEMO_SAUCE_STANDARD_USER" ] || [ -z "$DEMO_SAUCE_LOCKED_OUT_USER" ]; then
             echo "::warning title=demo-e2e did not run::secrets DEMO_SAUCE_* missing in the repository (Settings > Secrets and variables > Actions)"
+            # the job ends green without running a spec: said in the run's summary too, so it is never read as a pass
+            echo "**demo-e2e: NOT RUN** - the DEMO_SAUCE_* secrets are missing; no Playwright spec was executed." >> "$GITHUB_STEP_SUMMARY"
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: steps.secrets.outputs.ok == 'true'
         with:
           node-version: "22"
@@ -142,7 +195,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       # qa-audit engine for the state audit (docs/qa-audit.md section 22): it connects to the specs' Chromium
       # over CDP, so it only needs the package, not the Playwright browsers for Python
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: steps.secrets.outputs.ok == 'true'
         with:
           python-version: "3.12"

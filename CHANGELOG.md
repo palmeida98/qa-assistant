@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (CI, 2026-11-08)
+- The `qa-audit` integration job runs one job per engine in parallel (`qa-audit (chromium|firefox|webkit)`), with
+  the same tests: in series they took 17-19 minutes. A `qa-audit` job keeps the former status name and succeeds only
+  when every engine did. The cross-engine comparison still runs with the three engines, in the Chromium job.
+- GitHub Actions updated: `actions/checkout` v5 -> v7, `actions/setup-python` v6 -> v7, `actions/setup-node`
+  v5 -> v7 (none of the inputs they removed was used).
+- `demo-e2e` without its secrets writes "NOT RUN" in the run's summary, besides the warning.
+
 ### Fixed (final validation of 2026-11-08)
 - `run_log.py attach --evidence` with a path already recorded no longer rewrites the run log: evidence kept as a list
   of one path stays a list, and only the paths not recorded yet are added after the recorded ones.

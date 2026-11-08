@@ -231,8 +231,9 @@ workbook is rebuilt from the builder and the batches (`python examples/demo/rebu
 | `python scripts/qa_report.py <workspace> totals\|audit` | Reconciled totals per platform and build, and the audit of run logs, evidence and application (read only) |
 
 The CI (GitHub Actions, Ubuntu 24.04) runs `lint`, `tests`, `secrets`, `golden` (with LibreOffice), `qa-audit`
-(Chromium, Firefox, WebKit), `install` (clean clone and audit of the local site) and `demo-e2e` on each pull request
-and on `main`. Python dependencies, ruff, detect-secrets and the Playwright MCP have exact versions; a test prevents
+(one job per engine in parallel: Chromium, Firefox, WebKit; one `qa-audit` status gathers them), `install` (clean clone
+and audit of the local site) and `demo-e2e` on each pull request and on `main`. `demo-e2e` needs the repository's
+`DEMO_SAUCE_*` secrets; without them it runs no spec and says so in a warning and in the run's summary. Python dependencies, ruff, detect-secrets and the Playwright MCP have exact versions; a test prevents
 loose ones.
 
 ## State
