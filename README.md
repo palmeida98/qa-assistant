@@ -122,7 +122,7 @@ python scripts/sync_skills.py --apply                  # copies the eight skills
 python scripts/workspace_select.py where               # which framework, Python, imports, skill copy and commit guards run
 ```
 
-Where a document says `python`, use the interpreter of this checkout. No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (standard library only) prints the interpreter that can run the framework, or the commands that create a `.venv` for it; `python3 scripts/qa_python.py run scripts/qa_report.py <workspace> audit` runs a command with it from any directory.
+Where a document says `python`, use the interpreter of this checkout. No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (run from the checkout's root) prints the interpreter that can run the framework, or the commands that create a `.venv` for it. From any other directory use absolute paths: `python3 <checkout>/scripts/qa_python.py run <checkout>/scripts/qa_report.py <workspace> audit` runs a command with it (`<checkout>` is the folder you cloned).
 
 `sync_skills.py` without `--apply` is a dry run, and `--target <folder>` installs somewhere else (used by the tests). Skills
 of other origins are kept. A new Claude Code session is needed to load changed skills. Workspaces use the global copy, so
@@ -165,9 +165,9 @@ Details and every command are in [docs/skills-guide.md](docs/skills-guide.md) (t
 
 - **Time of the execution and time of the record.** `ts` is when the case was executed, `recorded_at` when it was written.
   `run_log.py add` records an execution happening now; an earlier observation takes `--executed-at "2026-11-05T16:21"
-  --executed-source "tester notes"` (or `--executed-at unknown`). No time zone is ever assigned, and a late record never makes
+  --executed-source "tester notes"` (a time nobody knows: `--executed-at unknown --executed-source "notes without a time"`). No time zone is ever assigned, and a late record never makes
   an old execution look newer.
-- **A Question is resolved, not overwritten.** `run_log.py resolve <batch> <case> <status> --reason … --decided-by …` keeps
+- **A Question is resolved, not overwritten.** `python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason … --decided-by …` keeps
   the observation, its time and evidence and records the decision; for a batch already applied it goes to a new batch with
   `--into`. Recording a decision does not apply it, and does not replace an approval the project asks for.
 - **A new bug and its priority.** `run_log.py defect-rule` says whether the project's schema requires a priority; the user
