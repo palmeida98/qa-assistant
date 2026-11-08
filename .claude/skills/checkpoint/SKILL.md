@@ -9,7 +9,7 @@ metadata:
   tools: "run_log.py, qa_report.py audit, compact_context.py, workspace_git.py status; the adapters for applying."
   outputs: "context.md updated; the consistency check; the pending list (batches to apply, bugs to review or publish, comments, uncommitted files, commits not pushed)."
   writes: "runs/ (results not yet saved), context.md, archive/context/ (compaction); the workbook or the tracker only after confirmation; a commit only when the user or the workspace's CLAUDE.md asks for it."
-  approvals: "Applying: the user confirms the batch after the dry run. Commit: the user or the workspace's rules. Push: only when the user says so."
+  approvals: "Saving and validating the local state (run log, context.md, the audit): none. Applying: the user confirms the batch after the dry run; a confirmation of the same preview whose token is still valid is not asked again. Commit: the user or the workspace's rules. Push: only when the user says so."
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
@@ -18,8 +18,11 @@ metadata:
   requires-tools: "git"
 ---
 
-0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
-   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
+   same. A run started by a launcher that already validated the workspace (the prompt of the local interface or
+   of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
+   instead; the steps below still check what the launcher did not (the target, the build observed), and a check
+   that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
    demo, ../..). Then:
    python <qa>/scripts/workspace_select.py preflight --skill checkpoint [<project id or name>] [--workspace <path>]
@@ -30,8 +33,10 @@ metadata:
    configuration it asks for. `Route:` lines name the procedure of each module; `Next:` is the one command to run
    before the work. The current workspace is the one it selected. Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
-1. Save every result of the session not yet in a run log, with run_log.py (procedures/apply.md steps 1 to 3). Never
-   write to history/. A Question stays Question, with its concrete question.
+1. Save every result of the session not yet in a run log, with run_log.py (procedures/apply.md steps 1 to 3); evidence
+   or a bug for a result already there with run_log.py attach, which keeps the rest of it. Never write to history/.
+   A Question stays Question, with its concrete question. Steps 1 to 4 are local and need no approval; applying
+   (step 5) and publishing are separate acts with their own.
 2. Validate, read only:
    python <qa>/scripts/qa_report.py <workspace> audit --since <date of the session>
    Every evidence file named must exist; Questions and proposed bugs are listed; a batch with a problem is not
@@ -47,7 +52,8 @@ metadata:
    (git status, read only); commits not pushed (python <qa>/scripts/workspace_git.py <workspace> status).
 5. Applying to the workbook or the tracker only after the user confirms that batch: procedures/apply.md steps 7 and
    7a. Excel: python -m adapters.excel.apply <workspace> <batch> --dry-run, show the cells, counts and problems it
-   lists, then after the approval the apply with --expect <token> (a stale preview is refused: preview again).
+   lists, then after the approval the apply with --expect <token> (a stale preview is refused: preview again, and
+   ask again; an approval of that same preview, still valid, is not asked a second time).
    Jira / Azure DevOps: dry run, approval, --yes. The exit codes as written there. The workspace's own rule on
    workbooks wins when stricter.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes

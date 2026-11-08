@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (skills configuration of 2026-11-08; methodology v2.13, skills-spec 2.1)
+- A request to test authorises its own scope: analysis, a plan by risk (negative, boundary and directly affected
+  regression; covered, missing and residual risk), the run on the platforms, environment and targets it names, and
+  the local records, without approving the same plan or run twice (`procedures/rules.md` §5). `/plan-tests` and
+  `/test-pbi` stop only for a request to plan, a wider scope, or a workspace rule that asks for it. Writes to a
+  workbook or a tracker, commits, pushes and syncs keep their approvals; an approval still valid (same set, preview
+  not stale) is reused across skills and on resuming.
+- The project's own rules (`CLAUDE.md` and what it imports) win where they ask for more, and the skill says which rule
+  it followed (`procedures/rules.md` §8); `/project-context` lists the rules in force. No new configuration key.
+- Evidence by risk on top of the project's policy, one artefact shared by cases with each case's part named, a block
+  kept with its diagnosis (`procedures/rules.md` §6, methodology §7.3).
+- One bug per problem: platforms grouped only when the evidence shows the same defect, differences kept apart, a link
+  not shown said to be uncertain, a platform not tested never named (methodology §9.1, `/manage-bugs`).
+- Step 0 of the skills: paths named in a prompt skip the search, not the checks; only a launcher that validated the
+  workspace (qa-ui, the workspace's CI) replaces the preflight. `/qa-report`'s contract names `dashboard.html` and
+  says the workbook is only read.
+
+### Added
+- `run_log.py attach <batch> <case> [--bug ID | --new-defect FILE] [--evidence PATH ...] [--replace-link]`: evidence or
+  a bug added to a recorded result keeps its status, observed text, time, earlier evidence and run block; before,
+  `/manage-bugs` had to `add --replace`, which dropped the evidence and rewrote `ts`.
+- `docs/README.md`, an index of the documentation.
+
 ### Added (iOS pilot of 2026-11-07, `docs/pilot-improvements-2026-11-07.md`)
 - Excel: `python -m adapters.excel.apply <ws> <batch> --dry-run [--json]` runs the apply's own pipeline on a temporary
   copy and lists the target workbook and platform, every cell before -> after (instant-only values marked

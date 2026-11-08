@@ -327,6 +327,60 @@ class RunLog(unittest.TestCase):
             f.write("[1, 2")
         self.assertEqual(self.run_("add", "20260929_01", "TC-SHOP-003", "Fail", "x", "--new-defect", draft)[0], 2)
 
+    # --- attach: a bug or evidence added after the run keeps what the run recorded (skills config 07.11.2026) -------
+
+    def test_attaching_a_bug_keeps_the_status_text_time_evidence_and_run_block(self):
+        rl.add(self.ws, "20260929_01", "TC-SHOP-002", "Fail", "expired coupon accepted",
+               evidence=["evidence/b/TC-SHOP-002_t1.png"], environment="test", build="1.4.0 (140)", now=NOW)
+        before = self.log()
+        draft = os.path.join(self.ws, "draft.json")
+        with open(draft, "w", encoding="utf-8") as f:
+            json.dump({"title": "Expired coupon accepted", "expected": "refused", "observed": "accepted"}, f)
+        code, out = self.run_("attach", "20260929_01", "TC-SHOP-002", "--new-defect", draft,
+                              "--evidence", "evidence/b/session.log")
+        self.assertEqual(code, 0, out)
+        self.assertIn("kept", out)
+        doc = self.log()
+        item = doc["results"][0]
+        self.assertEqual(doc["run"], before["run"])
+        self.assertEqual({k: item[k] for k in ("tc", "status", "actual_result", "ts")},
+                         {k: before["results"][0][k] for k in ("tc", "status", "actual_result", "ts")})
+        self.assertEqual(item["evidence"], ["evidence/b/TC-SHOP-002_t1.png", "evidence/b/session.log"])
+        self.assertEqual(item["new_defect"]["title"], "Expired coupon accepted")
+        # the same again changes nothing; another link needs --replace-link and drops the new defect for the bug
+        self.assertIn("unchanged", self.run_("attach", "20260929_01", "TC-SHOP-002", "--new-defect", draft)[1])
+        self.assertEqual(self.run_("attach", "20260929_01", "TC-SHOP-002", "--bug", "BUG-41")[0], 1)
+        self.assertEqual(self.log(), doc)
+        code, out = self.run_("attach", "20260929_01", "TC-SHOP-002", "--bug", "BUG-41", "--replace-link")
+        self.assertEqual(code, 0, out)
+        self.assertIn("previous link", out)
+        item = self.log()["results"][0]
+        self.assertEqual(item["bug"], "BUG-41")
+        self.assertNotIn("new_defect", item)
+        self.assertEqual(item["ts"], "2026-09-29T14:03:00")
+
+    def test_one_artefact_shared_by_two_cases_is_named_once_by_each(self):
+        for case in ("TC-SHOP-001", "TC-SHOP-002"):
+            rl.add(self.ws, "20260929_01", case, "Pass", f"ok, see session.log 14:02:{case[-1]}0", now=NOW)
+            rl.attach(self.ws, "20260929_01", case, evidence=["evidence/b/session.log"])
+        self.assertEqual([r["evidence"] for r in self.log()["results"]], ["evidence/b/session.log"] * 2)
+
+    def test_attach_refuses_what_it_cannot_do_and_writes_nothing(self):
+        self.assertEqual(self.run_("attach", "20260929_01", "TC-SHOP-001", "--bug", "BUG-1")[0], 2)  # no run log
+        rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
+        before = self.log()
+        self.assertEqual(self.run_("attach", "20260929_01", "TC-SHOP-002", "--bug", "BUG-1")[0], 2)  # no result
+        self.assertEqual(self.run_("attach", "20260929_01", "TC-SHOP-001")[0], 2)                   # nothing given
+        self.assertEqual(self.log(), before)
+        ad = ExcelAdapter.from_project(self.ws)
+        ad.load()
+        ad.apply_batch(self.log()["results"], batch_id="batch_20260929_01")
+        ad.save()
+        code, out = self.run_("attach", "20260929_01", "TC-SHOP-001", "--evidence", "evidence/b/x.png")
+        self.assertEqual(code, 1)
+        self.assertIn("already applied", out)
+        self.assertEqual(self.log(), before)
+
     def test_status_outside_the_vocabulary_is_2(self):
         code, out = self.run_("add", "20260929_01", "TC-SHOP-001", "Passed", "x")
         self.assertEqual(code, 2)

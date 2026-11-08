@@ -248,6 +248,113 @@ class Flow(unittest.TestCase):
                 self.assertIn(needle, text)
 
 
+class Autonomy(unittest.TestCase):
+    """The skills configuration of 08.11.2026 (methodology v2.13): a request to test authorises its own scope; the
+    project's own rules win where they ask for more; writes to a workbook or a tracker keep their approval; evidence
+    by risk; one bug per problem."""
+
+    def rules(self) -> str:
+        return flat(procedure("rules.md"))
+
+    def test_a_request_to_test_needs_no_second_approval_of_its_plan(self):
+        rules = self.rules()
+        self.assertIn("The request itself: a plan made for it is shown and the run follows, without a second approval "
+                      "of the same plan or run", rules)
+        plan = flat(skill_text("plan-tests"))
+        step7 = plan[plan.index("7. Save the analysis"):]
+        go_on = step7.index("go on with /run-tests, without asking to approve the same plan again")
+        stop = step7.index("STOP")
+        self.assertLess(go_on, stop)                       # the STOP is the second branch, not the default
+        self.assertIn("a workspace whose rules ask for a confirmation", step7[go_on:stop + 5])
+        pbi = flat(skill_text("test-pbi"))
+        self.assertNotIn("STOP for the user's approval. Once approved", pbi)
+        self.assertIn("The request to test the PBI covers the plan", pbi)
+        run = flat(skill_text("run-tests"))
+        self.assertIn("the run follows the plan without asking to approve it again", run)
+        self.assertNotIn("after the user approves it for the platform named", plan)
+
+    def test_a_request_to_plan_or_to_analyse_runs_nothing(self):
+        self.assertIn('"plan the tests of X" stops at the plan', self.rules())
+        self.assertIn("a request to plan only", flat(skill_text("plan-tests")))
+        self.assertIn("a request to analyse only stops here and runs nothing", flat(skill_text("analyze-ticket")))
+
+    def test_the_project_rules_win_where_they_ask_for_more_and_are_named(self):
+        rules = self.rules()
+        section = rules[rules.index("## 8. Defaults and the project's own rules"):]
+        for needle in ("and what it imports", "an approval of each platform's run", "the project's rule applies",
+                       "says which rule it followed", "never removes the approval of a write",
+                       "never applied to another"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, section)
+        self.assertIn("each rule of the workspace's CLAUDE.md, or of a file it imports, that asks for more",
+                      flat(skill_text("project-context")))
+        for name in ("plan-tests", "run-tests", "test-pbi"):
+            with self.subTest(skill=name):
+                self.assertRegex(flat(skill_text(name)), r"CLAUDE\.md asks for (more|a confirmation|that approval|one)")
+
+    def test_writes_to_a_workbook_or_tracker_wait_for_their_approval(self):
+        rules = self.rules()
+        self.assertIn("Every write to a workbook or a tracker (cases, results, bugs, comments, attachments) shows its "
+                      "exact content first, applies only the set approved, and is read back", rules)
+        self.assertIn("The autonomy of the tests never covers it, nor a commit, a push or a sync of the skills", rules)
+        checkpoint = flat(skill_text("checkpoint"))
+        self.assertIn("the user confirms the batch after the dry run", checkpoint)
+        self.assertIn("does not commit or push", checkpoint)
+        self.assertIn("approval before they enter the library", flat(skill_text("plan-tests")))
+
+    def test_a_valid_approval_is_reused_and_a_stale_one_is_asked_again(self):
+        rules = self.rules()
+        self.assertIn("It is reused, in this skill or the next, while that same set and its preview are still valid",
+                      rules)
+        self.assertIn("a changed set or a stale preview is asked again", rules)
+        self.assertIn("An approval still valid (§5) is not asked again on resuming", rules)
+        self.assertIn("an approval of that same preview, still valid, is not asked a second time",
+                      flat(skill_text("checkpoint")))
+
+    def test_resuming_keeps_what_was_recorded(self):
+        rules = self.rules()
+        self.assertIn("keeps its status, its observed text, its time, its evidence and the run block "
+                      "(`run_log.py attach`)", rules)
+        bugs = flat(skill_text("manage-bugs"))
+        self.assertIn("python <qa>/scripts/run_log.py <workspace> attach <batch> <case> --new-defect", bugs)
+        self.assertNotIn("add <batch> <case> Falhou|Fail", bugs)       # the replace that dropped the evidence
+        self.assertIn("Never `add --replace` only to link a bug", flat(procedure("bugs.md")))
+
+    def test_bugs_are_grouped_only_on_evidence_and_differences_stay_apart(self):
+        bugs = flat(skill_text("manage-bugs"))
+        for needle in ("One bug per problem", "The same defect shown by the evidence",
+                       "separate bugs, related when a link is known", "A link not shown stays uncertain",
+                       "A platform not tested is never named",
+                       "needs no root cause", "A tool failure, a block or inconclusive evidence is not a bug"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, bugs)
+
+    def test_a_tool_block_is_never_a_defect_and_evidence_is_by_risk(self):
+        rules = self.rules()
+        for needle in ("A failed capture or an automation timeout is never a defect of the application on its own",
+                       "a capture of the app is not required when it does not show the block",
+                       "one artefact may cover several cases", "the part that is its own (a timestamp, an interval",
+                       "no video of every case by default", "every file named exists",
+                       "A platform, build or environment not tested is never said to be affected or validated"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, rules)
+
+    def test_the_preflight_checks_even_when_the_paths_are_given(self):
+        for name in names():
+            text = flat(skill_text(name))
+            with self.subTest(skill=name):
+                self.assertNotIn("Preflight, unless the prompt of an unattended run already names", text)
+                self.assertIn("a launcher that already validated the workspace", text)
+                self.assertIn("a check that cannot run leaves its cases Blocked, never assumed", text)
+
+    def test_the_report_names_every_file_it_writes(self):
+        metadata = frontmatter(os.path.join(SKILLS, "qa-report", "SKILL.md"))["metadata"]
+        self.assertIn("dashboard.html", metadata["writes"])
+        self.assertIn("never saves it", metadata["writes"])
+        self.assertIn("Never a workbook", metadata["writes"])
+        self.assertIn("/checkpoint", metadata["approvals"])
+
+
 TRACKER_LINE = re.compile(r"python -m adapters\.tracker <workspace> (\S+)([^\n]*)")
 
 

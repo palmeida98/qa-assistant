@@ -11,7 +11,9 @@
    and respect the hierarchy of section 1.3. If two sources contradict each other, stop and ask.
 3. For each role/profile of the project, say whether it reaches the feature and what it can and cannot do.
 4. List the inputs, the states (life cycle), the business rules and the integrations.
-5. Assess the risk: probability of failure x impact for the user or for the business.
+5. Assess the risk: probability of failure x impact for the user or for the business, with the recent changes and
+   the dependencies they touch. Plan the negative and boundary cases and the regression of the areas affected
+   directly; a relevant sign found on the way widens the analysis inside the scope, with its reason written down.
 6. Record the specification gaps as questions or "missing specification" notes.
    Never fill them with assumptions (section 5.1).
 7. Produce the list of behaviours to test, each one linked to the role, rule or state it comes from,
@@ -95,7 +97,9 @@
 7. Check that each batch's test data exists. Cases without data are Blocked, with the reason.
 8. The optimisation never reduces coverage nor changes a case's logic: confirm that the number of cases
    planned equals the number of cases selected.
-9. Present the plan (batches, order, role, cases, dependencies) and wait for confirmation before /run-tests.
-10. Once confirmed, save each batch as <workspace>/batches/<name>.yaml -- cases: [<case ID>, ...] in the planned
+9. Present the plan (batches, order, role, cases, dependencies). Under a request to test within its scope it goes on
+   to /run-tests; a request to plan only, a wider scope, or a workspace whose rules ask for a confirmation waits for
+   it before /run-tests (rules.md sections 5 and 8).
+10. Once the plan stands (step 9), save each batch as <workspace>/batches/<name>.yaml -- cases: [<case ID>, ...] in the planned
     order (a name of letters, digits, '.', '_', '-') -- so it can also run remotely: the workspace's CI takes the
     batch's name (python scripts/workspace_ci.py <workspace> check --batch <name>; technique-mobile.md section 11).
