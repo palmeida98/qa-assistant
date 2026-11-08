@@ -180,8 +180,10 @@ jobs:
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
       # plan F20: the eight skills installed from the clean clone into a temporary folder (never ~/.claude), and the
       # preflight of each on the fictional demo workspace; nothing outside $RUNNER_TEMP is read or written
+      # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Install)
       - name: Skills sync and preflight (isolated)
         run: |
+          .venv/bin/python -m pip install --quiet -r requirements.txt
           export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
           target="$RUNNER_TEMP/skills"; mkdir -p "$target"
           .venv/bin/python scripts/sync_skills.py --apply --target "$target"
