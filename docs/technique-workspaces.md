@@ -137,7 +137,7 @@ Then it presents the project, the task, the environment keys, the tools, the wri
 |---|---|---|
 | `CLAUDE.md` | Permanent instructions | No temporary conclusion becomes a rule |
 | `project.yaml` | Configuration | The project's values; credentials only by reference |
-| `context.md` | Current summary and resume point | Localised updates; independent content is kept |
+| `context.md` | Current summary and resume point; the project's main document when its `CLAUDE.md` imports it, then also its permanent rules, in headed sections that are never compacted (methodology §12.2) | Localised updates; independent content is kept |
 | `analysis/` | Analyses of features, with date, sources and status | A new version is a new file; what is proposed is not a requirement |
 | `memory/tickets/` | Ticket references | Identity made of service, organisation and project |
 | `memory/checks/` | Checks and differences | Past reads are kept; analyses are linked and versioned |

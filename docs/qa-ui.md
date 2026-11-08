@@ -1,3 +1,8 @@
+> **Retired from the active scope (decision of 08.11.2026).** The product is the eight skills used through Claude Code; it
+> has no interface of its own, and `qa-ui` and the hub are neither developed nor promised for a later phase. This document and
+> `qa_ui/` stay as a legacy record until the user approves removing them (the exact list is prepared in
+> [development-plan.md](development-plan.md), phase 16). Nothing in the skills depends on them.
+
 # qa-ui — local web interface
 
 > Version 1.3 · 2026-11-01 · Plan, phases 12, 13, 15 and 15.6 (specification first, methodology §15). 1.1: the hub (§14). 1.2: the root can be configured and is never created; projects directly under the root; folders that are not ready are shown (§14.1, §14.2). 1.3: any folder name; each screen sets the tab's title and moves the focus to its heading; the user's edits of a run log take the workspace's lock (§9, §14.2).

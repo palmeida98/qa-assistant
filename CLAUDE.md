@@ -16,7 +16,9 @@ References:
 - docs/heuristics.md — anonymised failure patterns for error guessing (methodology §17; read when generating cases)
 - docs/development-plan.md — the framework's roadmap (read in development sessions)
 - docs/qa-audit.md — `qa-audit` automated audit engine (read when working on `src/qa_audit`); user guide: docs/qa-audit-guide.md
-- docs/qa-ui.md — `qa-ui` local web interface for a workspace: intake, suggested types of test, batch plan, runs, approvals (read when working on `qa_ui/`; plan phase 12)
+- docs/qa-ui.md — LEGACY: the local web interface `qa-ui`, retired from the active scope on 08.11.2026 (no interface of its own: the product is the eight skills in Claude Code); kept until its removal is approved; do not develop it
+- docs/tracker-validation.md — what each tracker (Excel, Azure DevOps, Jira + Xray) has implemented, tested with fakes and piloted for real, and what a real pilot needs (read when touching a tracker adapter or reporting its state)
+- docs/demo-walkthrough.md, docs/skills-evals.md — the reproducible fictional walkthrough (run by a test) and the agent-behaviour scenarios prepared but not yet run
 
 ## Fixed rules
 - Never write client data (URLs, accounts, names, credentials) in this repository.
@@ -39,12 +41,12 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/build_driver.py` — builds the companion driver `tools/android-driver/`; its signing key lives in `~/.qa-assistant/`, never in a repository
 - `scripts/setup_emulator.py`, `scripts/workspace_build.py`, `scripts/workspace_ci.py`, `scripts/remote_login.py` — the emulator, builds as releases, and remote execution (phase 11; `docs/workspace/ci/README.md`)
 - `scripts/build_dashboard.py <workspace> [--open]` — the workspace's `dashboard.html` (`/qa-report`, Excel only)
-- `scripts/workspace_select.py where|list|resolve|preflight|skills|set-root` — which framework really runs, the projects under the root with their status, which one a request means, and whether a skill can run there (read only, apart from `set-root`)
+- `scripts/workspace_select.py where|list|resolve|preflight|skills|set-root` — which framework really runs (and the commit guards: hooks installed, private denylist configured), the projects under the root with their status, which one a request means, and whether a skill can run there (read only, apart from `set-root`)
 - `scripts/qa_report.py <workspace> totals|audit` — reconciled totals per platform and build, and the audit of run logs, evidence and application (`/qa-report`, `/checkpoint`; read only)
 - `scripts/pbi_state.py <workspace> start|show|mark|baseline|check|published` — the resume record of `/test-pbi` (`memory/pbi/<id>.json`)
 - `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`, and the record next to it says which checkout it came from
 - `qa-audit …` (`pip install -e .` first; `qa-audit doctor`, or `python -m qa_audit doctor` when the `qa-audit` launcher points at a Python that is gone), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
-- `python -m qa_ui <workspace>` — the local web interface (docs/qa-ui.md)
+- `python -m qa_ui <workspace>` — LEGACY local web interface, retired from the active scope (docs/qa-ui.md); not developed
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `--dir <workspace>/golden/<batch>` (methodology §15). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)
 
 ## Environment

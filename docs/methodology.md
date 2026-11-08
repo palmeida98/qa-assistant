@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.13 · 2026-11-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026; a request to test that authorises its own scope, evidence by risk and one bug per problem since 08.11.2026.
+> Version 2.14 · 2026-11-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026; a request to test that authorises its own scope, evidence by risk and one bug per problem since 08.11.2026; a project's `context.md` may be its main document, with permanent rules in preserved sections, since 08.11.2026 (v2.14).
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -381,7 +381,7 @@ The assistant prepares the bug. Sending it to the external tracker only happens 
 
 In a **remote run** (§12.4) nobody is there to approve during the session, so the approval moves to the **pull request**: the agent writes every new bug as a `new_defect` with `"proposed": true`; the user reviews the run log in the pull request and edits it before the merge (removes a proposed bug, changes it, links an existing bug instead, or drops `"proposed"` to approve it) and answers each `Question`. The merge is the approval: only then is the run log applied (by the workspace's apply workflow, with `--yes` for Jira / Azure DevOps). A run log sent by the runner never has a `new_defect` applied before that, and every adapter refuses a `new_defect` that still has `"proposed"`.
 
-A run started from the **local interface** (`docs/qa-ui.md`) is unattended in the same way: the agent runs headless on the user's computer, writes each new bug as a `new_defect` with `"proposed": true` and each doubt as `Question`, and applies nothing. The approval happens in the interface, which records it in the run log (the same edits as in the pull request); only a run log with nothing proposed and no `Question` left is applied, and only after the user confirms it.
+A run started from the **local interface** (`docs/qa-ui.md`; the interface left the product's active scope on 08.11.2026, the rule stays for any unattended run) is unattended in the same way: the agent runs headless on the user's computer, writes each new bug as a `new_defect` with `"proposed": true` and each doubt as `Question`, and applies nothing. The approval happens in the interface, which records it in the run log (the same edits as in the pull request); only a run log with nothing proposed and no `Question` left is applied, and only after the user confirms it.
 
 ---
 
@@ -439,7 +439,9 @@ Updated: <date and time>
 ## Validation state
 ```
 
-`context.md` is the session's **temporary** state. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
+`context.md` is the session's **temporary** state by default. It does not replace the project's `CLAUDE.md` nor `project.yaml`. A decision that becomes a permanent rule moves up to one of those files.
+
+A project may choose otherwise, in its own `CLAUDE.md`: **`context.md` as the main document, imported by `CLAUDE.md`** (`@context.md`), with the project's permanent rules in clearly headed sections of it (for example `## Permanent rules`). The choice is the project's and is written once, in its `CLAUDE.md`; there is never a second competing copy of the rules, and the framework copies none of it. Those sections are never compacted or archived: `compact_context.py` reaches only the dated entries of `Current state`, `Execution point` and `Work done`, and a resume reads the whole imported document before acting. A rule is still changed only by the user.
 
 It stays **short**: the newest entries of the current state and of the execution point, the decisions still valid, the open questions, the blockers and the next steps, each pointing to the detailed record (run log, evidence, memory, `analysis/`). Older entries move to `archive/context/` word for word (`scripts/compact_context.py`, a dry run first, a recoverable copy of the whole file before the change); `history/` and the run logs are never touched, and a decision is never dropped by the tool: only dated entries older than the newest few are moved. A new session finds the last batch, what is pending and where the rest is without reading the older ones.
 
@@ -596,6 +598,10 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.13 → v2.14 (context as the main document, 08.11.2026)
+- **Changed:** a project may import `context.md` from its `CLAUDE.md` as its main document, with the permanent rules in headed sections that compaction never touches (§12.2); the default (rules in `CLAUDE.md`) is unchanged.
+- **Kept:** every approval, the statuses, `history/` immutable, one place for each rule.
 
 ### v2.12 → v2.13 (skills configuration, 08.11.2026)
 - **Changed:** a request to test authorises the work inside its scope (analysis, a plan by risk, the run, the local records) without approving the same plan or run twice (§3); the defaults and the precedence of a project's own rules are in `procedures/rules.md` §5 and §8. Writes to a workbook or a tracker keep their approval.

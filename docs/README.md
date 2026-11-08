@@ -13,7 +13,10 @@ Read only what the current task needs. This proposed index does not move or repl
 | Workspace configuration schema | [Project template](project.yaml) |
 | New computer / recovery | [Setup](workspace/setup.md), [resume](workspace/resume.md) |
 | Website audit engine | [User guide](qa-audit-guide.md), [specification](qa-audit.md) |
-| Local interface | [QA UI](qa-ui.md) |
+| Reproducible fictional walkthrough | [Demo walkthrough](demo-walkthrough.md) |
+| Tracker state: implemented, tested, piloted | [Tracker validation](tracker-validation.md) |
+| Agent-behaviour scenarios (prepared, not run) | [Skills evals](skills-evals.md) |
+| Legacy local interface (retired from the active scope) | [QA UI](qa-ui.md) |
 | Framework development and history | [Development plan](development-plan.md), [changelog](../CHANGELOG.md) |
 | Audit and pilot rationale | [Audit](audit-2026-11-06.md), [pilot improvements](pilot-improvements-2026-11-07.md) |
 
