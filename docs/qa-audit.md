@@ -457,7 +457,10 @@ The integration tests assert, among others: planted accessibility defects are fo
 problems; no trap link is requested and no form is posted; no request leaves `127.0.0.1` (recording proxy);
 reports are written, escaped and self-contained; `--cleanup` removes the run folder.
 Engines: `QA_AUDIT_TEST_ENGINES` (default `chromium,firefox`; CI adds `webkit`). An engine that cannot start is
-skipped with the reason.
+skipped with the reason. The CI runs one job per engine in parallel (`qa-audit (chromium|firefox|webkit)`, gathered
+in the `qa-audit` status): the Chromium job runs the whole discovery, so the tests that are not per engine run there,
+and then the cross-engine comparison with the three engines; the Firefox and WebKit jobs select their own classes
+with `-k Firefox` and `-k Webkit`.
 
 ---
 
