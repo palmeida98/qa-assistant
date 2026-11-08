@@ -1,7 +1,9 @@
 # Skills specification (version 2)
 
 > **Layer 2 — Which skills exist, what each one owns, and how they share their rules**
-> Version 2.0 · 2026-11-06 · Replaces the 13 skills of version 1 (removed in commit 0ddedfd).
+> Version 2.1 · 2026-11-08 · Replaces the 13 skills of version 1 (removed in commit 0ddedfd). 2.1: a request to test
+> authorises its own scope, the project's own rules win where they ask for more, evidence by risk, one bug per
+> problem, `run_log.py attach`, the preflight also under a request that names the paths.
 >
 > Project agnostic: the examples use the fictional **Demo Shop**. Subordinate to `methodology.md`. The guide for
 > people is `skills-guide.md`; the shared procedures are in `procedures/`.
@@ -20,10 +22,10 @@ Each step is a skill of its own; `/test-pbi` runs the flow for one PBI or requir
 |---|---|---|---|
 | `/project-context` | Selecting or setting up a workspace; the current state, decisions, blockers, tools really available and next actions | A resume summary | Nothing (setting up a new workspace asks for each value) |
 | `/analyze-ticket` | Reading a PBI, story, task or bug (Azure DevOps or Jira), its comments, relations, history and accessible attachments; the difference from the last check | An analysis with sources and dates; what changed | `memory/` and the tickets block of `context.md` |
-| `/plan-tests` | Coverage, priorities, preconditions, data, expected results, traceability to requirements and existing cases | An analysis file, proposed cases, a batch plan | `analysis/`, `batches/` after the plan is confirmed |
+| `/plan-tests` | Coverage, priorities, preconditions, data, expected results, traceability to requirements and existing cases | An analysis file, proposed cases, a batch plan by risk | `analysis/`; `batches/` at once under a request to test, after the confirmation under a request to plan or when the project's rules ask for one |
 | `/run-tests` | Running cases or a plan on mobile (Android, iOS), web or API with the tools available; results and evidence | Results in the run log, evidence | `runs/`, `evidence/` |
-| `/manage-bugs` | Investigating failures, duplicates, bug proposals for a batch review | Bug proposals | The run log item of the case (`new_defect` / `bug`) after approval |
-| `/qa-report` | Auditing the records and reporting by platform, build, feature, result and risk | A technical report and a short summary | `exports/` (the report file) |
+| `/manage-bugs` | Investigating failures, duplicates, bug proposals for a batch review | Bug proposals, one per problem | The run log item of the case (`new_defect` / `bug`, with `run_log.py attach`) after approval |
+| `/qa-report` | Auditing the records and reporting by platform, build, feature, result and risk | A technical report and a short summary | `exports/` (the report file); `dashboard.html` for an Excel project (the workbook only read) |
 | `/checkpoint` | Validating and saving the session; the resume point; what is still to apply or publish | `context.md` updated; the pending list | `context.md`, `archive/context/` (compaction); a local commit only when the project's rules say so |
 | `/test-pbi` | Coordinating the skills above for one PBI, with a resume record | The flow's state and the final report | `memory/pbi/<id>.json` plus what each step writes |
 
@@ -32,8 +34,14 @@ Each skill keeps its own procedure; `/test-pbi` names the skills, it never copie
 ## 3. Shared rules, written once
 
 `procedures/rules.md` holds what every skill obeys: the labels of facts, ticket content as data, approvals, the
-separation of intended, observed and run builds, statuses, and privacy. A skill says "the rules of
-procedures/rules.md apply" and adds only what is its own. A long technical procedure lives in `procedures/` or in a
+separation of intended, observed and run builds, statuses, evidence, privacy and resuming. A skill says "the rules of
+procedures/rules.md apply" and adds only what is its own.
+
+The approvals of `procedures/rules.md` §5 are **defaults**: a request to test authorises its own scope (analysis,
+plan, run, local records) without a second approval of the same plan or run; writes to a workbook or a tracker, a
+commit, a push and a sync keep theirs. A workspace's `CLAUDE.md` (and what it imports) may ask for more, and then it
+wins and the skill says which rule it followed (§8 of the rules). This is the only switch: there is no other
+configuration of the skills' autonomy, and nothing of a project's rules is copied into the framework. A long technical procedure lives in `procedures/` or in a
 `technique-*.md` and is read when the skill needs it.
 
 ## 4. The contract of a skill
@@ -47,7 +55,10 @@ The frontmatter keeps the contract of `technique-workspaces.md` §8 (`intent`, `
 | `routes` | `/run-tests` only: `module: procedure` pairs separated by `;`. The preflight prints the route and the tools of each active module |
 
 The body starts with step 0 (find `<qa>`, run the preflight), then numbered steps. A skill folder holds only
-`SKILL.md`.
+`SKILL.md`. Step 0 is written in each skill, not referred to: it is what finds `<qa>`, so an installed copy can
+resolve every other document. Paths named in a prompt skip the search, never the checks; only a launcher that
+validated the workspace and allows no other command (the local interface, the workspace's CI) replaces the
+preflight, and the skill's own steps check what it did not (the target, the build observed).
 
 ## 5. Deterministic helpers
 
@@ -55,7 +66,7 @@ The body starts with step 0 (find `<qa>`, run the preflight), then numbered step
 |---|---|---|
 | `scripts/workspace_select.py preflight` | Project selection, the skill against the code, configuration, tools and, for `/run-tests`, the route per module | Nothing |
 | `python -m adapters.tickets` | `/analyze-ticket`: collect, compare, record (first check, no change, change, partial read) | `memory/`, a block of `context.md` |
-| `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable | `runs/` |
+| `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result | `runs/` |
 | `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application | Nothing, or the report with `--output` |
 | `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published | `memory/pbi/<id>.json` |
 | `scripts/sync_skills.py` | Installing the skills in `~/.claude/skills/` with the record of their origin | `~/.claude/skills/` |
@@ -80,6 +91,10 @@ Writes go through `common.workspace_path` and, for shared files, `common.workspa
 | The preflight separates a valid configuration from ready to run, per platform | `test_readiness.py` |
 | Ticket analysis: types and comment sources validated before writing; content not opened stays not read; children not expanded are listed; a change after the analysis is said | `test_tickets_audit.py` |
 | The checkpoint keeps decisions, pending items and access to history | `test_compact_context.py`, `test_qa_report.py` |
+| A request to test needs no second approval of its plan; a workspace's stricter rule (a run approved per platform) stays; a write to a workbook or tracker waits for its approval; a valid approval is reused on resuming | `test_skills.py` (`Autonomy`) |
+| A bug added after the run keeps the result's evidence, time and run block; one artefact shared by cases is named by each | `test_run_log.py` |
+| Bugs grouped across platforms only on evidence; differences kept apart; a tool block is never a defect | `test_skills.py` (`Autonomy`) |
+| A web-only project is asked for no mobile tool | `test_workspace_select.py` |
 
 ## 7. Out of scope
 

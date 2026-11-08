@@ -3,8 +3,16 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 
     python scripts/run_log.py <workspace> add <batch> <case> <status> <actual>
         [--bug ID] [--new-defect FILE.json] [--evidence PATH ...] [--environment KEY] [--build VERSION]
+    python scripts/run_log.py <workspace> attach <batch> <case> [--bug ID | --new-defect FILE.json]
+        [--evidence PATH ...] [--replace-link]
     python scripts/run_log.py <workspace> remove <batch> <case>
     python scripts/run_log.py <workspace> mode <batch> "<kind>: <why>"
+
+- attach: adds evidence, an existing bug (--bug) or an approved new bug (--new-defect) to a result already in the
+  batch, and keeps everything else of it: status, observed text, "ts" (the time of the execution, methodology 7.1),
+  its evidence (the new paths are added after it) and the run block. The same link again changes nothing; another
+  link than the one recorded is refused unless --replace-link (the previous one is printed). A case without a result
+  in the batch is exit 2: its result is written first with add. Used by /manage-bugs after the review.
 
 - mode: how the batch is executed and why (procedures/run-mobile.md step 2), the run log's top-level "mode", written
   before the first result: `mode` on its own (it creates the run log when there is none), or `add ... --mode`. The kind
@@ -344,6 +352,71 @@ def _same_context(doc: dict, environment: str | None, build: str | None) -> None
                       f"says {environment!r}. Plan a new batch (/plan-tests)")
 
 
+def _paths(value) -> list[str]:
+    """The evidence of an item as a list: one path or several."""
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list):
+        return [e for e in value if isinstance(e, str) and e]
+    return []
+
+
+def attach(workspace: str, batch: str, case: str, bug: str | None = None, new_defect: dict | None = None,
+           evidence: list[str] | None = None, replace_link: bool = False) -> tuple[str, dict, dict]:
+    """Adds evidence or a bug to a result already recorded, keeping the rest of it: (path, before, after); before ==
+    after when nothing changed. Refused / UsageError as in the header."""
+    if not (bug or new_defect is not None or evidence):
+        raise UsageError("nothing to attach: give --bug, --new-defect or --evidence")
+    if bug and new_defect is not None:
+        raise UsageError("--bug (an existing bug) and --new-defect (a new one) exclude each other")
+    if new_defect is not None and (not isinstance(new_defect, dict) or not new_defect):
+        raise UsageError("--new-defect must hold a JSON object")
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    name = batch_id(batch)
+    where = applied(workspace, proj, name)
+    if where:
+        raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
+                      f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
+    path = run_log_path(workspace, name)
+    if not os.path.isfile(path):
+        raise UsageError(f"{name} has no run log (runs/{os.path.basename(path)}): write the result first with add")
+    try:
+        with workspace_lock(workspace):
+            where = applied(workspace, proj, name)
+            if where:
+                raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
+                              f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
+            doc = read_log(path)
+            at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict)
+                       and str(x.get("tc") or "").strip() == case.strip()), None)
+            if at is None:
+                have = ", ".join(str(x.get("tc")) for x in doc["results"] if isinstance(x, dict)) or "none"
+                raise UsageError(f"{case.strip()!r} has no result in {name} (results: {have}): write it first with add")
+            before = doc["results"][at]
+            item = dict(before)
+            link = ("bug", bug) if bug else ("new_defect", new_defect) if new_defect is not None else None
+            if link:
+                key, value = link
+                recorded = {k: before[k] for k in ("bug", "new_defect") if before.get(k) not in (None, "", {})}
+                if recorded and recorded != {key: value} and not replace_link:
+                    raise Refused(f"{item.get('tc')} is already linked to {json.dumps(recorded, ensure_ascii=False)}: "
+                                  "add --replace-link to replace that link (the rest of the result is kept)")
+                item.pop("bug" if key == "new_defect" else "new_defect", None)
+                item[key] = value
+            if evidence:
+                merged = list(dict.fromkeys(_paths(before.get("evidence")) + list(evidence)))
+                item["evidence"] = merged[0] if len(merged) == 1 else merged
+            if item != before:
+                doc["results"][at] = item
+                write_log(path, doc)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+    return path, before, item
+
+
 def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
     """Takes one mistaken result out of a batch not yet applied: (path, the result removed). The others stay as they
     are, evidence is never deleted, and the read, the change and the write are one step under the workspace's lock."""
@@ -374,6 +447,14 @@ def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
     return path, gone
 
 
+def _read_defect(path: str):
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (OSError, ValueError) as e:
+        raise UsageError(f"--new-defect {path}: {e}") from None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Writes the session's run log (methodology 7.1).")
     ap.add_argument("workspace")
@@ -398,8 +479,29 @@ def main(argv=None) -> int:
     p = sub.add_parser("remove", help="take one mistaken result out of a batch not yet applied")
     p.add_argument("batch")
     p.add_argument("case")
+    p = sub.add_parser("attach", help="add evidence or a bug to a result already recorded, keeping the rest of it")
+    p.add_argument("batch")
+    p.add_argument("case")
+    p.add_argument("--bug", help="an EXISTING bug linked to the case")
+    p.add_argument("--new-defect", metavar="FILE", help="JSON object of a new bug (approved; or \"proposed\": true)")
+    p.add_argument("--evidence", nargs="+", metavar="PATH", help="paths under evidence/, added after the ones recorded")
+    p.add_argument("--replace-link", action="store_true",
+                   help="replace a bug or new defect already linked to the result (the previous one is printed)")
     a = ap.parse_args(argv)
     try:
+        if a.command == "attach":
+            new = _read_defect(a.new_defect) if a.new_defect else None
+            path, before, after = attach(a.workspace, a.batch, a.case, a.bug, new, a.evidence, a.replace_link)
+            if before == after:
+                print(f"unchanged: {a.case} in {path} already has it")
+                return 0
+            print(f"attached to {a.case} ({after.get('status')}, {after.get('ts')}) in {path}; status, observed "
+                  "text, time, evidence and run block kept")
+            gone = {k: before[k] for k in ("bug", "new_defect") if k in before and before.get(k) != after.get(k)}
+            if gone:
+                print("previous link (kept only in this output and in git history): "
+                      + json.dumps(gone, ensure_ascii=False))
+            return 0
         if a.command == "mode":
             path, previous, changed = set_mode(a.workspace, a.batch, a.value)
             if not changed:
@@ -418,13 +520,7 @@ def main(argv=None) -> int:
             if files:
                 print("evidence not deleted (delete it by hand if it is not needed): " + ", ".join(files))
             return 0
-        new = None
-        if a.new_defect:
-            try:
-                with open(a.new_defect, encoding="utf-8-sig") as f:
-                    new = json.load(f)
-            except (OSError, ValueError) as e:
-                raise UsageError(f"--new-defect {a.new_defect}: {e}") from None
+        new = _read_defect(a.new_defect) if a.new_defect else None
         path, replaced = add(a.workspace, a.batch, a.case, a.status, a.actual, a.bug, new, a.evidence,
                              a.environment, a.build, replace=a.replace, mode=a.mode)
     except Refused as e:

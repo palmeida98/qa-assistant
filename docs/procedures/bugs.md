@@ -19,8 +19,11 @@
    batch review the user decides whether to update one of them or create a new one, never the adapter nor the
    assistant.
 4. Write: title in the project's format, environment and build, role and platform, preconditions,
-   steps to reproduce, expected -> observed, linked cases. Severity and priority only if the user asks
-   for them or decides them (section 9.2).
+   steps to reproduce, expected -> observed, linked cases. Several platforms in one bug only when the evidence shows
+   the same defect on each: then per platform the environment, device or browser, OS, build observed, steps,
+   observed result and evidence; a platform not tested is never listed as affected. Relevant differences: separate
+   bugs, related when a link is known; a link not shown is said to be uncertain. The cause may be unknown: say so.
+   Severity and priority only if the user asks for them or decides them (section 9.2).
 5. Put the bug in the batch's review: /manage-bugs shows every proposal of the batch at once and the user approves,
    changes or drops each one there (section 9.4). Nothing is recorded before that review, and nothing is asked bug
    by bug in the middle of the work.
@@ -47,6 +50,10 @@
    The bug's update goes in the item of the case where it was retested ("bug" + a note, or "bug_status").
 9. On a runner (remote execution, methodology 9.4 and 12.4) nobody approves during the run: a new bug goes as
    "new_defect" with "proposed": true, for the user to approve in the pull request; never applied before that.
-10. Writing the item: python scripts/run_log.py <workspace> add <batch> <case> <status> "<observed>"
-    [--bug ID] [--new-defect draft.json] (from the root of qa-assistant); it refuses a batch already applied
-    and names a new batch for the correction.
+10. Writing the item, from the root of qa-assistant. A case that already has its result in the batch:
+    python scripts/run_log.py <workspace> attach <batch> <case> [--bug ID | --new-defect draft.json] [--evidence PATH]
+    keeps its status, observed text, time ("ts", the execution's), evidence and run block; another link than the
+    one recorded needs --replace-link. A failure not yet in the run log:
+    python scripts/run_log.py <workspace> add <batch> <case> <status> "<observed>" [--bug ID] [--new-defect draft.json]
+    Both refuse a batch already applied and name a new batch for the correction. Never `add --replace` only to link
+    a bug: it drops the result's evidence and time.

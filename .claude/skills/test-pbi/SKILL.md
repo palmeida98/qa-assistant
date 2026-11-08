@@ -10,15 +10,18 @@ metadata:
   tools: "pbi_state.py for the record; each step's own tools through its skill."
   outputs: "The state of the flow per step and platform, and at the end the report of /qa-report for the PBI."
   writes: "memory/pbi/<pbi>.json, plus what each skill writes in its own step."
-  approvals: "Those of each step: the plan before any run, each platform apart, the bug review, each application or publication."
+  approvals: "The request to test the PBI covers analysing, planning and running it on the platforms named, with no approval of the same plan or run twice (rules.md section 5); the bug review, each application to a workbook or tracker and each publication keep their own. A workspace whose CLAUDE.md asks for more (the plan confirmed, each platform's run approved) keeps it (rules.md section 8)."
   failures: "A blocked step is marked blocked with the reason; the independent steps go on and the missing ones are listed. A changed requirement, build or environment since the plan is reported before going on."
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan and the bugs published."
   requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py"
   requires-docs: "procedures/rules.md, skills-guide.md, methodology.md"
 ---
 
-0. Preflight, unless the prompt of an unattended run already names the workspace and qa-assistant. Find <qa>, the
-   root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
+   same. A run started by a launcher that already validated the workspace (the prompt of the local interface or
+   of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
+   instead; the steps below still check what the launcher did not (the target, the build observed), and a check
+   that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
    demo, ../..). Then:
    python <qa>/scripts/workspace_select.py preflight --skill test-pbi [<project id or name>] [--workspace <path>]
@@ -51,11 +54,14 @@ metadata:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> <step> done --ref <file, check id or batch>
    - context: /project-context.
    - analyze: /analyze-ticket on the PBI and its tasks (FE, BE, QA), decisions and related bugs.
-   - plan: /plan-tests for the PBI and the platforms; STOP for the user's approval. Once approved:
+   - plan: /plan-tests for the PBI and the platforms. The request to test the PBI covers the plan: present it and go
+     on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, and say
+     which rule). Once the plan stands:
      python <qa>/scripts/pbi_state.py <workspace> baseline <pbi> --ticket <id>=<revision> --build <p>=<observed>
      [--environment <key>]
-   - run:<platform>: /run-tests, one platform at a time, each after its own approval.
-   - bugs: /manage-bugs, one review for all failures of the PBI.
+   - run:<platform>: /run-tests, one platform at a time, on the platforms the request named; a separate approval per
+     platform only when the workspace's rules ask for it. An approval still valid is not asked again on resuming.
+   - bugs: /manage-bugs, one review for all failures of the PBI (its approval before anything reaches the tracker).
    - report: /qa-report scoped to the PBI's batches and plan.
    - checkpoint: /checkpoint, the one that closes the flow (the intermediate checkpoints of a long run do not mark it).
 5. A step that cannot go on: mark <pbi> <step> blocked --note "<reason>" and continue with the steps that do not
@@ -65,4 +71,5 @@ metadata:
    (<proof>: the check id that read the bug back, or tracker/sent/<batch>.json)
    Exit 1 means it was already published (or that key belongs to another draft): update the existing one, never
    publish it again. A proposal is never recorded here: proposals live in the run log until the review.
-7. End with the /qa-report summary of the PBI and the record's `Next:` line.
+7. End with the /qa-report summary of the PBI and the record's `Next:` line. The autonomy of the tests never commits,
+   pushes or syncs anything: those follow their own rules (rules.md section 5).

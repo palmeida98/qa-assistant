@@ -78,7 +78,7 @@
 9. Record one note per turn in actual_result: what was sent, the decisive quote of the answer and the
    capture's path (evidence/<batch>/<case>_t<N>.png), through
    python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path>]
-   (one item per case, replaced when written again; a batch already applied is refused: use the new name
+   (one item per case, a second execution of it with --replace; a batch already applied is refused: use the new name
    it suggests). A result written for the wrong case: python scripts/run_log.py <workspace> remove <batch> <case> (a batch
    not yet applied; it shows the result, keeps the rest and never deletes evidence). A case that is not in the project's
    library is refused: it is added first (/plan-tests). Assisted mode (the user taps and types; device.py only reads) only when the companion

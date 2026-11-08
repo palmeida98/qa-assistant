@@ -7,12 +7,20 @@
 
 ```text
 /project-context ──► /analyze-ticket ──► /plan-tests ──► /run-tests ──► /manage-bugs ──► /qa-report ──► /checkpoint
-       resume            what changed        approve ▲        per platform     batch review       totals        resume point
+       resume            what changed        by risk ▲        per platform     batch review       totals        resume point
                                                      └──── /test-pbi runs this flow for one PBI and resumes it ────┘
 ```
 
 Each skill can be used alone. `/test-pbi` keeps a record (`memory/pbi/<id>.json`) so it can stop at any step and
 continue in another session.
+
+**What a request authorises** (`procedures/rules.md` §5 and §8). "Test DS-12 on Android" covers the analysis, a plan
+by risk, the run on Android in the test environment and the local records (run log, evidence, checkpoint), without
+approving the same plan twice. "Plan the tests of DS-12" stops at the plan. Every write to the workbook or the
+tracker (cases, results, bugs, comments) shows its exact content and waits for its approval; another platform,
+environment or target is asked; a commit, a push or a sync of the skills is never a side effect. A workspace whose
+`CLAUDE.md` asks for more (for example an approval of each platform's run) keeps its rule, and `/project-context`
+names the rules in force.
 
 ## 2. Examples
 
@@ -87,7 +95,8 @@ runs, its preflight prints the project and the framework, and the answer is the 
 |---|---|
 | Is this skill usable here, and is each route ready to run? | `scripts/workspace_select.py preflight --skill <skill> --workspace <ws>` (exit 0 = configuration valid; `Ready:` lines per platform) |
 | The device, the app and the build, before a batch | `scripts/device.py <ws> check [--batch <batch>]`; an iPhone: `--platform ios` |
-| Record one result | `scripts/run_log.py <ws> add <batch> <case> <status> "<observed>" --evidence <file> --build "<build>" --environment <env>` (a second result of a case needs `--replace`) |
+| Record one result | `scripts/run_log.py <ws> add <batch> <case> <status> "<observed>" --evidence <file> --build "<build>" --environment <env>` (a second execution of a case needs `--replace`) |
+| Add evidence or a bug to a recorded result, keeping it | `scripts/run_log.py <ws> attach <batch> <case> --bug <id> \| --new-defect <draft.json> [--evidence <file>]` |
 | Where each result stands (applied or not, per platform and build) | `scripts/qa_report.py <ws> totals` (`--detail` for every retest), `audit` |
 | The resume record of a PBI | `scripts/pbi_state.py <ws> show <pbi>`; after a change: `check … --reopen` |
 | Read a ticket | `python -m adapters.tickets <ws> collect <id>` (the children too unless `--no-expand`) |

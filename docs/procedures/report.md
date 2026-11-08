@@ -18,11 +18,13 @@ summary format of methodology section 16.3 stay the references of the report.
    from what this assistant sent would miss everyone else's results. Point the user to the tracker's own
    reports (the Xray test plan and execution reports, the Azure DevOps test plan's progress report) and, for
    this session's numbers, to /qa-report's summary.
-3. Confirm that dashboard.html is in the workspace's .gitignore. If it is not, add it and tell the
-   user (the dashboard has project data and does not go into git).
+3. Confirm that dashboard.html is in the workspace's .gitignore. If it is not, add that one line and tell the
+   user (the dashboard has project data and does not go into git). That line and dashboard.html are the only files
+   this section writes.
 4. From the root of qa-assistant, with the ABSOLUTE path of the workspace:
    python scripts/build_dashboard.py <workspace> --open
-   The script only reads the workbook; it never saves it.
+   The script only reads the workbook; it never saves it. Any change to a workbook (e.g. a summary's formulas) is
+   /checkpoint's, after its dry run and the user's approval.
 5. If it exits with 2, nothing was built: show the message (e.g. invalid dashboard.states section, or
    excel.summary.not_run_status different from the dashboard's pending status) and propose the fix to
    project.yaml. Do not change project.yaml without confirmation.

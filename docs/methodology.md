@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.12 · 2026-11-06 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026.
+> Version 2.13 · 2026-11-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026; a request to test that authorises its own scope, evidence by risk and one bug per problem since 08.11.2026.
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -114,7 +114,9 @@ Version 2 of the skills (2026-11-06; `skills-spec.md`, `skills-guide.md`) replac
 
 The user need not know these commands. Claude Code matches the request against the skills' descriptions, and each skill starts by finding the framework and the project (§4.3). Each skill's contract (intent, inputs, configuration, tools, outputs, writes, approvals, failures, resume) is in its own frontmatter; `python scripts/workspace_select.py skills` prints the catalogue from there. A skill existing does not prove its tools are available.
 
-**Analysis is not execution.** "Analyse these tickets" gives an analysis and marks nothing as tested. "Test this feature" may go through planning and execution, respecting the approved batch and the project's rules.
+**Analysis is not execution.** "Analyse these tickets" gives an analysis and marks nothing as tested. "Test this feature" may go through planning and execution, respecting the batch planned for it and the project's rules.
+
+**A request to test is its own authorisation** for the work inside its scope (the platforms, environment and targets it names): analysing, planning by risk, selecting existing cases, preparing local proposals, running, and recording run logs, evidence and local checkpoints, without approving the same plan or run twice. It never covers a write to a workbook or a tracker (cases, results, bugs, comments, attachments: each one shows its exact content and waits for its approval, §5.3, §9.4), another platform, environment or target, a commit, a push or a sync of the skills. A project whose rules ask for more (for example an approval of each platform's run) keeps them (§1.3 point 2); the defaults and that precedence are written once in `procedures/rules.md` §5 and §8.
 
 ---
 
@@ -257,6 +259,7 @@ During the session, the results are written to a run log in `runs/` (one file pe
 - A **new** bug goes as `new_defect` (fields in the tracker's technique, e.g. `technique-excel.md` §4), only after the user approves it (§9).
 - **A result is written only for a case of the project's library** (the workbook, or `tracker/cases.json`): an unknown ID is refused with the closest known ones, and a library that cannot be read is an error, never a silent acceptance.
 - **The run block is immutable once the batch has results**: another build or environment is refused. A build that changes during a batch ends that batch; a new one is planned with the right context (`technique-mobile.md` §1.4).
+- **Evidence or a bug added after the execution keeps the result**: `run_log.py attach` adds them to the item and keeps its status, observed text, `ts`, earlier evidence and the run block; `add --replace` is only for a new execution of the case.
 - **A mistaken result is removed, not edited over**: `run_log.py remove` shows the result, keeps the others, never deletes evidence and refuses a batch already applied.
 - Cases in `Question` can stay in the log during the session, but are reclassified before the batch goes to the workbook or tracker (§8.5): the adapter refuses a batch with statuses outside the project's vocabulary.
 - **Execution, application and later decision are three things.** `ts` is the time of the execution, never the time it was recorded or applied. An item that only records an earlier execution in the workbook, perhaps under another status decided later (a Question recorded as Blocked), declares `"applies": "<batch of the execution>"` and has no `ts` of its own; the reports keep the execution as the current result and show the applied status apart (`qa_report.py totals`). A correction of an execution is a new result with its own `ts` and `revision_of`. A time that no source gives is never filled in. A result whose run block has no build has an **unknown** build: it is never attributed to the current build nor counted in a build's coverage.
@@ -275,12 +278,12 @@ Each checkpoint keeps the statuses, the results, the new or updated bugs and the
 
 | Result | Evidence |
 |---|---|
-| Pass | None beyond the record |
+| Pass | What lets the result be verified (the record, a log, a response or a capture, by the risk) |
 | Fail | Enough to reproduce: URL, role, steps done, data used, expected → observed, relevant messages |
 | N/A | Short justification |
-| Blocked | Reason and the dependency that blocks |
+| Blocked | Reason and the dependency that blocks: the diagnosis that was reachable and the condition missing |
 
-By default the evidence is **textual**. Screenshots or video only when `project.yaml` requires them. Do not produce redundant evidence.
+The evidence is **proportional to the risk**, and the project's policy (`evidence` in `project.yaml`, its `CLAUDE.md`) is the minimum. A Fail, a Blocked or an intermittent result is reinforced with what shows it (a capture, a video, a log, an API response) when the text alone cannot; a capture of the app is not required when it does not show a block. One artefact may serve several cases when each case names its own part (a timestamp, an interval, lines). Every file named exists. Do not produce redundant evidence, nor a video of every case by default. A failure of the tool, a block and inconclusive evidence are kept apart from a defect of the application (§8).
 
 ---
 
@@ -348,6 +351,7 @@ A final report never contains cases in `Question`.
 3. If the problem already exists, **update the existing bug**.
 4. Only create a new bug when there is evidence that it is a distinct problem.
 5. When it is not clear whether it is a duplicate, propose it to the user and let them decide.
+6. **One bug per problem.** The same defect on several platforms (Android, iOS, web) goes in one bug only when the evidence shows it is the same (the same steps, screen or flow and result): it then holds the environment, device or browser, OS, build, steps, observed result and evidence of each platform. Similar symptoms are not enough; a relevant difference makes separate bugs, related when a link is known; a link not shown stays uncertain. A platform not tested is never said to be affected or validated. A reproducible defect needs no root cause: say when it is unknown.
 
 ### 9.2 Minimum content
 
@@ -592,6 +596,12 @@ When a doubt could significantly change the results of the tests, **stop and ask
 ---
 
 ## Migration notes
+
+### v2.12 → v2.13 (skills configuration, 08.11.2026)
+- **Changed:** a request to test authorises the work inside its scope (analysis, a plan by risk, the run, the local records) without approving the same plan or run twice (§3); the defaults and the precedence of a project's own rules are in `procedures/rules.md` §5 and §8. Writes to a workbook or a tracker keep their approval.
+- **Changed:** the evidence is proportional to the risk on top of the project's policy, and one artefact may serve several cases (§7.3); one bug per problem, grouping platforms only on evidence (§9.1).
+- **New:** `run_log.py attach` adds evidence or a bug to a recorded result and keeps the rest of it (§7.1).
+- **Kept:** every approval of a write to a workbook or a tracker, the statuses, the run block, the unattended runs (§9.4); a project's stricter rules.
 
 ### v2.11 → v2.12 (skills version 2, 06.11.2026)
 - **Changed:** the thirteen skills became eight (`skills-spec.md`, §3): `/project-context` (onboarding and resuming), `/analyze-ticket`, `/plan-tests` (analysis, case design and batches), `/run-tests` (mobile, web, API, accessibility, by a route per module), `/manage-bugs`, `/qa-report` (totals per platform and build, and the dashboard), `/checkpoint` and `/test-pbi` (the flow for one PBI, resumable). The long procedures moved word for word to `procedures/`; the rules every skill shares are in `procedures/rules.md`. The names map in `skills-guide.md` §6.

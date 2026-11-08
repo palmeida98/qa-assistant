@@ -165,7 +165,7 @@ A skill existing does not prove its tools are available: that is what `requires-
 
 **Routing is light.** Claude Code matches the request against the skills' descriptions and the skill runs its preflight, so the user need not know the commands. Methodology §3 has the table; `skills-spec.md` says what each skill owns and `skills-guide.md` how to ask for it, with the limits of matching by description. `/project-context` is the entry point for "continue", and `/test-pbi` runs the whole flow for one PBI; every skill still finds the framework and the project by itself. A second execution engine, a manual catalogue or a database would add nothing.
 
-Analysis and execution stay apart. "Analyse these tickets" gives an analysis. "Test this feature" may go through planning and execution, respecting the approved batch and the project's rules.
+Analysis and execution stay apart. "Analyse these tickets" gives an analysis. "Test this feature" may go through planning and execution, respecting the batch planned for it and the project's rules (procedures/rules.md §5 and §8).
 
 ## 9. Syncing the skills
 

@@ -600,6 +600,21 @@ class Preflight(Base):
     MOBILE: ClassVar[dict] = {"modules": ["mobile", "exploratory"],
                               "mobile": {"app_id": "pt.demo.app", "platform": "android", "flows": "flows"}}
 
+    def test_a_web_only_project_is_asked_for_no_mobile_tool(self):
+        # skills configuration 07.11.2026, point 3: a declarative list must not ask iOS tools of a web project
+        make_project(self.root, "demo/web")
+        lines = [(False, "xcrun", "iOS needs macOS with Xcode"), (False, "maestro", "not found"),
+                 (False, "adb", "not found"), (False, "ios-wda", "no WDA"), (True, "node", "/bin/node"),
+                 (True, ".env", "present")]
+        with mock.patch("validate_project.environment", return_value=lines):
+            code, report = self.preflight("run-tests", "demo/web")
+        self.assertEqual(code, ws.OK)
+        self.assertEqual([r["module"] for r in report["routes"]], ["functional-web"])
+        tools = {t["tool"] for t in report["tools"]}
+        self.assertFalse(tools & {"xcrun", "maestro", "adb", "ios-wda"}, tools)
+        self.assertLessEqual({"node", ".env"}, tools)
+        self.assertEqual([r["platform"] for r in report["routes"][0]["ready"]], [""])     # no Android/iOS line
+
     def test_a_mobile_only_project_is_routed_to_the_mobile_procedure_and_needs_no_browser_mcp(self):
         # audit finding D-14: running tests on a mobile project listed the Playwright MCP as missing
         make_project(self.root, "demo/app", **self.MOBILE)
@@ -729,7 +744,9 @@ class CommandLine(Base):
         code, out = self.run_("skills", "--json")
         self.assertEqual(code, 0)
         names = {s["name"] for s in json.loads(out)}
-        self.assertEqual(names, {d for d in os.listdir(os.path.join(ROOT, ".claude", "skills"))})
+        base = os.path.join(ROOT, ".claude", "skills")
+        # folders with a SKILL.md: a file of the system next to them (Finder's .DS_Store, git-ignored) is not a skill
+        self.assertEqual(names, {d for d in os.listdir(base) if os.path.isfile(os.path.join(base, d, "SKILL.md"))})
 
 
 class WritesStayInside(Base):
