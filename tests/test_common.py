@@ -146,15 +146,16 @@ class Redaction(unittest.TestCase):
         for name in ("APP_PIN", "DB_PASS", "api-key", "MY_PASSWORD", "AUTH_TOKEN", "PAT"):
             self.assertTrue(common.sensitive_name(name), name)
 
-    def test_the_interface_and_the_tickets_follow_the_same_rule(self):
+    def test_the_run_redactor_and_the_tickets_follow_the_same_rule(self):
         from adapters.tickets.model import Sanitizer
-        from qa_ui import runs
         with tempfile.TemporaryDirectory() as ws:
             with open(os.path.join(ws, ".env"), "w", encoding="utf-8") as f:
                 f.write("HEADLESS=1" + chr(10) + "APP_PIN=4821" + chr(10) + "NAMED=bob" + chr(10))
             with open(os.path.join(ws, "project.yaml"), "w", encoding="utf-8") as f:
                 f.write("project: x" + chr(10) + "api:" + chr(10) + "  user_var: NAMED" + chr(10))
-            self.assertEqual(runs.Runner(ws).redactor().text("1 of 10: 4821 bob"), "1 of 10: «APP_PIN» «NAMED»")
+            redactor = common.Redactor(common.read_workspace_env(ws),
+                                       sensitive=common.variable_names(common.read_project(ws)))
+            self.assertEqual(redactor.text("1 of 10: 4821 bob"), "1 of 10: «APP_PIN» «NAMED»")
         sanitizer = Sanitizer({"HEADLESS": "1", "APP_PIN": "4821", "LABEL": "short"})
         self.assertEqual(sanitizer.text("1 of 10: 4821 short"), "1 of 10: «APP_PIN» short")
 

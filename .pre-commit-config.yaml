@@ -25,19 +25,25 @@ repos:
 
   - repo: local
     hooks:
+      # language python (not system): the script uses only the standard library, and a machine where `python` is
+      # not on the PATH (a Mac with python3 only) must not lose this guard -- or be tempted to skip the hook.
+      # The golden and the tests below need the framework's dependencies, so they stay `system` (an active venv).
+      # `git config --global qa-assistant.denylistRequired true` makes a missing list a failure (check_denylist.py)
       - id: denylist
         name: client names
         entry: python scripts/check_denylist.py
-        language: system
+        language: python
         pass_filenames: true
+        verbose: true       # a passing hook's output is shown: "N term(s) checked: clean" or "NOT CONFIGURED"
 
       # the commit message also stays in the history: a client name in a message got through once
       # (25.09.2026), because the hook above only reads files
       - id: denylist-message
         name: client names in the commit message
         entry: python scripts/check_denylist.py
-        language: system
+        language: python
         stages: [commit-msg]
+        verbose: true
 
       # golden test of the Excel adapter (plan 1.5; methodology section 15):
       # runs only when the commit touches the adapter, the fixture or the test itself.

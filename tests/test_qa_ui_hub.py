@@ -23,8 +23,8 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abspath(__file__))]
 
-import qa_ui_kit as kit
 import run_log
+import workspace_kit as kit
 import workspace_select
 from common import main_checkout, read_workspace_env
 

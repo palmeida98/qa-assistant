@@ -17,7 +17,7 @@ import openpyxl
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abspath(__file__))]
 
-import qa_ui_kit as kit
+import workspace_kit as kit
 from common import read_project
 
 from adapters.excel import ExcelAdapter

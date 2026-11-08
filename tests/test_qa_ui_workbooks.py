@@ -20,7 +20,7 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")]
 
-import qa_ui_kit as kit
+import workspace_kit as kit
 
 from qa_ui import overview, runs, server
 from qa_ui import workspace as wk

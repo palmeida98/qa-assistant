@@ -26,7 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
 import common
-import qa_ui_kit as kit
+import workspace_kit as kit
 from build_fixture import build
 from test_tickets import BOARDS, T1, T2, T3
 from test_tickets import Base as TicketsBase

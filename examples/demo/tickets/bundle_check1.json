@@ -1,0 +1,86 @@
+{
+  "source": "demo-boards",
+  "roots": [
+    "1001"
+  ],
+  "tickets": [
+    {
+      "id": "1001",
+      "workitem": {
+        "id": 1001,
+        "rev": 3,
+        "relations": [
+          {
+            "rel": "System.LinkTypes.Hierarchy-Forward",
+            "url": "https://dev.azure.com/demo-shop/_apis/wit/workItems/1002",
+            "attributes": {
+              "name": "Child"
+            }
+          }
+        ],
+        "fields": {
+          "System.TeamProject": "Demo Shop",
+          "System.WorkItemType": "Product Backlog Item",
+          "System.Title": "Cart: remove an item from the cart page",
+          "System.State": "Active",
+          "System.IterationPath": "Demo Shop\\Sprint 5",
+          "System.ChangedDate": "2026-11-02T09:00:00Z",
+          "System.Description": "<p>A shopper must be able to remove a product from the cart page.</p>",
+          "Microsoft.VSTS.Common.AcceptanceCriteria": "<ul><li>The cart page shows a Remove button for each product.</li><li>Removing a product updates the cart badge.</li></ul>"
+        }
+      },
+      "comments": {
+        "items": [
+          {
+            "id": 1,
+            "createdBy": {
+              "displayName": "Demo Product Owner"
+            },
+            "createdDate": "2026-11-02T09:05:00Z",
+            "modifiedDate": "2026-11-02T09:05:00Z",
+            "text": "Remove is available on the cart page only, not on the product list.",
+            "renderedText": "<p>Remove is available on the cart page only, not on the product list.</p>"
+          }
+        ],
+        "complete": true
+      },
+      "updates": {
+        "items": [],
+        "complete": true
+      }
+    },
+    {
+      "id": "1002",
+      "workitem": {
+        "id": 1002,
+        "rev": 1,
+        "relations": [
+          {
+            "rel": "System.LinkTypes.Hierarchy-Reverse",
+            "url": "https://dev.azure.com/demo-shop/_apis/wit/workItems/1001",
+            "attributes": {
+              "name": "Parent"
+            }
+          }
+        ],
+        "fields": {
+          "System.TeamProject": "Demo Shop",
+          "System.WorkItemType": "Task",
+          "System.Title": "QA: test removing an item from the cart",
+          "System.State": "To Do",
+          "System.IterationPath": "Demo Shop\\Sprint 5",
+          "System.ChangedDate": "2026-11-02T09:10:00Z",
+          "System.Description": "<p>Test on the web shop.</p>"
+        }
+      },
+      "comments": {
+        "items": [],
+        "complete": true
+      },
+      "updates": {
+        "items": [],
+        "complete": true
+      }
+    }
+  ]
+}

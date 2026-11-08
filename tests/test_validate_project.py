@@ -84,7 +84,7 @@ class Validate(unittest.TestCase):
     def test_excel_cases_fields_without_title_or_expected_is_warned(self):
         # the first real batch of qa-ui: a workbook in another language, its title and expected columns unmapped,
         # reached the agent empty and every case came back Question
-        import qa_ui_kit as kit
+        import workspace_kit as kit
         tmp = kit.workspace()
         self.addCleanup(tmp.cleanup)
         _, warnings = vp.validate(tmp.name)
@@ -240,7 +240,9 @@ class Validate(unittest.TestCase):
                       "SHOP_ADMIN_USER", text)
         with open(os.path.join(self.tmp.name, ".env.example"), "w", encoding="utf-8") as f:
             f.write("SHOP_ADMIN_USER=\n")
-        bare = os.path.join(self.tmp.name, "..", os.path.basename(self.tmp.name) + "-remote.git")
+        # a sibling of the workspace's temporary folder, as an absolute path: with "tmp/../x" the cleanup ran after
+        # tmp was removed, the path no longer resolved and the bare repository stayed in the temporary folder
+        bare = os.path.normpath(os.path.join(self.tmp.name, "..", os.path.basename(self.tmp.name) + "-remote.git"))
         subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
         self.addCleanup(shutil.rmtree, bare, True)
         self.git("remote", "add", "origin", bare)

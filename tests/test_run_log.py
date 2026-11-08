@@ -116,7 +116,7 @@ class RunLog(unittest.TestCase):
         self.assertEqual(sorted(r["tc"] for r in self.log()["results"]), cases)
 
     def test_a_workspace_held_by_another_process_is_a_refusal_that_writes_nothing(self):
-        import qa_ui_kit as kit
+        import workspace_kit as kit
         with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
             code, out = self.run_(*("add", "20260929_01", "TC-SHOP-001", "Pass", "ok"))
         self.assertEqual(code, 1)
@@ -232,7 +232,7 @@ class RunLog(unittest.TestCase):
                          ["TC-ACCOUNT-002", "TC-SHOP-001", "TC-SHOP-002", "TC-SHOP-003"])
 
     def test_remove_waits_for_the_lock_and_writes_nothing_without_it(self):
-        import qa_ui_kit as kit
+        import workspace_kit as kit
         rl.add(self.ws, "20260929_01", "TC-SHOP-001", "Pass", "ok", now=NOW)
         before = self.log()
         with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):

@@ -17,8 +17,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")]
 
 import qa_report
-import qa_ui_kit as kit
 import run_log as rl
+import workspace_kit as kit
 
 from adapters.excel import apply as ap
 
@@ -114,8 +114,7 @@ class Mode(unittest.TestCase):
         proj = rl.read_project(self.ws)
         text = qa_report.render_audit(qa_report.audit(self.ws, proj, qa_report.load_batches(self.ws, proj)))
         self.assertIn(", conversational]", text)
-        import qa_ui.workspace as wk
-        self.assertEqual(wk.read_run_log(self.ws, proj, "m1")["mode"], "conversational: answers")
+        self.assertEqual(rl.read_log(rl.run_log_path(self.ws, "m1"))["mode"], "conversational: answers")
 
 
 if __name__ == "__main__":

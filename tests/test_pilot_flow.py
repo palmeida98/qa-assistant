@@ -24,8 +24,8 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")
 import device as dv
 import device_ios as wda
 import qa_report
-import qa_ui_kit as kit
 import run_log as rl
+import workspace_kit as kit
 from test_device_ios import Clock
 from test_ios_diagnose import Fake as FakeProbes
 from test_streaming_evidence import MESSAGE, Streamed
