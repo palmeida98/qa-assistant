@@ -30,8 +30,8 @@ import run_log
 import run_mobile
 import sync_skills
 import workspace_select as ws
-from qa_ui_kit import SECRET
 from tickets_fake import ORG, FakeAdo
+from workspace_kit import SECRET
 
 from adapters.tickets import cli as tickets_cli
 from adapters.tracker.errors import ConfigError
@@ -399,6 +399,37 @@ class Worktree(Base):
         self.assertTrue(ws._inside(info["imports"]["adapters"], ROOT))
         self.assertTrue(ws._inside(info["imports"]["qa_ui"], ROOT))
         self.assertEqual(info["workspaces_root"]["source"], "--root")
+
+    def test_where_reports_the_commit_guards_without_the_terms(self):
+        import check_denylist as cd
+        listing = os.path.join(self.tmp, "denylist.txt")
+        with open(listing, "w", encoding="utf-8") as f:
+            f.write("# fictional\nfictionalcompanyxyz\n")
+        env = {k: v for k, v in os.environ.items() if k != "QA_DENYLIST_REQUIRE"}
+        with mock.patch.object(cd, "DENYLIST_PATH", cd.Path(listing)), mock.patch.dict(os.environ, env, clear=True):
+            g = ws.guards()
+        self.assertEqual(g["denylist"]["state"], "ok")
+        self.assertEqual(g["denylist"]["terms"], 1)
+        self.assertNotIn("fictionalcompanyxyz", json.dumps(g))
+        self.assertEqual(set(g["hooks"]), {"pre-commit", "commit-msg"})
+        for state, content in (("empty", "# nothing\n"), ("missing", None)):
+            if content is None:
+                os.remove(listing)
+            else:
+                with open(listing, "w", encoding="utf-8") as f:
+                    f.write(content)
+            with mock.patch.object(cd, "DENYLIST_PATH", cd.Path(listing)):
+                g = ws.guards()
+            self.assertEqual(g["denylist"]["state"], state)
+            info = {"guards": g, "framework": {}, "python": {}, "imports": {}, "imports_from_another_checkout": [],
+                    "versions_that_differ": [], "workspaces_root": {"path": "x", "source": "y", "exists": True},
+                    "skills": {"target": "t", "record": None, "state": {}}}
+            info["framework"] = {"root": ROOT, "branch": "b", "commit": "c", "dirty": False, "worktree": False}
+            info["python"] = {"version": "3", "executable": "p"}
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                ws._print_where(info)
+            self.assertIn("client names are NOT checked", out.getvalue())
 
 
 class SkillAndCode(Base):

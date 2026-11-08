@@ -115,6 +115,42 @@ def versions_that_differ() -> list[dict]:
     return out
 
 
+def guards() -> dict:
+    """The commit guards this checkout really has (read only): hooks installed and the private list. It never says
+    a check is in place when it is not, and it never returns a term of the list."""
+    import subprocess
+
+    import check_denylist as cd
+
+    def git(*args):
+        try:
+            r = subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True, check=False, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    hooks_dir = git("config", "--get", "core.hooksPath")
+    if not hooks_dir:
+        common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+        hooks_dir = os.path.join(common, "hooks") if common else ""
+    elif not os.path.isabs(hooks_dir):
+        hooks_dir = os.path.join(ROOT, hooks_dir)
+    installed = {}
+    for hook in ("pre-commit", "commit-msg"):
+        try:
+            with open(os.path.join(hooks_dir, hook), encoding="utf-8", errors="ignore") as f:
+                installed[hook] = "pre-commit" in f.read()
+        except OSError:
+            installed[hook] = False
+    try:
+        terms, why = cd.load_denylist()
+        denylist = {"path": str(cd.DENYLIST_PATH), "state": "ok" if terms else why, "terms": len(terms)}
+    except cd.DenylistUnreadable as exc:
+        denylist = {"path": str(cd.DENYLIST_PATH), "state": f"unreadable ({exc})", "terms": 0}
+    denylist["required"] = cd.required([])
+    return {"hooks_dir": hooks_dir, "hooks": installed, "denylist": denylist}
+
+
 def where(root_arg: str | None = None, environ=None, config_path: str | None = None, target: str | None = None) -> dict:
     from common import git_state, main_checkout
     sync = _sync()
@@ -129,6 +165,7 @@ def where(root_arg: str | None = None, environ=None, config_path: str | None = N
             "python": {"version": ".".join(map(str, sys.version_info[:3])), "executable": sys.executable},
             "imports": origins, "imports_from_another_checkout": elsewhere, "versions_that_differ": versions_that_differ(),
             "workspaces_root": {"path": root, "source": source, "exists": os.path.isdir(root)},
+            "guards": guards(),
             "skills": {"target": target, "record": sync.read_record(target),
                        "state": sync.compare(sync.SOURCE, target, sync.read_record(target))
                        if os.path.isdir(sync.SOURCE) else {}}}
@@ -150,6 +187,15 @@ def _print_where(info: dict) -> None:
               "not an incompatibility: the tests decide)")
     w = info["workspaces_root"]
     print(f"Root of workspaces: {w['path']} (from {w['source']}){'' if w['exists'] else ' -- it does not exist'}")
+    g = info.get("guards")
+    if g:
+        missing = [h for h, ok in g["hooks"].items() if not ok]
+        print("Commit guards: " + ("hooks pre-commit and commit-msg installed" if not missing else
+              f"NOT installed: {', '.join(missing)} (pre-commit install, from an environment with `pre-commit`)"))
+        d = g["denylist"]
+        print(f"  private denylist: {d['state']}" + (f" ({d['terms']} term(s))" if d["terms"] else "")
+              + (", required" if d["required"] else ", not required")
+              + ("" if d["state"] == "ok" else ": client names are NOT checked on a commit here"))
     record = info["skills"]["record"]
     extra = ""
     if record and record.get("uncommitted"):

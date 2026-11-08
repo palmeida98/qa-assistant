@@ -132,3 +132,11 @@ excel:
   recalc:
     mechanism: "libreoffice"
     timeout: 60
+
+tickets:                      # /analyze-ticket and /test-pbi (docs/technique-tickets.md); fictional, no credentials
+  sources:
+    demo-boards:
+      service: "azure-devops"
+      access: "browser"       # the browser/MCP route: a bundle goes through `ingest`; tickets/ holds two fictional ones
+      organization_url: "https://dev.azure.com/demo-shop"
+      project: "Demo Shop"

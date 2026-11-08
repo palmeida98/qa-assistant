@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")]
 
 import compact_context as cc
-import qa_ui_kit as kit
+import workspace_kit as kit
 
 CONTEXT = """# Session context — Demo Shop
 Updated: 2026-11-02 10:20 (L46)
@@ -213,6 +213,75 @@ class Preservation(Base):
         original = self.read("context.md")
         cc.apply(self.ws, 2, datetime(2026, 11, 2, 11, 0, 0))
         self.assertEqual(self.read("archive", "context", "context_20261102_110000_before.md"), original)
+
+
+IMPORTED = """# Demo — main context
+Updated: 2026-11-08
+
+## 1. Decision for the new phase
+- 08.11.2026: build 1.0.0 (37) is the reference.
+
+## 5. Permanent rules of the project
+- 05.11.2026: never change a ticket's state.
+- 06.11.2026: every workbook change after a dry run and its approval.
+- 07.11.2026: one bug per problem; device and OS observed, never a default.
+- 01.11.2026: an older rule, still in force.
+
+## Permanent rules (kept by the project, imported by CLAUDE.md)
+**02.11.2026 - rule:** commit and push only inside the scope authorised in the session.
+**01.11.2026 - rule:** history/ is immutable.
+
+## Work done
+- 08.11.2026: verified the build.
+- 07.11.2026: ran the batch.
+- 06.11.2026: planned it.
+- 05.11.2026: read the ticket.
+- 04.11.2026: onboarding.
+- 03.11.2026: a decision about the evidence policy.
+- 02.11.2026: setup.
+
+## Pending work
+- (08.11.2026) choose the next PBI.
+"""
+
+
+class PermanentRulesOfAnImportedContext(Base):
+    """The project's CLAUDE.md may import context.md as its main document, with the permanent rules in identified
+    sections of it (plan F18; methodology 12.2). Compaction only reaches the dated entries of the three history
+    sections: those rules stay where they are, byte for byte, whatever their section is called or how old their date is."""
+
+    RULE_SECTIONS = ("## 5. Permanent rules of the project", "## Permanent rules (kept by the project, imported by CLAUDE.md)",
+                     "## 1. Decision for the new phase")
+
+    def sections(self, text):
+        parts = __import__("re").split(r"(?m)^(## .*)$", text)
+        return {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+
+    def test_dated_rules_outside_the_history_sections_are_never_moved(self):
+        self.write(IMPORTED)
+        before = self.sections(self.read("context.md"))
+        cc.apply(self.ws, 2, datetime(2026, 11, 8, 11, 0, 0))
+        after = self.sections(self.read("context.md"))
+        archive = self.read("archive", "context", "context_archive_20261108.md")
+        for name in self.RULE_SECTIONS:
+            with self.subTest(section=name):
+                self.assertEqual(before[name], after[name])
+        self.assertNotIn("never change a ticket", archive)
+        self.assertNotIn("history/ is immutable", archive)
+        self.assertIn("05.11.2026: read the ticket", archive)               # the history did move, word for word
+        self.assertNotIn("05.11.2026: read the ticket", self.read("context.md"))
+
+    def test_a_context_with_only_rule_sections_has_nothing_to_move(self):
+        text = IMPORTED.split("## Work done")[0] + "## Pending work\n- (08.11.2026) choose the next PBI.\n"
+        self.write(text)
+        plan = cc.plan(text, 2)
+        self.assertEqual(plan["moved"], 0)
+        self.assertEqual(plan["new_text"], text)
+
+    def test_a_rule_written_in_an_old_history_entry_is_flagged_before_the_move(self):
+        self.write(IMPORTED)
+        flagged = [m["line"] for r in cc.plan(IMPORTED, 2)["report"] for m in r["moved"] if m["may_hold_a_rule"]]
+        self.assertEqual(flagged, ["- 03.11.2026: a decision about the evidence policy."])
 
 
 class Command(Base):

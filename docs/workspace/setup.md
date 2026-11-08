@@ -39,7 +39,7 @@ pip install -r requirements.txt                       # the Excel adapter and th
 pip install -e .                                      # qa-audit (or scripts\install.ps1 / scripts/install.sh: a .venv and the browsers)
 python scripts/sync_skills.py --apply                 # the skills, copied to ~/.claude/skills/, with a record of this checkout
 python scripts/workspace_select.py where              # which framework, Python and imports really run
-pre-commit install                                    # only if you will change the framework (pip install pre-commit)
+pre-commit install                                    # only if you will change the framework (pip install pre-commit); see CONTRIBUTING.md for the guards
 ```
 
 ## 3. LibreOffice (tracker `excel`)

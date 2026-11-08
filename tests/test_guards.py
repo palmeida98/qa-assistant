@@ -72,6 +72,14 @@ class Guards(unittest.TestCase):
         self.assertEqual(h["stages"], ["commit-msg"])
         self.assertEqual(h["entry"], hooks()["denylist"]["entry"])
 
+    def test_denylist_hooks_do_not_depend_on_python_on_the_path_and_show_their_result(self):
+        # a Mac with python3 only lost the guard (`Executable python not found`); a passing hook printed nothing, so
+        # "NOT CONFIGURED" (no list, nothing checked) was invisible on a commit that went through
+        for hook in ("denylist", "denylist-message"):
+            with self.subTest(hook=hook):
+                self.assertEqual(hooks()[hook]["language"], "python")
+                self.assertTrue(hooks()[hook].get("verbose"))
+
     def test_playwright_mcp_gets_the_env_as_secrets(self):
         # technique-browser.md section 3: the assistant writes the variable's NAME and the MCP puts the value
         with open(os.path.join(ROOT, "examples", "demo", ".mcp.json"), encoding="utf-8") as f:

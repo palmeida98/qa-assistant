@@ -39,7 +39,21 @@ jobs:
       - run: pip install -r requirements.txt
       # extra of the visual engine (Pillow): without it the image comparison tests would be skipped
       - run: pip install pillow==12.3.0
-      - run: python -m unittest discover -s tests -v
+      # the counts and the skips (with their reasons) go to the run's summary: "OK" alone hides what was not run
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee unit.log
+      - name: Counts and skips in the summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "### unit tests (tests/)"
+            grep -E "^(Ran [0-9]+ tests|OK|FAILED)" unit.log | sed 's/^/- /'
+            echo
+            echo "Skipped, by reason (a skipped test proved nothing):"
+            grep -E "\.\.\. skipped" unit.log | sed -E "s/.*\.\.\. skipped //" | sort | uniq -c | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   secrets:
     runs-on: ubuntu-24.04
@@ -69,7 +83,10 @@ jobs:
       # tests that recalculate real formulas (summary vs direct count), the rebuild of the demo
       # (versioned workbook = builder + batches; plan 7.6) and the real golden's mechanism with fictional
       # data (plan 7.3); in the tests job they are skipped
-      - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real -v
+      # tests.test_qa_ui_runs: its two LibreOffice tests (cases added and results applied through the interface's
+      # runner) are skipped in the tests job; the interface is leaving the active scope (docs/development-plan.md),
+      # and until its code goes they run here with the recalculation, never silently skipped
+      - run: python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_qa_ui_runs -v
 
   qa-audit-engine:
     # qa-audit engine (plan 8.2): integration tests against the local site, one job per engine in parallel (in
@@ -161,9 +178,51 @@ jobs:
           echo "qa-audit exit code: $code"
           test "$code" = 1
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
+      # plan F20: the eight skills installed from the clean clone into a temporary folder (never ~/.claude), and the
+      # preflight of each on the fictional demo workspace; nothing outside $RUNNER_TEMP is read or written
+      # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Install)
+      - name: Skills sync and preflight (isolated)
+        run: |
+          .venv/bin/python -m pip install --quiet -r requirements.txt
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
+          target="$RUNNER_TEMP/skills"; mkdir -p "$target"
+          .venv/bin/python scripts/sync_skills.py --apply --target "$target"
+          .venv/bin/python scripts/sync_skills.py --target "$target"
+          test "$(ls -d "$target"/*/ | wc -l)" = 8
+          for skill in project-context analyze-ticket plan-tests run-tests manage-bugs qa-report checkpoint test-pbi; do
+            echo "::group::preflight $skill"
+            .venv/bin/python scripts/workspace_select.py preflight --skill "$skill" --workspace examples/demo
+            echo "::endgroup::"
+          done
+          echo "**install: skills synced to a temporary folder and preflight passed for the eight skills on examples/demo.**" >> "$GITHUB_STEP_SUMMARY"
+
+  demo-secrets:
+    # the secrets cannot be read in a job's `if:`, so this one only says whether they exist. Without them (a fork's
+    # pull request, or a repository that never set them) `demo-e2e` is SKIPPED, shown as such, and never green.
+    runs-on: ubuntu-24.04
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    env:
+      DEMO_SAUCE_STANDARD_USER: ${{ secrets.DEMO_SAUCE_STANDARD_USER }}
+      DEMO_SAUCE_LOCKED_OUT_USER: ${{ secrets.DEMO_SAUCE_LOCKED_OUT_USER }}
+      DEMO_SAUCE_PASSWORD: ${{ secrets.DEMO_SAUCE_PASSWORD }}
+    steps:
+      - id: check
+        run: |
+          if [ -z "$DEMO_SAUCE_PASSWORD" ] || [ -z "$DEMO_SAUCE_STANDARD_USER" ] || [ -z "$DEMO_SAUCE_LOCKED_OUT_USER" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=demo-e2e NOT RUN::secrets DEMO_SAUCE_* missing (Settings > Secrets and variables > Actions); no Playwright spec was executed"
+            echo "**demo-e2e: NOT RUN** - the DEMO_SAUCE_* secrets are missing; no Playwright spec was executed, so this is not E2E coverage." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
 
   demo-e2e:
-    # the demo's N2 regression against the public site (plan 4.2; specs in examples/demo/e2e)
+    # the demo's N2 regression against the public site (plan 4.2; specs in examples/demo/e2e). Three outcomes, never mixed:
+    # skipped (no secrets: nothing ran), failed (a spec failed or none was found), or passed with its counts written
+    # to the summary. A passing job always means that specs ran.
+    needs: demo-secrets
+    if: ${{ needs.demo-secrets.outputs.present == 'true' }}
     runs-on: ubuntu-24.04
     env:
       DEMO_SAUCE_STANDARD_USER: ${{ secrets.DEMO_SAUCE_STANDARD_USER }}
@@ -174,35 +233,27 @@ jobs:
         working-directory: examples/demo/e2e
     steps:
       - uses: actions/checkout@v7
-      - name: Demo secrets present?
-        id: secrets
-        run: |
-          if [ -z "$DEMO_SAUCE_PASSWORD" ] || [ -z "$DEMO_SAUCE_STANDARD_USER" ] || [ -z "$DEMO_SAUCE_LOCKED_OUT_USER" ]; then
-            echo "::warning title=demo-e2e did not run::secrets DEMO_SAUCE_* missing in the repository (Settings > Secrets and variables > Actions)"
-            # the job ends green without running a spec: said in the run's summary too, so it is never read as a pass
-            echo "**demo-e2e: NOT RUN** - the DEMO_SAUCE_* secrets are missing; no Playwright spec was executed." >> "$GITHUB_STEP_SUMMARY"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/setup-node@v7
-        if: steps.secrets.outputs.ok == 'true'
         with:
           node-version: "22"
-      - if: steps.secrets.outputs.ok == 'true'
-        run: npm ci
-      - if: steps.secrets.outputs.ok == 'true'
-        run: npx playwright install --with-deps chromium
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       # qa-audit engine for the state audit (docs/qa-audit.md section 22): it connects to the specs' Chromium
       # over CDP, so it only needs the package, not the Playwright browsers for Python
       - uses: actions/setup-python@v7
-        if: steps.secrets.outputs.ok == 'true'
         with:
           python-version: "3.12"
-      - if: steps.secrets.outputs.ok == 'true'
-        working-directory: .
+      - working-directory: .
         run: pip install -e .
-      - if: steps.secrets.outputs.ok == 'true'
+      - name: Playwright specs
         env:
           QA_AUDIT_CDP_PORT: "9222"
-        run: npx playwright test
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/playwright-report.json
+        run: npx playwright test --reporter=list,json
+      - name: Executed specs in the summary
+        run: |
+          expected=$(jq '.stats.expected' "$RUNNER_TEMP/playwright-report.json")
+          unexpected=$(jq '.stats.unexpected' "$RUNNER_TEMP/playwright-report.json")
+          skipped=$(jq '.stats.skipped' "$RUNNER_TEMP/playwright-report.json")
+          echo "**demo-e2e: EXECUTED** - ${expected} spec(s) passed, ${unexpected} failed, ${skipped} skipped." >> "$GITHUB_STEP_SUMMARY"
+          test "$expected" -gt 0

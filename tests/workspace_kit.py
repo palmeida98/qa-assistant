@@ -1,6 +1,7 @@
-"""Shared by the tests of qa-ui (docs/qa-ui.md section 12): a fictional workspace in a temporary folder (the Excel
-adapter's golden fixture as its workbook) and fake executables, so no test ever starts a real Claude session, a
-browser or a site. All data is the fictional Demo Shop."""
+"""Shared by the tests that need a workspace: a fictional workspace in a temporary folder (the Excel adapter's golden
+fixture as its workbook), a second writer holding its lock, and fake executables, so no test ever starts a real Claude
+session, a browser or a site. All data is the fictional Demo Shop. (Called qa_ui_kit while the local interface used
+it; the interface leaves the active scope and these helpers serve the skills' tests.)"""
 
 import contextlib
 import copy

@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (guards, CI and tests for the proof of concept, 2026-11-08)
+- **Privacy guard** (`scripts/check_denylist.py`): a missing, empty or unreadable list is said explicitly (exit 3 when the
+  check is required, 4 when the list cannot be read); a file that cannot be read, or a corrupt or encrypted Office file, is
+  `NOT VERIFIED` and fails the check; PDF and legacy Office files have their name checked and are listed as not inspected;
+  the log never prints a term, only its line in the list; required through `--require`, `QA_DENYLIST_REQUIRE=1` or
+  `git config --global qa-assistant.denylistRequired true`. The two denylist hooks run in their own environment (no
+  `python` needed on the PATH) and show their result even when they pass. `workspace_select.py where` reports the hooks and
+  the list. The hooks are installed in the checkout in use.
+- **CI**: `demo-e2e` is skipped (not green) without its secrets, and when it runs it reports its executed specs; the
+  unit tests' counts and skips go to the run's summary; the `install` job also syncs the eight skills to a temporary folder
+  and runs their preflight on the fictional demo; `tests.test_qa_ui_runs` runs with LibreOffice in the `golden` job.
+- **Demo**: the fictional demo has a `tickets:` source and two ticket bundles (`/analyze-ticket` and `/test-pbi` run on it with no
+  credentials); `tests/test_demo_walkthrough.py` runs the walkthrough that the documentation will describe; the compactor's
+  preservation of permanent-rule sections is tested.
+
+### Fixed (consolidation, 2026-11-08)
+- The test suite no longer leaves a `*-remote.git` repository in the temporary folder (`test_validate_project`).
+
+### Changed (tests, 2026-11-08)
+- `tests/qa_ui_kit.py` is now `tests/workspace_kit.py` (the helpers serve the skills' tests); two shared tests no longer
+  import `qa_ui`.
+
 ### Changed (CI, 2026-11-08)
 - The `qa-audit` integration job runs one job per engine in parallel (`qa-audit (chromium|firefox|webkit)`), with
   the same tests: in series they took 17-19 minutes. A `qa-audit` job keeps the former status name and succeeds only

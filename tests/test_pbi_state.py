@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")]
 
 import pbi_state as ps
-import qa_ui_kit as kit
+import workspace_kit as kit
 
 
 class PbiState(unittest.TestCase):

@@ -31,6 +31,17 @@ pip install pre-commit && pre-commit install
 qa-audit doctor
 ```
 
+`pre-commit install` writes the hooks into the repository's git directory, which every worktree of the checkout shares.
+Check them with `python scripts/workspace_select.py where` ("Commit guards"). The two denylist hooks run in their own
+environment, so they need no `python` on the PATH; the golden and the unit-test hooks use the `python` of an active
+environment (activate the one with `requirements.txt` before committing, or the hook stops with `Executable python not
+found`: a stop, never a silent pass; `--no-verify` is not the answer).
+
+The denylist is the owner's private list (`~/.qa-denylist.txt`). Without one the guard says `NOT CONFIGURED` and checks
+nothing; to make that a failure on your computer: `git config --global qa-assistant.denylistRequired true` (or
+`QA_DENYLIST_REQUIRE=1`). An unreadable list, or a file it cannot read, is a failure; a PDF or a legacy `.doc/.xls/.ppt` has its
+name checked and is listed as not inspected. The guard never prints a term of the list: a match names its line in the list.
+
 ## Tests
 
 | Command | What |

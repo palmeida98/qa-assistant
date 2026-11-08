@@ -11,7 +11,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.dirname(os.path.abspath(__file__))]
 
-import qa_ui_kit as kit
+import workspace_kit as kit
 
 from qa_ui import MODULES
 from qa_ui import suggest as sg
