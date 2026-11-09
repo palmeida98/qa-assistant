@@ -17,11 +17,12 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime
+from unittest import mock
 
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
 import qa_report as qr
 import run_log as rl
@@ -306,6 +307,93 @@ class InvalidEvidence(Base):
         self.assertEqual(audit["batches"][0]["without_ts"], [])
         res = ap.dry_run(self.ws, os.path.join(self.ws, "runs", NAME + ".json"), recalc=False, now=NOW)
         self.assertEqual((res["problems"], res["code"]), ([], 0))
+
+
+class RetimeReview(Base):
+    """What the review of the first version found: the end already recorded, the record as a limit, zones, old run logs."""
+
+    def setUp(self):
+        super().setUp()
+        self.add(executed_at="2026-11-08T19:20", executed_source="the session's commands", ended_at="2026-11-08T19:31",
+                 evidence="evidence/b/a.png")
+
+    def retime(self, executed_at, source="the instrument's log", **kw):
+        return rl.retime(self.ws, BATCH, "TC-SHOP-001", executed_at, source, now=LATER, **kw)
+
+    def test_an_end_already_recorded_stays_when_only_the_start_is_corrected(self):
+        self.retime("2026-11-08T19:25")
+        item = self.item()
+        self.assertEqual((item["ts"], item["ended_at"]), ("2026-11-08T19:25:00", "2026-11-08T19:31:00"))
+        self.assertEqual(item["retimed"][0]["previous_ended_at"], "2026-11-08T19:31:00")      # the history says what it was
+
+    def test_the_kept_end_must_still_fit_the_corrected_start(self):
+        before = self.digests()
+        with self.assertRaises(rl.UsageError) as ctx:
+            self.retime("2026-11-08T19:40")
+        self.assertIn("--ended-at", str(ctx.exception))
+        self.assertEqual(self.digests(), before)
+        self.retime("2026-11-08T19:40", ended_at="2026-11-08T19:42")                          # with the corrected end it fits
+        self.assertEqual(self.item()["ended_at"], "2026-11-08T19:42:00")
+
+    def test_neither_the_time_nor_the_end_can_come_after_the_record(self):
+        before = self.digests()
+        with self.assertRaises(rl.UsageError):
+            self.retime("2026-11-08T19:44")                                                    # the record is 19:43
+        with self.assertRaises(rl.UsageError):
+            self.retime("2026-11-08T19:20", ended_at="2026-11-08T19:44")
+        self.assertEqual(self.digests(), before)
+
+    def test_an_unknown_start_drops_the_end_and_keeps_it_in_the_history(self):
+        self.retime("unknown", "no time in the notes")
+        item = self.item()
+        self.assertNotIn("ended_at", item)
+        self.assertTrue(item["ts_unknown"])
+        self.assertEqual(item["retimed"][0]["previous_ended_at"], "2026-11-08T19:31:00")
+        self.retime("2026-11-08T19:20", "the session's commands again")                      # back to a known time
+        self.assertNotIn("ts_unknown", self.item())
+        self.assertEqual([h["previous_ts"] for h in self.item()["retimed"]], ["2026-11-08T19:20:00", "unknown"])
+
+    def test_zones_and_no_zone_compare_in_one_scale_for_the_window(self):
+        before = self.digests()
+        with self.assertRaises(rl.UsageError):                                                # 19:20+01:00 is 18:20 machine
+            rl.add(self.ws, BATCH, "TC-SHOP-002", "Pass", "x", environment="test", build="1.4.0 (140)", now=NOW,
+                   executed_at="2026-11-08T19:20", executed_source="n", ended_at="2026-11-08T19:10Z")
+        self.assertEqual(self.digests(), before)
+        rl.add(self.ws, BATCH, "TC-SHOP-002", "Pass", "x", environment="test", build="1.4.0 (140)", now=NOW,
+               executed_at="2026-11-08T19:20", executed_source="n", ended_at="2026-11-08T19:20")      # an end equal to the start
+        self.assertEqual(self.item("TC-SHOP-002")["ended_at"], "2026-11-08T19:20:00")
+
+    def test_an_old_run_log_without_the_new_fields_can_be_retimed_and_marked(self):
+        legacy = {"tc": "TC-SHOP-002", "status": "Pass", "actual_result": "old", "ts": "2026-11-05T10:00:00",
+                  "evidence": "evidence/old.png"}                                             # no recorded_at, a string
+        doc = self.log()
+        doc["results"].append(legacy)
+        with open(os.path.join(self.ws, "runs", NAME + ".json"), "w", encoding="utf-8") as f:
+            json.dump(doc, f)
+        _p, _b, after = rl.retime(self.ws, BATCH, "TC-SHOP-002", "2026-11-05T09:50", "the old notes", now=LATER)
+        self.assertEqual((after["ts"], after["retimed"][0]["previous_ts"]), ("2026-11-05T09:50:00", "2026-11-05T10:00:00"))
+        self.assertNotIn("recorded_at", after)
+        _p, _b, marked = rl.attach(self.ws, BATCH, "TC-SHOP-002", invalid=["evidence/old.png"], reason="blurred", now=LATER)
+        self.assertEqual(marked["evidence"], "evidence/old.png")
+        self.assertEqual(marked["evidence_invalid"][0]["path"], "evidence/old.png")
+
+    def test_another_writer_holding_the_workspace_blocks_the_three_changes_and_nothing_is_written(self):
+        import workspace_kit as kit
+        before = self.digests()
+        with mock.patch.dict(os.environ, {"QA_LOCK_WAIT": "0.2"}), kit.held_by_another_writer(self.ws):
+            with self.assertRaises(rl.Refused):
+                self.retime("2026-11-08T19:25")
+            with self.assertRaises(rl.Refused):
+                rl.attach(self.ws, BATCH, "TC-SHOP-001", invalid=["evidence/b/a.png"], reason="x", now=LATER)
+            with self.assertRaises(rl.Refused):
+                self.add(case="TC-SHOP-003", evidence=["evidence/b/z.png"])
+        self.assertEqual(self.digests(), before)
+
+    def test_a_correction_changes_the_preview_token_of_the_batch(self):
+        path = os.path.join(self.ws, "runs", NAME + ".json")
+        first = ap.dry_run(self.ws, path, recalc=False, now=NOW)["token"]
+        self.retime("2026-11-08T19:25")
+        self.assertNotEqual(ap.dry_run(self.ws, path, recalc=False, now=NOW)["token"], first)
 
 
 if __name__ == "__main__":

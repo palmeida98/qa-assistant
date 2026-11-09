@@ -28,8 +28,10 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 - Window of an execution (phase 17.1): `ts` is the START of the execution; `--ended-at` records when the case ended (it
   needs `--executed-at` with a known time, is not before it and not in the future). `retime` corrects only the time of a
   result in a batch not yet applied: observed text, status, evidence, build, bug and `recorded_at` stay; the previous time
-  goes to `retimed` ({at, previous_ts, previous_source, previous_ended_at}), one entry per correction; the same time again
-  changes nothing; an applied batch is refused (exit 1), an unknown batch or case is exit 2.
+  goes to `retimed` ({at, previous_ts, previous_source, previous_ended_at}, the keys that existed), one entry per
+  correction; an end already recorded stays unless a new one is given and must still fit the corrected start; neither the
+  time nor the end can come after `recorded_at`; the same time again changes nothing; an applied batch is refused (exit
+  1), an unknown batch or case is exit 2.
 - Evidence: `--evidence` takes one or more paths and may be repeated; every path is kept, in the order given, once.
   `attach --invalid PATH ... --reason TEXT` marks evidence the result already has as showing nothing useful
   (`evidence_invalid`: path, reason, when) without deleting it or taking it out of the list; the same mark again changes
@@ -573,7 +575,9 @@ def retime(workspace: str, batch: str, case: str, executed_at: str, executed_sou
     """Corrects only the time of a result in a batch not yet applied: (path, before, after); before == after when the
     time is already that. The observed text, status, evidence, build, bug and `recorded_at` stay; the previous time goes
     to `retimed`, one entry per correction, never replaced. `ts` is the start of the execution, `ended_at` the end of
-    its window; an unknown time removes `ts` (`ts_unknown`). Refused / UsageError as in the header."""
+    its window: one already recorded stays unless a new one is given, and must still fit the corrected start; neither
+    can come after `recorded_at`. An unknown time removes `ts` (`ts_unknown`) and the end (kept in `retimed`). Refused
+    / UsageError as in the header."""
     executed_at, executed_source = check_executed(executed_at, executed_source, now)
     if executed_at is None:
         raise UsageError("retime needs --executed-at: the corrected time, or `unknown`")
@@ -604,21 +608,36 @@ def retime(workspace: str, batch: str, case: str, executed_at: str, executed_sou
                 raise UsageError(f"{case.strip()!r} has no result in {name} (results: {have})")
             before = doc["results"][at]
             item = dict(before)
-            if executed_at == UNKNOWN_TIME:
-                item.pop("ts", None)
-                item["ts_unknown"] = True
-            else:
+            known = executed_at != UNKNOWN_TIME
+            # the end already recorded stays unless a new one is given (only the time of the result changes); it must
+            # still fit the corrected start. An unknown start cannot keep an end: it goes to the history below.
+            kept_end = before.get("ended_at") if known and not ended_at else None
+            end = ended_at or kept_end
+            if kept_end and ts_key(kept_end) < ts_key(executed_at):
+                raise UsageError(f"the end already recorded ({kept_end}) is before the corrected start "
+                                 f"({executed_at}): give --ended-at with the corrected end")
+            recorded = before.get("recorded_at")
+            if recorded:        # an execution, and its end, cannot come after the moment the result was recorded
+                for label, value in (("--executed-at", executed_at if known else None), ("the end", end)):
+                    if value and ts_key(value) > ts_key(recorded):
+                        raise UsageError(f"{label} {value} is after the time the result was recorded ({recorded})")
+            if known:
                 item["ts"] = executed_at
                 item.pop("ts_unknown", None)
+            else:
+                item.pop("ts", None)
+                item["ts_unknown"] = True
             item["executed_source"] = executed_source
-            if ended_at:
-                item["ended_at"] = ended_at
+            if end:
+                item["ended_at"] = end
             else:
                 item.pop("ended_at", None)
             same = all(item.get(k) == before.get(k) for k in ("ts", "ts_unknown", "executed_source", "ended_at"))
             if not same:
-                entry = {"at": (now or datetime.now()).isoformat(timespec="seconds"),
-                         "previous_ts": before.get("ts") or (UNKNOWN_TIME if before.get("ts_unknown") else None)}
+                entry = {"at": (now or datetime.now()).isoformat(timespec="seconds")}
+                previous = before.get("ts") or (UNKNOWN_TIME if before.get("ts_unknown") else None)
+                if previous:
+                    entry["previous_ts"] = previous
                 if before.get("executed_source"):
                     entry["previous_source"] = before["executed_source"]
                 if before.get("ended_at"):

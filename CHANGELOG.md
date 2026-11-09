@@ -9,8 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 - **Evidence is never lost silently**: `run_log.py add` and `attach` take `--evidence` once with several paths or repeated;
   every path is kept, in order, once (a repeated option kept only the last path before).
 - **The window of an execution**: `add --ended-at` (with `--executed-at`; not before it, not in the future); `ts` stays the
-  start. `run_log.py retime` corrects only the time of a result in a batch not yet applied, keeps the rest and the previous
-  time (`retimed`).
+  start. `run_log.py retime` corrects only the time of a result in a batch not yet applied, keeps the rest (an end already
+  recorded too, unless a new one is given) and the previous time (`retimed`); a time or an end after `recorded_at` is refused.
 - **`attach --invalid <path> --reason <text>`** marks an evidence that shows nothing useful (`evidence_invalid`) without
   deleting it. `qa_report.py` and the Excel adapter read the new fields as any other.
 
