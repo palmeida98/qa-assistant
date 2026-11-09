@@ -67,7 +67,7 @@ preflight, and the skill's own steps check what it did not (the target, the buil
 | `scripts/workspace_select.py preflight` | Project selection, the skill against the code, configuration, tools and, for `/run-tests`, the route per module | Nothing |
 | `python -m adapters.tickets` | `/analyze-ticket`: collect, compare, record (first check, no change, change, partial read) | `memory/`, a block of `context.md` |
 | `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result; `add --executed-at` records an earlier observation (`ts` = the start of the execution, `recorded_at` = record, `--ended-at` = the end of its window); `retime` corrects only the time of a result; `attach --invalid` marks an evidence without deleting it; `--evidence` keeps every path given; `resolve` records a Question's decision keeping the observation; `defect-rule` says if a new bug needs a priority | `runs/` |
-| `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application | Nothing, or the report with `--output` |
+| `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application; `report` writes a short summary and a technical report | Nothing, the report with `--output`, or `exports/<stem>.summary.md` and `.technical.md` with `report` |
 | `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published | `memory/pbi/<id>.json` |
 | `scripts/sync_skills.py` | Installing the skills in `~/.claude/skills/` with the record of their origin | `~/.claude/skills/` |
 
@@ -96,6 +96,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A batch goes to its own workbook (`excel.workbooks`); an apply holds the lock and never leaves a broken workbook | `test_workbook_routing.py` |
 | Writes never follow a planted link; `history/` in any case is refused; the lock is never seen empty | `test_write_integrity.py` |
 | The preflight separates a valid configuration from ready to run, per platform | `test_readiness.py` |
+| The audit presents evidence valid, invalid and missing apart (an invalid one is never proof), and prints a summary that keeps every caveat and decision; a check prints the three builds with their source | `test_audit_evidence.py`, `test_device.py` |
 | A command prints a short card by default and the complete text on `--detail`; a dry run's complete values are in a file tied to its token; errors, blocks and commands are never dropped by a limit; a notice that does not change is shown once | `test_output_layer.py` |
 | Cases are added to a workbook only as the user saw them in the dry run (a token), under the lock, and the recalculated file never leaves a half copy; a result a case already had can be kept in its notes | `test_excel_writes_safety.py` |
 | Ticket analysis: types and comment sources validated before writing; content not opened stays not read; children not expanded are listed; a change after the analysis is said | `test_tickets_audit.py` |

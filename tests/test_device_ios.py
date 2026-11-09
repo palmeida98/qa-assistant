@@ -393,6 +393,19 @@ class Commands(unittest.TestCase):
         self.assertIn("build: observed com.demoshop.app 1.0.0 (34), intended 1.0.0 (35): DIFFERS", out)
         self.assertIn("ready: yes", out)
 
+    def test_the_ios_check_also_prints_the_intended_build_and_compares_the_batch(self):
+        with open(os.path.join(self.ws, "project.yaml"), "w", encoding="utf-8") as f:
+            f.write("mobile:\n  platform: ios\n  ios:\n    app_id: com.demoshop.app\n    udid: UDID-1\n"
+                    "    build: {version: '1.0.0 (35)'}\n")
+        os.makedirs(os.path.join(self.ws, "runs"))
+        with open(os.path.join(self.ws, "runs", "batch_i.json"), "w", encoding="utf-8") as f:
+            json.dump({"run": {"build": "com.demoshop.app 1.0.0 (33)"}, "results": [{"tc": "x"}]}, f)
+        rc, out, _ = self.run_it(FakeWda(), "check", "--batch", "i")
+        self.assertEqual(rc, 3)
+        self.assertIn("build intended: 1.0.0 (35)", out)
+        self.assertIn("(run.build of batch i): DIFFERS from the observed one", out)
+        self.assertIn("the build changed during the batch", out)
+
     def test_wda_down_is_exit_3_with_the_help(self):
         def down(cfg, method, path, body=None, timeout=30):
             raise wda.Unreachable(f"WebDriverAgent did not answer at {cfg['wda_url']} ({wda.WDA_HELP})")

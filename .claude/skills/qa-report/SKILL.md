@@ -33,7 +33,7 @@ metadata:
 1. Fix the scope and say it: the batches, the date, the platform, the PBI and its plan. Then audit and count, from <qa>:
    python <qa>/scripts/qa_report.py <workspace> audit [--batch <b> ...] [--since <date>]
    python <qa>/scripts/qa_report.py <workspace> totals [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml]
-   An audit problem (Question open, evidence missing, a case repeated) is reported as an open inconsistency.
+   An audit problem (Question open, evidence missing, a case repeated, a result whose only evidence is marked invalid) is reported as an open inconsistency; evidence marked invalid is named apart (kept on file, not proof), never counted as valid. The audit prints a summary by default (`--detail` lists every batch and flag).
 2. Keep apart: historical results (older runs), recent results (the current result of each case), retests (before ->
    after with builds) and coverage still missing (planned and not run). Every total names its scope and every
    percentage its denominator; platforms and builds are never added into one figure, and nothing seen on one
@@ -44,9 +44,13 @@ metadata:
    platforms and builds in scope that were not tested; the limits of the evidence (a result whose evidence is
    missing or does not show it); risks (uncovered criteria, Fails without a bug, results on an old build, unknown
    platform or build) and the residual risk.
-4. Write the technical report to exports/qa_report_<scope>_<YYYYMMDD>.md (qa_report.py --output gives the totals
-   part). For an Excel project the dashboard is procedures/report.md section B: it writes dashboard.html and reads
-   the workbook without saving it; a summary whose formulas are wrong is reported, and fixed at /checkpoint.
+4. Write the reports: exports/<stem>.summary.md (short) and exports/<stem>.technical.md (complete), from the same run
+   logs and audit; the project's `output.reports` chooses which (both by default):
+   python <qa>/scripts/qa_report.py <workspace> report [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml] [--name <stem>]
+   Add to the technical report what only the records of the session hold (features, bugs, risks). `totals --output`
+   still gives the totals part alone. For an Excel project the dashboard is procedures/report.md section B: it writes
+   dashboard.html and reads the workbook without saving it; a summary whose formulas are wrong is reported, and fixed
+   at /checkpoint.
 5. In the conversation, a short summary for the team, professional and structured, in the workspace's language: scope
    and date, per platform the build and the totals with denominators, main bugs, blockers, next steps. Ready to paste;
    the user decides where it goes.

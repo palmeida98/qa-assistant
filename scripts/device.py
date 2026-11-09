@@ -772,12 +772,10 @@ def cmd_check_ios(cfg, serial, a) -> int:
         version = wda.installed_version(serial, cfg["app_id"])
         out.append(f"app: {cfg['app_id']} {version or '(version not read: no UDID or devicectl)'}")
         out.append("input: wda")
-        if version and cfg.get("intended_build"):
-            observed = f"{cfg['app_id']} {version}"
-            verdict = "same" if same_build(observed, cfg["intended_build"]) else "DIFFERS"
-            out.append(f"build: observed {observed}, intended {cfg['intended_build']}: {verdict}")
-        elif not version:
-            out.append("build: not read on the device: confirm it in the app (Conta / About) before recording results")
+        lines, b2, a2 = build_roles(cfg, a, f"{cfg['app_id']} {version}" if version else None)
+        out += lines
+        blockers += b2
+        advice += a2
         out.append(envs)
         out.append("session: unknown (the iOS driver does not check the session; look at the app)")
     out.append("ready: yes" if not blockers else "ready: NOT READY: " + "; ".join(blockers))
@@ -890,28 +888,10 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
             out += ["input: adb", "driver: not used (input: adb)"]
         if name:
             observed = observed_build(cfg["app_id"], name.group(1), code.group(1) if code else "?")
-            if cfg["intended_build"]:
-                verdict = "same" if same_build(observed, cfg["intended_build"]) else "DIFFERS"
-                line = f"build: observed {observed}, intended {cfg['intended_build']}: {verdict}"
-                if verdict == "DIFFERS":
-                    text = ("the observed build is not the intended one (mobile.build.version): confirm it is the one "
-                            "to test; the intended build is never rewritten from the device")
-                    if _notice(cfg, a, f"build-differs:{observed}:{cfg['intended_build']}", text):
-                        advice.append(text)
-            else:
-                line = f"build: observed {observed}, intended not set"
-            out.append(line)
-            if a.batch:
-                observed_in_batch = _batch_build(cfg["workspace"], a.batch)
-                if observed_in_batch is None:
-                    out.append(f"batch: {a.batch}: no run log yet, the first result will record this build")
-                elif not same_build(observed, observed_in_batch):
-                    blockers.append(f"the build changed during the batch: {a.batch} started on {observed_in_batch!r} and the "
-                                    f"device now has {observed!r}")
-                    advice.append("stop this batch (its results stay as they are) and plan a new batch with the right "
-                                  "context (/plan-tests)")
-                else:
-                    out.append(f"batch: {a.batch}: same build as its run log")
+            lines, b2, a2 = build_roles(cfg, a, observed)
+            out += lines
+            blockers += b2
+            advice += a2
         out.append(envs)
         state, why = session_state(cfg, serial, window.split("/")[0])
         out.append(f"session: {state}" + (f" ({why})" if why else ""))
@@ -940,6 +920,48 @@ def _notice(cfg: dict, a, notice_id: str, text: str) -> bool:
         return output.Notices(cfg["workspace"], settings).show(notice_id, text)
     except Exception:       # noqa: BLE001 - never lose an advice to a failure of the notice state
         return True
+
+
+def build_roles(cfg: dict, a, observed: str | None) -> tuple[list[str], list[str], list[str]]:
+    """The three builds of a check, each with its source (technique-mobile.md §1.4): the line `build:` (OBSERVED, read from
+    the device now, against the intended one), `build intended:` (`mobile.build.version`, a person's setting, never
+    rewritten from the device) and `build of the run:` (`run.build` of the batch's run log, fixed by its first result;
+    needs --batch). Returns (lines, blockers, advice). A build that changed during the batch is a blocker."""
+    lines, blockers, advice = [], [], []
+    intended = cfg.get("intended_build") or ""
+    if observed and intended:
+        verdict = "same" if same_build(observed, intended) else "DIFFERS"
+        lines.append(f"build: observed {observed}, intended {intended}: {verdict}")
+        if verdict == "DIFFERS":
+            text = ("the observed build is not the intended one (mobile.build.version): confirm it is the one "
+                    "to test; the intended build is never rewritten from the device")
+            if _notice(cfg, a, f"build-differs:{observed}:{intended}", text):
+                advice.append(text)
+    elif observed:
+        lines.append(f"build: observed {observed}, intended not set")
+    else:
+        lines.append("build: not read on the device: confirm it in the app (Conta / About) before recording results")
+    lines.append(f"build intended: {intended or 'not set'} (mobile.build.version, a person's setting; never rewritten "
+                 "from the device)")
+    batch = getattr(a, "batch", None)
+    if not batch:
+        lines.append("build of the run: not compared (give --batch <name> to compare with the run log's build)")
+        return lines, blockers, advice
+    of_run = _batch_build(cfg["workspace"], batch)
+    if of_run is None:
+        lines.append(f"build of the run: batch {batch}: no run log yet, the first result will record the observed build")
+    elif not observed:
+        lines.append(f"build of the run: {of_run} (run.build of batch {batch}); the observed build was not read, "
+                     "so they were not compared")
+    elif not same_build(observed, of_run):
+        lines.append(f"build of the run: {of_run} (run.build of batch {batch}): DIFFERS from the observed one")
+        blockers.append(f"the build changed during the batch: {batch} started on {of_run!r} and the device now has "
+                        f"{observed!r}")
+        advice.append("stop this batch (its results stay as they are) and plan a new batch with the right "
+                      "context (/plan-tests)")
+    else:
+        lines.append(f"build of the run: {of_run} (run.build of batch {batch}): same as the observed one")
+    return lines, blockers, advice
 
 
 def _batch_build(workspace: str, batch: str) -> str | None:

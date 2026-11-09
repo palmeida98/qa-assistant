@@ -887,6 +887,22 @@ class OneCheck(unittest.TestCase):
         self.assertEqual(self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "20261102_L46")[0], 0)
         self.assertIn("no run log yet", self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "nope")[1])
 
+    def test_the_three_builds_are_three_lines_each_with_its_source(self):
+        self.configure("  build: {version: \"1.4.0 (140)\"}\n")
+        os.makedirs(os.path.join(self.ws, "runs"))
+        with open(os.path.join(self.ws, "runs", "batch_a.json"), "w", encoding="utf-8") as f:
+            json.dump({"run": {"build": "1.4.0 (140)"}, "results": [{"tc": "x"}]}, f)
+        _, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "a")
+        self.assertIn("build: observed com.demoshop.app 1.4.0 (140), intended 1.4.0 (140): same", out)
+        self.assertIn("build intended: 1.4.0 (140) (mobile.build.version, a person's setting", out)
+        self.assertIn("build of the run: 1.4.0 (140) (run.build of batch a): same as the observed one", out)
+        _, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check")          # without a batch: said, not guessed
+        self.assertIn("build of the run: not compared (give --batch", out)
+        self.configure()
+        _, out, _ = self.run_it(ReportDevice([CHAT_SENT]), "check", "--batch", "nope")
+        self.assertIn("build intended: not set", out)
+        self.assertIn("build of the run: batch nope: no run log yet", out)
+
     def test_the_session_is_confirmed_needed_or_unknown_and_never_guessed(self):
         self.configure("  session:\n    signed_in: [Type a message]\n    signed_out: [Log in]\n")
         self.assertIn("session: confirmed", self.run_it(ReportDevice([CHAT_SENT]), "check")[1])

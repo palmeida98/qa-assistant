@@ -235,7 +235,7 @@ class Audit(Base):
         self.batch("batch_android_01", [item("TC-SHOP-001", "Pass", "2026-11-01T10:00",
                                              evidence="evidence/b1/TC-SHOP-001_t1.png")],
                    run={"environment": "test", "build": "1.0.0 (7)"})
-        code, out = self.run_("audit")
+        code, out = self.run_("audit", "--detail")
         self.assertEqual(code, 0)
         self.assertIn("applied: no", out)
         self.assertIn("nothing to fix", out)
@@ -245,7 +245,7 @@ class Audit(Base):
             item("TC-SHOP-001", "Question", "2026-11-01T10:00"),
             item("TC-SHOP-002", "Fail", "2026-11-01T10:05", evidence="evidence/b1/TC-SHOP-002_BUG-new.png",
                  new_defect={"title": "[Cart] total wrong", "proposed": True})])
-        code, out = self.run_("audit")
+        code, out = self.run_("audit", "--detail")
         self.assertEqual(code, 1)
         self.assertIn("Question open: TC-SHOP-001", out)
         self.assertIn("evidence named but missing: TC-SHOP-002: evidence/b1/TC-SHOP-002_BUG-new.png", out)
@@ -281,7 +281,7 @@ class Audit(Base):
     def test_it_writes_nothing(self):
         self.batch("batch_android_01", [item("TC-SHOP-001", "Question", "2026-11-01T10:00")])
         before = sorted(os.walk(self.ws))
-        self.run_("audit")
+        self.run_("audit", "--detail")
         self.run_("totals")
         self.assertEqual(sorted(os.walk(self.ws)), before)
 
