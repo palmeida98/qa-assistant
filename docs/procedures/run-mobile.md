@@ -77,8 +77,10 @@
    intermediate state is never a Fail by itself).
 9. Record one note per turn in actual_result: what was sent, the decisive quote of the answer and the
    capture's path (evidence/<batch>/<case>_t<N>.png), through
-   python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path>]
-   (one item per case, a second execution of it with --replace; an observation made earlier, such as the tester's
+   python scripts/run_log.py <workspace> add <batch> <case> <status> "<note>" [--evidence <path> ...]
+   (every evidence path is kept: several after one option or the option repeated; a case of many steps: `ts` is its
+   start and --ended-at its end; a time recorded wrongly: run_log.py retime; an evidence that shows nothing useful:
+   attach --invalid <path> --reason "<why>", never deleted; one item per case, a second execution of it with --replace; an observation made earlier, such as the tester's
    notes of the day before, with its time and source: --executed-at "2026-11-05T16:21" --executed-source "tester
    notes of 05.11", or --executed-at unknown when nobody knows: `ts` is the execution time, never the time it was
    written, and a time is never guessed; a batch already applied is refused: use the new name

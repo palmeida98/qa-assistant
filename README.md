@@ -166,7 +166,9 @@ Details and every command are in [docs/skills-guide.md](docs/skills-guide.md) (t
 - **Time of the execution and time of the record.** `ts` is when the case was executed, `recorded_at` when it was written.
   `run_log.py add` records an execution happening now; an earlier observation takes `--executed-at "2026-11-05T16:21"
   --executed-source "tester notes"` (a time nobody knows: `--executed-at unknown --executed-source "notes without a time"`). No time zone is ever assigned, and a late record never makes
-  an old execution look newer.
+  an old execution look newer. `ts` is the start: `--ended-at` adds the end of the window, `run_log.py retime` corrects only the
+  time of a result (the previous one is kept), and `--evidence` may be repeated without losing a path; `attach --invalid <path>
+  --reason …` marks an evidence that shows nothing useful without deleting it.
 - **A Question is resolved, not overwritten.** `python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason … --decided-by …` keeps
   the observation, its time and evidence and records the decision; for a batch already applied it goes to a new batch with
   `--into`. Recording a decision does not apply it, and does not replace an approval the project asks for.

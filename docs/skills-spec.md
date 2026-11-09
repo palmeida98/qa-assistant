@@ -66,7 +66,7 @@ preflight, and the skill's own steps check what it did not (the target, the buil
 |---|---|---|
 | `scripts/workspace_select.py preflight` | Project selection, the skill against the code, configuration, tools and, for `/run-tests`, the route per module | Nothing |
 | `python -m adapters.tickets` | `/analyze-ticket`: collect, compare, record (first check, no change, change, partial read) | `memory/`, a block of `context.md` |
-| `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result; `add --executed-at` records an earlier observation (`ts` = execution, `recorded_at` = record); `resolve` records a Question's decision keeping the observation; `defect-rule` says if a new bug needs a priority | `runs/` |
+| `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result; `add --executed-at` records an earlier observation (`ts` = the start of the execution, `recorded_at` = record, `--ended-at` = the end of its window); `retime` corrects only the time of a result; `attach --invalid` marks an evidence without deleting it; `--evidence` keeps every path given; `resolve` records a Question's decision keeping the observation; `defect-rule` says if a new bug needs a priority | `runs/` |
 | `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application | Nothing, or the report with `--output` |
 | `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published | `memory/pbi/<id>.json` |
 | `scripts/sync_skills.py` | Installing the skills in `~/.claude/skills/` with the record of their origin | `~/.claude/skills/` |
@@ -89,6 +89,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | Ticket analysis: first check, no change, change, partial read that removes nothing | `test_tickets.py`, `test_skill_flows.py` |
 | `/run-tests` routes mobile, web and API, and names missing tools | `test_workspace_select.py` |
 | Results are written once per case; approvals are kept | `test_run_log.py`, `test_skill_flows.py` |
+| Every evidence path given is kept (a repeated option too); the end of an execution's window is recorded; a time is corrected without rewriting the result and the previous time is kept; an evidence that shows nothing useful is marked, never deleted; an applied batch is never touched | `test_run_log_traceability.py` |
 | `/test-pbi` resumes without repeating done steps or publishing twice (a publication needs a confirmation, a key is not reused); a changed build or requirement is reported and `--reopen` returns the steps to review; what was not compared is never "nothing changed" | `test_pbi_state.py` |
 | The report's totals reconcile and Android and iOS stay apart; a current result says whether it is applied; the file time never decides | `test_qa_report.py` |
 | A batch goes to its own workbook (`excel.workbooks`); an apply holds the lock and never leaves a broken workbook | `test_workbook_routing.py` |
