@@ -369,7 +369,8 @@ def dump_xml(serial: str, tries: int = 3) -> str:
             return out[out.find("<?xml") if "<?xml" in out else out.find("<hierarchy"):]
         if attempt < tries - 1:
             time.sleep(1)
-    raise NoTarget(f"uiautomator dump returned no hierarchy after {tries} tries (screen animating or locked?)")
+    raise NoTarget(f"uiautomator dump returned no hierarchy after {tries} tries (screen animating or locked?); "
+                   "a side menu or an animation can cause it: a tap by coordinates still works (tap --xy X Y)")
 
 
 def read_screen(cfg: dict, serial: str, allow_dialogs: bool = False) -> list[Node]:
@@ -1230,7 +1231,11 @@ def cmd_send(cfg, serial, a) -> int:
         typed_tree = on_ios(wda.tree, cfg)
         nodes = [Node(*t) for t in wda.nodes(typed_tree)]
     else:
-        nodes = read_screen(cfg, serial)
+        try:
+            nodes = read_screen(cfg, serial)
+        except (NoTarget, NotFound) as e:       # typed, and the send control could not even be looked for
+            raise Interrupted(NOT_SENT, f"the text was typed but the screen could not be read to find the send control "
+                              f"({e}); it was not sent: look at the app", 4) from None
     control = next((n for lab in labels for n in nodes if n.text.casefold() == lab.casefold()), None)
     if control is None:   # contains, never the field that still shows the message
         key = a.text[:40].casefold()
@@ -1238,6 +1243,7 @@ def cmd_send(cfg, serial, a) -> int:
                         if lab.casefold() in n.text.casefold() and key not in n.text.casefold()), None)
     baseline = {n.text for n in nodes if a.text[:40].casefold() not in n.text.casefold()}
     held = any(a.text[:40].casefold() in n.text.casefold() for n in nodes)     # the field shows what was typed
+    held_at = {(n.x1, n.y1, n.x2, n.y2) for n in nodes if a.text[:40].casefold() in n.text.casefold()}   # where
     if typed_tree is not None:          # the field's own label comes back once it is emptied: not the answer
         baseline |= {f["label"] for f in wda.editable_fields(typed_tree, cfg.get("field_labels") or ()) if f["label"]}
     if control is None:
@@ -1252,7 +1258,11 @@ def cmd_send(cfg, serial, a) -> int:
             raise Interrupted(UNCERTAIN, f"the tap on send got no answer ({e}): the message may or may not have gone; "
                               "look at the app before sending again", 3) from None
     else:
-        tap_xy(cfg, serial, *control.centre)
+        try:
+            tap_xy(cfg, serial, *control.centre)
+        except (NoTarget, NotFound) as e:
+            raise Interrupted(UNCERTAIN, f"the tap on send got no answer ({e}): the message may or may not have gone; "
+                              "look at the app before sending again", 3) from None
     if timing:
         timing["to_send_s"] = round(time.monotonic() - began, 2)
         print(f"timing: focus {timing['focus_s']} s, keys {timing['keys_s']} s, until the tap on send "
@@ -1263,8 +1273,9 @@ def cmd_send(cfg, serial, a) -> int:
             burst.start()
         else:
             burst.take()
-    if ios_on(cfg):
-        print(f"outcome: {confirm_sent_ios(cfg, a.text, held=held)}")
+    outcome = (confirm_sent_ios(cfg, a.text, held=held) if ios_on(cfg)
+               else confirm_sent_android(cfg, serial, a.text, held_at))
+    print(f"outcome: {outcome}")
 
     last: dict = {}
 
@@ -1291,6 +1302,10 @@ def cmd_send(cfg, serial, a) -> int:
         else:
             lines, stable = wait_stable(reader, a.timeout,
                                         interval=a.burst_interval if burst and not burst.threaded else POLL_S)
+    except (NoTarget, NotFound) as e:           # the message went (or may have): never end with a bare NO TARGET
+        raise Interrupted(SENT if outcome.startswith(SENT) else UNCERTAIN,
+                          f"the answer could not be read ({e}); the message outcome was {outcome!r}: look at the app "
+                          "before sending again", 3) from None
     finally:
         if burst:
             burst.stop("settled")
@@ -1317,6 +1332,34 @@ def cmd_send(cfg, serial, a) -> int:
         raise NoTarget(f"the screen did not settle in {a.timeout:.0f} s (answer still streaming?): "
                        "the lines above are the last reading")
     return 0
+
+
+def confirm_sent_android(cfg: dict, serial: str, text: str, held_at: set) -> str:
+    """After the tap on send, the Android counterpart of `confirm_sent_ios`: `sent` once the message is no longer in the
+    field where it was typed (`held_at`: the bounds of the nodes that showed it) or, when no field showed it, once it is
+    shown on the screen; the text still in the field after SENT_WAIT_S is Interrupted (typed, not sent); a message
+    nowhere to be seen, or a screen that cannot be read, leave it `uncertain` (the answer is still read, nothing is sent
+    again). A dump that fails is a result, not a bare error: the message may have gone."""
+    key = text[:40].casefold()
+    start = time.monotonic()
+    while True:
+        try:
+            nodes = read_screen(cfg, serial)
+        except (NoTarget, NotFound) as e:
+            return f"{UNCERTAIN} (the screen could not be read after the tap: {e}; nothing is sent again)"
+        showing = [n for n in nodes if key and key in n.text.casefold()]
+        in_field = any((n.x1, n.y1, n.x2, n.y2) in held_at for n in showing)
+        if held_at and not in_field:
+            return f"{SENT} (the field no longer holds the message)"
+        if not held_at and showing:
+            return f"{SENT} (the message is shown on the screen)"
+        if time.monotonic() - start >= SENT_WAIT_S:
+            if held_at:
+                raise Interrupted(NOT_SENT, f"the message is still in the field {SENT_WAIT_S:.0f} s after the tap on "
+                                  "send: look at the app; it is not sent again", 4)
+            return (f"{UNCERTAIN} (the message is not shown {SENT_WAIT_S:.0f} s after the tap; "
+                    "nothing is sent again)")
+        time.sleep(FOCUS_POLL_S)
 
 
 def confirm_sent_ios(cfg: dict, text: str, held: bool = True) -> str:

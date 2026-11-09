@@ -63,9 +63,10 @@
    opened sheet, a new one with device.py <workspace> shot <case>_t<N>b; never classify from an incomplete
    dump. Exit 3 from send = the answer did not settle: read the screen again (dump) before deciding. Captures only with the app in the foreground (the driver
    refuses otherwise: bring the app back, never capture another app).
-   On an iPhone `send` finds the one text field itself (--field only when there are several); when it stops it prints
-   `outcome:` (nothing typed, partly typed, typed not sent, sent, uncertain). Never send again before looking at the
-   app (dump or shot): a second send of an `uncertain` one can post the message twice.
+   On an iPhone `send` finds the one text field itself (--field only when there are several). On both platforms `send`
+   prints `outcome:` after the tap (nothing typed, partly typed, typed not sent, sent, uncertain), also when the screen
+   cannot be read afterwards (a dump that fails after the tap is `uncertain` or `sent`, never a bare NO TARGET). Never
+   send again before looking at the app (dump or shot): a second send of an `uncertain` one can post the message twice.
    A case that expects the answer to be presented progressively (streaming): add `--samples 20 --sample-interval 3`
    to send: it keeps timed readings in evidence/<batch>/<capture>_samples.json and its `evidence:` says what they
    could show (partial text observed; answer readable, no intermediate state captured; answer text not readable;

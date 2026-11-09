@@ -13,6 +13,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   recorded too, unless a new one is given) and the previous time (`retimed`); a time or an end after `recorded_at` is refused.
 - **`attach --invalid <path> --reason <text>`** marks an evidence that shows nothing useful (`evidence_invalid`) without
   deleting it. `qa_report.py` and the Excel adapter read the new fields as any other.
+### Changed (reliable send on Android, phase 17.2, 2026-11-09)
+- **`device.py send` says what reached the app on Android**, as it did on an iPhone: an `outcome:` line after the tap
+  (`sent`, `typed, not sent` or `uncertain`). A screen that cannot be read after the tap, or to find the send control, no
+  longer ends as a bare `NO TARGET`: it is `STOPPED …` with the outcome (exit 3 or 4) and nothing is sent again. **The first
+  stdout line of an Android `send` is now `outcome: …`.**
+- A dump with no hierarchy says that a tap by coordinates still works (`tap --xy`).
 
 ### Changed (traceability of applications and results, branch `claude/melhorias-rastreabilidade`, 2026-11-08)
 - **Excel preview token (A-02)**: `adapters.excel.apply` tokens are `v2-<hash>` and cover `--label`, the reporter actually
