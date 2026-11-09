@@ -69,7 +69,7 @@ metadata:
 5. Classify by procedures/rules.md section 4: Fail only for a failure of the application shown by the evidence; tool
    failure, block and inconclusive evidence stay apart, each with its reason. A capture that failed or a timeout is
    retried once and is never a defect by itself. A send that stopped is never repeated before looking at the app (its
-   `outcome:` line says what reached it). Streaming: use the sampler's `evidence:` as written and, when the answer is
+   `outcome:` line, on Android too, says what reached it; a dump that fails after the tap is `uncertain`, not an error). Streaming: use the sampler's `evidence:` as written and, when the answer is
    not readable, --burst screenshots judged by content; report the limits; no captured intermediate state is not a
    Fail by itself.
 6. A Fail: keep its evidence and hand it to /manage-bugs at the end of the batch (proposals, reviewed together). Never

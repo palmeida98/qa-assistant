@@ -465,9 +465,10 @@ class Commands(unittest.TestCase):
         rc, out, _ = self.run_it(fake, "send", "Where is my order QA-1?", "--capture", "TC-SHOP-001_t1")
         self.assertEqual(rc, 0)
         lines = out.splitlines()
-        self.assertEqual(lines[0], "[0,600][800,700] Your order ships tomorrow. / Track it in Orders.")
-        self.assertTrue(lines[1].startswith("capture: "))
-        self.assertEqual(len(lines), 2)                                    # no chrome, no earlier turns
+        self.assertEqual(lines[0], "outcome: sent (the field no longer holds the message)")   # as on an iPhone
+        self.assertEqual(lines[1], "[0,600][800,700] Your order ships tomorrow. / Track it in Orders.")
+        self.assertTrue(lines[2].startswith("capture: "))
+        self.assertEqual(len(lines), 3)                                    # no chrome, no earlier turns
         self.assertEqual(fake.of("shell", "input", "text"),
                          [("shell", "input", "text", "Where%sis%smy%sorder%sQA-1\\?")])
         self.assertEqual(fake.taps(), [("1015", "2250")])                  # the send control, by its content-desc
@@ -493,6 +494,40 @@ class Commands(unittest.TestCase):
         fake = FakeDevice([typed])
         self.assertEqual(self.run_it(fake, "send", "please send the invoice")[0], 4)
         self.assertEqual(fake.taps(), [])
+
+    def test_send_says_what_reached_the_app_when_the_screen_cannot_be_read_after_the_tap(self):
+        # the real case of 09.11.2026: the dump failed after the tap, the message had gone, and only NO TARGET came out
+        fake = FakeDevice([CHAT_TYPED, ""])
+        with mock.patch.object(dv.time, "sleep"):
+            rc, out, err = self.run_it(fake, "send", "Where is my order QA-1?")
+        self.assertEqual(rc, 3)
+        self.assertEqual(len(fake.taps()), 1)                                   # tapped once, never again
+        self.assertIn("outcome: uncertain (the screen could not be read after the tap", out)
+        self.assertIn("STOPPED: the answer could not be read", err)
+        self.assertIn("outcome: uncertain (not repeated automatically)", err)
+        self.assertNotIn("NO TARGET", err)
+
+    def test_send_says_typed_not_sent_when_the_message_stays_in_the_field(self):
+        fake = FakeDevice([CHAT_TYPED])                                         # the same screen after the tap
+        with mock.patch.object(dv, "SENT_WAIT_S", 0.0), mock.patch.object(dv.time, "sleep"):
+            rc, _, err = self.run_it(fake, "send", "Where is my order QA-1?")
+        self.assertEqual(rc, 4)
+        self.assertIn("typed, not sent", err)
+        self.assertEqual(len(fake.taps()), 1)
+
+    def test_send_says_typed_not_sent_when_the_screen_cannot_be_read_to_find_the_send_control(self):
+        fake = FakeDevice([""])
+        with mock.patch.object(dv.time, "sleep"):
+            rc, _, err = self.run_it(fake, "send", "Where is my order QA-1?")
+        self.assertEqual(rc, 4)
+        self.assertIn("typed, not sent", err)
+        self.assertEqual(fake.taps(), [])                                       # no send control was tapped
+
+    def test_a_dump_that_fails_says_a_tap_by_coordinates_still_works(self):
+        with mock.patch.object(dv, "adb", FakeDevice(dumps=[""])), mock.patch.object(dv.time, "sleep"), \
+                self.assertRaises(dv.NoTarget) as ctx:
+            dv.dump_xml("emulator-5554")
+        self.assertIn("tap --xy", str(ctx.exception))
 
     # --- link
 
@@ -645,7 +680,8 @@ class DriverInput(unittest.TestCase):
         fake = DriverDevice([CHAT_TYPED, CHAT_SENT, CHAT_ANSWERED])
         rc, out, _ = self.run_it(fake, "send", "Where is my order QA-1?")
         self.assertEqual(rc, 0)
-        self.assertEqual(out.splitlines(), ["[0,600][800,700] Your order ships tomorrow. / Track it in Orders."])
+        self.assertEqual(out.splitlines(), ["outcome: sent (the field no longer holds the message)",
+                                            "[0,600][800,700] Your order ships tomorrow. / Track it in Orders."])
         calls = fake.driver_calls()
         self.assertEqual(calls[0], ("text", base64.b64encode(b"Where is my order QA-1?").decode()))
         self.assertEqual(calls[1], ("tap", "1015,2250"))
@@ -896,7 +932,7 @@ class StreamingSamples(unittest.TestCase):
 
     def sampled(self, *extra, dumps=None):
         two = self.partial("Your order ships")
-        dumps = dumps or [CHAT_TYPED, self.partial("Your"), two, "", "", "", CHAT_ANSWERED]
+        dumps = dumps or [CHAT_TYPED, CHAT_SENT, self.partial("Your"), two, "", "", "", CHAT_ANSWERED]   # CHAT_SENT: the outcome
         with mock.patch.object(dv.time, "sleep"):
             return self.run_it(FakeDevice(dumps), "send", "Where is my order QA-1?", "--capture", "TC-SHOP-001_t1",
                                "--samples", "20", "--sample-interval", "5", *extra)

@@ -88,6 +88,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A second, fictional workspace works with no tie to a real project | `test_skill_flows.py` |
 | Ticket analysis: first check, no change, change, partial read that removes nothing | `test_tickets.py`, `test_skill_flows.py` |
 | `/run-tests` routes mobile, web and API, and names missing tools | `test_workspace_select.py` |
+| A send says what reached the app on both platforms, also when the screen cannot be read after the tap, and never sends again by itself | `test_device.py`, `test_device_ios.py` |
 | Results are written once per case; approvals are kept | `test_run_log.py`, `test_skill_flows.py` |
 | Every evidence path given is kept (a repeated option too); the end of an execution's window is recorded; a time is corrected without rewriting the result and the previous time is kept; an evidence that shows nothing useful is marked, never deleted; an applied batch is never touched | `test_run_log_traceability.py` |
 | `/test-pbi` resumes without repeating done steps or publishing twice (a publication needs a confirmation, a key is not reused); a changed build or requirement is reported and `--reopen` returns the steps to review; what was not compared is never "nothing changed" | `test_pbi_state.py` |
