@@ -53,7 +53,7 @@ Ask the user for the final status, the reason and who decided it (and where the 
    <at apply time> take the instant of the real apply), counts, new defects, problems, "already applied". A problem
    or "already applied" means no apply. Once the user confirms THAT preview, apply with its token:
    python -m adapters.excel.apply <workspace> <run_log>/<batch>.json --expect <token>
-   (with the SAME --label, --reported-by, --now and --no-recalc the dry run had: the `v2-` token covers them, and an
+   (with the SAME --label, --reported-by, --now, --no-recalc and --keep-previous the dry run had: the `v2-` token covers them, and an
    apply with others, or a token from before this rule, is refused before any write)
    An "out of date" refusal (exit 4, nothing written) means the batch, project.yaml or a workbook changed since the
    preview: run the dry run again and ask again. Never copy the workspace by hand to simulate.

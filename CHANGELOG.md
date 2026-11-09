@@ -19,6 +19,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   longer ends as a bare `NO TARGET`: it is `STOPPED …` with the outcome (exit 3 or 4) and nothing is sent again. **The first
   stdout line of an Android `send` is now `outcome: …`.**
 - A dump with no hierarchy says that a tap by coordinates still works (`tap --xy`).
+### Changed (Excel writes, phase 17.3, 2026-11-09)
+- **`add_cases --expect <token>`**: the dry run prints a `v1-<hash>` preview token (cases file, the workbook's path and
+  content, `project.yaml`, the plan and the options); the real add refuses, writing nothing, when any of them changed.
+  The add now holds the workspace's lock, like the apply. Cases already added are still not added again.
+- **The final recalculation is put in place in one step** (a copy next to the workbook, renamed over it): a stop in the
+  middle leaves the workbook as it was and no half copy behind.
+- **`apply --keep-previous`**: the result a case already had (and its status) stays in the case's notes when the batch
+  replaces it (`notes.previous_result`); part of the token only when given, so tokens of a dry run without it do not change.
 
 ### Changed (traceability of applications and results, branch `claude/melhorias-rastreabilidade`, 2026-11-08)
 - **Excel preview token (A-02)**: `adapters.excel.apply` tokens are `v2-<hash>` and cover `--label`, the reporter actually

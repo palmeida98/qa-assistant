@@ -3,7 +3,8 @@ Safe recalculation of a workbook's formulas (technique-excel.md section 2).
 
 Golden rule: never recalculate directly on a path inside a synced or mounted
 folder. recalc_safe() always copies the file to a local temporary folder,
-recalculates there and only then copies the result back.
+recalculates there and only then puts the result back in one step (copied next to the
+workbook and renamed over it).
 
 Mechanisms:
 - "libreoffice" (default): soffice --headless with an isolated profile that
@@ -20,6 +21,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 MECHANISMS = ("libreoffice", "excel-com")
 
@@ -145,5 +147,29 @@ def recalc_safe(path: str, mechanism: str = "libreoffice", timeout: int = 60) ->
             fn(tmp_path, timeout)
         except Exception as e:  # noqa: BLE001 -- any failure becomes ok=False; the original is untouched
             return {"ok": False, "mechanism": mechanism, "error": str(e)}
-        shutil.copy(tmp_path, path)
+        try:
+            _put_in_place(tmp_path, path)
+        except OSError as e:    # a copy that stops in the middle never leaves a broken workbook: the original stays
+            return {"ok": False, "mechanism": mechanism, "error": f"the recalculated file could not be put in place: {e}"}
     return {"ok": True, "mechanism": mechanism}
+
+
+def _put_in_place(source: str, path: str) -> None:
+    """The recalculated copy replaces the workbook in one step: it is copied next to it first and then renamed over it
+    (`os.replace`), so a stop in the middle leaves the original as it was (and no half copy behind)."""
+    folder = os.path.dirname(os.path.abspath(path))
+    fd, staged = tempfile.mkstemp(prefix=".~qa-recalc-", suffix=os.path.splitext(path)[1] or ".xlsx", dir=folder)
+    os.close(fd)
+    try:
+        shutil.copy(source, staged)
+        for n in range(20):         # Windows: a reader holding the file for a moment
+            try:
+                os.replace(staged, path)
+                return
+            except PermissionError:
+                if n == 19:
+                    raise
+                time.sleep(0.05)
+    finally:
+        if os.path.exists(staged):
+            os.unlink(staged)

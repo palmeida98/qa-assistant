@@ -50,7 +50,8 @@ temporary folder is removed, also on error.
 The dry run ends with a **preview token** `v2-<hash>`: the batch (its name, which routes it to a workbook, and its
 content), `project.yaml`, every declared workbook, and the options that change what is written: `--label` (as given; the
 default label is a marker, because its date is the apply's own), the reporter actually written (`--reported-by`, else
-`excel.defects.reported_by`, else the default), `--no-recalc` and a fixed `--now`. The dry run prints them
+`excel.defects.reported_by`, else the default), `--no-recalc`, a fixed `--now` and, when given, `--keep-previous` (a token
+without it is the same as before). The dry run prints them
 ("Options covered by the token"). `apply ... --expect <token>` applies only if the same options are given and none of
 those things changed; otherwise exit 4 with "the preview ... is out of date" and nothing written (checked before any
 write): run the dry run again and show it again. **The real clock is not in the token**: the seconds that pass never
@@ -58,6 +59,12 @@ invalidate a preview, and the cells that take the instant of the apply (label da
 date) are exactly the ones the dry run marks `<at apply time>`; to fix them in the approval, give `--now` to both. A
 token without the `v2-` prefix is from before this rule (it did not cover the options): it is refused with a message and
 the dry run is repeated. Dry runs left pending when this change is adopted must be repeated.
+
+**The result a case already had** is replaced by the batch's (the workbook shows the latest result of each case). With
+`apply --keep-previous` it is not lost in the workbook: when a case already had a result text and the batch replaces it
+with another, the case's notes get `Previous result (<status>): <text>` (the text of `notes.previous_result`), after the
+label like every note. It needs the notes column in every case sheet (else the batch is refused whole before anything is
+written) and is part of the token; without it nothing changes. The previous value always stays in git and in the run logs.
 
 **Date of the application.** By default, the adapter uses the clock: the date of the notes' label, the report date of new defects, the date of the active view's summary text and the `applied_at` of the control sheet. With `--now YYYY-MM-DDTHH:MM:SS` in `apply` (attribute `now` of `ExcelAdapter`), it uses that instant in all those places, and the same sequence of batches always produces the same cells. It serves to rebuild a workbook from the batches with the date each batch was run (e.g. `examples/demo/rebuild_workbook.py`, which uses the first `ts` of each batch); in a normal session it is not used.
 
@@ -103,7 +110,7 @@ A case's status always uses the list of valid statuses **of that project** (defi
 
 The cases `/plan-tests` proposes only enter the workbook after the user approves them (methodology §5.3), and they enter through the adapter, never by hand: the same load → validate → save-if-clean → recalculate → summary check of a batch.
 
-    python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run] [--label …] [--no-recalc] [--now …]
+    python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run] [--label …] [--no-recalc] [--now …] [--expect <token>]
 
 - **Input:** `<workspace>/cases/cases_<YYYYMMDD>_<nn>.json`, `{"cases": [case, …]}` with the fields of the case model (methodology §2), the same as the tracker adapters' cases file (`technique-jira-xray.md` §7): `id`, `title`, `area`, `feature`, `preconditions`, `steps` [{`action`, `data`, `expected`}], `expected`, `role`, `platform`, `priority`, `technique`, `origin`. The `id` is the **final** ID in the project's pattern (a workbook has no tracker to give one), and its prefix chooses the sheet (`cases.sheets`). A file already added is never edited: new cases go in a new file.
 - **Configuration:** `cases.fields` maps each model field to the header of its column (`{title: "Title", steps: "Steps", expected: "Expected Result", …}`); `title` is required for `add-cases` (it is how duplicates are found); the ID and the status always use `cases.columns`. A mapped column may be missing from some sheets (as `actual_result`): there the field is not written, and the command lists it. A field with no column is listed as not written, never refused. `cases.new_status` (optional) is the status of a new case; by default the first of `cases.statuses` (the pending status the dashboard assumes).
@@ -112,7 +119,8 @@ The cases `/plan-tests` proposes only enter the workbook after the user approves
 - **Where and how:** each case goes in the row after the last row with an ID of its sheet, in the file's order; every cell of the new row gets the style of the previous case row (font, fill, border, alignment, number format, protection); a column the case does not fill that has a **formula** in the previous row gets that formula translated to the new row; a data validation that covered the previous row's cell is extended to the new one. The row height is never set (§3).
 - **Once only:** the file is recorded in the control sheet (§5) like a batch — its identity is the file name, the fingerprint is that of its cases, `items` is the number of cases —; the same file again changes nothing (exit 0) and the same name with another content is refused (exit 4).
 - **Then the usual:** `save_if_clean()` (exit 2 with the cross-check's problems, original untouched), `recalc()` (exit 3) and `check_summary()` (exit 5: a summary with fixed ranges that no longer reach the new rows, or without the new area — fix the formulas).
-- `--dry-run` validates and prints, per case, the sheet, the row and the cells it would write, and the fields not written; it writes nothing (0 valid · 4 refused).
+- `--dry-run` validates and prints, per case, the sheet, the row and the cells it would write, and the fields not written; it writes nothing (0 valid · 4 refused). It ends with a **preview token** `v1-<hash>`: the cases file, the workbook that would change (path and content), `project.yaml`, the plan (sheet, row and cells of every case) and the options that change what is written (`--label`, `--no-recalc`, a fixed `--now`).
+- **`--expect <token>` binds the add to the dry run the user saw**: if the cases file, the workbook, `project.yaml`, the plan or an option changed, exit 4 with "the preview … is out of date" and nothing written (checked after the lock is taken, before the write); a token of another command (`v2-…`, the apply's) or `--expect` with `--dry-run` is refused. Cases already added are not added again, with or without a token. The add **holds the workspace's lock** like the apply (one writer at a time: exit 4 and nothing written when another is writing), and the final recalculation puts the result in place in one step (a copy next to the workbook renamed over it), so a stop in the middle leaves the workbook as it was.
 
 In the adapter: `validate_cases()` (read only) → `add_cases()` → `save_if_clean()` → `recalc()` → `check_summary()`.
 
