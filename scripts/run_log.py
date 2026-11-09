@@ -3,12 +3,15 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 
     python scripts/run_log.py <workspace> add <batch> <case> <status> <actual>
         [--bug ID] [--new-defect FILE.json] [--evidence PATH ...] [--environment KEY] [--build VERSION]
-        [--executed-at "YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]" | unknown --executed-source "<where the time comes from>"]
+        [--executed-at "YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]" | unknown --executed-source "<where the time comes from>"
+         [--ended-at "YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]"]]
+    python scripts/run_log.py <workspace> retime <batch> <case> --executed-at "YYYY-MM-DDTHH:MM[:SS]" | unknown
+        --executed-source "<where the time comes from>" [--ended-at "YYYY-MM-DDTHH:MM[:SS]"]
     python scripts/run_log.py <workspace> defect-rule
     python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason "<why>" --decided-by "<who>"
         [--decision-source "<where the decision is written>"] [--into <new batch>]
     python scripts/run_log.py <workspace> attach <batch> <case> [--bug ID | --new-defect FILE.json]
-        [--evidence PATH ...] [--replace-link]
+        [--evidence PATH ...] [--invalid PATH ... --reason "<why>"] [--replace-link]
     python scripts/run_log.py <workspace> remove <batch> <case>
     python scripts/run_log.py <workspace> mode <batch> "<kind>: <why>"
 
@@ -21,6 +24,16 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
   made current by the clock. The time needs a date and a time (a bare date is refused); a time without a zone stays
   without one (as every ts already recorded: the machine's clock), a zone given (Z, +01:00) is kept as written; a time
   in the future or not valid is exit 2 and nothing is written. Old run logs (ts only) stay valid and are never filled in.
+
+- Window of an execution (phase 17.1): `ts` is the START of the execution; `--ended-at` records when the case ended (it
+  needs `--executed-at` with a known time, is not before it and not in the future). `retime` corrects only the time of a
+  result in a batch not yet applied: observed text, status, evidence, build, bug and `recorded_at` stay; the previous time
+  goes to `retimed` ({at, previous_ts, previous_source, previous_ended_at}), one entry per correction; the same time again
+  changes nothing; an applied batch is refused (exit 1), an unknown batch or case is exit 2.
+- Evidence: `--evidence` takes one or more paths and may be repeated; every path is kept, in the order given, once.
+  `attach --invalid PATH ... --reason TEXT` marks evidence the result already has as showing nothing useful
+  (`evidence_invalid`: path, reason, when) without deleting it or taking it out of the list; the same mark again changes
+  nothing, another reason for the same path is refused, a path the result does not have is exit 2.
 
 - resolve: records the decision about a `Question` (methodology 8.5) without losing the observation. It is NOT a new
   execution: the item keeps its tc, observed text, ts, recorded_at and evidence, and gets the new status and a
@@ -95,6 +108,7 @@ from common import (
     parse_when,
     read_project,
     same_build,
+    ts_key,
     workspace_lock,
     workspace_path,
 )
@@ -220,6 +234,23 @@ def check_executed(executed_at: str | None, source: str | None, now: datetime | 
         raise UsageError(f"--executed-at: {e}") from None
 
 
+def check_ended(ended_at: str | None, executed_at: str | None, now: datetime | None = None) -> str | None:
+    """The end of an execution's window as stored, or None. `ts` is the START, so an end needs a known start (an
+    execution recorded as happening now has none to give) and is neither before it nor in the future."""
+    if ended_at is None:
+        return None
+    if executed_at is None or executed_at == UNKNOWN_TIME:
+        raise UsageError("--ended-at needs --executed-at with a known time: `ts` is the start of the execution and "
+                         "the end is the end of its window")
+    try:
+        end = parse_when(ended_at, now)
+    except ValueError as e:
+        raise UsageError(f"--ended-at: {e}") from None
+    if ts_key(end) < ts_key(executed_at):
+        raise UsageError(f"--ended-at {end} is before the start {executed_at}")
+    return end
+
+
 def vocabulary(proj: dict) -> list[str]:
     """The project's statuses: those of the tracker's section ([] when it has none)."""
     tracker = proj.get("tracker")
@@ -324,11 +355,13 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         new_defect: dict | None = None, evidence: list[str] | None = None, environment: str | None = None,
         build: str | None = None, now: datetime | None = None, replace: bool = False,
         mode: str | None = None, executed_at: str | None = None,
-        executed_source: str | None = None) -> tuple[str, dict | None]:
+        executed_source: str | None = None, ended_at: str | None = None) -> tuple[str, dict | None]:
     """Appends the result of `case`, or replaces it with `replace`; (path, the result replaced or None). Refused /
-    UsageError as in the header. `mode`: as `set_mode`, checked before the result is written."""
+    UsageError as in the header. `mode`: as `set_mode`, checked before the result is written. `ended_at`: the end of
+    the execution's window (`ts` is its start)."""
     mode = check_mode(mode) if mode is not None else None
     executed_at, executed_source = check_executed(executed_at, executed_source, now)
+    ended_at = check_ended(ended_at, executed_at, now)
     try:
         proj = read_project(workspace)
     except FileNotFoundError as e:
@@ -363,14 +396,14 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
                               f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
             return _add(path, doc_for=path, case=case, status=status, actual=actual, bug=bug, new_defect=new_defect,
                         evidence=evidence, environment=environment, build=build, now=now, replace=replace, mode=mode,
-                        executed_at=executed_at, executed_source=executed_source)
+                        executed_at=executed_at, executed_source=executed_source, ended_at=ended_at)
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
 
 
 def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
          now, replace: bool = False, mode: str | None = None, executed_at: str | None = None,
-         executed_source: str | None = None) -> tuple[str, dict | None]:
+         executed_source: str | None = None, ended_at: str | None = None) -> tuple[str, dict | None]:
     doc = read_log(doc_for)
     _same_context(doc, environment, build)
     if mode is not None:
@@ -386,10 +419,13 @@ def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, n
     item["recorded_at"] = recorded
     if executed_source:
         item["executed_source"] = executed_source
+    if ended_at:
+        item["ended_at"] = ended_at
     if bug:
         item["bug"] = bug
     if new_defect:
         item["new_defect"] = new_defect
+    evidence = list(dict.fromkeys(e for e in (evidence or []) if e))      # every path once, in the order given
     if evidence:
         item["evidence"] = evidence if len(evidence) > 1 else evidence[0]
     if environment or build:
@@ -443,11 +479,19 @@ def _paths(value) -> list[str]:
 
 
 def attach(workspace: str, batch: str, case: str, bug: str | None = None, new_defect: dict | None = None,
-           evidence: list[str] | None = None, replace_link: bool = False) -> tuple[str, dict, dict]:
+           evidence: list[str] | None = None, replace_link: bool = False, invalid: list[str] | None = None,
+           reason: str | None = None, now: datetime | None = None) -> tuple[str, dict, dict]:
     """Adds evidence or a bug to a result already recorded, keeping the rest of it: (path, before, after); before ==
-    after when nothing changed. Refused / UsageError as in the header."""
-    if not (bug or new_defect is not None or evidence):
-        raise UsageError("nothing to attach: give --bug, --new-defect or --evidence")
+    after when nothing changed. `invalid` marks evidence paths of the result as showing nothing useful, with the
+    `reason` (they stay in the list, never deleted). Refused / UsageError as in the header."""
+    reason = " ".join(str(reason or "").split()) or None
+    invalid = list(dict.fromkeys(p for p in (invalid or []) if p))
+    if not (bug or new_defect is not None or evidence or invalid):
+        raise UsageError("nothing to attach: give --bug, --new-defect, --evidence or --invalid")
+    if invalid and not reason:
+        raise UsageError("--invalid needs --reason: why the evidence shows nothing useful")
+    if reason and not invalid:
+        raise UsageError("--reason says why an evidence is invalid: give --invalid <path> too")
     if bug and new_defect is not None:
         raise UsageError("--bug (an existing bug) and --new-defect (a new one) exclude each other")
     if new_defect is not None and (not isinstance(new_defect, dict) or not new_defect):
@@ -498,9 +542,92 @@ def attach(workspace: str, batch: str, case: str, bug: str | None = None, new_de
                         item["evidence"] = new[0] if len(new) == 1 else new
                     else:
                         item["evidence"] = (old if isinstance(old, list) else [old]) + new
+            if invalid:
+                have = _paths(item.get("evidence"))
+                missing = [p for p in invalid if p not in have]
+                if missing:
+                    raise UsageError(f"{', '.join(missing)} is not in the evidence of {item.get('tc')} "
+                                     f"({', '.join(have) or 'none'}): only a recorded path is marked")
+                marked = {str(m.get("path")): m for m in before.get("evidence_invalid") or [] if isinstance(m, dict)}
+                new_marks = []
+                for p in invalid:
+                    if p in marked:
+                        if marked[p].get("reason") != reason:
+                            raise Refused(f"{p} is already marked invalid ({marked[p].get('reason')!r}): another "
+                                          "reason is not written over it")
+                        continue
+                    new_marks.append({"path": p, "reason": reason,
+                                      "at": (now or datetime.now()).isoformat(timespec="seconds")})
+                if new_marks:
+                    item["evidence_invalid"] = list(before.get("evidence_invalid") or []) + new_marks
             if item != before:
                 doc["results"][at] = item
                 write_log(path, doc)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+    return path, before, item
+
+
+def retime(workspace: str, batch: str, case: str, executed_at: str, executed_source: str | None,
+           ended_at: str | None = None, now: datetime | None = None) -> tuple[str, dict, dict]:
+    """Corrects only the time of a result in a batch not yet applied: (path, before, after); before == after when the
+    time is already that. The observed text, status, evidence, build, bug and `recorded_at` stay; the previous time goes
+    to `retimed`, one entry per correction, never replaced. `ts` is the start of the execution, `ended_at` the end of
+    its window; an unknown time removes `ts` (`ts_unknown`). Refused / UsageError as in the header."""
+    executed_at, executed_source = check_executed(executed_at, executed_source, now)
+    if executed_at is None:
+        raise UsageError("retime needs --executed-at: the corrected time, or `unknown`")
+    ended_at = check_ended(ended_at, executed_at, now)
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    name = batch_id(batch)
+    where = applied(workspace, proj, name)
+    if where:
+        raise Refused(f"{name} was already {where}: it is never changed; a correction goes to a new batch, "
+                      f"e.g. {next_name(workspace, proj, name)}")
+    path = run_log_path(workspace, name)
+    if not os.path.isfile(path):
+        raise UsageError(f"{name} has no run log (runs/{os.path.basename(path)})")
+    try:
+        with workspace_lock(workspace):
+            where = applied(workspace, proj, name)
+            if where:
+                raise Refused(f"{name} was already {where}: it is never changed; a correction goes to a new batch, "
+                              f"e.g. {next_name(workspace, proj, name)}")
+            doc = read_log(path)
+            at = next((i for i, x in enumerate(doc["results"]) if isinstance(x, dict)
+                       and str(x.get("tc") or "").strip() == case.strip()), None)
+            if at is None:
+                have = ", ".join(str(x.get("tc")) for x in doc["results"] if isinstance(x, dict)) or "none"
+                raise UsageError(f"{case.strip()!r} has no result in {name} (results: {have})")
+            before = doc["results"][at]
+            item = dict(before)
+            if executed_at == UNKNOWN_TIME:
+                item.pop("ts", None)
+                item["ts_unknown"] = True
+            else:
+                item["ts"] = executed_at
+                item.pop("ts_unknown", None)
+            item["executed_source"] = executed_source
+            if ended_at:
+                item["ended_at"] = ended_at
+            else:
+                item.pop("ended_at", None)
+            same = all(item.get(k) == before.get(k) for k in ("ts", "ts_unknown", "executed_source", "ended_at"))
+            if not same:
+                entry = {"at": (now or datetime.now()).isoformat(timespec="seconds"),
+                         "previous_ts": before.get("ts") or (UNKNOWN_TIME if before.get("ts_unknown") else None)}
+                if before.get("executed_source"):
+                    entry["previous_source"] = before["executed_source"]
+                if before.get("ended_at"):
+                    entry["previous_ended_at"] = before["ended_at"]
+                item["retimed"] = list(before.get("retimed") or []) + [entry]
+                doc["results"][at] = item
+                write_log(path, doc)
+            else:
+                item = before
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
     return path, before, item
@@ -686,7 +813,8 @@ def main(argv=None) -> int:
     p.add_argument("actual", help="what was observed (not the expected result copied)")
     p.add_argument("--bug", help="an EXISTING bug linked to the case")
     p.add_argument("--new-defect", metavar="FILE", help="JSON object of a new bug (approved; or \"proposed\": true)")
-    p.add_argument("--evidence", nargs="+", metavar="PATH", help="paths under evidence/")
+    p.add_argument("--evidence", nargs="+", action="extend", metavar="PATH",
+                   help="paths under evidence/: several after one option, or the option repeated (every path is kept)")
     p.add_argument("--environment", help="run.environment (a key of environments)")
     p.add_argument("--build", help="run.build (the version tested)")
     p.add_argument("--replace", action="store_true",
@@ -698,6 +826,16 @@ def main(argv=None) -> int:
                         "without zone stays without one), or 'unknown'. Needs --executed-source. Not in the future")
     p.add_argument("--executed-source", metavar="TEXT",
                    help="where --executed-at comes from (e.g. 'tester notes of 05.11')")
+    p.add_argument("--ended-at", metavar="WHEN",
+                   help="when the case ENDED (the end of its window; `ts` is the start): needs --executed-at with a "
+                        "known time; not before it, not in the future")
+    p = sub.add_parser("retime", help="correct only the time of a result in a batch not yet applied")
+    p.add_argument("batch")
+    p.add_argument("case")
+    p.add_argument("--executed-at", metavar="WHEN", required=True,
+                   help="the corrected start of the execution, or 'unknown' (YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM])")
+    p.add_argument("--executed-source", metavar="TEXT", help="where the time comes from (required)")
+    p.add_argument("--ended-at", metavar="WHEN", help="the end of the execution's window (optional)")
     p = sub.add_parser("defect-rule", help="what the project's schema says about the priority of a new bug")
     p = sub.add_parser("resolve", help="record the decision about a Question, keeping the observation")
     p.add_argument("batch")
@@ -718,14 +856,35 @@ def main(argv=None) -> int:
     p.add_argument("case")
     p.add_argument("--bug", help="an EXISTING bug linked to the case")
     p.add_argument("--new-defect", metavar="FILE", help="JSON object of a new bug (approved; or \"proposed\": true)")
-    p.add_argument("--evidence", nargs="+", metavar="PATH", help="paths under evidence/, added after the ones recorded")
+    p.add_argument("--evidence", nargs="+", action="extend", metavar="PATH",
+                   help="paths under evidence/, added after the ones recorded (several after one option, or the "
+                        "option repeated)")
+    p.add_argument("--invalid", nargs="+", action="extend", metavar="PATH",
+                   help="paths of the result's evidence that show nothing useful: marked, never deleted; needs --reason")
+    p.add_argument("--reason", help="why the --invalid evidence shows nothing useful")
     p.add_argument("--replace-link", action="store_true",
                    help="replace a bug or new defect already linked to the result (the previous one is printed)")
     a = ap.parse_args(argv)
     try:
+        if a.command == "retime":
+            path, before, after = retime(a.workspace, a.batch, a.case, a.executed_at, a.executed_source, a.ended_at)
+
+            def window(x):
+                return (f"ts={x.get('ts') or 'unknown'} source={x.get('executed_source') or '-'} "
+                        f"ended_at={x.get('ended_at') or '-'}")
+
+            if before == after:
+                print(f"unchanged: {a.case} in {path} already has that time ({window(after)})")
+                return 0
+            print(f"retimed: {a.case} ({after.get('status')}) in {path}; observed text, status, evidence, build and "
+                  "recorded_at kept")
+            print(f"before: {window(before)}")
+            print(f"after:  {window(after)}")
+            return 0
         if a.command == "attach":
             new = _read_defect(a.new_defect) if a.new_defect else None
-            path, before, after = attach(a.workspace, a.batch, a.case, a.bug, new, a.evidence, a.replace_link)
+            path, before, after = attach(a.workspace, a.batch, a.case, a.bug, new, a.evidence, a.replace_link,
+                                         invalid=a.invalid, reason=a.reason)
             if before == after:
                 print(f"unchanged: {a.case} in {path} already has it")
                 return 0
@@ -773,14 +932,16 @@ def main(argv=None) -> int:
         new = _read_defect(a.new_defect) if a.new_defect else None
         path, replaced = add(a.workspace, a.batch, a.case, a.status, a.actual, a.bug, new, a.evidence,
                              a.environment, a.build, replace=a.replace, mode=a.mode,
-                             executed_at=a.executed_at, executed_source=a.executed_source)
+                             executed_at=a.executed_at, executed_source=a.executed_source, ended_at=a.ended_at)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    print(f"{'replaced' if replaced else 'added'}: {a.case} {a.status} in {path}")
+    kept = len(dict.fromkeys(e for e in (a.evidence or []) if e))
+    print(f"{'replaced' if replaced else 'added'}: {a.case} {a.status} in {path}"
+          + (f"; {kept} evidence path(s) kept" if kept else ""))
     if replaced:
         print("previous result (kept only in this output and in git history):")
         print(json.dumps(replaced, ensure_ascii=False, indent=1))

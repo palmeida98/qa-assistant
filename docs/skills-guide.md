@@ -100,7 +100,9 @@ runs, its preflight prints the project and the framework, and the answer is the 
 | Record the user's decision about a Question | `scripts/run_log.py <ws> resolve <batch> <case> <status> --reason "<why>" --decided-by "<who>" [--decision-source "<where>"]`; a batch already applied: add `--into <new batch>` (applied afterwards with its own dry run and approval) |
 | Does the project require a priority for a new bug? | `scripts/run_log.py <ws> defect-rule` (the user decides the value at the bug review) |
 | Which Python runs the scripts | `python3 <qa>/scripts/qa_python.py` (prints it, or the commands that create one) |
-| Add evidence or a bug to a recorded result, keeping it | `scripts/run_log.py <ws> attach <batch> <case> --bug <id> \| --new-defect <draft.json> [--evidence <file>]` |
+| Add evidence or a bug to a recorded result, keeping it | `scripts/run_log.py <ws> attach <batch> <case> --bug <id> \| --new-defect <draft.json> [--evidence <file> ...]` (the option may be repeated: every path is kept) |
+| Mark an evidence that shows nothing useful, without deleting it | `scripts/run_log.py <ws> attach <batch> <case> --invalid <file> ... --reason "<why>"` |
+| Correct only the time of a result already recorded (batch not applied) | `scripts/run_log.py <ws> retime <batch> <case> --executed-at "2026-11-05T16:21" --executed-source "<where>" [--ended-at "2026-11-05T16:30"]` (`ts` is the start; the previous time is kept) |
 | Where each result stands (applied or not, per platform and build) | `scripts/qa_report.py <ws> totals` (`--detail` for every retest), `audit` |
 | The resume record of a PBI | `scripts/pbi_state.py <ws> show <pbi>`; after a change: `check … --reopen` |
 | Read a ticket | `python -m adapters.tickets <ws> collect <id>` (the children too unless `--no-expand`) |

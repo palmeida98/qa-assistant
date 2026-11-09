@@ -61,7 +61,11 @@ metadata:
    copied. Evidence by risk (rules.md section 6): what lets the result be verified; more context and sequence for a
    Fail, a block or an intermittent result; one artefact shared by several cases is named by each, with its own part
    (a timestamp, an interval, lines) in the observed text. Evidence added later to a recorded result:
-   python <qa>/scripts/run_log.py <workspace> attach <batch> <case> --evidence <path> (it keeps the rest).
+   python <qa>/scripts/run_log.py <workspace> attach <batch> <case> --evidence <path> (it keeps the rest). Several
+   files go after one --evidence or with the option repeated: every path is kept. `ts` is the START of the execution;
+   a case of many steps adds --ended-at (with --executed-at). A time recorded wrongly: run_log.py retime <batch> <case>
+   --executed-at … --executed-source … (only the time changes; a batch already applied is refused). An evidence that
+   shows nothing useful stays on file: attach --invalid <path> --reason "<why>".
 5. Classify by procedures/rules.md section 4: Fail only for a failure of the application shown by the evidence; tool
    failure, block and inconclusive evidence stay apart, each with its reason. A capture that failed or a timeout is
    retried once and is never a defect by itself. A send that stopped is never repeated before looking at the app (its
