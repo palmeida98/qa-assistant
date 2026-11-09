@@ -99,7 +99,7 @@ class Flow:
                  "related_tc": failing}
         r = self.rl("attach", "flow", failing, "--new-defect", self.write_json("d.json", {**draft, "proposed": True}))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        audit = self.cli("scripts/qa_report.py", self.ws, "audit")
+        audit = self.cli("scripts/qa_report.py", self.ws, "audit", "--detail")
         self.assertIn("priority decision", audit.stdout)
         for bad in ({**draft}, {**draft, "priority": other}):
             r = self.rl("attach", "flow", failing, "--new-defect", self.write_json("d.json", bad), "--replace-link")
@@ -148,7 +148,7 @@ class Flow:
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Reconciled (statuses = builds = cases): yes", r.stdout)
         self.assertIn("Cases with a current result: 3", r.stdout)
-        audit = self.cli("scripts/qa_report.py", self.ws, "audit")
+        audit = self.cli("scripts/qa_report.py", self.ws, "audit", "--detail")
         self.assertIn("Question resolved", audit.stdout)
         self.assertNotIn("Question open", audit.stdout)
         self.assertNotIn("priority decision", audit.stdout)

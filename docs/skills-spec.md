@@ -96,6 +96,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A batch goes to its own workbook (`excel.workbooks`); an apply holds the lock and never leaves a broken workbook | `test_workbook_routing.py` |
 | Writes never follow a planted link; `history/` in any case is refused; the lock is never seen empty | `test_write_integrity.py` |
 | The preflight separates a valid configuration from ready to run, per platform | `test_readiness.py` |
+| The audit presents evidence valid, invalid and missing apart (an invalid one is never proof), and prints a summary that keeps every caveat and decision; a check prints the three builds with their source | `test_audit_evidence.py`, `test_device.py` |
 | A command prints a short card by default and the complete text on `--detail`; a dry run's complete values are in a file tied to its token; errors, blocks and commands are never dropped by a limit; a notice that does not change is shown once | `test_output_layer.py` |
 | Cases are added to a workbook only as the user saw them in the dry run (a token), under the lock, and the recalculated file never leaves a half copy; a result a case already had can be kept in its notes | `test_excel_writes_safety.py` |
 | Ticket analysis: types and comment sources validated before writing; content not opened stays not read; children not expanded are listed; a change after the analysis is said | `test_tickets_audit.py` |

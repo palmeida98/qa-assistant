@@ -33,7 +33,7 @@ metadata:
 1. Fix the scope and say it: the batches, the date, the platform, the PBI and its plan. Then audit and count, from <qa>:
    python <qa>/scripts/qa_report.py <workspace> audit [--batch <b> ...] [--since <date>]
    python <qa>/scripts/qa_report.py <workspace> totals [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml]
-   An audit problem (Question open, evidence missing, a case repeated) is reported as an open inconsistency.
+   An audit problem (Question open, evidence missing, a case repeated, a result whose only evidence is marked invalid) is reported as an open inconsistency; evidence marked invalid is named apart (kept on file, not proof), never counted as valid. The audit prints a summary by default (`--detail` lists every batch and flag).
 2. Keep apart: historical results (older runs), recent results (the current result of each case), retests (before ->
    after with builds) and coverage still missing (planned and not run). Every total names its scope and every
    percentage its denominator; platforms and builds are never added into one figure, and nothing seen on one

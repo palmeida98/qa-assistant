@@ -70,7 +70,7 @@ Rule: the run log and the bug **always** say where it ran (platform, OS version,
 | `target`, `foreground`, `app`, `input` | The device (serial, Android version, model), the app in the foreground, the installed app and its version, and the input route (with the driver: its version and whether it answers) |
 | `device` | Connected, or not, and why |
 | `driver` | Only with `mobile.input: driver`. **Setting** (the service is listed in `enabled_accessibility_services`) and **answering** (it replies to a ping) are two facts. Setting on and not answering is a divergence: Android can leave a service listed without running it |
-| `build` | **Observed** (read from the device now), **intended** (`mobile.build.version`, when set), and whether they are the same (§1.4) |
+| `build`, `build intended`, `build of the run` | Three lines, one per role (§1.4), each with its source: **observed** (`build:`, read from the device now, against the intended one), **intended** (`mobile.build.version`, a person's setting, never rewritten from the device) and **of the run** (`run.build` of the batch's run log, only with `--batch`: `same`, `DIFFERS` and a blocker, or `no run log yet`). "The latest build available" is not a value of the framework: a project that has such a rule keeps it in its own context and compares it by hand |
 | `environment` | The environments of `project.yaml` and the app under test; the app must be the test build, not the store's |
 | `session` | `confirmed`, `needed` or `unknown`, from the screen text and the optional `mobile.session` (`signed_in` and `signed_out`: lists of texts). Without them it is `unknown`, never guessed |
 | `ready` | `yes`, or `NOT READY` with each blocker and the way out |

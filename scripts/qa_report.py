@@ -47,6 +47,7 @@ from collections import Counter, defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
+import output
 from common import (
     BUILD_PARTS,
     OutsideWorkspace,
@@ -402,6 +403,28 @@ def _evidence(item: dict) -> list[str]:
     return list(dict.fromkeys(named + EVIDENCE.findall(str(item.get("actual_result") or ""))))
 
 
+def _invalid_marks(item: dict) -> dict:
+    """{path: reason} of the evidence a result marks invalid (`run_log.py attach --invalid`): kept on file, not proof."""
+    return {str(m.get("path")): str(m.get("reason") or "no reason written")
+            for m in item.get("evidence_invalid") or [] if isinstance(m, dict) and m.get("path")}
+
+
+def _evidence_state(workspace: str, item: dict) -> dict:
+    """The evidence of one result in three apart lists: `valid` (named, present, not marked invalid), `invalid` ((path,
+    reason): marked, whether or not the file is still there) and `missing` (named, not marked, not on disk). A pattern
+    counts as present when it matches a file."""
+    marks = _invalid_marks(item)
+    out = {"valid": [], "invalid": [], "missing": []}
+    for e in _evidence(item):
+        if e in marks:
+            out["invalid"].append((e, marks[e]))
+            continue
+        full = os.path.join(workspace, e)
+        found = glob.glob(full) if any(c in e for c in "*?[") else os.path.exists(full)
+        out["valid" if found else "missing"].append(e)
+    return out
+
+
 def _applied_in(workspace: str, cfg: dict) -> dict | str:
     """{batch_id: applied_at} of one workbook's control sheet, read only; a str says why it could not be read."""
     try:
@@ -466,60 +489,97 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
                           if isinstance(r.get("new_defect"), dict) and r["new_defect"].get("proposed"))
         no_priority = sorted(str(r["tc"]) for r in b["results"] if isinstance(r.get("new_defect"), dict)
                              and defect_priority_problem(proj, r["new_defect"]))
-        missing, without = [], []
+        missing, without, invalid, no_valid = [], [], [], []
+        counts_ev = {"valid": 0, "invalid": 0, "missing": 0}
         for r in b["results"]:
-            ev = _evidence(r)
-            if not ev:
+            state = _evidence_state(workspace, r)
+            if not (state["valid"] or state["invalid"] or state["missing"]):
                 without.append(str(r["tc"]))
-            for e in ev:
-                full = os.path.join(workspace, e)
-                found = glob.glob(full) if any(c in e for c in "*?[") else os.path.exists(full)
-                if not found:            # a pattern (TC-1*.png) counts when it matches a file
-                    missing.append(f"{r['tc']}: {e}")
+            for kind in counts_ev:
+                counts_ev[kind] += len(state[kind])
+            missing += [f"{r['tc']}: {e}" for e in state["missing"]]
+            invalid += [f"{r['tc']}: {e} ({why})" for e, why in state["invalid"]]
+            if state["invalid"] and not state["valid"] and not state["missing"]:
+                no_valid.append(str(r["tc"]))
         applied = view(b["name"], b.get("run"))
         entry = {"batch": b["name"], "platform": platform_of(b, proj), "build": build_of(b), "mode": b.get("mode"),
                  "results": len(b["results"]), "applied": applied if applied else "no",
                  "questions": questions, "repeated": repeated, "missing_evidence": missing,
-                 "without_evidence": without, "proposed_bugs": proposed, "without_ts": without_ts,
+                 "without_evidence": without, "invalid_evidence": invalid, "without_valid_evidence": no_valid,
+                 "evidence_counts": counts_ev, "proposed_bugs": proposed, "without_ts": without_ts,
                  "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority}
         settled = bool(applied) and not is_unknown(applied)     # unknown is not applied (audit 06.11.2026)
-        entry["to_fix"] = bool(repeated or missing or dangling or ((questions or proposed or no_priority) and not settled))
+        entry["to_fix"] = bool(repeated or missing or dangling or no_valid or ((questions or proposed or no_priority) and not settled))
         out["problems"] += int(entry["to_fix"])
         out["batches"].append(entry)
     return out
 
 
-def render_audit(report: dict) -> str:
+def _audit_flags(e: dict) -> list[tuple[str, bool]]:
+    """(text, needs_a_decision) of one batch: what the audit found. The flags that need a decision or an action are
+    never dropped by the short mode."""
+    flags: list[tuple[str, bool]] = []
+    if e["questions"]:
+        flags.append((f"Question open: {', '.join(e['questions'])}", True))
+    if e.get("resolved"):
+        flags.append((f"Question resolved (decision recorded, observation kept): {', '.join(e['resolved'])}", False))
+    if e.get("invalid_revisions"):
+        flags.append((f"resolution that does not hold (it changes no total): {'; '.join(e['invalid_revisions'])}", True))
+    if e["repeated"]:
+        flags.append((f"case repeated: {', '.join(e['repeated'])}", True))
+    if e["missing_evidence"]:
+        flags.append((f"evidence named but missing: {'; '.join(e['missing_evidence'])}", True))
+    if e.get("invalid_evidence"):
+        flags.append((f"evidence marked invalid (kept on file, not proof of the result): {'; '.join(e['invalid_evidence'])}",
+                      True))
+    if e.get("without_valid_evidence"):
+        flags.append((f"result(s) whose only evidence is invalid: {', '.join(e['without_valid_evidence'])}", True))
+    if e.get("bugs_without_priority"):
+        flags.append(("bug(s) waiting for the user's priority decision (the project requires one): "
+                      + ", ".join(e["bugs_without_priority"]), True))
+    if e["proposed_bugs"]:
+        flags.append((f"bugs proposed, to review: {', '.join(e['proposed_bugs'])}", True))
+    if e["build"] == UNKNOWN:
+        flags.append(("no build in the run block", True))
+    if e["without_evidence"]:
+        flags.append((f"{len(e['without_evidence'])} result(s) without evidence named", True))
+    if not e.get("mode") and e["applied"] == "no" and e["results"]:
+        flags.append(("no mode recorded: how it was run is not known (never filled in by guess)", True))
+    if e.get("without_ts"):
+        flags.append((f"result(s) without ts (cannot be ordered against other runs): {', '.join(e['without_ts'])}",
+                      True))
+    return flags
+
+
+def _evidence_line(e: dict) -> str:
+    c = e.get("evidence_counts") or {}
+    return f"evidence: {c.get('valid', 0)} valid · {c.get('invalid', 0)} invalid · {c.get('missing', 0)} missing"
+
+
+def render_audit(report: dict, detail: bool = True) -> str:
+    """The complete audit (detail) or a summary: a count line, then every batch that needs something, with the flags that
+    need a decision or an action in full, and the batches with nothing to say counted, not listed."""
     lines = []
+    summary_clean = 0
     for e in report["batches"]:
-        flags = []
-        if e["questions"]:
-            flags.append(f"Question open: {', '.join(e['questions'])}")
-        if e.get("resolved"):
-            flags.append(f"Question resolved (decision recorded, observation kept): {', '.join(e['resolved'])}")
-        if e.get("invalid_revisions"):
-            flags.append(f"resolution that does not hold (it changes no total): {'; '.join(e['invalid_revisions'])}")
-        if e["repeated"]:
-            flags.append(f"case repeated: {', '.join(e['repeated'])}")
-        if e["missing_evidence"]:
-            flags.append(f"evidence named but missing: {'; '.join(e['missing_evidence'])}")
-        if e.get("bugs_without_priority"):
-            flags.append("bug(s) waiting for the user's priority decision (the project requires one): "
-                         + ", ".join(e["bugs_without_priority"]))
-        if e["proposed_bugs"]:
-            flags.append(f"bugs proposed, to review: {', '.join(e['proposed_bugs'])}")
-        if e["build"] == UNKNOWN:
-            flags.append("no build in the run block")
-        if e["without_evidence"]:
-            flags.append(f"{len(e['without_evidence'])} result(s) without evidence named")
-        if not e.get("mode") and e["applied"] == "no" and e["results"]:
-            flags.append("no mode recorded: how it was run is not known (never filled in by guess)")
-        if e.get("without_ts"):
-            flags.append(f"result(s) without ts (cannot be ordered against other runs): {', '.join(e['without_ts'])}")
+        flags = _audit_flags(e)
         mark = "FIX " if e["to_fix"] else "    "
         kind = str(e.get("mode") or "").partition(":")[0].strip()
-        lines.append(f"{mark}{e['batch']} [{e['platform']}, {e['build']}{', ' + kind if kind else ''}] {e['results']} "
-                     f"result(s), applied: {e['applied']}" + ("".join(f"\n       - {f}" for f in flags)))
+        head = (f"{mark}{e['batch']} [{e['platform']}, {e['build']}{', ' + kind if kind else ''}] {e['results']} "
+                f"result(s), applied: {e['applied']}")
+        if detail:
+            shown = [t for t, _m in flags] + ([_evidence_line(e)] if any(e.get("evidence_counts", {}).values()) else [])
+            lines.append(head + "".join(f"\n       - {f}" for f in shown))
+            continue
+        needs = [t for t, must in flags if must]
+        if not needs and not e["to_fix"]:
+            summary_clean += 1
+            continue
+        lines.append(head + "".join(f"\n       - {t}" for t in needs))
+    if not detail:
+        n = len(report["batches"])
+        lines.insert(0, f"AUDIT {n} batch(es): {report['problems']} to fix · {summary_clean} with nothing that needs "
+                        "a decision (every batch and flag: --detail)")
     lines.append(f"{report['problems']} batch(es) to fix before applying" if report["problems"] else
                  "nothing to fix: every batch is consistent (applying still needs the user's confirmation)")
     return "\n".join(lines) + "\n"
@@ -535,6 +595,8 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument("--batch", action="append", help="a batch, with or without the batch_ prefix (repeatable)")
         p.add_argument("--since", help="results with ts on or after this date (YYYY-MM-DD)")
         p.add_argument("--json", action="store_true")
+        if name == "audit":
+            output.add_flags(p)
         if name == "totals":
             p.add_argument("--platform")
             p.add_argument("--plan", action="append", help="batches/<name>.yaml: the cases planned (repeatable)")
@@ -556,7 +618,9 @@ def main(argv=None) -> int:
         batches = load_batches(ws, proj, a.batch, a.since)
         if a.command == "audit":
             report = audit(ws, proj, batches)
-            print(json.dumps(report, ensure_ascii=False, indent=1) if a.json else render_audit(report), end="")
+            cfg = output.settings(proj, output.cli_choice(a))
+            print(json.dumps(report, ensure_ascii=False, indent=1) if a.json
+                  else render_audit(report, not output.is_brief(cfg)), end="")
             return 1 if report["problems"] else 0
         plan = planned_cases(ws, a.plan) if a.plan else None
         report = totals(ws, proj, batches, (a.platform or "").lower() or None, plan)
