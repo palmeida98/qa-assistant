@@ -96,6 +96,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A batch goes to its own workbook (`excel.workbooks`); an apply holds the lock and never leaves a broken workbook | `test_workbook_routing.py` |
 | Writes never follow a planted link; `history/` in any case is refused; the lock is never seen empty | `test_write_integrity.py` |
 | The preflight separates a valid configuration from ready to run, per platform | `test_readiness.py` |
+| Cases are added to a workbook only as the user saw them in the dry run (a token), under the lock, and the recalculated file never leaves a half copy; a result a case already had can be kept in its notes | `test_excel_writes_safety.py` |
 | Ticket analysis: types and comment sources validated before writing; content not opened stays not read; children not expanded are listed; a change after the analysis is said | `test_tickets_audit.py` |
 | The checkpoint keeps decisions, pending items and access to history | `test_compact_context.py`, `test_qa_report.py` |
 | A request to test needs no second approval of its plan; a workspace's stricter rule (a run approved per platform) stays; a write to a workbook or tracker waits for its approval; a valid approval is reused on resuming | `test_skills.py` (`Autonomy`) |

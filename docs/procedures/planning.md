@@ -67,7 +67,9 @@
    FINAL ID in the project's pattern (the next free number of the sheet its prefix chooses). From the root of
    qa-assistant, the dry run first:
    python -m adapters.excel.add_cases <workspace> cases/cases_<YYYYMMDD>_<nn>.json --dry-run
-   0 = show the user the rows and the fields not written (no column), then run it again without --dry-run;
+   0 = show the user the rows, the fields not written (no column) and the preview token, then, once the user approves
+   THAT preview, run it again without --dry-run and with --expect <token> (the same --label, --no-recalc and --now;
+   refused, nothing written, if the cases file, the workbook or project.yaml changed since);
    4 = an ID that exists, a candidate duplicate (same title in the sheet) or an invalid file: the user decides
    (remove the case or give another ID, never force it). After the write: 2 = cross-check problems (original
    untouched); 3 = recalculation failed; 5 = the summary does not count the new rows: fix its formulas, never the

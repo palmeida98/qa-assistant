@@ -405,6 +405,7 @@ class ExcelAdapter:
 
         defaults = {
             "notes": {"result": "Result: {result}", "new_defect": "New defect: {id}.",
+                      "previous_result": "Previous result ({status}): {result}",
                       "existing_defect": "Linked defect: {id}."},
             "batch_control": {"sheet": CONTROL_SHEET_DEFAULT},
             "recalc": {"mechanism": "libreoffice", "timeout": 60},
@@ -700,7 +701,8 @@ class ExcelAdapter:
         return problems
 
     def apply_batch(self, batch: list, label: str | None = None, reported_by: str | None = None,
-                    batch_id: str | None = None, identity: str | None = None, run: dict | None = None) -> dict:
+                    batch_id: str | None = None, identity: str | None = None, run: dict | None = None,
+                    keep_previous: bool = False) -> dict:
         """Applies the batch: status, actual result and notes per case, and
         creates the new defects. A batch already applied to this workbook (same
         content) is not applied again: returns {"applied": False, ...} without
@@ -710,6 +712,10 @@ class ExcelAdapter:
         `identity` replaces the content's hash as the batch's identity: a batch
         converted by scripts/migrate_workspace.py carries the hash of its
         original content (`translated_from`), which the workbook recorded.
+
+        `keep_previous`: a result the case already had (and its status) is kept in
+        the case's notes when the batch replaces it, so nothing is lost in the
+        workbook; it needs the notes column.
 
         The whole batch is validated before anything is written
         (validate_batch); if it has problems, raises InvalidBatch and nothing
@@ -736,6 +742,11 @@ class ExcelAdapter:
         ccol = cases["columns"]
 
         problems = self.validate_batch(batch)
+        if keep_previous:
+            missing = [sheet for sheet, _ws, h in self._case_sheets() if ccol.get("notes") not in h]
+            if missing:
+                problems.append("--keep-previous needs the notes column (excel.cases.columns.notes) in every case "
+                                f"sheet; missing in {missing}")
         if problems:
             raise InvalidBatch(problems)
 
@@ -754,8 +765,10 @@ class ExcelAdapter:
         for item in batch:
             tc = str(item["tc"]).strip()
             ws, h, r = rowmap[tc]
+            old_status = ws.cell(r, h[ccol["status"]]).value
             ws.cell(r, h[ccol["status"]]).value = item["status"]
             has_res = ccol.get("actual_result") in h
+            old_result = ws.cell(r, h[ccol["actual_result"]]).value if has_res else None
             if has_res:
                 ws.cell(r, h[ccol["actual_result"]]).value = item.get("actual_result")
 
@@ -770,6 +783,8 @@ class ExcelAdapter:
                 parts = []
                 if not has_res:
                     parts.append(notes["result"].format(result=item.get("actual_result")))
+                if keep_previous and old_result not in (None, "") and str(old_result) != str(item.get("actual_result")):
+                    parts.append(notes["previous_result"].format(status=old_status, result=old_result))
                 if def_id:
                     parts.append(notes["new_defect"].format(id=def_id))
                 if item.get("bug") not in (None, ""):
