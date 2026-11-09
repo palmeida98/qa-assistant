@@ -8,6 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ### Changed (audit and build lines, phase 17.4 and PR-5, 2026-11-09)
 - **The audit presents evidence apart** (`qa_report.py audit`): valid, marked invalid (with the reason; kept on file, never
   proof) and missing, with the counts per batch; a result whose only evidence is invalid is to fix. JSON carries the lists.
+- **`qa_report.py report`** writes `exports/<stem>.summary.md` (short: totals per platform and build, what is open and to decide,
+  evidence valid / invalid / missing) and `exports/<stem>.technical.md` (totals in detail, the complete audit, the dry-run
+  review files present), from the same data; `output.reports` chooses which. Exit 1 when something is to fix.
 - **`qa_report.py audit` prints a summary by default** (counts, every batch that needs something, caveats and decisions in
   full; the clean batches counted); `--detail` or `output.terminal: normal` print every batch as before.
 - **`device.py check` prints the three builds**, each with its source: observed (device), intended (`mobile.build.version`)

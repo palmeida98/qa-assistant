@@ -67,7 +67,7 @@ preflight, and the skill's own steps check what it did not (the target, the buil
 | `scripts/workspace_select.py preflight` | Project selection, the skill against the code, configuration, tools and, for `/run-tests`, the route per module | Nothing |
 | `python -m adapters.tickets` | `/analyze-ticket`: collect, compare, record (first check, no change, change, partial read) | `memory/`, a block of `context.md` |
 | `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result; `add --executed-at` records an earlier observation (`ts` = the start of the execution, `recorded_at` = record, `--ended-at` = the end of its window); `retime` corrects only the time of a result; `attach --invalid` marks an evidence without deleting it; `--evidence` keeps every path given; `resolve` records a Question's decision keeping the observation; `defect-rule` says if a new bug needs a priority | `runs/` |
-| `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application | Nothing, or the report with `--output` |
+| `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application; `report` writes a short summary and a technical report | Nothing, the report with `--output`, or `exports/<stem>.summary.md` and `.technical.md` with `report` |
 | `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published | `memory/pbi/<id>.json` |
 | `scripts/sync_skills.py` | Installing the skills in `~/.claude/skills/` with the record of their origin | `~/.claude/skills/` |
 

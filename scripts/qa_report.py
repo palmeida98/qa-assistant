@@ -585,24 +585,92 @@ def render_audit(report: dict, detail: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_summary(report: dict, audit_report: dict, scope: str, technical: str | None = None) -> str:
+    """The short report for the team: what was run, the results per platform and build, what is open and what needs a
+    decision. Everything in it is also in the technical report; nothing is rounded into a better picture."""
+    lines = [f"# QA summary — {scope}", ""]
+    if not report["platforms"]:
+        lines.append("No result in this scope.")
+    for p, e in report["platforms"].items():
+        counts = " · ".join(f"{n} {s}" for s, n in e["statuses"].items())
+        builds = ", ".join(f"{b} ({v['cases']})" for b, v in e["by_build"].items())
+        lines.append(f"- **{p}**: {e['cases']} case(s) with a current result: {counts}. Builds: {builds}.")
+        lines.append(f"  Applied to the workbook or tracker: {e['current_applied']} of {e['cases']}"
+                     + (f"; not applied: {', '.join(e['current_not_applied'][:10])}" if e["current_not_applied"] else "")
+                     + ("" if e["reconciled"] else ". **Totals do not reconcile: see the technical report**"))
+        if e.get("unknown_build"):
+            lines.append(f"  Build unknown (never counted as any build): {len(e['unknown_build'])} case(s)")
+    lines += ["", "## Open and to decide", ""]
+    open_items = []
+    for b in audit_report["batches"]:
+        open_items += [f"{b['batch']}: {t}" for t, must in _audit_flags(b) if must]
+    nothing = "- Nothing open: every batch is consistent (applying still needs the user's confirmation)."
+    lines += [f"- {x}" for x in open_items] or [nothing]
+    counts_ev = Counter()
+    for b in audit_report["batches"]:
+        counts_ev.update(b.get("evidence_counts") or {})
+    lines.append("")
+    lines.append(f"Evidence: {counts_ev['valid']} valid · {counts_ev['invalid']} marked invalid (kept on file, not proof) "
+                 f"· {counts_ev['missing']} named but missing.")
+    if technical:
+        lines += ["", f"Complete data, every case and every flag: `{technical}`."]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python scripts/qa_report.py", description="Reconciled totals and an audit of "
                                  "the run logs. Read only.")
     ap.add_argument("workspace")
     sub = ap.add_subparsers(dest="command", required=True)
-    for name in ("totals", "audit"):
+    for name in ("totals", "audit", "report"):
         p = sub.add_parser(name)
         p.add_argument("--batch", action="append", help="a batch, with or without the batch_ prefix (repeatable)")
         p.add_argument("--since", help="results with ts on or after this date (YYYY-MM-DD)")
         p.add_argument("--json", action="store_true")
         if name == "audit":
             output.add_flags(p)
+        if name == "report":
+            p.add_argument("--plan", action="append", help="batches/<name>.yaml: the cases planned (repeatable)")
+            p.add_argument("--name", help="file stem under exports/ (default: qa_report_<date>)")
+            p.add_argument("--platform")
         if name == "totals":
             p.add_argument("--platform")
             p.add_argument("--plan", action="append", help="batches/<name>.yaml: the cases planned (repeatable)")
             p.add_argument("--output", help="write the report to this file, inside the workspace (e.g. exports/x.md)")
             p.add_argument("--detail", action="store_true", help="list each retest's sequence and the batch names")
     return ap
+
+
+def _report(ws: str, proj: dict, batches: list[dict], a, plan) -> int:
+    """Writes the two reports under exports/: `<name>.summary.md` (short) and `<name>.technical.md` (complete), from the same
+    run logs and audit; which of them is in `output.reports` of project.yaml (both by default). Nothing else is written."""
+    from datetime import date
+    cfg = output.settings(proj)
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", a.name or f"qa_report_{date.today():%Y%m%d}")
+    scope = ", ".join(filter(None, [f"batches {', '.join(a.batch)}" if a.batch else "all run logs",
+                                    f"since {a.since}" if a.since else "", f"platform {a.platform}" if a.platform else "",
+                                    f"plan {', '.join(a.plan)}" if a.plan else ""]))
+    tot = totals(ws, proj, batches, (a.platform or "").lower() or None, plan)
+    aud = audit(ws, proj, batches)
+    wanted = cfg["reports"]
+    tech_rel = f"exports/{stem}.technical.md"
+    written = []
+    if "technical" in wanted:
+        text = render_totals(tot, scope, True) + "\n## Audit\n\n" + render_audit(aud, True)
+        reviews = sorted(f for f in os.listdir(os.path.join(ws, "runs")) if f.endswith(".dryrun.md")) \
+            if os.path.isdir(os.path.join(ws, "runs")) else []
+        if reviews:
+            text += "\n## Dry-run review files present\n\n" + "\n".join(f"- runs/{f}" for f in reviews) + "\n"
+        path = workspace_path(ws, tech_rel)
+        atomic_write(path, text)
+        written.append(os.path.relpath(path, ws))
+    if "summary" in wanted:
+        path = workspace_path(ws, f"exports/{stem}.summary.md")
+        atomic_write(path, render_summary(tot, aud, scope, tech_rel if "technical" in wanted else None))
+        written.append(os.path.relpath(path, ws))
+    for w in written:
+        print(f"written: {w}")
+    return 1 if aud["problems"] else 0
 
 
 def main(argv=None) -> int:
@@ -623,6 +691,8 @@ def main(argv=None) -> int:
                   else render_audit(report, not output.is_brief(cfg)), end="")
             return 1 if report["problems"] else 0
         plan = planned_cases(ws, a.plan) if a.plan else None
+        if a.command == "report":
+            return _report(ws, proj, batches, a, plan)
         report = totals(ws, proj, batches, (a.platform or "").lower() or None, plan)
         scope = ", ".join(filter(None, [f"batches {', '.join(a.batch)}" if a.batch else "all run logs",
                                         f"since {a.since}" if a.since else "", f"platform {a.platform}" if a.platform

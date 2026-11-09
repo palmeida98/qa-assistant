@@ -125,5 +125,41 @@ class Summary(Moded):
         self.assertIn("nothing to fix", out)
 
 
+class Reports(Evidence):
+    def read(self, name):
+        with open(os.path.join(self.ws, "exports", name), encoding="utf-8") as f:
+            return f.read()
+
+    def test_the_summary_and_the_technical_report_show_valid_invalid_and_missing_evidence(self):
+        self.mixed()
+        code, out = self.run_("report", "--name", "demo")
+        self.assertEqual(code, 1)                                           # something to fix: the exit says so
+        self.assertIn("written: exports/demo.technical.md", out)
+        self.assertIn("written: exports/demo.summary.md", out)
+        summary, technical = self.read("demo.summary.md"), self.read("demo.technical.md")
+        self.assertIn("Evidence: 2 valid · 2 marked invalid (kept on file, not proof) · 1 named but missing.", summary)
+        self.assertIn("result(s) whose only evidence is invalid: TC-SHOP-002", summary)
+        self.assertIn("exports/demo.technical.md", summary)
+        self.assertLess(len(summary.splitlines()), len(technical.splitlines()))
+        self.assertIn("(captured another app)", technical)
+        self.assertIn("evidence: 2 valid · 2 invalid · 1 missing", technical)
+
+    def test_without_evidence_problems_the_report_says_nothing_is_open(self):
+        ok = self.touch("ok.png")
+        self.batch("batch_android_01", [base.item("TC-SHOP-001", "Pass", "2026-11-01T10:00", evidence=ok)], run=RUN)
+        code, _ = self.run_("report", "--name", "clean")
+        self.assertEqual(code, 0)
+        self.assertIn("Nothing open", self.read("clean.summary.md"))
+
+    def test_the_project_chooses_which_reports_are_written(self):
+        self.mixed()
+        self.proj["output"] = {"reports": ["summary"]}
+        self.write_project()
+        self.run_("report", "--name", "only")
+        self.assertTrue(os.path.exists(os.path.join(self.ws, "exports", "only.summary.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "exports", "only.technical.md")))
+        self.assertNotIn("Complete data", self.read("only.summary.md"))        # no pointer to a file that is not there
+
+
 if __name__ == "__main__":
     unittest.main()
