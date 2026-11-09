@@ -110,7 +110,7 @@ class Flow:
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
         # 4. the Question is still open until answered: the dry run refuses it; then the decision is recorded
-        r = self.apply("--dry-run", "--no-recalc")
+        r = self.apply("--dry-run", "--detail", "--no-recalc")
         self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
         self.assertIn("Question", r.stdout)
         r = self.rl("resolve", "flow", question, "Pass", "--reason", "the PO answered: 3 is the limit",
@@ -124,7 +124,7 @@ class Flow:
         self.assertEqual(items[passing]["executed_source"], "fictional tester notes of 05.11")
 
         # 5. the preview, the options it covers, and an apply with other options refused before any write
-        r = self.apply("--dry-run", "--no-recalc", "--now", NOW, "--label", "[flow]", "--reported-by", "QA (fictional)")
+        r = self.apply("--dry-run", "--detail", "--no-recalc", "--now", NOW, "--label", "[flow]", "--reported-by", "QA (fictional)")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         token = next(line.split()[2] for line in r.stdout.splitlines() if line.startswith("Preview token:"))
         self.assertTrue(token.startswith("v2-"))

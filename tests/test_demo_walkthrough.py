@@ -74,7 +74,7 @@ class Walkthrough(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
         # 4. a proposal is never applied: the dry run refuses it and says how it is approved
-        preview = ("-m", "adapters.excel.apply", self.ws, "runs/batch_poc01.json", "--dry-run", "--no-recalc")
+        preview = ("-m", "adapters.excel.apply", self.ws, "runs/batch_poc01.json", "--dry-run", "--detail", "--no-recalc")
         r = self.run_(*preview)
         self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
         self.assertIn('still a proposal ("proposed")', r.stdout)

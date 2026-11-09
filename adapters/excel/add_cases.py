@@ -39,7 +39,8 @@ from datetime import datetime
 from .apply import _resolve, _sha
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
-from common import WorkspaceBusy, workspace_lock
+import output
+from common import WorkspaceBusy, atomic_write, workspace_lock, workspace_path
 
 from .base import ConfigError, ExcelAdapter, InvalidBatch, batch_hash
 
@@ -78,22 +79,44 @@ def cases_token(workspace: str, ad: ExcelAdapter, cases_path: str, cases: list, 
     return f"{TOKEN_VERSION}-" + hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
 
 
+def review_text(workspace: str, ad: ExcelAdapter, cases_path: str, plan: list, token: str, command: str,
+                label: str | None, recalc: bool, now: datetime | None) -> str:
+    """The complete review of an add: the token and what it covers, then every cell of every case in full."""
+    out = [f"# Dry run of adding {os.path.basename(cases_path)}: complete review", "",
+           ("Nothing was written to the workbook. This file is replaced by the next dry run of the same cases file; the "
+            "token below says which one it describes."), "", "## What the token covers", "",
+           f"- **Token: `{token}`**: the add with `--expect` is refused, writing nothing, if any of this changes",
+           f"- Target: `{os.path.relpath(ad.path, workspace)}` (SHA-256 `{_sha(ad.path)}`)",
+           f"- Cases file `{os.path.relpath(cases_path, workspace)}` (SHA-256 `{_sha(cases_path)}`)",
+           f"- SHA-256 of project.yaml: `{_sha(os.path.join(workspace, 'project.yaml'))}`",
+           (f"- Options: label {label!r}, recalculation {'on' if recalc else 'off'}, "
+            f"date {now.isoformat() if now else '<clock of the add>'}"), "", f"## Cases ({len(plan)})", ""]
+    for p in plan:
+        out += [f"### {p['id']} -> `{p['sheet']}` row {p['row']}", ""]
+        for col, value in p["cells"].items():
+            out += [f"- **{col}**", "", "~~~", str(value), "~~~", ""]
+        if p["not_written"]:
+            out += [f"Not written (no column in this sheet): {', '.join(p['not_written'])}", ""]
+    return "\n".join(out + ["## Command (only after the user approves THIS review)", "", "~~~", command, "~~~", ""])
+
+
 def add(workspace: str, cases_path: str, dry_run: bool = False, label: str | None = None,
-        recalc: bool = True, now: datetime | None = None, expect: str | None = None) -> int:
+        recalc: bool = True, now: datetime | None = None, expect: str | None = None,
+        cfg: dict | None = None, command_options: str = "") -> int:
     if dry_run and expect:
         raise ConfigError("--expect goes with the real add, not with --dry-run")
     cases_path = _resolve(workspace, cases_path, "cases file")
     if dry_run:
-        return _add(workspace, cases_path, True, label, recalc, now, None)
+        return _add(workspace, cases_path, True, label, recalc, now, None, cfg, command_options)
     try:
         with workspace_lock(workspace):         # one writer at a time, as the apply does
-            return _add(workspace, cases_path, False, label, recalc, now, expect)
+            return _add(workspace, cases_path, False, label, recalc, now, expect, None, "")
     except WorkspaceBusy as e:
         raise ConfigError(f"{e} Nothing was written.") from None
 
 
 def _add(workspace: str, cases_path: str, dry_run: bool, label: str | None, recalc: bool, now: datetime | None,
-         expect: str | None) -> int:
+         expect: str | None, cfg: dict | None, command_options: str) -> int:
     ad = ExcelAdapter.from_project(workspace)
     ad.now = now
     ad.load()
@@ -106,9 +129,18 @@ def _add(workspace: str, cases_path: str, dry_run: bool, label: str | None, reca
         problems = ad.validate_cases(cases)
         if problems:
             raise InvalidBatch(problems)
-        print("Dry run -- nothing written. It would add:")
-        _show(ad.plan_cases(cases))
+        plan = ad.plan_cases(cases)
         token = cases_token(workspace, ad, cases_path, cases, label, recalc, now)
+        if cfg is not None and output.is_brief(cfg) and cfg["detail_files"]:
+            command = (f"python -m adapters.excel.add_cases {workspace} {os.path.relpath(cases_path, workspace)}"
+                       f"{command_options} --expect {token}")
+            review = os.path.join(os.path.dirname(cases_path), f"{os.path.splitext(os.path.basename(cases_path))[0]}.dryrun.md")
+            review = workspace_path(workspace, *os.path.relpath(review, workspace).replace(os.sep, "/").split("/"))
+            atomic_write(review, review_text(workspace, ad, cases_path, plan, token, command, label, recalc, now))
+            _print_brief(workspace, ad, plan, token, os.path.relpath(review, workspace), command, cfg)
+            return 0
+        print("Dry run -- nothing written. It would add:")
+        _show(plan)
         print(f"Preview token: {token}  (add with --expect {token}: refused if anything changed since)")
         return 0
 
@@ -165,6 +197,34 @@ def _add(workspace: str, cases_path: str, dry_run: bool, label: str | None, reca
     return 0
 
 
+def _project_dict(workspace: str) -> dict:
+    try:
+        from common import read_project
+        return read_project(workspace)
+    except Exception:       # noqa: BLE001 - the command's own configuration errors are reported where they matter
+        return {}
+
+
+def _print_brief(workspace: str, ad: ExcelAdapter, plan: list, token: str, review: str, command: str, cfg: dict) -> None:
+    """A short card of the dry run: where, how many cases and which rows, what is not written, the review file and the
+    command. The command and the review are never dropped; `--detail` prints every cell."""
+    per: dict = {}
+    for p in plan:
+        per.setdefault(p["sheet"], []).append(p)
+    lines: list[tuple[str, bool]] = [(f"DRY RUN add {len(plan)} case(s): nothing is written to the workbook", False),
+                                     (f"Target: {os.path.relpath(ad.path, workspace)} · token {token}", False)]
+    for sheet, items in per.items():
+        ids = ", ".join(p["id"] for p in items)
+        lines.append((f"{sheet}: rows {items[0]['row']}-{items[-1]['row']}: {ids}", False))
+    skipped = sorted({f for p in plan for f in p["not_written"]})
+    if skipped:
+        lines.append((f"Fields without a column (not written): {', '.join(skipped)}", True))
+    lines.append((f"Review (every cell in full, hashes, token): {review}", True))
+    lines.append((f"Add, after approving THAT review: {command}", True))
+    for text in output.fit(lines, cfg["max_lines"], "--detail", cfg["max_cols"]):
+        print(text)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Adds approved cases to a workspace's workbook")
     ap.add_argument("workspace")
@@ -177,9 +237,13 @@ def main(argv=None) -> int:
                          "project.yaml or an option changed since")
     ap.add_argument("--now", type=datetime.fromisoformat, metavar="YYYY-MM-DDTHH:MM:SS",
                     help="instant recorded instead of the clock")
+    output.add_flags(ap)
     a = ap.parse_args(argv)
     try:
-        return add(a.workspace, a.cases, a.dry_run, a.label, not a.no_recalc, a.now, a.expect)
+        cfg = output.settings(_project_dict(a.workspace), output.cli_choice(a))
+        options = (f" --label {json.dumps(a.label)}" if a.label else "") + (" --no-recalc" if a.no_recalc else "") \
+            + (f" --now {a.now.isoformat()}" if a.now else "")
+        return add(a.workspace, a.cases, a.dry_run, a.label, not a.no_recalc, a.now, a.expect, cfg, options)
     except (InvalidBatch, ConfigError, FileNotFoundError, json.JSONDecodeError) as e:
         print(f"\nNOTHING ADDED -- {e}", file=sys.stderr)
         return 4

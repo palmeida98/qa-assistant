@@ -58,7 +58,7 @@ from .base import (
 )
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
-from common import WorkspaceBusy, workspace_lock
+from common import WorkspaceBusy, atomic_write, workspace_lock, workspace_path
 
 
 def _resolve(workspace: str, path: str, what: str = "batch") -> str:
@@ -216,6 +216,7 @@ def _apply(workspace: str, batch_path: str, batch_id: str, label: str | None, re
         log(f"Nothing applied: {r['reason']}. The workbook was not changed.")
         return 0
     report["new_defects"] = r["new_defects"]
+    report["replaced_results"] = r.get("replaced_results", [])
     if r["new_defects"]:
         log("New defects:", ", ".join(r["new_defects"]))
 
@@ -463,6 +464,124 @@ def print_dry_run(res: dict) -> None:
         print(f"Preview token: {res['token']}  (apply with --expect {res['token']}: refused if anything changed since)")
 
 
+def _fence(text) -> str:
+    body = "" if text is None else str(text)
+    return "~~~\n" + body + "\n~~~"
+
+
+def review_text(workspace: str, batch_path: str, res: dict, proj: dict, command: str) -> str:
+    """The complete review of a dry run, as Markdown: the token and everything it covers (the options, the SHA-256 of
+    the batch, of project.yaml and of every declared workbook), the problems and warnings, EVERY cell with its complete
+    value before and after (no cut), the counts and the command. Written from the same result the token was computed
+    from, so the file and the token describe the same content and options."""
+    o = res.get("options") or {}
+    out = [f"# Dry run of {res['batch']}: complete review", "",
+           ("Nothing was written to the workbook. This file is replaced by the next dry run of the same batch; the token "
+            "below says which one it describes."), "", "## What the token covers", "",
+           f"- **Token: `{res.get('token', '-')}`**: the apply with `--expect` is refused, writing nothing, if any of this changes",
+           f"- Target: `{res.get('workbook')}` (platform: {res.get('platform') or 'not declared'}; from {res.get('source')})",
+           (f"- Options: label {o.get('label')!r}, reported by {o.get('reported_by')!r}, recalculation "
+            f"{'on' if o.get('recalc') else 'off'}, date {o.get('now')}, previous result kept in the notes: "
+            f"{'yes' if o.get('keep_previous') else 'no'}"),
+           f"- SHA-256 of the batch ({os.path.basename(batch_path)}): `{_sha(batch_path)}`",
+           f"- SHA-256 of project.yaml: `{_sha(os.path.join(workspace, 'project.yaml'))}`"]
+    out += [f"- SHA-256 of `{f}`: `{_sha(os.path.join(workspace, f))}`" for f in sorted(set(workbook_files(proj)))]
+    if res.get("problems"):
+        out += ["", "## Problems that stop the apply", ""] + [f"- {p}" for p in res["problems"]]
+    if res.get("already_applied"):
+        out += ["", f"## Already applied: {res['already_applied']}. Applying would change nothing."]
+    if res.get("replaced_results"):
+        out += ["", "## Warning: earlier results replaced", "",
+                (f"The batch replaces the result text of {len(res['replaced_results'])} case(s): "
+                 f"{', '.join(res['replaced_results'])}. The workbook keeps only the new text; the earlier one stays in "
+                 "git and in the run logs. `--keep-previous` keeps it in the case's notes.")]
+    for key, title in (("cross_check", "Cross-check problems (the apply would leave the original untouched)"),
+                       ("summary_problems", "Summary versus direct count would differ")):
+        if res.get(key):
+            out += ["", f"## {title}", ""] + [f"- {p}" for p in res[key]]
+    cells = res.get("cells") or []
+    out += ["", f"## Cells that would change ({len(cells)})", ""]
+    by_sheet: dict = {}
+    for c in cells:
+        by_sheet.setdefault(c["sheet"], []).append(c)
+    for sheet, items in by_sheet.items():
+        out += [f"### {sheet}: {len(items)}", ""]
+        for c in items:
+            where = f"{c['sheet']}!{c['cell']}" + (f" ({c['case']})" if c.get("case") else "")
+            out += [f"- `{where}`" + ("  *(takes the instant of the apply: not part of the token)*" if c["at_apply_time"] else ""),
+                    "", "  before:", "", _fence(c["before"]), "", "  after:", "", _fence(c["after"]), ""]
+    if res.get("counts_after"):
+        out += ["## Counts per sheet, before → after", ""]
+        for sheet, after in res["counts_after"].items():
+            before = (res.get("counts_before") or {}).get(sheet)
+            out.append(f"- {sheet}: {before} → {after}" + ("" if before == after else "  (changes)"))
+    if res.get("new_defects"):
+        out += ["", "## New defects", "", ", ".join(res["new_defects"])]
+    out += ["", "## Command (only after the user approves THIS review)", "", _fence(command), ""]
+    return "\n".join(out)
+
+
+def write_review(workspace: str, batch_path: str, res: dict, proj: dict, command: str) -> str:
+    """Writes `runs/<batch>.dryrun.md` and returns its path relative to the workspace."""
+    path = workspace_path(workspace, "runs", f"{res['batch']}.dryrun.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    atomic_write(path, review_text(workspace, batch_path, res, proj, command))
+    return os.path.relpath(path, workspace)
+
+
+def apply_command(workspace: str, a, token: str | None) -> str:
+    """The exact command of the real apply, with the options the dry run had."""
+    parts = ["python -m adapters.excel.apply", workspace, a.batch]
+    if a.label:
+        parts += ["--label", json.dumps(a.label)]
+    if a.reported_by:
+        parts += ["--reported-by", json.dumps(a.reported_by)]
+    if a.no_recalc:
+        parts.append("--no-recalc")
+    if a.now:
+        parts += ["--now", a.now.isoformat()]
+    if a.keep_previous:
+        parts.append("--keep-previous")
+    parts += ["--expect", token or "<token>"]
+    return " ".join(parts)
+
+
+def print_dry_run_brief(res: dict, cfg: dict, review: str, command: str) -> None:
+    """A short card of a dry run: the target, how many cells change and where, what needs a decision, the review file
+    and the command. Problems, warnings and the command are never dropped; `--detail` prints every cell."""
+    import output
+    lines: list[tuple[str, bool]] = [(f"DRY RUN {res['batch']}: nothing is written to the workbook", False)]
+    lines += [(f"PROBLEM: {p}", True) for p in res.get("problems") or []]
+    if res.get("already_applied"):
+        lines.append((f"Already applied: {res['already_applied']}. Applying would change nothing.", True))
+    if res.get("workbook"):
+        lines.append((f"Target: {res['workbook']} ({res.get('platform') or 'platform not declared'})"
+                      + (f" · token {res['token']}" if res.get("token") else ""), False))
+    cells = res.get("cells") or []
+    if cells:
+        per: dict = {}
+        for c in cells:
+            per[c["sheet"]] = per.get(c["sheet"], 0) + 1
+        lines.append((f"Changes: {len(cells)} cell(s): " + " · ".join(f"{s} {n}" for s, n in per.items()), False))
+        moved = [s for s, after in (res.get("counts_after") or {}).items()
+                 if (res.get("counts_before") or {}).get(s) != after]
+        lines.append(("Statuses and totals: " + (f"change in {', '.join(moved)}" if moved else "unchanged"), False))
+    if res.get("new_defects"):
+        lines.append((f"New defects: {', '.join(res['new_defects'])}", False))
+    if res.get("replaced_results"):
+        ids = res["replaced_results"]
+        lines.append(((f"Warning: the batch replaces the earlier result text of {len(ids)} case(s) "
+                       f"({', '.join(ids[:5])}{'…' if len(ids) > 5 else ''}); the workbook keeps only the new one "
+                       "(--keep-previous keeps the old in the notes)"), True))
+    lines += [(f"Cross-check: {p}", True) for p in res.get("cross_check") or []]
+    lines += [(f"Summary vs direct count: {p}", True) for p in res.get("summary_problems") or []]
+    lines.append((f"Review (every value before → after, options, hashes, token): {review}", True))
+    if not res.get("problems") and not res.get("already_applied"):
+        lines.append((f"Apply, after approving THAT review: {command}", True))
+    for text in output.fit(lines, cfg["max_lines"], "--detail", cfg["max_cols"]):
+        print(text)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Applies a batch to a workspace's workbook")
     ap.add_argument("workspace")
@@ -481,6 +600,8 @@ def main(argv=None) -> int:
                          "replaces it: nothing is lost in the workbook (needs the notes column)")
     ap.add_argument("--expect", metavar="TOKEN",
                     help="the preview token of a dry run: refuse when the batch, project.yaml or a workbook changed")
+    import output
+    output.add_flags(ap)
     a = ap.parse_args(argv)
     if a.json and not a.dry_run:
         ap.error("--json goes with --dry-run")
@@ -489,8 +610,13 @@ def main(argv=None) -> int:
     try:
         if a.dry_run:
             res = dry_run(a.workspace, a.batch, a.label, a.reported_by, not a.no_recalc, a.now, a.keep_previous)
+            cfg = output.settings(_project(a.workspace), output.cli_choice(a))
             if a.json:
                 print(json.dumps(res, ensure_ascii=False, indent=1, default=str))
+            elif output.is_brief(cfg) and cfg["detail_files"]:
+                command = apply_command(a.workspace, a, res.get("token"))
+                review = write_review(a.workspace, _resolve(a.workspace, a.batch), res, _project(a.workspace), command)
+                print_dry_run_brief(res, cfg, review, command)
             else:
                 print_dry_run(res)
             return 4 if res["problems"] else res["code"]

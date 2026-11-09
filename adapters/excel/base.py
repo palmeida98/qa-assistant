@@ -761,6 +761,7 @@ class ExcelAdapter:
         next_num = self.next_defect_number()
         dcol = d["columns"]
         new_ids = []
+        replaced: list[str] = []         # the cases whose earlier result text this batch replaces
 
         for item in batch:
             tc = str(item["tc"]).strip()
@@ -769,6 +770,8 @@ class ExcelAdapter:
             ws.cell(r, h[ccol["status"]]).value = item["status"]
             has_res = ccol.get("actual_result") in h
             old_result = ws.cell(r, h[ccol["actual_result"]]).value if has_res else None
+            if old_result not in (None, "") and str(old_result) != str(item.get("actual_result")):
+                replaced.append(tc)
             if has_res:
                 ws.cell(r, h[ccol["actual_result"]]).value = item.get("actual_result")
 
@@ -820,7 +823,7 @@ class ExcelAdapter:
                   "label": label, "items": len(batch), "new_defects": ", ".join(new_ids),
                   "batch_id": batch_id}
         ctl.append([record.get(name) for name in self._control_names(ctl)])
-        return {"applied": True, "hash": h_batch, "new_defects": new_ids}
+        return {"applied": True, "hash": h_batch, "new_defects": new_ids, "replaced_results": replaced}
 
     # ------------------------------------------------------------------
     # Adding approved cases (technique-excel.md section 4.1)

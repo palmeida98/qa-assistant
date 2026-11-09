@@ -49,7 +49,8 @@ Ask the user for the final status, the reason and who decided it (and where the 
 7. Do not pass results to the main workbook/tracker without the user's confirmation. With the excel
    tracker, first the DRY RUN (technique-excel.md section 1.1; writes nothing), from the root of qa-assistant:
    python -m adapters.excel.apply <workspace> <run_log>/<batch>.json --dry-run
-   and show the user what it printed: target workbook and platform, the cells before -> after (the ones marked
+   and show the user what it printed: the short card (and, to review every value, the file it names,
+   `<batch>.dryrun.md`; `--detail` prints it all): target workbook and platform, the cells before -> after (the ones marked
    <at apply time> take the instant of the real apply), counts, new defects, problems, "already applied". A problem
    or "already applied" means no apply. Once the user confirms THAT preview, apply with its token:
    python -m adapters.excel.apply <workspace> <run_log>/<batch>.json --expect <token>

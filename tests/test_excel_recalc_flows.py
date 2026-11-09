@@ -87,7 +87,7 @@ class RecalculatedWrites(unittest.TestCase):
         add("TC-SHOP-003", "Fail", "no discount", "--new-defect", defect)
         batch = os.path.join("runs", "batch_b1.json")
         before = sha(self.book)
-        preview = self.run_("-m", "adapters.excel.apply", self.ws, batch, "--dry-run")
+        preview = self.run_("-m", "adapters.excel.apply", self.ws, batch, "--dry-run", "--detail")
         self.assertEqual(preview.returncode, 0, preview.stdout + preview.stderr)
         self.assertEqual(sha(self.book), before)
         token = next(line.split()[2] for line in preview.stdout.splitlines() if line.startswith("Preview token:"))

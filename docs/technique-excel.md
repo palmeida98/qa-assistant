@@ -47,6 +47,14 @@ rewrites (the same formula with other quoting) are counted apart. The exit code 
 (4 when a problem stops it). Nothing in the workspace is written (the original's sha256 is unchanged) and the
 temporary folder is removed, also on error.
 
+**What the terminal shows (17.4).** By default the dry run prints a short card of about eight lines (target and token,
+changes per sheet, statuses, problems and warnings, the path of the review file and the whole apply command with
+`--expect`) and writes **one file**, `<batch>.dryrun.md` next to the batch (`<cases>.dryrun.md` for `add-cases`), with the
+target, the sha256 of the batch, every cell before → after in full and the token: the same content and options as the
+token, so what the user approved is what that file holds. `--detail` (or `output.terminal: normal`) prints the complete
+text as before and writes nothing; with `output.detail_files: false` the complete text is printed. Problems, warnings and
+the command are never dropped by a line limit. `--json` is unchanged.
+
 The dry run ends with a **preview token** `v2-<hash>`: the batch (its name, which routes it to a workbook, and its
 content), `project.yaml`, every declared workbook, and the options that change what is written: `--label` (as given; the
 default label is a marker, because its date is the apply's own), the reporter actually written (`--reported-by`, else

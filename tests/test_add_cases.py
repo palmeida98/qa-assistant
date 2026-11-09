@@ -267,7 +267,7 @@ class CommandLine(unittest.TestCase):
 
     def test_dry_run_writes_nothing(self):
         before = self.shop_ids()
-        code, out = self.run_cli(self.write("c.json", [case()]), "--dry-run")
+        code, out = self.run_cli(self.write("c.json", [case()]), "--dry-run", "--detail")
         self.assertEqual(code, 0, out)
         self.assertIn("Dry run", out)
         self.assertEqual(self.shop_ids(), before)
