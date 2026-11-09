@@ -79,7 +79,7 @@ class Workspace(unittest.TestCase):
 
 class AddCasesToken(Workspace):
     def dry(self, *extra):
-        code, out = self.run_cli(ac, "cases/cases_01.json", "--dry-run", "--no-recalc", *extra)
+        code, out = self.run_cli(ac, "cases/cases_01.json", "--dry-run", "--detail", "--no-recalc", *extra)
         self.assertEqual(code, 0, out)
         token = next(line.split()[2] for line in out.splitlines() if line.startswith("Preview token:"))
         return token, out
@@ -301,7 +301,7 @@ class KeepPrevious(Workspace):
     def test_the_dry_run_shows_the_option_and_the_token_authorises_the_apply(self):
         self.first_result()
         path = self.batch("batch_a_02", [self.result("Pass", "second result")])
-        code, out = self.run_cli(ap, path, "--dry-run", "--no-recalc", "--now", NOW.isoformat(), "--keep-previous")
+        code, out = self.run_cli(ap, path, "--dry-run", "--detail", "--no-recalc", "--now", NOW.isoformat(), "--keep-previous")
         self.assertEqual(code, 0, out)
         self.assertIn("the previous result of each case kept in its notes", out)
         self.assertTrue(any(line.lstrip().startswith("Shop!") and "Previous result" in line for line in out.splitlines()),

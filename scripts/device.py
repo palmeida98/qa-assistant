@@ -894,8 +894,10 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
                 verdict = "same" if same_build(observed, cfg["intended_build"]) else "DIFFERS"
                 line = f"build: observed {observed}, intended {cfg['intended_build']}: {verdict}"
                 if verdict == "DIFFERS":
-                    advice.append("the observed build is not the intended one (mobile.build.version): confirm it is the one "
-                                  "to test; the intended build is never rewritten from the device")
+                    text = ("the observed build is not the intended one (mobile.build.version): confirm it is the one "
+                            "to test; the intended build is never rewritten from the device")
+                    if _notice(cfg, a, f"build-differs:{observed}:{cfg['intended_build']}", text):
+                        advice.append(text)
             else:
                 line = f"build: observed {observed}, intended not set"
             out.append(line)
@@ -925,6 +927,19 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
         print(f"NO TARGET: {blockers[0]}", file=sys.stderr)
         return 3
     return 0
+
+
+def _notice(cfg: dict, a, notice_id: str, text: str) -> bool:
+    """Whether to print an advice that does not need an action now: always in the complete modes; in the short one only
+    when it is new or changed for this workspace (scripts/output.py): the same advice at every check is noise."""
+    try:
+        import output
+        from common import read_project
+        proj = read_project(cfg["workspace"])
+        settings = output.settings(proj, output.cli_choice(a))
+        return output.Notices(cfg["workspace"], settings).show(notice_id, text)
+    except Exception:       # noqa: BLE001 - never lose an advice to a failure of the notice state
+        return True
 
 
 def _batch_build(workspace: str, batch: str) -> str | None:
@@ -1517,6 +1532,8 @@ def parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("check", parents=[common], help="one report: device, app, driver, build, environment, session")
     p.add_argument("--batch", help="also compare the observed build with the run log of this batch")
+    import output
+    output.add_flags(p)
     p = sub.add_parser("doctor", parents=[common], help="iOS: why the iPhone target is not ready, read only (§1.5)")
     p.add_argument("--no-session", action="store_true",
                    help="strictly passive: do not open and close a WebDriverAgent session (the proof of UI automation)")

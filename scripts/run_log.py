@@ -101,6 +101,7 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
+import output
 from common import (
     OutsideWorkspace,
     WorkspaceBusy,
@@ -813,6 +814,156 @@ def resolve(workspace: str, batch: str, case: str, status: str, reason: str, dec
         raise Refused(str(e)) from None
 
 
+def _platform_of(proj: dict, name: str, doc: dict | None = None) -> str | None:
+    """The platform of a batch: the run block's, else the project's `report.platforms` patterns (never guessed)."""
+    import fnmatch
+    declared = ((doc or {}).get("run") or {}).get("platform")
+    if declared:
+        return str(declared)
+    for platform, patterns in ((proj.get("report") or {}).get("platforms") or {}).items():
+        for pattern in [patterns] if isinstance(patterns, str) else patterns or []:
+            if fnmatch.fnmatch(name, str(pattern)):
+                return str(platform)
+    return None
+
+
+def _plan_cases(workspace: str, plan: str | None) -> list[str] | None:
+    """The cases of a batch plan (`batches/<name>.yaml`, key `cases`), in order; None without a readable plan."""
+    if not plan:
+        return None
+    try:
+        import yaml
+        with open(workspace_path(workspace, *str(plan).replace("\\", "/").split("/")), encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, ValueError, ImportError, OutsideWorkspace):
+        return None
+    cases = data.get("cases") if isinstance(data, dict) else None
+    return [str(c).strip() for c in cases] if isinstance(cases, list) else None
+
+
+def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bool]:
+    """Records which batch plan (`batches/<name>.yaml`) the run log follows, so a result can say what comes next:
+    (path, previous plan, changed). Every case of the plan must be in the library; refused when the batch was applied."""
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    rel = os.path.relpath(os.path.join(workspace, plan), workspace).replace(os.sep, "/")
+    cases = _plan_cases(workspace, rel)
+    if not cases:
+        raise UsageError(f"{plan}: not found inside the workspace, or it has no `cases:` list (a batches/<name>.yaml)")
+    known, source = library_cases(workspace, proj)
+    unknown = [c for c in cases if c not in known]
+    if unknown:
+        raise UsageError(f"{plan}: {', '.join(unknown)} not in the project's library ({source}): nothing was written")
+    name = batch_id(batch)
+    path = run_log_path(workspace, name)
+    try:
+        with workspace_lock(workspace):
+            where = applied(workspace, proj, name)
+            if where:
+                raise Refused(f"{name} was already {where}: it is never changed")
+            doc = read_log(path)
+            previous = doc.get("plan")
+            if previous == rel:
+                return path, previous, False
+            doc = {**{k: v for k, v in doc.items() if k != "results"}, "plan": rel, "results": doc["results"]}
+            write_log(path, doc)
+            return path, previous, True
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+
+
+def progress(workspace: str, batch: str, plan: str | None = None) -> dict:
+    """Where a batch stands, read only: the platform, the build, each planned case with its result or what is next, and
+    results outside the plan. The plan is the one given, else the one recorded by `plan`."""
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    name = batch_id(batch)
+    path = run_log_path(workspace, name)
+    if not os.path.isfile(path):
+        raise UsageError(f"{name} has no run log (runs/{os.path.basename(path)})")
+    doc = read_log(path)
+    planned = _plan_cases(workspace, plan or doc.get("plan"))
+    done = {str(x.get("tc")).strip(): x for x in doc["results"] if isinstance(x, dict)}
+    order = planned if planned is not None else list(done)
+    todo = [c for c in order if c not in done]
+    return {"batch": name, "platform": _platform_of(proj, name, doc), "build": (doc.get("run") or {}).get("build"),
+            "plan": plan or doc.get("plan"), "order": order, "results": done, "next": todo[0] if todo else None,
+            "pending": todo, "outside_plan": [c for c in done if planned is not None and c not in planned],
+            "mode": doc.get("mode")}
+
+
+def _pass_word(proj: dict) -> str | None:
+    try:
+        return project_status(proj, "pass")
+    except UsageError:
+        return None
+
+
+def print_progress(info: dict, proj: dict, cfg: dict) -> None:
+    """A short card of the progress: one line per case (a result, or what is next), the counts, and the next step. A
+    result that is not a pass (a fail, a block, a Question) is a must line: it never falls out of the limit."""
+    import output
+    ok = _pass_word(proj)
+    head = f"PROGRESS {info['batch']}" + (f" · {info['platform']}" if info["platform"] else "") \
+        + (f" · build {info['build']}" if info["build"] else "")
+    lines: list[tuple[str, bool]] = [(head, True)]
+    for case in info["order"]:
+        got = info["results"].get(case)
+        if got:
+            at = str(got.get("ts") or "")[11:16] or "no ts"
+            lines.append((f"  ✓ {case}  {got.get('status')} · {at}", got.get("status") != ok))
+        elif case == info["next"]:
+            lines.append((f"  ▶ {case}  next", True))
+        else:
+            lines.append((f"  · {case}", False))
+    lines += [(f"  + {c}  {info['results'][c].get('status')} (not in the plan)", True) for c in info["outside_plan"]]
+    counts: dict = {}
+    for got in info["results"].values():
+        counts[str(got.get("status"))] = counts.get(str(got.get("status")), 0) + 1
+    lines.append(("Results: " + (" · ".join(f"{n} {s}" for s, n in counts.items()) or "none yet")
+                  + (f" · {len(info['pending'])} to run" if info["plan"] else ""), True))
+    if info["next"]:
+        lines.append((f"Next: {info['next']}" + (f" (plan {info['plan']})" if info["plan"] else ""), True))
+    elif info["plan"]:
+        lines.append(("Next: every planned case has a result: /manage-bugs for the Fails, then /checkpoint", True))
+    else:
+        lines.append(("Next: no plan recorded: run_log.py <workspace> plan <batch> batches/<name>.yaml", True))
+    cols = cfg["max_cols"] if output.is_brief(cfg) else None
+    for text in output.fit(lines, max(cfg["max_lines"], 12) if output.is_brief(cfg) else 10**6, "--detail", cols):
+        print(text)
+
+
+def _project_or_empty(workspace: str) -> dict:
+    try:
+        return read_project(workspace)
+    except Exception:       # noqa: BLE001 - a missing project.yaml is the command's own error, said where it matters
+        return {}
+
+
+def _brief_added(workspace: str, batch: str, case: str, status: str, path: str, replaced, evidence) -> str:
+    """One line for a recorded result: the platform, the case, the result, the evidence count, the file (relative) and,
+    when the batch has a plan, what comes next."""
+    try:
+        info = progress(workspace, batch)
+    except UsageError:
+        info = {"platform": None, "next": None, "plan": None}
+    kept = len({e for e in (evidence or []) if e})
+    parts = [f"{'replaced' if replaced else 'added'}: " + (f"[{info['platform']}] " if info["platform"] else "")
+             + f"{case} {status}"]
+    if kept:
+        parts.append(f"{kept} evidence path(s)")
+    parts.append(os.path.relpath(path, workspace))
+    if info["next"]:
+        parts.append(f"next: {info['next']}")
+    elif info["plan"]:
+        parts.append("every planned case has a result")
+    return " · ".join(parts)
+
+
 def _read_defect(path: str):
     try:
         with open(path, encoding="utf-8-sig") as f:
@@ -848,6 +999,7 @@ def main(argv=None) -> int:
     p.add_argument("--ended-at", metavar="WHEN",
                    help="when the case ENDED (the end of its window; `ts` is the start): needs --executed-at with a "
                         "known time; not before it, not in the future")
+    output.add_flags(p)
     p = sub.add_parser("retime", help="correct only the time of a result in a batch not yet applied")
     p.add_argument("batch")
     p.add_argument("case")
@@ -855,6 +1007,13 @@ def main(argv=None) -> int:
                    help="the corrected start of the execution, or 'unknown' (YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM])")
     p.add_argument("--executed-source", metavar="TEXT", help="where the time comes from (required)")
     p.add_argument("--ended-at", metavar="WHEN", help="the end of the execution's window (optional)")
+    p = sub.add_parser("plan", help="record which batch plan (batches/<name>.yaml) the run log follows")
+    p.add_argument("batch")
+    p.add_argument("file", help="the plan, inside the workspace: a YAML with `cases: [...]` in the planned order")
+    p = sub.add_parser("progress", help="where the batch stands: each case, the counts and the next step (read only)")
+    p.add_argument("batch")
+    p.add_argument("--plan", metavar="FILE", help="the plan to follow (default: the one recorded by `plan`)")
+    output.add_flags(p)
     p = sub.add_parser("defect-rule", help="what the project's schema says about the priority of a new bug")
     p = sub.add_parser("resolve", help="record the decision about a Question, keeping the observation")
     p.add_argument("batch")
@@ -884,6 +1043,7 @@ def main(argv=None) -> int:
     p.add_argument("--replace-link", action="store_true",
                    help="replace a bug or new defect already linked to the result (the previous one is printed)")
     a = ap.parse_args(argv)
+    cfg = output.settings(_project_or_empty(a.workspace), output.cli_choice(a))
     try:
         if a.command == "retime":
             path, before, after = retime(a.workspace, a.batch, a.case, a.executed_at, a.executed_source, a.ended_at)
@@ -899,6 +1059,15 @@ def main(argv=None) -> int:
                   "recorded_at kept")
             print(f"before: {window(before)}")
             print(f"after:  {window(after)}")
+            return 0
+        if a.command == "plan":
+            path, previous, changed = set_plan(a.workspace, a.batch, a.file)
+            print(f"plan: {a.file} in {os.path.relpath(path, a.workspace)}" if changed
+                  else f"unchanged: the plan of {os.path.relpath(path, a.workspace)} is already {previous}")
+            return 0
+        if a.command == "progress":
+            info = progress(a.workspace, a.batch, a.plan)
+            print_progress(info, read_project(a.workspace), cfg)
             return 0
         if a.command == "attach":
             new = _read_defect(a.new_defect) if a.new_defect else None
@@ -958,9 +1127,12 @@ def main(argv=None) -> int:
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    kept = len(dict.fromkeys(e for e in (a.evidence or []) if e))
-    print(f"{'replaced' if replaced else 'added'}: {a.case} {a.status} in {path}"
-          + (f"; {kept} evidence path(s) kept" if kept else ""))
+    if output.is_brief(cfg):
+        print(_brief_added(a.workspace, a.batch, a.case, a.status, path, replaced, a.evidence))
+    else:
+        kept = len(dict.fromkeys(e for e in (a.evidence or []) if e))
+        print(f"{'replaced' if replaced else 'added'}: {a.case} {a.status} in {path}"
+              + (f"; {kept} evidence path(s) kept" if kept else ""))
     if replaced:
         print("previous result (kept only in this output and in git history):")
         print(json.dumps(replaced, ensure_ascii=False, indent=1))

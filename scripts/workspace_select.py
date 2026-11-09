@@ -763,7 +763,24 @@ def _readiness(via: str, lines: list[dict]) -> list[dict]:
     return out
 
 
-def _print_preflight(code: int, r: dict) -> None:
+def _output_settings(report: dict, args) -> dict | None:
+    """The output settings in force for the selected project (None when scripts/output.py is not there)."""
+    try:
+        import output
+        from common import read_project
+    except ImportError:
+        return None
+    project: dict = {}
+    path = (report.get("project") or {}).get("path")
+    if path:
+        try:
+            project = read_project(path)
+        except Exception:       # noqa: BLE001 - an unreadable project.yaml is the preflight's own finding
+            project = {}
+    return output.settings(project, output.cli_choice(args))
+
+
+def _print_preflight_full(code: int, r: dict) -> None:
     p = r.get("project")
     if r["instruction"]:
         print(f"STOP: {r['instruction']}")
@@ -811,6 +828,84 @@ def _print_preflight(code: int, r: dict) -> None:
         print(f"warning: {warning}")
 
 
+def _print_preflight(code: int, r: dict, cfg: dict | None = None) -> None:
+    """The complete text (`_print_preflight_full`) or, by default, a short card (phase 17.4)."""
+    try:
+        import output
+    except ImportError:         # an old checkout without scripts/output.py: the complete text, as always
+        return _print_preflight_full(code, r)
+    if cfg is None or not output.is_brief(cfg):
+        return _print_preflight_full(code, r)
+    return _print_preflight_brief(code, r, cfg, output)
+
+
+def _print_preflight_brief(code: int, r: dict, cfg: dict, output) -> None:
+    """A short card: what was selected, whether the skill can run (one line per platform, the same state of several
+    routes said once), what blocks it and the next command. Problems, blocks, the choice of a project and the next
+    command are never dropped; a warning that does not change is shown once (output.Notices); `--detail` prints all."""
+    p = r.get("project")
+    notices = output.Notices(p["path"], cfg) if p else None
+    lines: list[tuple[str, bool]] = []
+    if r["instruction"]:
+        lines.append((f"STOP: {r['instruction']}", True))
+    if r.get("message"):
+        lines.append((r["message"], True))
+    for c in r.get("candidates") or []:
+        lines.append((f"  {c['status']:15} {c['id']}  {c['name'] if c['name'] != c['folder'] else ''}".rstrip(), True))
+    if p:
+        lines.append((f"Project: {p['name']} [{p['id']}] ({p['status']}) · {p['path']}", False))
+    lines += [(f"PROBLEM: {problem}", True) for problem in r["problems"]]
+    if r.get("proposes"):
+        lines.append((f"Proposed: {r['proposes']} in that folder", True))
+    blocked_tools: set[str] = set()
+    if code == OK:
+        envs = ", ".join(r.get("environments") or []) or "none declared"
+        lines.append((f"Configuration: valid for this skill (/{r['skill']['name']}) · environments: {envs}", False))
+        seen: dict[tuple, list[str]] = {}
+        for route in r.get("routes") or []:
+            state = ("ready" if not route["missing"] and not route["config"] else
+                     "; ".join(filter(None, [f"missing: {', '.join(route['missing'])}" if route["missing"] else "",
+                                             "; ".join(route["config"])])))
+            lines.append((f"Route: {route['module']} -> {route['procedure']}"      # the procedure to follow: kept
+                          + (f" ({route['why']})" if route["why"] else "") + f" [{state}]"
+                          + ("" if route["exists"] else " [PROCEDURE MISSING in this checkout]"), True))
+            for ready in route.get("ready") or []:
+                ok = bool(ready["ready"] and not route["config"])
+                why = "; ".join(f"{tool} — {action}" for tool, action in ready["blocked"]) or "; ".join(route["config"])
+                blocked_tools |= {tool for tool, _a in ready["blocked"]}
+                seen.setdefault((ready["platform"], ok, why), []).append(route["module"])      # one line per state
+        for platform, ok, why in seen:
+            label = f"Ready{' (' + platform + ')' if platform else ''}"
+            if ok:
+                lines.append((f"{label}: yes", False))
+            else:
+                lines.append((f"{label}: NO, its cases would be Blocked (environment) until: {why}", True))
+        lines += [(f"Next: {x}", True) for x in r.get("next") or []]
+        for s in r.get("sources") or []:
+            missing = [k for k, v in s["credentials"].items() if not v]
+            if missing:
+                lines.append((f"source {s['id']}: credentials MISSING: {', '.join(missing)}", True))
+        for tool in r["tools"]:
+            if not tool["ok"] and tool["tool"].split(" ")[0] not in blocked_tools and notices:
+                text = f"[missing] {tool['tool']}: {tool['detail']}"
+                if notices.show(f"tool:{tool['tool']}", text):
+                    lines.append((text, False))
+        task = f"Task: /{r['skill']['name']} -- {r['skill'].get('intent', '')}"
+        if notices and notices.show(f"task:{r['skill']['name']}", task):
+            lines.append((task, False))
+        for key in ("writes", "approvals"):
+            text = f"{key.capitalize()}: {r['skill'].get(key, '')}"
+            if notices and notices.show(f"{key}:{r['skill']['name']}", text):
+                lines.append((text, key == "approvals"))        # an approval rule is never cut by the limit
+    for warning in r["warnings"]:
+        if notices is None or notices.show("warning:" + warning[:40], warning):
+            lines.append((f"warning: {warning}", False))
+    for text in output.fit(lines, cfg["max_lines"], "--detail", cfg["max_cols"]):
+        print(text)
+    if code == OK:
+        print("Complete text and the tool lines: add --detail")
+
+
 def catalogue(framework: str = ROOT) -> list[dict]:
     """Every skill's contract, read from its own frontmatter: there is no other list."""
     sync = _sync()
@@ -843,6 +938,11 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("resolve", parents=[common, roots, pick], help="which project a request means")
     p = sub.add_parser("preflight", parents=[common, roots, pick], help="whether a skill can run, on which project")
     p.add_argument("--skill", required=True, help="the skill's name, without the slash")
+    try:
+        import output as _output
+        _output.add_flags(p)
+    except ImportError:         # an old checkout without scripts/output.py
+        pass
     sub.add_parser("skills", parents=[common], help="the catalogue, from each skill's frontmatter")
     p = sub.add_parser("set-root", help="keep the root of workspaces in ~/.qa-assistant/config.json")
     p.add_argument("path")
@@ -900,7 +1000,7 @@ def _run(a) -> int:
     if emit:
         emit({"code": code, **report})
     else:
-        _print_preflight(code, report)
+        _print_preflight(code, report, _output_settings(report, a))
     return code
 
 

@@ -414,6 +414,9 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
         elif set(report) - {"platforms"}:
             warnings.append(f"report: unknown key(s) {sorted(set(report) - {'platforms'})} (known: ['platforms'])")
 
+    import output
+    problems += output.validate(proj.get("output"))         # what the scripts print (scripts/output.py)
+
     modules = proj.get("modules") or []
     if not modules:
         problems.append("'modules' is empty: choose from the list in methodology 4.1")

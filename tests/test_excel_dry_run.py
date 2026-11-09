@@ -114,7 +114,7 @@ class DryRun(unittest.TestCase):
         self.assertIn("do not agree", " ".join(res["problems"]))
         self.assertEqual(res["cells"], [])
         self.assertEqual(self.digests(), before)
-        rc, out = self.cli(path, "--dry-run", "--no-recalc")
+        rc, out = self.cli(path, "--dry-run", "--detail", "--no-recalc")
         self.assertEqual(rc, 4)
         self.assertIn("Problems that stop the apply", out)
 
@@ -205,7 +205,7 @@ class DryRun(unittest.TestCase):
         self.assertTrue(control and control[0]["at_apply_time"], control)
         status = [c for c in res["cells"] if c["case"] == "TC-ACCOUNT-001" and c["after"] == "Pass"]
         self.assertTrue(status and not status[0]["at_apply_time"])
-        _, out = self.cli(self.batch("batch_20261107_06"), "--dry-run", "--no-recalc")
+        _, out = self.cli(self.batch("batch_20261107_06"), "--dry-run", "--detail", "--no-recalc")
         self.assertIn("<at apply time>", out)
         self.assertIn("Preview token:", out)
 
@@ -318,7 +318,7 @@ class DryRun(unittest.TestCase):
 
     def test_the_dry_run_states_the_options_and_which_cells_take_the_clock(self):
         path = self.batch("batch_20261107_17")
-        rc, out = self.cli(path, "--dry-run", "--no-recalc")
+        rc, out = self.cli(path, "--dry-run", "--detail", "--no-recalc")
         self.assertEqual(rc, 0, out)
         self.assertIn("Options covered by the token", out)
         self.assertIn("clock of the apply", out)
@@ -337,7 +337,7 @@ class DryRun(unittest.TestCase):
 
     def test_a_dry_run_applies_later_with_the_clock_advanced_and_a_protected_option_still_refuses(self):
         path = self.batch("batch_20261107_20")
-        rc, out = self.cli(path, "--dry-run", "--no-recalc")                     # the clock, no fixed --now
+        rc, out = self.cli(path, "--dry-run", "--detail", "--no-recalc")                     # the clock, no fixed --now
         self.assertEqual(rc, 0, out)
         token = next(line.split()[2] for line in out.splitlines() if line.startswith("Preview token:"))
         before = self.digests()

@@ -87,6 +87,19 @@ dashboard:
   states: {}                 # e.g. {"Not run": pending, "Pass": ok, "Fail": fail, "Blocked": blocked, "N/A": na}
 
 # ---------------------------------------------------------------------------
+# (opt.) output: what the scripts print. Defaults (framework): a short card; the complete text with --detail.
+# Errors, blocks, caveats and decisions are never dropped by a limit; a notice that does not change is shown once.
+# Order of precedence: the command's --brief/--detail, QA_OUTPUT (brief|normal|verbose), this section, the defaults.
+# ---------------------------------------------------------------------------
+# output:
+#   terminal: brief          # brief | normal | verbose (normal and verbose print the complete text)
+#   max_cols: 100            # width of a card line (at least 40)
+#   max_lines: 12            # information lines of a card (at least 3)
+#   truncate: warn           # warn | never: a value is never cut without saying where it is complete
+#   detail_files: true       # write the file with the complete values and cite its path
+#   reports: [summary, technical]
+
+# ---------------------------------------------------------------------------
 # excel: layout of the workbook, read by the adapter (adapters/excel/base.py).
 # Fill in ONLY when tracker: "excel". Never guess: /project-context (onboarding)
 # runs `python -m adapters.excel.inspect <workbook>` and confirms each value

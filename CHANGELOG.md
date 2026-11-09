@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (output layer, phase 17.4, 2026-11-09)
+- **A short card by default** (`scripts/output.py`): the preflight, the dry run of `apply` and `add_cases`, `run_log add`
+  and the device check print a few lines and say where the complete text is. `--detail` (or `QA_OUTPUT=normal`, or
+  `output.terminal: normal` in `project.yaml`) prints it as before; `--json` is unchanged. Errors, blocks, caveats and
+  decisions are never dropped by a limit; a command is never cut.
+- **`output:` section in `project.yaml`** (terminal, max_cols, max_lines, truncate, detail_files, reports), validated by
+  `validate_project.py`; framework defaults when absent.
+- **The dry run writes `<batch>.dryrun.md`**: every cell before → after in full, the batch's sha256 and the token, tied to
+  the same content and options as the token (`apply` and `add_cases`).
+- **`run_log.py plan` and `progress`**: the planned cases of a batch and a card with each case, the counts and the next
+  step; `add` prints one line (platform, case, result, evidence, next).
+- **A notice that does not change is shown once** (state in `$QA_ASSISTANT_HOME`, default `~/.qa-assistant`, per workspace).
+- Not part of this change: the Android `send` is still not validated on a real device (17.2); the presentation of
+  invalid evidence in the reports is pending (17.5); `apply --only/--skip` (17.3b) is designed, not implemented.
+
 ### Changed (traceable results, phase 17.1, 2026-11-09)
 - **Evidence is never lost silently**: `run_log.py add` and `attach` take `--evidence` once with several paths or repeated;
   every path is kept, in order, once (a repeated option kept only the last path before).
