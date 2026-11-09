@@ -100,7 +100,7 @@ the sources of truth: [methodology §1](docs/methodology.md).
 
 | Tracker | Implemented | Verified with fixtures | Used on a real instance |
 |---|---|---|---|
-| **Excel** (workbook) | read cases, add approved cases, apply results and bugs with a dry run and a preview token, dashboard | yes: unit tests and a golden test (LibreOffice) | **yes**, on real projects |
+| **Excel** (workbook) | read cases, add approved cases, apply results and bugs with a dry run and a preview token (`v2-…`, see "Recording results"), dashboard | yes: unit tests and a golden test (LibreOffice) | **yes**, on real projects |
 | **Azure DevOps** (Test Plans + Boards) | import and export cases, send results (one test run per batch), create/update bugs, duplicate search | yes: fake service and fictional golden | **no: pilot pending** (needs a test organisation) |
 | **Jira + Xray** (Cloud) | the same four directions (one Test Execution per batch) | yes: fake service and fictional golden | **no: pilot pending** (needs a test site with Xray) |
 | Ticket reading (`/analyze-ticket`) | Azure DevOps and Jira, read only, compared with the last check | yes, and the demo below | Azure DevOps through a logged-in browser: yes; by token, and Jira: no |
@@ -122,7 +122,7 @@ python scripts/sync_skills.py --apply                  # copies the eight skills
 python scripts/workspace_select.py where               # which framework, Python, imports, skill copy and commit guards run
 ```
 
-No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (standard library only) prints the interpreter that can run the framework, or the commands that create a `.venv` for it; `python3 scripts/qa_python.py run scripts/qa_report.py <workspace> audit` runs a command with it from any directory.
+Where a document says `python`, use the interpreter of this checkout. No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (run from the checkout's root) prints the interpreter that can run the framework, or the commands that create a `.venv` for it. From any other directory use absolute paths: `python3 <checkout>/scripts/qa_python.py run <checkout>/scripts/qa_report.py <workspace> audit` runs a command with it (`<checkout>` is the folder you cloned).
 
 `sync_skills.py` without `--apply` is a dry run, and `--target <folder>` installs somewhere else (used by the tests). Skills
 of other origins are kept. A new Claude Code session is needed to load changed skills. Workspaces use the global copy, so
@@ -158,6 +158,27 @@ change and writes nothing) is in [docs/demo-walkthrough.md](docs/demo-walkthroug
 shows the engine the skills call; it does not show the agent's choices ([docs/skills-evals.md](docs/skills-evals.md):
 scenarios prepared, not yet run).
 
+## Recording results: execution time, Questions, the Excel token
+
+Details and every command are in [docs/skills-guide.md](docs/skills-guide.md) (the table of scripts); the method is in
+[docs/methodology.md](docs/methodology.md) §7.1 and §9.2.
+
+- **Time of the execution and time of the record.** `ts` is when the case was executed, `recorded_at` when it was written.
+  `run_log.py add` records an execution happening now; an earlier observation takes `--executed-at "2026-11-05T16:21"
+  --executed-source "tester notes"` (a time nobody knows: `--executed-at unknown --executed-source "notes without a time"`). No time zone is ever assigned, and a late record never makes
+  an old execution look newer.
+- **A Question is resolved, not overwritten.** `python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason … --decided-by …` keeps
+  the observation, its time and evidence and records the decision; for a batch already applied it goes to a new batch with
+  `--into`. Recording a decision does not apply it, and does not replace an approval the project asks for.
+- **A new bug and its priority.** `run_log.py defect-rule` says whether the project's schema requires a priority; the user
+  decides it at the bug review.
+- **Excel preview token.** The token of a dry run (`v2-…`) also covers `--label`, the reporter, `--no-recalc` and `--now`: apply
+  with the same options. **A token from before version 2 is refused: repeat the dry run to get a new one.**
+
+All of this is checked with fictional data (unit tests, a golden test and an end-to-end test on two fictional layouts, with
+simulated approvals); real use is documented only for the Excel tracker on real projects, and the skills' text is not an
+evaluation of the agent ([docs/skills-evals.md](docs/skills-evals.md)).
+
 ## Validation and CI
 
 | Command | What |
@@ -180,6 +201,8 @@ scenarios prepared, not yet run).
 | LibreOffice | 26.8.2.2 (Homebrew) | 24.2.7 (Ubuntu package) |
 | Unit tests (`tests/`) | 1292 run, 0 failures, 3 skipped (two Windows-only, one Linux-only) | `tests` job: 1292 run, 0 failures, 16 skipped (the same two Windows-only, plus 14 that need LibreOffice) |
 | LibreOffice-dependent tests | run in the same pass | run in the `golden` job (28 tests plus the Excel golden, which passes) |
+
+The counts above are those confirmed on 08.11.2026, before the tests of PR #7; each CI run's own counts are in its summary.
 
 The Pillow difference was **not forced away**: a downgrade in the shared environment could break the mobile tool. The suite
 also passed in a clean throwaway environment built from the pinned versions (Pillow 12.3.0): 1292 tests, the same three skips.
