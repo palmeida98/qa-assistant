@@ -43,6 +43,7 @@
 | 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026); 15.8 daily use of the mobile flow done (02.11.2026) |
 
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
+| 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1955,10 +1956,42 @@ findings relevant to the framework are recorded here, in generic terms.
   `claude/qa-assistant-analysis-7549a1`, because a session was working in it; and the local branches `plan/qa-hub` and `reset-skills`,
   whose remote branches are gone (the approval named the remote ones).
 
+## Phase 17 — Output, traceability and write safety (09.11.2026)
+
+Goal: answer what a real test of one mobile project on Android and iOS showed (four cases per platform, the builds read from the
+devices, two workbooks applied, run logs and evidence kept). The findings are recorded here in generic terms; the project's own
+analysis stays in its workspace. Output stays **text**: no graphical interface, no new tracker. What a project shows in the
+terminal is a presentation choice (`output:` in its `project.yaml`, with framework defaults); **approvals stay where the project
+defines them** and the stricter rule prevails.
+
+Process: as in `CONTRIBUTING.md` (specification first, then code, then tests, one task per commit `17.<n>: <summary>`); a task
+may group related changes, and a pull request may hold several tasks. The order below follows the dependencies found when the
+work was planned, not the priority labels of the analysis: the output layer (17.4) is the foundation of the progress and report
+tasks, and the run-log changes (17.1) come before them.
+
+### 17.1 Execution board
+
+| Task | Depends on | Scope | State |
+|---|---|---|---|
+| 17.0 Register the phase | — | this section and the summary row | Done (09.11.2026) |
+| 17.1 Traceable results | — | `run_log.py`: a repeated `--evidence` never loses a path; `--ended-at` (the window of an execution); `retime` (correct only the time of a result, keeping the previous one); `attach --invalid` (an evidence kept on file and marked, with the reason); the methodology §7.1, the run-tests skill and the tests | In review |
+| 17.2 Reliable send and driver on Android | — | the outcome of a send on Android as on iOS; one message for a listed but stopped driver; the advice when the dump fails | Pending |
+| 17.3 Excel writes | — | `add_cases --expect` and the workspace lock; the final recalculation put in place atomically; `apply --only/--skip` with the token covering the selection; keeping the previous text of a result | Pending |
+| 17.4 Output layer and approval cards | 17.3 | `output:` in `project.yaml` with framework defaults; shared formatting; a short preflight; the dry run as a short card plus a file with the complete values; a summary mode of the audit; the three build lines of a device check | Pending |
+| 17.5 Progress and reports | 17.1, 17.4 | a progress view per batch; a summary and a technical report generated from the run log, the evidence and the dry run | Pending |
+| 17.6 Skills and specification | 17.1–17.5 | an output budget in the eight skills and in `docs/skills-spec.md` §3 and §6; scenarios for `docs/skills-evals.md` | Pending |
+| 17.7 iOS: screen, build and waiting | 17.4 | the build read without the WebDriverAgent; `home` and `activate`; waiting for a device | Pending |
+| 17.8 WebDriverAgent operation | — | backoff and a limit in the launcher, a warning before the profile expires (`doctor`) | Pending |
+| 17.9 Documentation and checks | — | the constraints of the agent's shell in the examples; the procedure to compare a device tool inside and outside the sandbox | Pending |
+
+**Decided later (not part of this phase until then):** a script to measure tokens and time from a session's transcript; the test of
+the device tool inside and outside the sandbox; the model and budget of the skills' agent evaluation (`docs/skills-evals.md`).
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-09 | Phase 17 registered (17.0): output, traceability and write safety, from a real two-platform mobile test; tasks 17.1–17.9 grouped by dependency; 17.1 (traceable results) in review. |
 | 2026-11-08 | Phase 16 (consolidation for the proof of concept) and the product scope: Claude Code with eight skills, no interface of its own; `qa-ui`, the hub and remote execution outside this version; the three trackers in scope, with their real state in `tracker-validation.md`. |
 | 2026-11-02 | 15.8: daily use of the mobile flow (first session on a real workspace): the case library checked before a result is written, `run_log.py remove`, one check of the target, the route of a mobile-only project, the roles of a build, `compact_context.py`, streaming samples; methodology v2.11, `technique-mobile.md` v1.7. Unit tests 1133 → 1176. |
 | 2026-11-01 | 15.7: consolidation of the audit; methodology v2.10. Unit tests 1116 → 1133. |
