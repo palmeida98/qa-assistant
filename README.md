@@ -76,9 +76,10 @@ Safeguards against unintended writes, each with tests (none replaces the person'
 - **Destructive-command guard** (`scripts/guard_destructive.py`, a Claude Code `PreToolUse` hook you install yourself,
   [docs/technique-destructive-guard.md](docs/technique-destructive-guard.md)): blocks recursive removals and scripts that
   contain them outside a scratch directory. It is a text heuristic and can give false positives.
-- **Result identity and approval files:** `run_log.py` refuses a result already applied from another batch, and a correction
-  of an applied execution needs an explicit `revision_of`; `scripts/check_approval_files.py` checks approval files before an
-  apply.
+- **Result identity:** the Excel apply refuses a result already applied from another batch, and a correction of an applied
+  execution needs an explicit `revision_of` link (`run_log.py resolve` writes it).
+- **Review files:** `scripts/check_approval_files.py` is a read-only, heuristic check of plans and comment drafts for
+  truncation, wrong counts and mismatched hashes. You run it; nothing calls it automatically.
 - **Proof and coverage:** `run_log.py add --observed/--claimed/--inferred` and `--requires-comparison` mark what was seen;
   `scripts/ac_coverage.py` and `qa_report.py audit` cross acceptance-criteria maps with the workbook and the run logs, and
   never report complete coverage for results under review.
