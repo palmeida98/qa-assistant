@@ -24,7 +24,9 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 - Proof (plan Q2, 10.11.2026): `add` takes `--observed` (seen on screen, in a log or in the evidence; `label: text`),
   `--claimed` (the assistant under test said it; not verified), `--inferred` (concluded, not seen) and `--requires-observed
   LABEL` (what the case needs to have been observed). The result keeps them in `proof`. The audit flags a Pass whose
-  `proof` has nothing observed or lacks a required observation; a result without `proof` (all the earlier ones) is only
+  `proof` has nothing observed or lacks a required observation, and (phase 19) one that depends on a comparison
+  (`--requires-comparison SUBJECT`) without `before SUBJECT: ...` and `after SUBJECT: ...` observations; an absence seen
+  directly (`--observed-absence`) is listed apart, not as a comparison; a result without `proof` (all the earlier ones) is only
   counted, never judged or rewritten.
 - Times. Every item has "ts", the time of the EXECUTION (methodology 7.1), and "recorded_at", the time the item was
   written. `add` without --executed-at records an execution that is happening now: ts = recorded_at = the clock. An
@@ -191,6 +193,22 @@ def _with_mode(doc: dict, mode: str) -> tuple[dict, bool]:
     return {"mode": mode, **{k: v for k, v in doc.items() if k != "mode"}}, True
 
 
+def check_destination(proj: dict, name: str, doc: dict | None) -> None:
+    """Q1 (phase 19): before anything is written to a run log, the workbook of the batch must be unambiguous. It uses the
+    one rule of the apply (`route_workbook`) and stops when the project has several workbooks and the batch's name and
+    run block do not say one platform, or say different ones. A project with a single workbook, and the reading of old
+    run logs, are not affected; nothing is chosen by elimination."""
+    if proj.get("tracker") != "excel":
+        return
+    from adapters.excel.base import route_workbook, workbook_patterns
+    if not workbook_patterns(proj.get("excel") if isinstance(proj.get("excel"), dict) else {}):
+        return
+    run = (doc or {}).get("run")
+    route = route_workbook(proj, name, run if isinstance(run, dict) else None, environ={})
+    if route.problem:
+        raise UsageError(f"nothing was written: {route.problem}")
+
+
 def set_mode(workspace: str, batch: str, mode: str) -> tuple[str, str | None, bool]:
     """Writes the run log's mode before its first result: (path, previous mode, changed). Refused when the batch was
     applied, or has results (another mode, or none)."""
@@ -207,6 +225,7 @@ def set_mode(workspace: str, batch: str, mode: str) -> tuple[str, str | None, bo
             if where:
                 raise Refused(f"{name} was already {where}: it is never changed")
             doc = read_log(path)
+            check_destination(proj, name, doc)
             previous = doc.get("mode")
             doc, changed = _with_mode(doc, mode)
             if changed:
@@ -409,6 +428,7 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
     if where:
         raise Refused(f"{name} was already {where}: it is never changed; write the correction to a new batch, "
                       f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
+    check_destination(proj, name, read_log(run_log_path(workspace, name)))
     statuses = vocabulary(proj)
     if not case.strip():
         raise UsageError("the case ID is empty")
@@ -454,11 +474,13 @@ def check_proof(proof: dict | None) -> dict | None:
     """The proof block of a result (plan Q2, 10.11.2026): what was OBSERVED (seen on screen, in a log or in the
     evidence), what the assistant under test CLAIMED (what the assistant said; not verified) and what was INFERRED (concluded
     from the observed, not seen), plus `requires_observed`: the labels of what the case needs to have been observed to be
-    a Pass. Each entry is a short text, an observed one optionally `label: text`. Returns None for no proof."""
+    a Pass; `requires_comparison`: the subjects whose conclusion depends on a comparison, each needing an observation
+    `before <subject>: ...` and another `after <subject>: ...` (Q2, phase 19); `absent_observed`: an absence seen directly
+    (e.g. "chat: no card on screen"), which is not a comparison. Each entry is a short text, an observed one optionally `label: text`. Returns None for no proof."""
     if not proof:
         return None
     out: dict = {}
-    for kind in (*PROOF_KINDS, "requires_observed"):
+    for kind in (*PROOF_KINDS, "requires_observed", "requires_comparison", "absent_observed"):
         values = [str(v).strip() for v in (proof.get(kind) or []) if str(v).strip()]
         if values:
             out[kind] = list(dict.fromkeys(values))
@@ -480,6 +502,13 @@ def proof_gaps(item: dict) -> list[str]:
         want = str(label).strip().casefold()
         if not any(o.strip().casefold() == want or o.strip().casefold().startswith(want + ":") for o in observed):
             gaps.append(f"required observation missing: {label}")
+    for subject in proof.get("requires_comparison") or []:
+        want = str(subject).strip().casefold()
+        missing = [w for w in ("before", "after")
+                   if not any(o.strip().casefold().startswith(f"{w} {want}") for o in observed)]
+        if missing:
+            gaps.append(f"comparison required for {subject}: observation of {' and '.join(missing)} missing "
+                        f"(record `{missing[0]} {subject}: ...` with its evidence)")
     return gaps
 
 
@@ -1139,6 +1168,11 @@ def main(argv=None) -> int:
                    help="what was INFERRED from the observed (not seen); repeat the option")
     p.add_argument("--requires-observed", action="append", metavar="LABEL",
                    help="a label that must appear as an observation for a Pass to be sound (audit flags a Pass without it)")
+    p.add_argument("--requires-comparison", action="append", metavar="SUBJECT",
+                   help="the Pass depends on a comparison: record `before SUBJECT: ...` and `after SUBJECT: ...` "
+                        "observations (the audit flags a Pass without both)")
+    p.add_argument("--observed-absence", action="append", metavar="TEXT",
+                   help="an ABSENCE seen directly (e.g. `chat: no card on screen`); kept apart from a comparison")
     p.add_argument("--proposed", action="store_true",
                    help="the case is only PROPOSED in cases/*.json (not yet in the workbook): record its result, marked "
                         "case_pending_add; the apply refuses it until the case is added")
@@ -1276,7 +1310,9 @@ def main(argv=None) -> int:
                              a.environment, a.build, replace=a.replace, mode=a.mode,
                              executed_at=a.executed_at, executed_source=a.executed_source, ended_at=a.ended_at,
                              proof={"observed": a.observed, "claimed": a.claimed, "inferred": a.inferred,
-                                    "requires_observed": a.requires_observed}, proposed=a.proposed)
+                                    "requires_observed": a.requires_observed,
+                                    "requires_comparison": a.requires_comparison,
+                                    "absent_observed": a.observed_absence}, proposed=a.proposed)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1

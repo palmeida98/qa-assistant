@@ -496,6 +496,20 @@ class Proof(Fixture):
         flags = [t for t, must in qr._audit_flags(e) if must]
         self.assertTrue(any(t.startswith("Pass without the proof its case requires") for t in flags))
 
+    def test_a_pass_that_depends_on_a_comparison_needs_before_and_after(self):
+        self.add("TC-SHOP-001", "Pass", proof={"observed": ["after documents: 3"], "requires_comparison": ["documents"]})
+        self.add("TC-SHOP-002", "Pass", proof={"observed": ["before documents: 3", "after documents: 3"],
+                                               "requires_comparison": ["documents"]})
+        self.add("TC-SHOP-003", "Pass", proof={"observed": ["panel: no duplicate card"],
+                                               "absent_observed": ["panel: no duplicate card"]})
+        e = self.entry()
+        self.assertEqual(e["proof_problems"], [("TC-SHOP-001: comparison required for documents: observation of before "
+                                                "missing (record `before documents: ...` with its evidence)")])
+        self.assertEqual(e["absence_observed"], ["TC-SHOP-003: panel: no duplicate card"])
+        flags = dict(qr._audit_flags(e))
+        self.assertIs(flags["absence observed directly (not a comparison): TC-SHOP-003: panel: no duplicate card"], False)
+        self.assertTrue(e["to_fix"])
+
     def test_results_without_a_proof_block_are_only_counted_never_judged(self):
         self.add("TC-SHOP-001", "Pass")                                   # recorded without proof: as every earlier result
         self.add("TC-SHOP-002", "Fail", proof={"inferred": ["x"]})         # not a Pass: never judged

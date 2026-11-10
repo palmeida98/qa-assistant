@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (closing Q1, Q2 and Q3, 2026-11-10)
+- `run_log.py add` and `mode` use the apply's workbook rule (`route_workbook`): with several workbooks, an ambiguous or
+  contradictory destination is refused before anything is written; single-workbook projects and old run logs are unchanged.
+  Tests: `tests/test_run_log_destination.py`.
+- Proof: `run_log.py add --requires-comparison SUBJECT` (needs `before SUBJECT:` and `after SUBJECT:` observations) and
+  `--observed-absence TEXT`; the audit flags a Pass that lacks a comparison side and lists an absence seen directly apart.
+- `qa_report.py audit` shows the criteria coverage of `analysis/ac_map_*.json` per platform (that platform's workbook and run
+  logs, `ac_coverage.py report --platform`), the same case with different results between platforms, and says «no map» apart from
+  «uncovered criterion». It never changes the batches' `to_fix`. Tests: `tests/test_ac_audit.py`.
+
 ### Added (batch 2, phase D and guard hardening, 2026-11-10)
 - `adapters/excel/add_cases.py --platform android|ios|both|<platform>`: the destination workbook comes from project.yaml (no
   `QA_WORKBOOK`, no copy); `both` validates every workbook before writing and has one combined token; a case that says another

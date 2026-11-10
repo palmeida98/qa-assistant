@@ -553,6 +553,8 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
         passes = [r for r in b["results"] if str(r.get("status")) in pass_words]
         proof_problems = sorted(f"{r['tc']}: {'; '.join(proof_gaps(r))}" for r in passes if proof_gaps(r))
         no_proof_class = sorted(str(r["tc"]) for r in passes if not isinstance(r.get("proof"), dict))
+        absence_seen = sorted(f"{r['tc']}: {'; '.join(r['proof']['absent_observed'])}" for r in passes
+                              if isinstance(r.get("proof"), dict) and r["proof"].get("absent_observed"))
         applied = view(b["name"], b.get("run"))
         shared = _shared_with_applied(every, view, b["name"]) if not (applied and not is_unknown(applied)) else {}
         entry = {"batch": b["name"], "platform": platform_of(b, proj), "build": build_of(b), "mode": b.get("mode"),
@@ -562,6 +564,7 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
                  "evidence_counts": counts_ev, "proposed_bugs": proposed, "without_ts": without_ts,
                  "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority,
                  "proof_problems": proof_problems, "pass_without_proof_class": no_proof_class,
+                 "absence_observed": absence_seen,
                  "derived_from": b.get("derived_from") if isinstance(b.get("derived_from"), dict) else None,
                  "already_applied_elsewhere": shared}
         settled = bool(applied) and not is_unknown(applied)     # unknown is not applied (audit 06.11.2026)
@@ -569,6 +572,12 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
                                or ((questions or proposed or no_priority or proof_problems) and not settled))
         out["problems"] += int(entry["to_fix"])
         out["batches"].append(entry)
+    import ac_coverage
+    known = [e["platform"] for e in out["batches"] if e["platform"] != UNKNOWN]
+    try:
+        out["ac_coverage"] = ac_coverage.audit_maps(workspace, known)
+    except Exception as e:          # noqa: BLE001 - the criteria coverage never stops the audit of the batches
+        out["ac_coverage"] = {"maps": [], "unreadable": [f"{type(e).__name__}: {e}"]}
     return out
 
 
@@ -598,6 +607,8 @@ def _audit_flags(e: dict) -> list[tuple[str, bool]]:
         flags.append((f"bugs proposed, to review: {', '.join(e['proposed_bugs'])}", True))
     if e.get("proof_problems"):
         flags.append((f"Pass without the proof its case requires: {'; '.join(e['proof_problems'])}", True))
+    if e.get("absence_observed"):
+        flags.append((f"absence observed directly (not a comparison): {'; '.join(e['absence_observed'])}", False))
     if e.get("already_applied_elsewhere"):
         shared = "; ".join(f"{c} in {b}" for c, b in sorted(e["already_applied_elsewhere"].items()))
         flags.append((f"result(s) already applied from another batch or corrected without a revision link (applying this batch would be refused): {shared}", True))
@@ -651,6 +662,9 @@ def render_audit(report: dict, detail: bool = True) -> str:
         n = len(report["batches"])
         lines.insert(0, f"AUDIT {n} batch(es): {report['problems']} to fix · {summary_clean} with nothing that needs "
                         "a decision (every batch and flag: --detail)")
+    if detail and report.get("ac_coverage") is not None:
+        import ac_coverage
+        lines += ac_coverage.audit_lines(report["ac_coverage"])
     lines.append(f"{report['problems']} batch(es) to fix before applying" if report["problems"] else
                  "nothing to fix: every batch is consistent (applying still needs the user's confirmation)")
     return "\n".join(lines) + "\n"
