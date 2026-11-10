@@ -1891,7 +1891,7 @@ Why: the first daily-use session on a real workspace (3 cases, a Redmi with the 
 | D-16 | confirmed (cost) | `context.md` had 95 000 characters, 44 000 of them in 34 dated entries of the current state | `scripts/compact_context.py`: the older dated entries move word for word to `archive/context/`, after a copy of the whole file; dry run by default; an entry with a rule is flagged first (words from `context.rule_words` of `project.yaml`) | `test_compact_context` (13) |
 | D-17 | gap | A complete final answer cannot show streaming, and the only trace of it in L46 is one capture in the middle | `send --samples N`: timed samples, limited in number and seconds, partial text detected, a failed capture told apart from a failure of the app | `test_device.StreamingSamples` (5) |
 
-Not changed: the results already applied. TC-SHOP-001 of the L46 expects a progressive answer, and its evidence is indirect (a capture in the middle and dumps that failed while the screen animated): a specific review, or a retest with `--samples`, is a decision of the team and is not made here. The button without an accessible name is an observation about the app, kept in the workspace, not a bug. The 15.7 consolidation had dropped the heading of the change log below; it is back.
+Not changed: the results already applied. TC-SHOP-001 of a pilot batch expects a progressive answer, and its evidence is indirect (a capture in the middle and dumps that failed while the screen animated): a specific review, or a retest with `--samples`, is a decision of the team and is not made here. The button without an accessible name is an observation about the app, kept in the workspace, not a bug. The 15.7 consolidation had dropped the heading of the change log below; it is back.
 
 ## Phase 16 — Consolidation for the proof of concept (08.11.2026)
 
@@ -1950,7 +1950,7 @@ findings relevant to the framework are recorded here, in generic terms.
   Recovery: the git history of `main`.
 - Removed: the worktree of the old iOS branch (clean, no process) and the branches `feat/ios-wda-backend` (kept reachable by the
   annotated tag `archive/ios-wda-backend-20261031`, which holds both of its commits), `claude/ci-optimisation`,
-  `claude/qa-assistant-final-validation-5c433a`, `claude/qa-assistant-skills-051be5`, `reset-skills` and `plan/qa-hub` on the remote,
+  two `claude/*` task branches, `reset-skills` and `plan/qa-hub` on the remote,
   and the merged local ones.
 - **Not removed (still open):** the worktree `.claude/worktrees/qa-assistant-skills-config-a2fbfd` and its branch
   `claude/qa-assistant-analysis-7549a1`, because a session was working in it; and the local branches `plan/qa-hub` and `reset-skills`,

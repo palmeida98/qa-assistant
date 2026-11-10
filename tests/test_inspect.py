@@ -73,7 +73,7 @@ class Inspect(unittest.TestCase):
         ws.title = "Chat"
         ws.append(["ID", "Titre", "Profil", "Préconditions", "Étapes", "Résultat attendu", "État", "Remarques"])
         for i in range(1, 7):
-            ws.append([f"TC-CHAT-{i:03d}", f"Case {i}", "user", "a session", "1. Send", "it is shown",
+            ws.append([f"TC-SHOP-{i:03d}", f"Case {i}", "user", "a session", "1. Send", "it is shown",
                        STATUSES[i % 3], None])
         dv = DataValidation(type="list", formula1='"' + ",".join(STATUSES) + '"')
         dv.add("G2:G200")
