@@ -5,6 +5,107 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (batch 2, phase D and guard hardening, 2026-11-10)
+- `adapters/excel/add_cases.py --platform android|ios|both|<platform>`: the destination workbook comes from project.yaml (no
+  `QA_WORKBOOK`, no copy); `both` validates every workbook before writing and has one combined token; a case that says another
+  platform is refused for that destination; an ID proposed with different content by another `cases/*.json` that is not yet in the
+  target workbook is refused. Tests: `tests/test_add_cases_platform.py`.
+- `run_log.py add --proposed`: records the result of a case that is only proposed in `cases/*.json` (marked `case_pending_add`);
+  the apply refuses it, naming `add_cases`, until the case is in the workbook. Tests: `tests/test_run_log_proposed.py`.
+- `adapters/excel/add_columns.py` + case-model fields `pbi_id` and `qa_task`: traceability columns (PBI ID, QA task, origin,
+  platform) added to the case sheets with a dry run, a token, a review file and a control-sheet record; only headers are added.
+  Tests: `tests/test_add_columns.py` (checked on a scratch copy of a real workbook: cross-check 0 problems).
+- `scripts/ado_write_guard.py`: refuses a credential with whitespace or control characters inside (writes disabled; the status shows
+  `rejected: ...`, never the value); the status reports `credential_expiry` (days left, warning at <= 3 days) from optional ISO-date
+  env vars; read-only tools `ado_guard_preview_comment` (same code path as add_comment: duplicate, SHA-256, would_write, reasons)
+  and `ado_guard_render_markdown` (deterministic, escaped Markdown to HTML with its hash; never applied automatically); optional
+  publication reports (`--report-dir` / `ADO_GUARD_REPORT_DIR`): one JSON per successful comment or attachment with hashes,
+  read-back result and revisions, never text or content. 47 new tests; bug creation stays disabled by default.
+- `scripts/ado_write_guard.py` FIX found against the real service: with `$expand=relations` the API returns the work item id at the
+  top level and not in `fields`; the parent check now compares the top-level id (and `System.Id` only when present), and the fake
+  transport of the tests returns the real shape. Before this, the bug-creation preview was blocked for every parent.
+- `scripts/device.py`: `check` prints `device state:` (no-device / unauthorized / offline / other / several, one `next:` action
+  each; exit codes unchanged), `screen:` (awake / locked / asleep / unknown) and `notifications:`; tap/hold --xy, swipe and the tap
+  of send refuse (REFUSED, exit 3) when the notification shade, a heads-up, a permission dialog or the developer settings is in
+  front; `find_personal_data` (e-mail / phone-like counts, never values) makes shot, dump --capture and send --capture warn and
+  `--require-clean` refuse to save; `--caption` writes `evidence_manifest.jsonl`. The heuristic ignores the project's synthetic test identifiers (`QA-AUTO-<date>-<n>`), which
+  it used to report as a phone number on a real screen, and still finds real numbers next to letters, identifiers and punctuation (regression
+  tests with the observed identifiers, numbers with and without country code, several separators and mixed cases). Tests: `tests/test_device_diagnostics.py`
+  (66, injected adb output only; nothing was proven on a real device).
+- `scripts/ado_write_guard.py --probe-on-start` (opt-in, or `ADO_GUARD_PROBE_ON_START=1`): one read with the write credential at startup, reported
+  in the status as `startup_probe`; never fatal. `run_log.py progress` (already present) is the per-batch resume. `device.py check` was run read-only on a real
+  Android phone: device state, screen, foreground app, notification permission and build read correctly.
+- `docs/procedures/rules.md` §16 and `planning.md` step 1d: corrections of applied results (L5), new cases (Q4), traceability
+  columns (L1), builds (phase B) and bugs (phase C) in one place.
+
+### Changed (public-repository hygiene, 2026-11-10)
+- `scripts/ado_write_guard.py`: the Azure DevOps organisation is configuration (`--org` or `ADO_GUARD_ORG`), never a constant of
+  the code or of the tests; with neither the server does not start (exit 2, nothing read or written); the name must be a plain
+  organisation name (never a URL or a path). The tests use a fictional organisation. Tests: `OrganisationConfig` in
+  `tests/test_ado_write_guard.py`.
+
+### Added (phase B, Slack build search, read only, 2026-11-10)
+- `scripts/slack_build_messages.py`: offline parser of the text a Slack connector returns (detailed format) into the message list
+  of `build_candidates.py`; keeps the exact `Message TS` (blocks without it are skipped, never approximated), drops names, e-mails
+  and user ids; builds permalinks only when the workspace domain is given. No network, no credentials.
+- `scripts/build_candidates.py`: release-pipeline notifications («Deployment on stage … succeeded», `Release-N`) are listed
+  apart (`--deployments`) and are never build candidates: the pipeline release id is not an app build number.
+- `docs/procedures/builds.md`: procedure, scope, permissions (local deny of the write tools), the four things never confused
+  (announced release, pipeline deployment, app distribution, installed build) and the limitations.
+  Tests: `tests/test_slack_build_messages.py`.
+
+### Added (first batch of improvements after the six-PBI cycle, 2026-11-10)
+- `python -m adapters.excel.annotate <workspace> <annotations.json> [--dry-run] [--expect TOKEN]` (technique-excel.md §4.2): adds a
+  dated note to the Notes column of cases that already have a result, without touching their status or observed result (checked
+  before saving); dry run with a token, review next to the file (never in runs/), control-sheet record, same annotations or a
+  note already in the case refused. Tests: `tests/test_excel_annotate.py`.
+- `scripts/guard_destructive.py` (docs/technique-destructive-guard.md): Claude Code PreToolUse hook that blocks recursive deletion
+  outside the session's scratchpad (rm -r, rmtree, find -delete, git clean; in commands, python files the command runs and
+  files being written). NOT installed by default. Tests: `tests/test_guard_destructive.py`.
+- `procedures/rules.md` §12 (deleting), §13 (test accounts: state and reason only) and §14 (communication: the final report of a
+  phase; interrupt only for a block, a login/consent/permission, an approval or a decision); planning and mobile procedures
+  check the account first.
+- `scripts/build_candidates.py`: parses fictional (or pasted) build announcements into candidates that keep the announced release,
+  the distributed build and the build observed on the device apart; no Slack access. Tests: `tests/test_build_candidates.py`.
+
+### Added (batch 2, phase C: controlled creation of bugs in the guard, 2026-11-10; DISABLED by default)
+- `scripts/ado_write_guard.py`: `ado_guard_preview_bug` (read only: all the checks, the exact JSON Patch and the payload hash) and
+  `ado_guard_create_bug` (one bug; off unless the launcher sets `ADO_GUARD_ALLOW_BUG_CREATE=1`). The parent must be a PBI or a QA task of
+  the project assigned to the verified identity (stable id); the bug is born assigned to that identity (unique name read from the parent) with
+  the parent's area and iteration; closed schema; payload hash; Bug type check; duplicate search (same parent and project, WIQL as a
+  read); parent revision re-read; ONE request with the Parent link; the result is read back. Atomicity of fields + link is NOT proven
+  (`ATOMICITY_PROVEN = False`): a bug without the link or different from the approved is reported with its id, never repaired, repeated
+  or deleted; after a lost or 5xx answer it looks for the bug and never resends. `Http.request(read=True)` lets a POST that only reads
+  use the read credential. Tests: `tests/test_ado_guard_bugs.py` (32, fictional). Docs: `docs/technique-ado-write-guard.md`.
+
+### Added (batch 2, phase A: integrity of results and approvals, 2026-11-10)
+- **Partial batches (Q1):** `run_log.py subset` copies chosen results unchanged into a new batch (`derived_from`: original, SHA-256,
+  cases, reason); each result has an identity (`result_key`) kept in the control sheet (`result_keys`, rebuilt from the run log for
+  older rows) and the apply refuses a result already applied from another batch; the audit lists the derivation and an overlap.
+- **Proof (Q2):** `run_log.py add --observed/--claimed/--inferred/--requires-observed` (`proof` block); the audit flags a Pass with
+  nothing observed or without a required observation and only COUNTS results with no proof block (never judged or rewritten).
+- **Criteria coverage (Q3):** `scripts/ac_coverage.py init/report`: criteria from the ticket memory, cases mapped by the planner,
+  verdicts (uncovered, not run, passed, partly passed, open), source `none`/`inferred` said, results under review shown.
+- **Approval files (Q5):** `scripts/check_approval_files.py` (cut files, fences, declared counts, commands with an ellipsis, declared
+  hashes); the dry runs of apply, add-cases and annotate give the same token for the same inputs (tests).
+- **Review of the phase (same day):** an older application with no `result_keys` and no run log is UNVERIFIABLE: the dry run names its origin and
+  the apply is blocked; rows of add-cases and annotate are recognised by their file and hash (and now written with `[]`); correcting
+  the status or the text of an applied execution (same case and time) is refused without a `revision_of` link to the batch that
+  applied it (`execution_key`); `ac_coverage.py report` shows workbook status, latest run-log result and the under-review note apart and
+  never reports complete coverage while one is under review or divergent (`--no-run-logs` says what it cannot see).
+- **Second review (same day):** a result without a time of execution is never given one: accepted for a case with nothing applied, else it
+  needs `revision_of` or a time with its source (a timed result after an untimed application must be later than the moment that
+  application was written); a control row is rebuilt only from a run log PROVEN to be what was applied (hash of its results equals the
+  row's hash, or `translated_from`): a divergent file makes the row unverifiable, and with stored keys a changed file is a warning;
+  `python -m adapters.excel.reconcile <workspace> <batch_id> --from <file> [--dry-run] [--expect TOKEN]` writes the missing keys of ONE row
+  only from a file proven by the hash (never accepts an unproven origin); `ac_coverage` maps carry a short `why` per association, a
+  `source` per criterion and `related` verifications (a `required` one in Question stops a totally covered criterion).
+- Tests: `tests/test_batch_integrity.py` (52).
+
+### Added (guarded Azure DevOps writes, 2026-11-09)
+- `scripts/ado_write_guard.py`: MCP server (stdio) with four tools (status, check, one comment, one attachment) that writes only to work items of the configured project assigned to a verified identity id; fails closed; reads with a separate read credential; `docs/technique-ado-write-guard.md`; `tests/test_ado_write_guard.py` (26 tests).
+
+
 ### Changed (audit and build lines, phase 17.4 and PR-5, 2026-11-09)
 - **The audit presents evidence apart** (`qa_report.py audit`): valid, marked invalid (with the reason; kept on file, never
   proof) and missing, with the counts per batch; a result whose only evidence is invalid is to fix. JSON carries the lists.

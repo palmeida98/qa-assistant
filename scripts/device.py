@@ -64,6 +64,12 @@ technique-mobile.md §1.3), for the conversational mode (technique-mobile.md §2
   input is always WebDriverAgent (scripts/device_ios.py); the same subcommands and the same privacy rule, the
   foreground being read from WDA. `back` is a swipe from the left edge; `link` is not available.
 
+- Diagnostics (technique-mobile.md 1.3): `check` prints `device state:` (ok | no-device | unauthorized | offline |
+  other | several), `screen:` (awake | locked | asleep | unknown) and `notifications:` (granted | denied | unknown),
+  each blocker with ONE `next:` advice; it never re-plugs, restarts adb, unlocks or grants. On Android, tap/hold --xy,
+  swipe and the tap of `send` refuse (REFUSED, exit 3) when system UI is in front. `shot`, `dump --capture` and
+  `send --capture` warn about personal data on the screen (counts only), accept --require-clean and --caption.
+
 Exit codes:
   0  ok
   2  invalid usage or configuration (e.g. no mobile.app_id, several devices
@@ -149,6 +155,29 @@ class NoTarget(Exception):
 
 class NotFound(Exception):
     """Element not found on the screen (code 4)."""
+
+
+class Refused(NoTarget):
+    """A command refused before touching the device further: system UI in front of the app, personal data in a
+    capture that must be clean (code 3, like every refusal of the foreground guard)."""
+
+
+class NoDevice(NoTarget):
+    """No usable device, which case it is (`kind`) and the one action that fixes it (code 3)."""
+
+    def __init__(self, message: str, kind: str, action: str):
+        super().__init__(message)
+        self.kind, self.action = kind, action
+
+
+class SeveralDevices(UsageError):
+    """Several devices ready and none chosen (code 2, as always)."""
+
+    kind = "several"
+
+    def __init__(self, message: str, action: str):
+        super().__init__(message)
+        self.action = action
 
 
 # what happened to a text when typing or sending stopped (docs/pilot-improvements-2026-11-07.md D)
@@ -292,27 +321,187 @@ def on_ios(fn, cfg: dict, *args):
         raise NotFound(str(e)) from None
 
 
-def resolve_serial(wanted: str | None) -> str:
-    """The serial to use: the one asked for, if connected; otherwise the only device connected."""
-    rows = [ln.split() for ln in adb(None, "devices").splitlines()[1:] if ln.strip()]
-    ready = [r[0] for r in rows if len(r) >= 2 and r[1] == "device"]
+# --- which device, and why not (check) -----------------------------------------------------------------------------
+# One action per case, said as advice: the tool never re-plugs, restarts adb, accepts a prompt or unlocks a phone.
+DEVICE_ACTIONS = {
+    "no-device": "check the USB cable, set the phone's USB mode to file transfer (not charging only) and turn on "
+                 "USB debugging in Developer options",
+    "unauthorized": "unlock the phone and accept the 'Allow USB debugging?' prompt on it",
+    "offline": "unplug and plug the cable again; `adb kill-server` is the user's call, this tool never runs it",
+    "other": "the device is in a state adb cannot drive: reconnect it and check it with `adb devices`",
+    "several": "choose one with --serial, QA_MOBILE_SERIAL or mobile.serial",
+}
+SCREEN_ACTIONS = {
+    "locked": "the user unlocks the phone (this tool never unlocks it), then repeat the check",
+    "asleep": "the screen is off: the user wakes and unlocks the phone (this tool never does), then repeat the check",
+}
+
+
+@dataclass(frozen=True)
+class DeviceDiagnosis:
+    kind: str                    # ok | no-device | unauthorized | offline | other | several
+    serial: str | None           # the device to use when kind is ok
+    message: str
+    action: str
+
+
+def parse_adb_devices(text: str) -> list[tuple[str, str]]:
+    """(serial, state) for each row of `adb devices`; the header and the daemon's lines are dropped. A state of two
+    words ("no permissions") is kept whole."""
+    rows = []
+    for ln in text.splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith(("List of devices", "*", "adb server")):
+            continue
+        parts = ln.split(None, 1)
+        if len(parts) == 2:
+            rows.append((parts[0], parts[1].split("  ")[0].split(" usb:")[0].split(" product:")[0].strip()))
+    return rows
+
+
+def diagnose_devices(adb_devices_text: str, wanted: str | None = None) -> DeviceDiagnosis:
+    """Why there is, or is not, one device to drive: from the output of `adb devices`. Pure."""
+    rows = parse_adb_devices(adb_devices_text)
+    ready = [s for s, st in rows if st == "device"]
     if wanted:
         if wanted in ready:
-            return wanted
-        state = next((r[1] for r in rows if r[0] == wanted and len(r) >= 2), "not connected")
-        raise NoTarget(f"device {wanted}: {state}")
-    if not ready:
-        raise NoTarget("no Android device/emulator connected (adb devices)")
+            return DeviceDiagnosis("ok", wanted, "", "")
+        state = next((st for s, st in rows if s == wanted), "not connected")
+        kind = ("unauthorized" if state == "unauthorized" else "offline" if state in ("offline", "authorizing")
+                else "no-device" if state == "not connected" else "other")
+        return DeviceDiagnosis(kind, None, f"device {wanted}: {state}", DEVICE_ACTIONS[kind])
     if len(ready) > 1:
-        raise UsageError(f"several devices connected ({', '.join(ready)}): choose one with --serial, "
-                         "QA_MOBILE_SERIAL or mobile.serial")
-    return ready[0]
+        return DeviceDiagnosis("several", None, f"several devices connected ({', '.join(ready)}): choose one with "
+                               "--serial, QA_MOBILE_SERIAL or mobile.serial", DEVICE_ACTIONS["several"])
+    if ready:
+        return DeviceDiagnosis("ok", ready[0], "", "")
+    for kind, states in (("unauthorized", ("unauthorized",)), ("offline", ("offline", "authorizing")),
+                         ("other", None)):
+        hit = next(((s, st) for s, st in rows if states is None or st in states), None)
+        if hit:
+            return DeviceDiagnosis(kind, None, f"no Android device ready: {hit[0]} is {hit[1]}", DEVICE_ACTIONS[kind])
+    return DeviceDiagnosis("no-device", None, "no Android device/emulator connected (adb devices)",
+                           DEVICE_ACTIONS["no-device"])
+
+
+def resolve_serial(wanted: str | None) -> str:
+    """The serial to use: the one asked for, if connected; otherwise the only device connected."""
+    d = diagnose_devices(adb(None, "devices"), wanted)
+    if d.kind == "ok":
+        return d.serial
+    if d.kind == "several":
+        raise SeveralDevices(d.message, d.action)
+    raise NoDevice(d.message, d.kind, d.action)
+
+
+def window_text(serial: str) -> str:
+    return adb(serial, "shell", "dumpsys", "window")
+
+
+def focus_of(window_dump: str) -> str:
+    """The focused window in the text of `dumpsys window`, e.g. com.demoshop.app/com.demoshop.app.MainActivity."""
+    m = FOCUS.search(window_dump)
+    return m.group(1).split()[-1] if m and m.group(1).split() else ""
 
 
 def foreground(serial: str) -> str:
     """The focused window, e.g. com.demoshop.app/com.demoshop.app.MainActivity ('' if none)."""
-    m = FOCUS.search(adb(serial, "shell", "dumpsys", "window"))
-    return m.group(1).split()[-1] if m and m.group(1).split() else ""
+    return focus_of(window_text(serial))
+
+
+# Whether the phone can be driven at all: best effort from `dumpsys power` and `dumpsys window`; unknown when neither says.
+KEYGUARD_SHOWING = re.compile(r"(?:isKeyguardShowing|mKeyguardShowing|mShowingLockscreen|KeyguardShown)\s*[=:]\s*true")
+WAKEFULNESS = re.compile(r"mWakefulness\s*=\s*(\w+)")
+
+
+def parse_screen_state(power_text: str = "", window_dump: str = "") -> str:
+    """awake | locked | asleep | unknown. `asleep` covers Asleep and Dozing; the lock only counts while it is awake
+    (a sleeping phone is locked as well, but the useful fact is that the screen is off). Pure."""
+    m = WAKEFULNESS.search(power_text)
+    wake = m.group(1).lower() if m else ""
+    if wake in ("asleep", "dozing"):
+        return "asleep"
+    if KEYGUARD_SHOWING.search(window_dump) or KEYGUARD_SHOWING.search(power_text) or \
+            "keyguard" in focus_of(window_dump).lower():
+        return "locked"
+    return "awake" if wake == "awake" else "unknown"
+
+
+NOTIFICATION_PERMISSION = re.compile(r"android\.permission\.POST_NOTIFICATIONS\s*:\s*granted=(true|false)")
+
+
+def parse_notification_permission(package_dump: str) -> str:
+    """granted | denied | unknown, from the text of `dumpsys package <app>`: the runtime permission POST_NOTIFICATIONS
+    (Android 13+). Whether the app's notifications are switched off in Settings is another fact and is not read.
+    `unknown` when the permission is not listed (older Android, an app that does not declare it) or the text is
+    empty. Only the first listing counts (the user running the app). Pure."""
+    m = NOTIFICATION_PERMISSION.search(package_dump or "")
+    return "unknown" if not m else "granted" if m.group(1) == "true" else "denied"
+
+
+# --- system UI in front of the app (never tap on it by coordinates) -----------------------------------------------
+RESUMED = re.compile(r"(?:mResumedActivity|topResumedActivity|ResumedActivity)[:=]?\s*ActivityRecord\{[0-9a-f]+ "
+                     r"u\d+ (\S+) t\d+")
+UI_NODE = re.compile(r'<node\b[^>]*>')
+SYSTEMUI_PKG = "com.android.systemui"
+
+
+def resumed_components(activity_dump: str) -> list[str]:
+    """The component of each resumed activity in `dumpsys activity` text (package/Activity). Pure."""
+    return RESUMED.findall(activity_dump or "")
+
+
+def classify_system_ui(window_dump: str = "", activity_dump: str = "", ui_xml: str = "") -> tuple[str, str] | None:
+    """What system UI is in front of the app, as (kind, what was seen), or None when nothing says so. From the focused
+    window of `dumpsys window`, the resumed activities of `dumpsys activity` and, when one was just read, the
+    uiautomator dump. Kinds: notification-shade, heads-up, permission-dialog, developer-settings, system-dialog.
+    Best effort: a heads-up banner is only recognised from the window name or from the nodes of a dump. Pure."""
+    focus = focus_of(window_dump)
+    components = [focus] if focus else []
+    components += resumed_components(activity_dump)
+    for comp in components:
+        pkg = comp.partition("/")[0]
+        low = comp.lower()
+        if pkg in PERMISSION_DIALOGS or "grantpermissions" in low or pkg == "com.lbe.security.miui":
+            return "permission-dialog", comp
+        if "usbdebugging" in low or "adbdebugging" in low or (pkg == SYSTEMUI_PKG and "activity" in low):
+            return "system-dialog", comp
+        if pkg == "com.android.settings" and ("development" in low or "developer" in low):
+            return "developer-settings", comp
+        if "heads" in low and "up" in low:
+            return "heads-up", comp
+        if pkg == SYSTEMUI_PKG or pkg.lower() in ("notificationshade", "statusbar", "quicksettings") or \
+                "notificationshade" in low:
+            return "notification-shade", comp
+    for ln in UI_NODE.findall(ui_xml or ""):
+        if f'package="{SYSTEMUI_PKG}"' not in ln:
+            continue
+        rid = re.search(r'resource-id="([^"]*)"', ln)
+        rid = rid.group(1).lower() if rid else ""
+        if re.search(r"heads_?up", rid):
+            return "heads-up", rid
+        if any(w in rid for w in ("quick_settings", "qs_panel", "notification_stack", "notification_panel")):
+            return "notification-shade", rid
+    return None
+
+
+SYSTEM_UI_LABELS = {"notification-shade": "the notification shade", "heads-up": "a heads-up notification",
+                    "permission-dialog": "a permission dialog", "developer-settings": "the developer settings",
+                    "system-dialog": "a system dialog"}
+
+
+def refuse_system_ui(cfg: dict, serial: str, action: str, ui_xml: str = "") -> None:
+    """Before a tap, hold, swipe or send by coordinates (Android): refuses (Refused, code 3) when system UI is in front
+    of the app, because a coordinate would land on it (the notification shade, the 'USB debugging connected' banner, a
+    permission or developer-settings screen). Reads only; nothing is touched when it refuses. A tap by text on a
+    permission dialog is not refused here: the text was read from that dialog on purpose."""
+    if ios_on(cfg):
+        return
+    found = classify_system_ui(window_text(serial), adb(serial, "shell", "dumpsys", "activity", "activities"), ui_xml)
+    if found:
+        kind, seen = found
+        raise Refused(f"{action} by coordinates refused: {SYSTEM_UI_LABELS[kind]} is in front of the app ({seen}); "
+                      "nothing was touched: the user closes it, then repeat")
 
 
 def guard(cfg: dict, serial: str, action: str, allow_dialogs: bool = False) -> None:
@@ -330,6 +519,44 @@ def guard(cfg: dict, serial: str, action: str, allow_dialogs: bool = False) -> N
         return
     raise NoTarget(f"{action} refused: the foreground is {window or 'nothing'!r}, not {cfg['app_id']}"
                    + (" (a permission dialog is never captured)" if pkg in PERMISSION_DIALOGS else ""))
+
+
+# --- personal data on the screen ----------------------------------------------------------------------------------
+# What the last screen read in this process contained, as categories and counts only (never the values): `shot` warns
+# about it, and `--require-clean` refuses to save a capture of it. `xml` is that dump, for the system-UI check.
+_LAST_SCREEN: dict = {"personal": None, "xml": ""}
+EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+")
+# A phone-like number is not glued to a word or an address before it, nor a decimal («3.912345678»); a dot after a letter is
+# fine («tel.912345678»). The synthetic test identifiers of the project (`QA-AUTO-<date>-<n>`: hyphen-separated alphanumeric
+# segments) are removed first: their date and counter are digits, not a phone number.
+PHONE_LIKE = re.compile(r"(?<![\w@])(?<!\d[.,])\+?\d[\d ().\-]{6,}\d(?!\w)")
+SYNTHETIC_ID = re.compile(r"QA-AUTO(?:-[A-Za-z0-9]+)+", re.IGNORECASE)
+DATE_LIKE = re.compile(r"^\d{4}[-./]\d{1,2}[-./]\d{1,2}|^\d{1,2}[-./]\d{1,2}[-./]\d{2,4}")
+
+
+def find_personal_data(text: str) -> dict[str, int]:
+    """Categories and counts of personal data in a UI text, never the values: {"email": n, "phone": n}, only the
+    categories found (an empty dict is clean). A phone-like number has 9 to 15 digits and is not a date; the check is a
+    heuristic and may over-report (an order number, a long id). A synthetic test identifier (`QA-AUTO-20261110-1001`) is
+    never a phone number, wherever it appears, and a real number next to one is still found (separated by a space, a comma,
+    a slash or a bracket); the limit is a number glued to the identifier by a hyphen, which reads as part of it. Pure."""
+    found: dict[str, int] = {}
+    text = text or ""
+    emails = EMAIL.findall(text)
+    if emails:
+        found["email"] = len(emails)
+    phones = 0
+    for m in PHONE_LIKE.finditer(SYNTHETIC_ID.sub(" ", EMAIL.sub(" ", text))):
+        digits = sum(ch.isdigit() for ch in m.group(0))
+        if 9 <= digits <= 15 and not DATE_LIKE.match(m.group(0)):
+            phones += 1
+    if phones:
+        found["phone"] = phones
+    return found
+
+
+def describe_personal(found: dict[str, int]) -> str:
+    return ", ".join(f"{k}: {v}" for k, v in sorted(found.items()))
 
 
 # --- reading the screen -----------------------------------------------------------------------------------------
@@ -376,8 +603,13 @@ def dump_xml(serial: str, tries: int = 3) -> str:
 def read_screen(cfg: dict, serial: str, allow_dialogs: bool = False) -> list[Node]:
     guard(cfg, serial, "dump", allow_dialogs)
     if ios_on(cfg):
-        return [Node(*t) for t in on_ios(wda.source, cfg)]
-    return parse_nodes(dump_xml(serial))
+        nodes = [Node(*t) for t in on_ios(wda.source, cfg)]
+        xml = ""
+    else:
+        xml = dump_xml(serial)
+        nodes = parse_nodes(xml)
+    _LAST_SCREEN.update(xml=xml, personal=find_personal_data("\n".join(n.text for n in nodes)))
+    return nodes
 
 
 def find(nodes: list[Node], text: str, index: int = 0) -> Node:
@@ -709,13 +941,62 @@ def check_name(name: str) -> None:
         raise UsageError(f"invalid capture name {name!r}: a file name, without folders")
 
 
-def shot(cfg: dict, serial: str, name: str, batch: str | None) -> str:
+MANIFEST_NAME = "evidence_manifest.jsonl"
+MAX_CAPTION = 300
+
+
+def check_caption(cfg: dict, caption: str | None) -> str | None:
+    """The caption of a capture, one line: refused (code 2) when it holds personal data or a value of the .env."""
+    if caption is None:
+        return None
+    caption = " ".join(caption.split())
+    if not caption:
+        raise UsageError("the caption is empty")
+    if len(caption) > MAX_CAPTION:
+        raise UsageError(f"the caption is longer than {MAX_CAPTION} characters")
+    found = find_personal_data(caption)
+    if found:
+        raise UsageError(f"the caption contains personal data ({describe_personal(found)}): say what the step shows "
+                         "without it")
+    refuse_secrets(cfg["workspace"], caption)
+    return caption
+
+
+def shot(cfg: dict, serial: str, name: str, batch: str | None, *, caption: str | None = None,
+         require_clean: bool = False, fresh_check: bool = False) -> str:
+    """Saves a screenshot of the app. Personal data: the last screen read in this process says whether the capture may show
+    any (a warning on stderr, categories and counts only); `fresh_check` reads one first (a `shot` on its own). With
+    `require_clean` a capture that may show personal data, or whose screen could not be read, is not saved (Refused).
+    A caption is kept in evidence_manifest.jsonl next to the capture (written only when one is given)."""
     check_name(name)
+    caption = check_caption(cfg, caption)
+    if fresh_check and not ios_on(cfg):
+        guard(cfg, serial, "screenshot")
+        try:
+            read_screen(cfg, serial)
+        except (NoTarget, NotFound):
+            _LAST_SCREEN["personal"] = None
+    personal = _LAST_SCREEN["personal"]
+    if require_clean and personal is None:
+        raise Refused("capture refused: --require-clean needs a screen read to check for personal data and none could "
+                      "be read; nothing was saved")
+    if require_clean and personal:
+        raise Refused(f"capture refused: the screen contains personal data ({describe_personal(personal)}); "
+                      "nothing was saved")
     png = capture_png(cfg, serial)
     folder = evidence_folder(cfg, batch)
     path = os.path.join(folder, name if name.lower().endswith(".png") else name + ".png")
     with open(path, "wb") as f:
         f.write(png)
+    if personal:
+        print(f"WARNING: the screen read before this capture contained personal data ({describe_personal(personal)}); "
+              "the capture may show it: do not share it as it is", file=sys.stderr)
+    if caption:
+        entry = {"file": os.path.basename(path), "caption": caption,
+                 "ts": datetime.now().isoformat(timespec="seconds"),
+                 "personal_data": personal if personal is not None else "unchecked"}
+        with open(os.path.join(folder, MANIFEST_NAME), "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return path
 
 
@@ -848,22 +1129,43 @@ def session_state(cfg: dict, serial: str, foreground_pkg: str) -> tuple[str, str
     return "unknown", "none of the configured texts is on the screen"
 
 
-def cmd_check(cfg, serial, a, no_target: str = "") -> int:
-    """One report, nothing changed on the device (technique-mobile.md 1.3). 0 ready, 3 not ready."""
+def cmd_check(cfg, serial, a, no_target: str = "", problem=None) -> int:
+    """One report, nothing changed on the device (technique-mobile.md 1.3). 0 ready, 3 not ready, 2 several devices.
+    `problem` is the NoDevice / SeveralDevices that said why there is no serial: its `kind` is the line `device state:`
+    and its `action` is the one `next:` line (always advice, never an action of this tool)."""
     out, blockers, advice = [], [], []
     envs = f"environment: {', '.join(cfg['environments']) or 'none declared'}, app {cfg['app_id']}"
     if serial is None:
-        out += [f"device: not connected ({no_target})", envs, "session: unknown (no device)"]
+        kind = getattr(problem, "kind", "unknown")
+        out += [f"device: not connected ({no_target})", f"device state: {kind}", envs, "session: unknown (no device)"]
         blockers.append(no_target)
-        advice.append("connect the device (USB debugging on) or start the emulator, then repeat")
+        advice.append(getattr(problem, "action", None)
+                      or "connect the device (USB debugging on) or start the emulator, then repeat")
     else:
         release = adb(serial, "shell", "getprop", "ro.build.version.release").strip()
         sdk = adb(serial, "shell", "getprop", "ro.build.version.sdk").strip()
         model = adb(serial, "shell", "getprop", "ro.product.model").strip()
         out.append(f"target: {serial} · Android {release} (SDK {sdk}) · model: {model}")
-        out.append(f"device: {serial} connected")
-        window = foreground(serial)
+        out += [f"device: {serial} connected", "device state: ok"]
+        wdump = window_text(serial)
+        window = focus_of(wdump)
+        try:
+            power = adb(serial, "shell", "dumpsys", "power")
+        except NoTarget:
+            power = ""
+        screen_state = parse_screen_state(power, wdump)
+        out.append(f"screen: {screen_state}")
+        if screen_state in SCREEN_ACTIONS:
+            blockers.append(f"the screen is {screen_state}")
+            advice.append(SCREEN_ACTIONS[screen_state])
         out.append(f"foreground: {window or 'nothing'}")
+        in_front = window.split("/")[0] == cfg["app_id"]
+        out.append(f"app in foreground: {'yes' if in_front else 'no'}")
+        fg_advised = False
+        if not in_front and screen_state not in SCREEN_ACTIONS:
+            advice.append("bring the app to the front: python scripts/device.py <workspace> launch (a system screen "
+                          "in front is the user's to close)")
+            fg_advised = True
         pkg = adb(serial, "shell", "dumpsys", "package", cfg["app_id"])
         installed = f"Package [{cfg['app_id']}]" in pkg
         name = re.search(r"versionName=(\S+)", pkg) if installed else None
@@ -874,6 +1176,12 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
             advice.append("install the test build (technique-mobile.md §1.1; mobile.build.source says where it comes from)")
         else:
             out.append(f"app: {cfg['app_id']} {name.group(1)}" + (f" (code {code.group(1)})" if code else ""))
+            notif = parse_notification_permission(pkg)
+            out.append(f"notifications: {notif}" + (" (runtime permission POST_NOTIFICATIONS)" if notif != "unknown"
+                                                    else " (permission not listed or not readable)"))
+            if notif == "denied":
+                advice.append("notification permission is denied: tests that need a push are the user's to enable in "
+                              "the app's settings (this tool never grants it)")
         if cfg["input"] == "driver":
             d = driver_report(serial)
             if d["answering"]:
@@ -898,11 +1206,14 @@ def cmd_check(cfg, serial, a, no_target: str = "") -> int:
         if state == "needed":
             blockers.append("the app has no session")
             advice.append(why)
-        elif state == "unknown" and "foreground" in why:
+        elif state == "unknown" and "foreground" in why and not fg_advised:
             advice.append(why)
     out.append("ready: yes" if not blockers else "ready: NOT READY: " + "; ".join(blockers))
     out += [f"next: {x}" for x in advice]
     print("\n".join(out))
+    if isinstance(problem, SeveralDevices):
+        print(f"ERROR: {blockers[0]}", file=sys.stderr)
+        return 2
     if blockers:
         print(f"NO TARGET: {blockers[0]}", file=sys.stderr)
         return 3
@@ -980,12 +1291,18 @@ def cmd_dump(cfg, serial, a) -> int:
     for n in read_screen(cfg, serial, allow_dialogs=True):
         print(n.line())
     if a.capture:
-        print(f"capture: {shot(cfg, serial, a.capture, a.batch)}")
+        print(f"capture: {shot(cfg, serial, a.capture, a.batch, **capture_options(a))}")
     return 0
+
+
+def capture_options(a) -> dict:
+    """--caption and --require-clean of the commands that save a screenshot."""
+    return {"caption": getattr(a, "caption", None), "require_clean": bool(getattr(a, "require_clean", False))}
 
 
 def cmd_tap(cfg, serial, a) -> int:
     if a.xy:
+        refuse_system_ui(cfg, serial, "tap")
         guard(cfg, serial, "tap", allow_dialogs=True)
         x, y = a.xy
         label = f"({x},{y})"
@@ -1295,6 +1612,10 @@ def cmd_send(cfg, serial, a) -> int:
             raise Interrupted(UNCERTAIN, f"the tap on send got no answer ({e}): the message may or may not have gone; "
                               "look at the app before sending again", 3) from None
     else:
+        try:                    # nothing is tapped when system UI came in front while typing: said as typed, not sent
+            refuse_system_ui(cfg, serial, "send", _LAST_SCREEN["xml"])
+        except Refused as e:
+            raise Interrupted(NOT_SENT, f"the text was typed but not sent: {e}", 3) from None
         try:
             tap_xy(cfg, serial, *control.centre)
         except (NoTarget, NotFound) as e:
@@ -1352,7 +1673,7 @@ def cmd_send(cfg, serial, a) -> int:
     for ln in new:
         print(ln)
     if a.capture:
-        print(f"capture: {shot(cfg, serial, a.capture, a.batch)}")
+        print(f"capture: {shot(cfg, serial, a.capture, a.batch, **capture_options(a))}")
     if sampler:
         s = sampler.summary()
         path = sampler.write(cfg, a.capture or "send", a.batch)
@@ -1433,6 +1754,7 @@ def cmd_hold(cfg, serial, a) -> int:
     if a.ms < 1:
         raise UsageError("--ms must be a positive number of milliseconds")
     if a.xy:
+        refuse_system_ui(cfg, serial, "hold")
         guard(cfg, serial, "hold", allow_dialogs=True)
         x, y = a.xy
         label = f"({x},{y})"
@@ -1449,6 +1771,7 @@ def cmd_hold(cfg, serial, a) -> int:
 def cmd_swipe(cfg, serial, a) -> int:
     if a.ms < 1:
         raise UsageError("--ms must be a positive number of milliseconds")
+    refuse_system_ui(cfg, serial, "swipe")
     guard(cfg, serial, "swipe", allow_dialogs=True)
     swipe_xy(cfg, serial, a.x1, a.y1, a.x2, a.y2, a.ms)
     print(f"swiped: ({a.x1},{a.y1}) -> ({a.x2},{a.y2}) in {a.ms} ms")
@@ -1504,7 +1827,7 @@ def cmd_launch(cfg, serial, a) -> int:
 
 
 def cmd_shot(cfg, serial, a) -> int:
-    print(f"capture: {shot(cfg, serial, a.name, a.batch)}")
+    print(f"capture: {shot(cfg, serial, a.name, a.batch, fresh_check=True, **capture_options(a))}")
     return 0
 
 
@@ -1536,6 +1859,13 @@ COMMANDS = {"check": cmd_check, "dump": cmd_dump, "tap": cmd_tap, "type": cmd_ty
             "clear": cmd_clear, "launch": cmd_launch, "doctor": cmd_doctor, "shot-burst": cmd_shot_burst}
 
 
+def capture_flags(p) -> None:
+    p.add_argument("--caption", metavar="TEXT",
+                   help="what the step shows, kept next to the capture in evidence_manifest.jsonl (no personal data)")
+    p.add_argument("--require-clean", action="store_true",
+                   help="do not save a capture when the last screen read contained personal data (or none was read)")
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Drives an Android device/emulator through adb "
                                              "(technique-mobile.md §4.1).")
@@ -1562,6 +1892,7 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("dump", parents=[common], help="visible text with bounds, one line per node")
     p.add_argument("--capture", metavar="NAME", help="also save a screenshot")
     p.add_argument("--batch", help="evidence folder (default: mobile.evidence_batch or today)")
+    capture_flags(p)
     p = sub.add_parser("tap", parents=[common], help="tap by text (exact, then contains) or by coordinates")
     p.add_argument("text", nargs="?")
     p.add_argument("--index", type=int, default=0, help="which match, from 0")
@@ -1577,6 +1908,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--file", metavar="UTF8_FILE", help="the text from a UTF-8 file (emoji, long texts)")
     p.add_argument("--capture", metavar="NAME")
     p.add_argument("--batch")
+    capture_flags(p)
     p.add_argument("--send-label", help="label of the send control (default: mobile.send_label)")
     p.add_argument("--field", metavar="LABEL")
     p.add_argument("--timeout", type=float, default=200, help="seconds to wait for the answer (default 200)")
@@ -1604,6 +1936,7 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("shot", parents=[common], help="screenshot to evidence/<batch>/<NAME>.png")
     p.add_argument("name")
     p.add_argument("--batch")
+    capture_flags(p)
     p = sub.add_parser("link", parents=[common], help="open a deep link / login callback (never printed)")
     p.add_argument("url")
     p.add_argument("--package", help="app that opens it (default: mobile.browser, else the system's choice)")
@@ -1627,6 +1960,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     a = parser().parse_args(argv)
+    _LAST_SCREEN.update(personal=None, xml="")
     try:
         cfg = configuration(a.workspace, a.serial, a.input, a.platform)
         if ios_on(cfg):
@@ -1638,17 +1972,20 @@ def main(argv=None) -> int:
         else:
             if a.command == "check":        # a report: a missing device is a line of it, not the end of it
                 try:
-                    serial, reason = resolve_serial(cfg["serial"]), ""
-                except NoTarget as e:
-                    serial, reason = None, str(e)
-                return cmd_check(cfg, serial, a, reason)
+                    serial, reason, problem = resolve_serial(cfg["serial"]), "", None
+                except (NoTarget, SeveralDevices) as e:
+                    serial, reason, problem = None, str(e), e
+                return cmd_check(cfg, serial, a, reason, problem)
             serial = resolve_serial(cfg["serial"])
         return COMMANDS[a.command](cfg, serial, a)
     except UsageError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
+    except Refused as e:
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return 3
     except NoTarget as e:
-        print(f"NO TARGET: {e}", file=sys.stderr)
+        print(f"NO TARGET: {e}" + (f" -> {e.action}" if isinstance(e, NoDevice) else ""), file=sys.stderr)
         return 3
     except NotFound as e:
         print(f"NOT FOUND: {e}", file=sys.stderr)

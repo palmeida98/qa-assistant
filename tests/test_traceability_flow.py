@@ -123,6 +123,15 @@ class Flow:
         self.assertEqual(items[passing]["ts"], "2026-11-05T16:21:00")
         self.assertEqual(items[passing]["executed_source"], "fictional tester notes of 05.11")
 
+        # 4b. plan Q1 (10.11.2026): the Question had no time and its case already has a result applied: a new execution cannot be
+        # told from a correction, so the dry run refuses it; no time is invented: the tester gives one with its source
+        r = self.apply("--dry-run", "--detail", "--no-recalc")
+        if r.returncode == 4:               # the layouts whose case already has an applied result (the other has none yet)
+            self.assertIn("no time of execution and the case already has a result applied", r.stdout)
+        r = self.rl("retime", "flow", question, "--executed-at", "2026-11-05T17:00:00",
+                    "--executed-source", "fictional tester notes of 05.11")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
         # 5. the preview, the options it covers, and an apply with other options refused before any write
         r = self.apply("--dry-run", "--detail", "--no-recalc", "--now", NOW, "--label", "[flow]", "--reported-by", "QA (fictional)")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

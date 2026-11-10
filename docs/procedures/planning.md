@@ -87,6 +87,15 @@
    root of qa-assistant (read only): python -m adapters.tracker <workspace> import-cases
    and show the user the flags it prints. Use the tracker's IDs (the "id" of each case: the key or work item id
    with id_source key/id) and last_status; never cases from memory.
+1b. Test accounts (rules.md §13): for each case that needs an account, record whether it is ready (it exists and can
+   start a session), not ready or to confirm, and why; the user does the login and the consents. A case whose account is not
+   ready goes in the plan as Blocked (environment) with that reason, never as a case to run; the rest of the batch goes on.
+1c. Acceptance criteria (rules.md §15): `python scripts/ac_coverage.py <workspace> init <pbi>` writes a map of the PBI's criteria
+   (from the ticket memory; `none` when there are none, and the report says so); map the existing and new cases to each criterion,
+   `report` it and say the uncovered ones in the plan.
+1d. New cases (rules.md §16): write the proposals to `cases/<file>.json` before running anything (one file per platform, or one
+   file for both with the `platform` field saying so); each proposal keeps its PBI ID, QA task and origin so the traceability
+   columns can be filled. Their results are recorded with `run_log.py add --proposed` until `add_cases --platform` adds them.
 2. Select the candidate cases (e.g. not run, retest of fixed bugs). Exclude those out of scope by a
    recorded decision and say why.
 3. Group by area + feature + platform + role + flow (section 6).

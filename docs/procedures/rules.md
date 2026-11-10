@@ -111,3 +111,81 @@ the running interpreter, then PATH. The launcher uses only the standard library,
 or PyYAML is not installed. With none usable it exits 3 and prints the commands that create an environment for the
 checkout; nothing is installed for the user and the system Python is never used silently or modified.
 `python3 <qa>/scripts/qa_python.py run <script or -m module> ...` runs a command with it from any directory.
+
+## 12. Deleting files and folders (incident of 09.11.2026)
+- A recursive deletion (`rm -r`, `rmtree`, `find -delete`, `git clean`) is only done on an ABSOLUTE path, written in full,
+  strictly INSIDE the temporary scratchpad of the current session, after listing what is there. Never on a parent folder, a
+  prefix, a variable or a glob, and never to clean up a file the agent wrote by mistake: that file is removed by its own
+  full path (`rm <file>`), and an empty folder the agent created with `rmdir`.
+- Cleaning is never inside a helper script that also does something else: generate content in one step and delete in another,
+  so the deletion is seen on its own.
+- What is not the agent's own work of this task (a folder of another session, the user's files, a prefix of a path) is
+  never deleted; when it is not certain who created something, it is left and reported.
+- The safety net is `scripts/guard_destructive.py` (technique `technique-destructive-guard.md`), a Claude Code
+  PreToolUse hook that blocks the dangerous forms before they run. It only protects what is installed in the user's
+  settings (the user decides that) and what it can read; this rule applies whether or not it is installed.
+
+## 13. Test accounts: availability before planning and running
+- Before planning or running a case that needs a test account, confirm that the account is available and can start a
+  session. The login, the code, the consent and the permissions are the user's: the agent asks for them and never
+  signs in on the user's behalf, never creates an account and never changes the account's data to get past a block.
+- Record only the STATE (`ready`, `not ready`, `to confirm`) and the reason of a block (for example «number not
+  provisioned», «second account not yet logged in»): never a number, a code, a link, an email or a credential.
+- A case that depends on an account that is not ready is Blocked (environment) with that reason, and the rest of the batch
+  goes on. The plan says which cases need which account and who unblocks it.
+
+## 14. Communication
+- The final report of a phase is the routine communication: what was done, what was verified, what is pending and what
+  depends on the user, with every text, hash, token and command that needs an approval shown in full. No running
+  commentary of each step.
+- Interrupt before the report only when: the work is blocked, a login, a consent, a permission or another action of the
+  user is needed, an approval is needed to go on, or a decision that stops the work is needed.
+- The project's own rules prevail (§8): in particular its language and its approvals.
+
+## 15. Partial batches, proof, criteria and approval files (batch 2, phase A, 10.11.2026)
+- **A result is applied once.** Apply only a chosen part of a batch with `run_log.py subset <source> <new> --case TC-X ...`: the
+  results are copied unchanged into a NEW batch (`derived_from` records the original and its SHA-256) and the original is
+  never touched. The apply refuses a result already applied from another batch, so a partial batch and its original, or two
+  partial batches, can never apply the same result twice; it also refuses the correction of an execution already applied (same
+  case and time, another status or text) without a `revision_of` link, and any apply while an earlier application cannot be
+  checked (no keys and no proven run log: the dry run names it; `adapters/excel/reconcile.py` lifts it only with the exact
+  file). A result without a time of execution is never given one: for a case that already has a result it needs a time with its
+  source or a `revision_of`. Never edit an applied batch.
+- **Say what kind of proof a result has.** When recording a result, separate what was OBSERVED (seen on screen, in a log or in
+  the evidence), what the assistant under test CLAIMED (what the assistant said; not verified) and what was INFERRED (`run_log.py add
+  --observed/--claimed/--inferred`), and name what the case needs observed (`--requires-observed`). A Pass with nothing
+  observed, or without a required observation, is flagged by the audit; results recorded before this existed are only counted.
+- **Map the criteria to cases.** `ac_coverage.py init <pbi>` reads the criteria of the ticket memory; the mapping of cases is
+  a planning decision; `report` shows which criteria are uncovered, not run, passed, partly passed or open, and says when the
+  source of the criteria is not available or inferred. It shows the workbook status, the latest run-log result and a note
+  «under review» apart, and never reports complete coverage while a mapped result is under review or differs from its run
+  log. A criterion with no case is a gap to say, never to hide.
+- **Check what is shown for approval.** Before presenting a plan, a comment or a review for approval, run
+  `check_approval_files.py` on it: it catches a cut file, a wrong declared count, a command with an ellipsis and a wrong hash.
+  The dry runs give the same token for the same inputs; any change gives another.
+
+## 16. Corrections, new cases, traceability columns, builds and bugs (batch 2, phase D, 10.11.2026)
+- **Correct an applied result without rewriting it (L5).** An applied result is never edited. While a correction is pending, record
+  the doubt in the workbook with `adapters/excel/annotate.py` (a dated «under review» note; status and observed result stay).
+  The correction itself is a NEW batch with only the cases to correct: run the test again, or, for a decision about a
+  `Question`, `run_log.py resolve --into <new batch>` (it keeps the observation and links `revision_of`); apply it with
+  `apply.py --keep-previous` after the dry run and the user's approval, so the previous result stays in the notes. State the
+  limit that remains (for example an identity that the app does not expose). Do not repeat a test only to change a state in the
+  workbook: record the decision and its reason instead.
+- **New cases (Q4).** `/plan-tests` writes proposals to `cases/<file>.json` before anything is run. The result of a proposed
+  case is recorded with `run_log.py add --proposed` (it is marked `case_pending_add` and the apply refuses it, naming
+  `add_cases`, until the case is in the workbook). Add the cases with `adapters/excel/add_cases.py --platform
+  android|ios|both` (the workbook comes from project.yaml; `both` validates every workbook before writing and has ONE combined
+  token): a case that says another platform is refused for that workbook, and an ID proposed with different content by another
+  cases file that is not yet added is refused (the same content in a sibling file, e.g. the iOS copy, is fine).
+- **Traceability columns (L1).** A project that wants the PBI ID, the QA task, the origin and the platform next to each case adds
+  the columns with `adapters/excel/add_columns.py <columns.json>` (dry run with a token, a review file, recorded in the control
+  sheet; it only adds headers) and then maps them in `excel.cases.fields` (`pbi_id`, `qa_task`, `origin`, `platform`). Adding
+  columns to a production workbook is a structural change: show the dry run on a copy and ask for approval.
+- **Builds (phase B).** Follow `procedures/builds.md`: announced release, pipeline deployment, app distribution and installed
+  build are four different things, and the platform of a build is the one the message says for the BUILD, not a keyword in the
+  text. Slack is read-only, within the authorised channel and window, with the write tools denied by the client; absence of an
+  announcement is never proven by one channel.
+- **Bugs in the tracker (phase C).** Real bug creation stays disabled until the user decides (`ADO_GUARD_ALLOW_BUG_CREATE` unset).
+  A bug is prepared with the preview tool (no write), shown whole for approval, and one bug is created per approval, under a
+  parent assigned to the verified identity.

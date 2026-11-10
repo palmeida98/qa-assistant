@@ -132,6 +132,31 @@ The cases `/plan-tests` proposes only enter the workbook after the user approves
 
 In the adapter: `validate_cases()` (read only) → `add_cases()` → `save_if_clean()` → `recalc()` → `check_summary()`.
 
+- **`--platform android|ios|both|<platform>`** (plan Q4) chooses the destination from `project.yaml` without `QA_WORKBOOK` and without copying a file: the `excel.workbooks` entry of that platform (its `platform`, else its key), else `excel.file` (the workbook of the platforms without an entry). `both` is every workbook: all are validated before any is written and ONE combined token (`v1-…`) covers them; the dry run writes one review per destination. A case whose `platform` field names another platform is refused for that destination (a case for both must say so), and an ID that ANOTHER `cases/*.json` proposes with different content (the `platform` field aside) and that is not yet in the target workbook is refused. Without `--platform` the behaviour is the old one, with a notice when the project has several workbooks. The result of a case that is only proposed is recorded with `run_log.py add --proposed`.
+
+### 4.2 Annotating cases (`annotate`)
+A result is never rewritten to improve a remark about it, and the workbook is never edited by hand. To record that a result
+is **under review** (or any later remark) without touching its status or its observed result:
+`python -m adapters.excel.annotate <workspace> <annotations.json> --dry-run`, review `<name>.dryrun.md` (next to the file, never in
+`runs/`: every note in full, the notes before and after, the token), and after the approval of THAT review
+`... --expect <token>`. The file is `{"annotations": [{"case": "TC-X-001", "note": "text"}]}`, one entry per case. The note is
+appended to the Notes cell after a blank line as `<label> <note>` (label default `[date, file name]`). Before saving, the status
+and the observed result of each case are compared with what they were: a difference stops the write. The write is recorded in the
+control sheet like a batch (the same annotations again change nothing; the same file name with another content is refused) and a
+note already contained in the case's notes is refused. Exit codes and the token as `add-cases` (§4.1). Needs
+`excel.cases.columns.notes`.
+
+### 4.3 Traceability columns (`add_columns`)
+To record the PBI ID, the QA task, the origin and the platform next to each case, add the columns with
+`python -m adapters.excel.add_columns <workspace> <columns.json> [--platform …] --dry-run`, review `<name>.dryrun.md` (sheets, positions, headers, the lines for
+`project.yaml`) and, after the approval of THAT review, `... --expect <token>`. The file is `{"columns": [{"header": "PBI (ID)", "field":
+"pbi_id"}, …]}` (`field` is a field of the case model: `pbi_id`, `qa_task`, `origin`, `platform`, `feature`…). Each header is appended after the last
+header of every case sheet with the style of the one before it, the autofilter keeps covering the header row, and nothing else changes (no case,
+formula or row). A header that already exists, an Excel table in a case sheet and a column file with repeated headers or unknown fields are refused,
+writing nothing; the write is recorded in the control sheet like a batch (the same columns again change nothing). The adapter fills a new column only
+after `excel.cases.fields` maps it (`pbi_id: "PBI (ID)"`…); until then `add-cases` lists the field as not written. Exit codes and tokens as §4.1. Try it
+on a COPY of the workbook first: it is a structural change.
+
 ## 5. Consistency between results and defects
 
 When regenerating the bugs view from the cases (instead of editing it by hand), the same duplicate rules of the methodology apply (§9.1, §10): one defect per distinct problem, update instead of duplicating, and a defect whose status means "resolved" follows the project's rule (remove from the active list or archive — methodology §9.3, configurable in `project.yaml`).
@@ -145,6 +170,35 @@ The adapter's cross-check also checks that each defect points to a case that exi
 **Summary vs direct count.** The formulas of a summary sheet can be wrong without anyone noticing: counting the wrong column, with a fixed range that no longer reaches the last row, or without a new area. So the adapter **never uses the summary as the source of the totals**: the dashboard and `apply` count the statuses row by row. When the optional block `excel.summary` exists, `check_summary()` compares the summary's **calculated** values (read from the saved file, with `data_only=True`) with that direct count, per area, per status, in the area's total and in the total row, and reports each difference. The calculated values only exist after a recalculation (`openpyxl` saves formulas without cached values); without them, the check says it cannot compare, without inventing numbers. In `apply`, it runs after the recalculation: if the summary does not match, it exits with code 5 (saved and recalculated, but the workbook's summary is wrong: fix the formulas, never the numbers by hand). The dashboard shows the same warning.
 
 If the summary has a % run column (`summary.percent_column`), it is also compared, per area and in the total row, with the methodology's definition (§16.3): **(total − cases in `not_run_status`) / total**, with N/A and Blocked counted as run, and 0 in an area without cases. It accepts the fraction (0.2857 with a % format) or percentage points (28.57). The default tolerance is strict (0.001 percentage points), so as not to let through a formula that excludes the N/A in a large workbook; if the summary rounds on purpose, `percent_tolerance` (in percentage points) says by how much. The `not_run_status` must be the same status the `dashboard:` section treats as pending.
+
+### 5.1 Result identity and partial batches (plan Q1)
+Every result has two identities: the **result** (`result_key`: case, status, observed text and time of execution; evidence, bug
+links and the recording time are not part of it) and the **execution** (`execution_key`: case and time of execution). The
+control sheet keeps both for what each batch applied (`result_keys`, entries `<result>:<execution>`; a control row from before
+the column is rebuilt from `runs/<batch_id>.json`; a row of add-cases or annotate is recognised by its file and its content hash
+and applied no results). `apply_batch` refuses, writing nothing:
+- a result already applied from ANOTHER batch (the full batch and its partial batches, or two partial batches);
+- the **correction** of an execution already applied (same case and time, another status or observed text) that does not
+  carry `revision_of` pointing at the batch that applied it: correcting the status or the text is not a new execution (a
+  correction is recorded as a revision, `run_log.py resolve --into`); the same case executed at ANOTHER time is a new execution;
+- any application while a control row is **unverifiable** (no `result_keys` and no run log to rebuild them, and not a row of
+  cases or notes): duplicates cannot be ruled out against it. The dry run names its origin (batch id, time, items) and the
+  apply is blocked until the run log is restored (it is in Git) or the row is explained.
+**Results without a time of execution.** No time is ever invented. A result without `ts` is accepted when the case has nothing applied
+yet; when the case already has an applied result (with or without a time) a new execution cannot be told from a correction, so the
+apply refuses it unless it carries `revision_of` or gets a time of execution with its source (`run_log.py add --executed-at
+--executed-source`). A result WITH a time for a case whose applied execution has no time is accepted only if it is later than the
+moment that application was written (a later one is certainly a new execution), else it needs `revision_of`. Old data stay as they
+are: an applied result without a time is kept with an empty execution key and judged only when a new result for its case appears.
+**Origin of an old control row.** A row without `result_keys` is rebuilt from `runs/<batch_id>.json` only when that file is PROVEN to be
+what was applied (the hash of its results equals the row's hash, or its `translated_from`); a file that exists but does not hash to
+the row is `divergent` and the row is unverifiable. With the keys stored, a run log edited later is reported as a warning and the
+stored keys still count. To lift an unverifiable row: restore the exact file (Git) or `python -m adapters.excel.reconcile
+<workspace> <batch_id> --from <file> --dry-run`, then `--expect <token>`: it writes only the `result_keys` cell of that row and
+only for a file proven by the hash; it never accepts an origin it cannot prove (an explicit, recorded acceptance of an unproven
+origin is a proposal, not implemented). To apply part of a batch: `run_log.py subset` (copies unchanged, records `derived_from`).
+The first write with this version adds the column `result_keys` to the control sheet (header and the new row only); older rows stay
+empty.
 
 ## 6. Export for other teams
 

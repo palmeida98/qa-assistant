@@ -16,6 +16,9 @@
    - exploratory charters on the app (module exploratory in a mobile project, technique section 4.2) ->
      conversational, steps 6-9, one note per turn; each charter judged by its expected result.
    Commands run from <qa> with the ABSOLUTE path of the workspace.
+2b. Before the first case that needs an account, check that the account is available and a session can start
+   (`device.py check` shows the session; the login and the consents are the user's, rules.md §13). Record only the state and
+   the reason of a block; a case that depends on an account that is not ready is Blocked (environment), and the rest goes on.
 3. Flows: confirm the target and the environment (technique sections 1 and 3): test build installed or test
    URL; device/emulator connected (android: adb devices; ios: simulator). With no target, the cases are
    Blocked (environment) -- never Pass. Record platform, OS, device and app version.

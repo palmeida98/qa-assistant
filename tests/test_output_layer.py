@@ -236,7 +236,7 @@ class DryRunOfTheApply(Workspace):
         self.proj["output"] = {"max_lines": 3}
         self.save_project()
         self.cli(ap, self.batch("batch_a_00", [self.result("TC-SHOP-004", "Fail", "first")]), "--no-recalc")
-        path = self.batch("batch_a_01", [self.result("TC-SHOP-004", "Pass", "second")])
+        path = self.batch("batch_a_01", [self.result("TC-SHOP-004", "Pass", "second", ts="2026-11-08T20:30:00")])
         _, card = self.dry(path)
         self.assertIn("Warning: the batch replaces the earlier result text of 1 case(s) (TC-SHOP-004)", card)
         self.assertIn("Review (every value before", card)
