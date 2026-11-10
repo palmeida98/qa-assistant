@@ -71,6 +71,20 @@ flowchart LR
 | Commit, push, sync of the skills | The person | never a side effect of a skill |
 | A project's stricter rules | The project (they win over the defaults) | `CLAUDE.md` and what it imports; `/project-context` lists them |
 
+Safeguards against unintended writes, each with tests (none replaces the person's review):
+
+- **Destructive-command guard** (`scripts/guard_destructive.py`, a Claude Code `PreToolUse` hook you install yourself,
+  [docs/technique-destructive-guard.md](docs/technique-destructive-guard.md)): blocks recursive removals and scripts that
+  contain them outside a scratch directory. It is a text heuristic and can give false positives.
+- **Result identity:** the Excel apply refuses a result already applied from another batch, and a correction of an applied
+  execution needs an explicit `revision_of` link (`run_log.py resolve` writes it).
+- **Review files:** `scripts/check_approval_files.py` is a read-only, heuristic check of plans and comment drafts for
+  truncation, wrong counts and mismatched hashes. You run it; nothing calls it automatically.
+- **Proof and coverage:** `run_log.py add --observed/--claimed/--inferred` and `--requires-comparison` mark what was seen;
+  `scripts/ac_coverage.py` and `qa_report.py audit` cross acceptance-criteria maps with the workbook and the run logs, and
+  never report complete coverage for results under review.
+- **Guarded Azure DevOps writes:** see the tracker table below.
+
 Traceability: a result exists only for a case of the project's library, keeps its time, its build and its evidence, and
 is never edited over (a mistaken one is removed, a later execution is a new result). Finished batches in `history/` are
 immutable. Reconciled totals never add platforms into one percentage, and a result with no build recorded is never
@@ -101,12 +115,15 @@ the sources of truth: [methodology §1](docs/methodology.md).
 | Tracker | Implemented | Verified with fixtures | Used on a real instance |
 |---|---|---|---|
 | **Excel** (workbook) | read cases, add approved cases, apply results and bugs with a dry run and a preview token (`v2-…`, see "Recording results"), dashboard | yes: unit tests and a golden test (LibreOffice) | **yes**, on real projects |
-| **Azure DevOps** (Test Plans + Boards) | import and export cases, send results (one test run per batch), create/update bugs, duplicate search | yes: fake service and fictional golden | **no: pilot pending** (needs a test organisation) |
+| **Azure DevOps** (Test Plans + Boards) | import and export cases, send results (one test run per batch), create/update bugs, duplicate search. Separately, a guarded MCP write server (`scripts/ado_write_guard.py`): one comment or one attachment per call on work items assigned to a verified identity, with a read before and after and a confirmation per call; bug creation is implemented but **disabled by default** | yes: fake service and fictional golden; the guard has its own unit tests | the guarded **comments and attachments**: yes, on one real project. Test results, case import/export and bug creation: **no, pilot pending** (needs a test organisation) |
 | **Jira + Xray** (Cloud) | the same four directions (one Test Execution per batch) | yes: fake service and fictional golden | **no: pilot pending** (needs a test site with Xray) |
 | Ticket reading (`/analyze-ticket`) | Azure DevOps and Jira, read only, compared with the last check | yes, and the demo below | Azure DevOps through a logged-in browser: yes; by token, and Jira: no |
 
 Fixtures prove the code follows its specification; they do not prove it works against the real service. Until the pilots
-exist, the Azure DevOps and Jira writes are **implemented and tested with fakes only**. No parity between trackers is
+exist, the Azure DevOps result/bug/case writes and all Jira writes are **implemented and tested with fakes only**; the
+guarded comment and attachment writes are the only tracker writes used on a real instance, and the guard is a local
+safeguard, not a permission model (the tracker does not limit writes per assignee: see
+[docs/technique-ado-write-guard.md](docs/technique-ado-write-guard.md)). No parity between trackers is
 claimed (for example the dashboard is Excel only). Details and what a real pilot needs:
 [docs/tracker-validation.md](docs/tracker-validation.md).
 
@@ -201,13 +218,14 @@ evaluation of the agent ([docs/skills-evals.md](docs/skills-evals.md)).
 | `playwright`, `ruff` (pinned) | 1.63.0, 0.16.8 | the same |
 | **Pillow** | **13.0.0** (the shared virtual environment also serves a mobile tool, `pymobiledevice3`, which requires Pillow with no version limit) | **12.3.0** (pinned by the `visual` extra) |
 | LibreOffice | 26.8.2.2 (Homebrew) | 24.2.7 (Ubuntu package) |
-| Unit tests (`tests/`) | 1292 run, 0 failures, 3 skipped (two Windows-only, one Linux-only) | `tests` job: 1292 run, 0 failures, 16 skipped (the same two Windows-only, plus 14 that need LibreOffice) |
+| Unit tests (`tests/`) | 1799 run, 0 failures, 3 skipped (re-run on 10.11.2026 on `main`, `591486c`) | each run's `tests` job summary states its own counts and skips (on 08.11.2026: 1292 run, 16 skipped, 14 of them needing LibreOffice) |
 | LibreOffice-dependent tests | run in the same pass | run in the `golden` job (28 tests plus the Excel golden, which passes) |
 
-The counts above are those confirmed on 08.11.2026, before the tests of PR #7; each CI run's own counts are in its summary.
+The environment versions above were confirmed on 08.11.2026; the local unit-test count was refreshed on 10.11.2026. Each CI
+run's own counts are in its summary.
 
 The Pillow difference was **not forced away**: a downgrade in the shared environment could break the mobile tool. The suite
-also passed in a clean throwaway environment built from the pinned versions (Pillow 12.3.0): 1292 tests, the same three skips.
+also passed on 08.11.2026 in a clean throwaway environment built from the pinned versions (Pillow 12.3.0): 1292 tests at the time, the same three skips.
 So the difference is known and has shown no effect on the results, but it is a difference: `python scripts/workspace_select.py
 where` prints it ("a difference, not an incompatibility"), the pin stays the reference, and moving it is a change of its own,
 with the tests. The browser integration tests (`qa-audit`) ran only in the CI, on Linux; they were not run locally for this POC.
