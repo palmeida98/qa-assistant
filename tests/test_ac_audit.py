@@ -5,6 +5,8 @@ uncovered criterion; a divergent or under-review result stops a «complete» ver
 python -m unittest discover -s tests   (from the root of qa-assistant)
 """
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -99,6 +101,66 @@ class AcAudit(base.Base):
         m = self.audit()["ac_coverage"]["maps"][0]
         self.assertEqual([r["platform"] for r in m["reports"]], ["android"])
         self.assertEqual(m["platform_differences"], [])
+
+    def set_scope(self, platforms):
+        path = os.path.join(self.ws, "analysis", "ac_map_1.json")
+        with open(path, encoding="utf-8") as f:
+            amap = json.load(f)
+        amap["platforms"] = platforms
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(amap, f)
+
+    def test_an_android_map_in_an_ios_only_audit_is_out_of_scope(self):
+        self.map()
+        self.set_scope(["android"])
+        self.batch("batch_ios_01", [base.item("TC-SHOP-001", "Fail", "2026-11-10T10:00:00")], run=RUN)
+        rep = qr.audit(self.ws, self.proj, qr.load_batches(self.ws, self.proj))
+        m = rep["ac_coverage"]["maps"][0]
+        self.assertEqual((m["reports"], m["platform_differences"]), ([], []))
+        self.assertIn("covers android; the audit covers ios", m["out_of_scope"])
+        text = qr.render_audit(rep, True)
+        self.assertIn("out of scope of this audit", text)
+        self.assertNotIn("complete coverage", text)
+
+    def test_the_scope_is_the_intersection_of_the_map_and_the_audited_batches(self):
+        self.map()
+        self.set_scope(["android", "ios"])
+        self.batch("batch_ios_01", [base.item("TC-SHOP-001", "Fail", "2026-11-10T10:00:00")], run=RUN)
+        rep = qr.audit(self.ws, self.proj, qr.load_batches(self.ws, self.proj))
+        self.assertEqual([r["platform"] for r in rep["ac_coverage"]["maps"][0]["reports"]], ["ios"])
+
+    def standalone(self, *args):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = ac.main([self.ws, "report", os.path.join("analysis", "ac_map_1.json"), *args])
+        return code, out.getvalue()
+
+    def test_the_standalone_command_with_several_workbooks_reports_each_platform_or_needs_one(self):
+        self.set_status(CFG["file"], "TC-SHOP-001", "Pass")
+        self.set_status(self.ios_file, "TC-SHOP-001", "Fail")
+        self.map()
+        code, out = self.standalone()
+        self.assertIn("== platform: android ==", out)
+        self.assertIn("== platform: ios ==", out)
+        self.assertEqual(code, 1)
+        code, out = self.standalone("--json", "--platform", "ios")
+        self.assertEqual((json.loads(out)["platform"], code), ("ios", 1))
+        code, out = self.standalone("--platform", "windows")
+        self.assertEqual(code, 2)
+        self.assertIn("not a platform of this project", out)
+        self.set_scope(["android"])
+        code, out = self.standalone()
+        self.assertNotIn("== platform", out)
+        self.assertIn("complete coverage", out)
+
+    def test_a_single_workbook_project_runs_without_a_platform(self):
+        del self.proj["excel"]["workbooks"]
+        self.write_project()
+        self.map()
+        code, out = self.standalone()
+        self.assertNotIn("== platform", out)
+        self.assertEqual(code, 1)                      # AC2 has no case, but it ran with no platform
+        self.assertIn("AC2  UNCOVERED", out)
 
     def test_a_source_that_is_not_available_is_not_an_uncovered_criterion(self):
         self.map(kind="none", cases=())

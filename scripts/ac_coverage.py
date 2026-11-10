@@ -95,6 +95,28 @@ def _workbook_of(workspace: str, platform: str | None) -> str | None:
     return None
 
 
+def known_platforms(workspace: str) -> list[str]:
+    """The platforms the project names: `report.platforms` and the `platform` (else the key) of each `excel.workbooks` entry."""
+    from common import read_project
+
+    from adapters.excel.base import workbook_patterns
+    proj = read_project(workspace)
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    names = [str(k).lower() for k in ((proj.get("report") or {}).get("platforms") or {})] \
+        if isinstance(proj.get("report"), dict) else []
+    names += [str(((excel.get("workbooks") or {}).get(k) or {}).get("platform") or k).lower()
+              for k, _f, _p in workbook_patterns(excel)]
+    return list(dict.fromkeys(names))
+
+
+def several_workbooks(workspace: str) -> bool:
+    from common import read_project
+
+    from adapters.excel.base import workbook_patterns
+    excel = read_project(workspace).get("excel")
+    return bool(workbook_patterns(excel if isinstance(excel, dict) else {}))
+
+
 def _library(workspace: str, platform: str | None = None):
     from adapters.excel.base import ExcelAdapter
     ad = ExcelAdapter.from_project(workspace, file=_workbook_of(workspace, platform))
@@ -247,7 +269,18 @@ def audit_maps(workspace: str, platforms: list[str]) -> dict:
         entry = {"map": os.path.relpath(path, workspace), "pbi": amap.get("pbi"), "reports": [], "platform_differences": [],
                  "error": None}
         scope = [str(x).lower() for x in amap.get("platforms") or []]
-        mine = [p for p in plats if not scope or p in scope] or plats
+        known = [p for p in plats if p]
+        # the platforms to evaluate = the map's scope ∩ the audited platforms; no audited platform is known: the map's own
+        if not scope:
+            mine = plats
+        elif known:
+            mine = [p for p in known if p in scope]
+        else:
+            mine = scope
+        if scope and known and not mine:
+            entry["out_of_scope"] = f"the map covers {', '.join(scope)}; the audit covers {', '.join(known)}"
+            out["maps"].append(entry)
+            continue
         try:
             for p in mine:
                 entry["reports"].append(report(workspace, amap, True, p))
@@ -274,6 +307,9 @@ def audit_lines(ac: dict) -> list[str]:
     for m in ac["maps"]:
         if m["error"]:
             lines.append(f"acceptance criteria, PBI {m['pbi']}: not assessed ({m['error']})")
+            continue
+        if m.get("out_of_scope"):
+            lines.append(f"acceptance criteria, PBI {m['pbi']}: out of scope of this audit ({m['out_of_scope']}); not evaluated")
             continue
         for rep in m["reports"]:
             where = f" on {rep['platform']}" if rep["platform"] else ""
@@ -320,7 +356,8 @@ def main(argv=None) -> int:
     p.add_argument("map")
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-run-logs", action="store_true", help="read only the workbook (the report then says what it cannot see)")
-    p.add_argument("--platform", help="use the workbook and the run logs of this platform (default: the default workbook, every run log)")
+    p.add_argument("--platform", help="use the workbook and the run logs of this platform. A project with several workbooks without it gets one report "
+                        "per platform (the map's scope); an unknown platform is an error. One workbook: optional")
     a = ap.parse_args(argv)
     if a.command == "init":
         amap = init(a.workspace, a.pbi)
@@ -339,9 +376,27 @@ def main(argv=None) -> int:
     path = a.map if os.path.isabs(a.map) else os.path.join(a.workspace, a.map)
     with open(path, encoding="utf-8-sig") as f:
         amap = json.load(f)
-    rep = report(a.workspace, amap, run_logs=not a.no_run_logs, platform=a.platform)
-    print(json.dumps(rep, ensure_ascii=False, indent=1) if a.json else render(rep), end="")
-    return rep["exit"]
+    wanted = [a.platform.strip().lower()] if a.platform else []
+    if several_workbooks(a.workspace):
+        known = known_platforms(a.workspace)
+        if wanted and wanted[0] not in known:
+            print(f"error: --platform {a.platform!r} is not a platform of this project ({', '.join(known) or 'none named'})",
+                  file=sys.stderr)
+            return 2
+        if not wanted:      # several workbooks: one report per platform (the map's scope when it has one), never a guess
+            scope = [str(x).lower() for x in amap.get("platforms") or []]
+            wanted = [p for p in known if not scope or p in scope]
+            if not wanted:
+                print("error: the project has several workbooks and no platform could be chosen: pass --platform "
+                      f"({', '.join(known) or 'none named'})", file=sys.stderr)
+                return 2
+    reps = [report(a.workspace, amap, run_logs=not a.no_run_logs, platform=p) for p in wanted or [None]]
+    code = max(r["exit"] for r in reps)
+    if a.json:
+        print(json.dumps(reps[0] if len(reps) == 1 else {"reports": reps, "exit": code}, ensure_ascii=False, indent=1))
+    else:
+        print("\n".join(f"== platform: {r['platform']} ==\n" + render(r) if len(reps) > 1 else render(r) for r in reps), end="")
+    return code
 
 
 if __name__ == "__main__":

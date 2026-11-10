@@ -157,13 +157,16 @@ checkout; nothing is installed for the user and the system Python is never used 
   observed, or without a required observation, is flagged by the audit; results recorded before this existed are only counted.
   When the conclusion depends on a COMPARISON («no duplicate», «unchanged»), record `--requires-comparison <subject>` and the
   observations `before <subject>: ...` and `after <subject>: ...` with their evidence: the audit flags a Pass that lacks one of
-  them. An absence seen directly is recorded with `--observed-absence` and is listed apart, not as a comparison.
+  them. A side counts only as `before <subject>: <text>` / `after <subject>: <text>` with the exact subject (a longer subject
+  sharing the prefix is another one) and a non-empty text. An absence seen directly is recorded with `--observed-absence`: it
+  counts as a direct observation but never satisfies a comparison, and is listed apart.
 - **Know which workbook a batch goes to before writing.** In a project with several workbooks, `run_log.py add` and `mode`
   refuse (nothing written) a batch whose name and run block do not say one platform, or say different ones; a project with a
   single workbook and the reading of old run logs are not affected.
 - **Map the criteria to cases.** `ac_coverage.py init <pbi>` reads the criteria of the ticket memory; the mapping of cases is
   a planning decision (the audit now shows the coverage of every `analysis/ac_map_*.json` per platform, from that platform's workbook
-  and run logs, and the cases whose latest result differs between platforms; no map = coverage not assessed, not «uncovered»); `report` shows which criteria are uncovered, not run, passed, partly passed or open, and says when the
+  and run logs, and the cases whose latest result differs between platforms; no map = coverage not assessed, not «uncovered»; a map's `platforms` is intersected with the audited platforms, and a map outside them is
+  shown as out of scope; the standalone `report` with several workbooks gives one report per platform or needs `--platform`); `report` shows which criteria are uncovered, not run, passed, partly passed or open, and says when the
   source of the criteria is not available or inferred. It shows the workbook status, the latest run-log result and a note
   «under review» apart, and never reports complete coverage while a mapped result is under review or differs from its run
   log. A criterion with no case is a gap to say, never to hide.

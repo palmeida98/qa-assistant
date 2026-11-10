@@ -487,6 +487,17 @@ def check_proof(proof: dict | None) -> dict | None:
     return out or None
 
 
+def _has_side(observed: list[str], label: str) -> bool:
+    """True when an OBSERVED entry is exactly `label: text` with a non-empty text (the label is the whole text before the
+    first colon, compared without case, so `before documents extra:` is not `before documents:`). An absence recorded with
+    `--observed-absence` is never searched here: it does not satisfy a comparison."""
+    for o in observed:
+        head, sep, text = str(o).partition(":")
+        if sep and head.strip().casefold() == label and text.strip():
+            return True
+    return False
+
+
 def proof_gaps(item: dict) -> list[str]:
     """What a Pass lacks of its proof (empty = nothing lacks, or the result has no proof block: a result from before
     the block is never judged by it). Used by the audit."""
@@ -495,20 +506,21 @@ def proof_gaps(item: dict) -> list[str]:
         return []
     gaps = []
     observed = [str(x) for x in proof.get("observed") or []]
-    if not observed:
+    absent = [str(x) for x in proof.get("absent_observed") or []]
+    direct = observed + absent              # an absence seen directly IS a direct observation (not a comparison)
+    if not direct:
         kinds = [k for k in ("claimed", "inferred") if proof.get(k)]
         gaps.append("nothing observed" + (f" (only {' and '.join(kinds)})" if kinds else ""))
     for label in proof.get("requires_observed") or []:
         want = str(label).strip().casefold()
-        if not any(o.strip().casefold() == want or o.strip().casefold().startswith(want + ":") for o in observed):
+        if not any(o.strip().casefold() == want or o.strip().casefold().startswith(want + ":") for o in direct):
             gaps.append(f"required observation missing: {label}")
     for subject in proof.get("requires_comparison") or []:
         want = str(subject).strip().casefold()
-        missing = [w for w in ("before", "after")
-                   if not any(o.strip().casefold().startswith(f"{w} {want}") for o in observed)]
+        missing = [w for w in ("before", "after") if not _has_side(observed, f"{w} {want}")]
         if missing:
             gaps.append(f"comparison required for {subject}: observation of {' and '.join(missing)} missing "
-                        f"(record `{missing[0]} {subject}: ...` with its evidence)")
+                        f"(record `{missing[0]} {subject}: <what was seen>` with its evidence)")
     return gaps
 
 
