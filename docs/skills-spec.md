@@ -40,7 +40,8 @@ procedures/rules.md apply" and adds only what is its own.
 The approvals of `procedures/rules.md` §5 are **defaults**: a request to test authorises its own scope (analysis,
 plan, run, local records) without a second approval of the same plan or run; writes to a workbook or a tracker, a
 commit, a push and a sync keep theirs. A workspace's `CLAUDE.md` (and what it imports) may ask for more, and then it
-wins and the skill says which rule it followed (§8 of the rules). This is the only switch: there is no other
+wins and the skill says which rule it followed (§8 of the rules). Three more shared rules live there: deleting files (§12), test accounts before planning and running (§13) and the
+communication of routine as the final report of a phase (§14). This is the only switch: there is no other
 configuration of the skills' autonomy, and nothing of a project's rules is copied into the framework. A long technical procedure lives in `procedures/` or in a
 `technique-*.md` and is read when the skill needs it.
 
