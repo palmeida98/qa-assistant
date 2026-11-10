@@ -97,6 +97,7 @@ def load_batches(workspace: str, proj: dict, names: list[str] | None = None, sin
         out.append({"name": name, "path": path, "written": os.path.getmtime(path),
                     "run": doc.get("run") if isinstance(doc.get("run"), dict) else {},
                     "mode": doc.get("mode") if isinstance(doc.get("mode"), str) else None,
+                    "derived_from": doc.get("derived_from") if isinstance(doc.get("derived_from"), dict) else None,
                     "results": results})
     if names:
         found = {b["name"] for b in out} | {b["name"].removeprefix("batch_") for b in out}
@@ -469,9 +470,56 @@ def _applied_view(workspace: str, proj: dict):
     return view
 
 
+def _pass_words(proj: dict) -> set[str]:
+    words = {"Pass", "Passou"}
+    try:
+        from run_log import project_status
+        words.add(project_status(proj, "pass"))
+    except Exception:      # noqa: BLE001, S110 - a project with no word for Pass keeps the two usual ones
+        pass
+    return words
+
+
+def _shared_with_applied(all_batches: list[dict], view, name: str) -> dict:
+    """{case: why} of the results of batch `name` that the apply would refuse (plan Q1): applied from another batch, or the
+    correction of an execution already applied (same case and time, another status or text) with no `revision_of` link to
+    the batch that applied it. Empty when the adapter is not available (a project that is not an Excel one)."""
+    try:
+        from adapters.excel.base import execution_key, result_key
+    except ImportError:
+        return {}
+    by_result: dict = {}
+    by_exec: dict = {}
+    mine = next((b for b in all_batches if b["name"] == name), None)
+    for b in all_batches:
+        if b["name"] == name:
+            continue
+        done = view(b["name"], b.get("run"))
+        if done and not is_unknown(done):
+            for r in b["results"]:
+                if isinstance(r, dict):
+                    by_result.setdefault(result_key(r), b["name"])
+                    if execution_key(r):
+                        by_exec.setdefault(execution_key(r), b["name"])
+    out = {}
+    for r in (mine or {}).get("results", []):
+        if not isinstance(r, dict):
+            continue
+        tc, ek = str(r.get("tc")), execution_key(r)
+        if result_key(r) in by_result:
+            out[tc] = by_result[result_key(r)]
+        elif ek and ek in by_exec:
+            link = r.get("revision_of")
+            if not (isinstance(link, dict) and link.get("batch") == by_exec[ek]):
+                out[tc] = f"{by_exec[ek]} (same execution, another status or text, no revision link)"
+    return out
+
+
 def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
     view = _applied_view(workspace, proj)
-    superseded, _, bad_links = revision_links(load_batches(workspace, proj), proj)   # all of them, not a filter
+    every = load_batches(workspace, proj)
+    superseded, _, bad_links = revision_links(every, proj)   # all of them, not a filter
+    pass_words = _pass_words(proj)
     out = {"batches": [], "problems": 0}
     for b in batches:
         counts = Counter(str(r["tc"]) for r in b["results"])
@@ -501,15 +549,24 @@ def audit(workspace: str, proj: dict, batches: list[dict]) -> dict:
             invalid += [f"{r['tc']}: {e} ({why})" for e, why in state["invalid"]]
             if state["invalid"] and not state["valid"] and not state["missing"]:
                 no_valid.append(str(r["tc"]))
+        from run_log import proof_gaps
+        passes = [r for r in b["results"] if str(r.get("status")) in pass_words]
+        proof_problems = sorted(f"{r['tc']}: {'; '.join(proof_gaps(r))}" for r in passes if proof_gaps(r))
+        no_proof_class = sorted(str(r["tc"]) for r in passes if not isinstance(r.get("proof"), dict))
         applied = view(b["name"], b.get("run"))
+        shared = _shared_with_applied(every, view, b["name"]) if not (applied and not is_unknown(applied)) else {}
         entry = {"batch": b["name"], "platform": platform_of(b, proj), "build": build_of(b), "mode": b.get("mode"),
                  "results": len(b["results"]), "applied": applied if applied else "no",
                  "questions": questions, "repeated": repeated, "missing_evidence": missing,
                  "without_evidence": without, "invalid_evidence": invalid, "without_valid_evidence": no_valid,
                  "evidence_counts": counts_ev, "proposed_bugs": proposed, "without_ts": without_ts,
-                 "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority}
+                 "resolved": resolved, "invalid_revisions": dangling, "bugs_without_priority": no_priority,
+                 "proof_problems": proof_problems, "pass_without_proof_class": no_proof_class,
+                 "derived_from": b.get("derived_from") if isinstance(b.get("derived_from"), dict) else None,
+                 "already_applied_elsewhere": shared}
         settled = bool(applied) and not is_unknown(applied)     # unknown is not applied (audit 06.11.2026)
-        entry["to_fix"] = bool(repeated or missing or dangling or no_valid or ((questions or proposed or no_priority) and not settled))
+        entry["to_fix"] = bool(repeated or missing or dangling or no_valid or shared
+                               or ((questions or proposed or no_priority or proof_problems) and not settled))
         out["problems"] += int(entry["to_fix"])
         out["batches"].append(entry)
     return out
@@ -539,6 +596,20 @@ def _audit_flags(e: dict) -> list[tuple[str, bool]]:
                       + ", ".join(e["bugs_without_priority"]), True))
     if e["proposed_bugs"]:
         flags.append((f"bugs proposed, to review: {', '.join(e['proposed_bugs'])}", True))
+    if e.get("proof_problems"):
+        flags.append((f"Pass without the proof its case requires: {'; '.join(e['proof_problems'])}", True))
+    if e.get("already_applied_elsewhere"):
+        shared = "; ".join(f"{c} in {b}" for c, b in sorted(e["already_applied_elsewhere"].items()))
+        flags.append((f"result(s) already applied from another batch or corrected without a revision link (applying this batch would be refused): {shared}", True))
+    if e.get("derived_from"):
+        d = e["derived_from"]
+        n = len(d.get("cases") or [])
+        flags.append((f"partial batch derived from {d.get('batch')} ({n} case(s); the original is kept)", False))
+    if e.get("pass_without_proof_class"):
+        n = len(e["pass_without_proof_class"])
+        text = (f"{n} Pass result(s) without a proof classification (recorded before it existed or without it: "
+                "kept as they are, never rewritten)")
+        flags.append((text, False))
     if e["build"] == UNKNOWN:
         flags.append(("no build in the run block", True))
     if e["without_evidence"]:

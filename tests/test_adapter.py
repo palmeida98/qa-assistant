@@ -19,6 +19,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "tests", "golden")]
 from build_fixture import build
 
 from adapters.excel import ExcelAdapter, InvalidBatch, load_batch
+from adapters.excel.base import batch_hash
 
 with open(os.path.join(ROOT, "adapters", "excel", "example.yaml"), encoding="utf-8") as _f:
     CFG = yaml.safe_load(_f)
@@ -129,8 +130,10 @@ class BatchEditedAfterBeingApplied(unittest.TestCase):
         self.assertEqual(self.defects(), ["BUG-1", "BUG-2", "BUG-3", "BUG-4"])
 
     def test_a_correction_batch_with_another_id_is_accepted(self):
-        self.ad.apply_batch(self.batch, batch_id="batch_01")
-        correction = [item("TC-ACCOUNT-001", "Fail", actual_result="typo fixed", bug="BUG-4")]
+        first = [{**self.batch[0], "ts": "2026-11-07T10:00:00"}]
+        self.ad.apply_batch(first, batch_id="batch_01")
+        # a correction is a later execution (its own time of execution); without a time it would be ambiguous (plan Q1)
+        correction = [item("TC-ACCOUNT-001", "Fail", actual_result="typo fixed", bug="BUG-4", ts="2026-11-07T11:00:00")]
         r = self.ad.apply_batch(correction, batch_id="batch_01_correction")
         self.assertTrue(r["applied"])
         self.assertEqual(r["new_defects"], [])
@@ -139,22 +142,29 @@ class BatchEditedAfterBeingApplied(unittest.TestCase):
         ws = self.ad.wb.create_sheet(CFG["batch_control"]["sheet"])
         ws.append(["hash", "applied_at", "label", "items", "new_defects"])
         ws.append(["abc", "2026-09-01T10:00:00", "[old]", 1, ""])
-        self.ad.apply_batch(self.batch, batch_id="batch_01")
+        # an old row with no batch id has no run log to rebuild its results from: it is UNVERIFIABLE and the apply is
+        # blocked (plan Q1, 10.11.2026); the control sheet is still extended with the new columns when it is written
+        with self.assertRaises(InvalidBatch) as ctx:
+            self.ad.apply_batch(self.batch, batch_id="batch_01")
+        self.assertIn("(no batch id) applied at 2026-09-01T10:00:00", str(ctx.exception.args[0]))
+        self.ad._control_ws(create=True)
         self.assertEqual(ws.cell(1, 6).value, "batch_id")
-        ids = [x.get("batch_id") for x in self.ad.applied_batches()]
-        self.assertEqual(ids, [None, "batch_01"])
+        self.assertEqual([x.get("batch_id") for x in self.ad.applied_batches()], [None])
 
     def test_a_control_sheet_from_before_the_translation_is_read_and_extended(self):
         # headers written by the adapter before plan 8.11: workbook data, never rewritten
         ws = self.ad.wb.create_sheet(CFG["batch_control"]["sheet"])
         ws.append(["hash", "aplicado_em", "etiqueta", "itens", "defeitos_novos", "lote_id"])
-        ws.append(["abc", "2026-09-01T10:00:00", "[old]", 1, "", "lote_01"])
+        ws.append([batch_hash([]), "2026-09-01T10:00:00", "[old]", 1, "", "lote_01"])      # the hash of the (empty) run log below
+        os.makedirs(os.path.join(self.tmp.name, "runs"))
+        with open(os.path.join(self.tmp.name, "runs", "lote_01.json"), "w", encoding="utf-8") as f:
+            json.dump({"results": []}, f)               # the run log the old row is rebuilt from
         self.assertEqual(self.ad.applied_batches()[0]["applied_at"], "2026-09-01T10:00:00")
         with self.assertRaises(InvalidBatch):                      # same id, other content
             self.ad.apply_batch(self.batch, batch_id="lote_01")
         self.ad.apply_batch(self.batch, batch_id="batch_02")
         self.assertEqual([c.value for c in ws[1]], ["hash", "aplicado_em", "etiqueta", "itens", "defeitos_novos",
-                                                     "lote_id"])
+                                                     "lote_id", "result_keys"])      # the old headers stay, the new column is added
         self.assertEqual([x["batch_id"] for x in self.ad.applied_batches()], ["lote_01", "batch_02"])
 
     def test_the_identity_of_a_converted_batch_is_its_original_hash(self):

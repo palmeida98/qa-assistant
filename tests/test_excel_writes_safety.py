@@ -242,8 +242,9 @@ class KeepPrevious(Workspace):
             json.dump({"run": {"environment": "test", "build": "1.4.0 (140)"}, "results": results}, f)
         return path
 
-    def result(self, status, text, case="TC-SHOP-001"):
-        return {"tc": case, "status": status, "actual_result": text, "ts": "2026-11-08T19:20:00"}
+    def result(self, status, text, case="TC-SHOP-001", ts="2026-11-08T19:20:00"):
+        # a result that REPLACES an earlier one is a new execution (another time): the same time would be its correction
+        return {"tc": case, "status": status, "actual_result": text, "ts": ts}
 
     def apply(self, path, *extra):
         return self.run_cli(ap, path, "--no-recalc", "--now", NOW.isoformat(), *extra)
@@ -263,7 +264,7 @@ class KeepPrevious(Workspace):
 
     def test_the_previous_status_and_result_are_kept_in_the_notes(self):
         self.first_result()
-        code, out = self.apply(self.batch("batch_a_02", [self.result("Pass", "second result")]), "--keep-previous")
+        code, out = self.apply(self.batch("batch_a_02", [self.result("Pass", "second result", ts="2026-11-08T20:30:00")]), "--keep-previous")
         self.assertEqual(code, 0, out)
         row = self.cells()
         self.assertEqual((row["Status"], row["Actual Result"]), ("Pass", "second result"))
@@ -271,7 +272,7 @@ class KeepPrevious(Workspace):
 
     def test_without_the_option_the_previous_result_is_not_kept(self):
         self.first_result()
-        self.apply(self.batch("batch_a_02", [self.result("Pass", "second result")]))
+        self.apply(self.batch("batch_a_02", [self.result("Pass", "second result", ts="2026-11-08T20:30:00")]))
         self.assertNotIn("Previous result", str(self.cells()["Notes"]))
 
     def test_nothing_is_kept_when_there_was_no_result_or_it_is_the_same(self):
@@ -300,7 +301,7 @@ class KeepPrevious(Workspace):
 
     def test_the_dry_run_shows_the_option_and_the_token_authorises_the_apply(self):
         self.first_result()
-        path = self.batch("batch_a_02", [self.result("Pass", "second result")])
+        path = self.batch("batch_a_02", [self.result("Pass", "second result", ts="2026-11-08T20:30:00")])
         code, out = self.run_cli(ap, path, "--dry-run", "--detail", "--no-recalc", "--now", NOW.isoformat(), "--keep-previous")
         self.assertEqual(code, 0, out)
         self.assertIn("the previous result of each case kept in its notes", out)
@@ -309,7 +310,7 @@ class KeepPrevious(Workspace):
         token = next(line.split()[2] for line in out.splitlines() if line.startswith("Preview token:"))
         code, out = self.apply(path, "--keep-previous", "--expect", token)
         self.assertEqual(code, 0, out)
-        code, out = self.apply(self.batch("batch_a_03", [self.result("Fail", "third")]), "--expect", token)
+        code, out = self.apply(self.batch("batch_a_03", [self.result("Fail", "third", ts="2026-11-08T21:40:00")]), "--expect", token)
         self.assertEqual(code, 4)                                       # another batch, and no option: another token
 
     def test_the_adapter_refuses_a_missing_notes_column_with_a_problem_list(self):

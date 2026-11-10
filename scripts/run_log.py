@@ -12,9 +12,20 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
         [--decision-source "<where the decision is written>"] [--into <new batch>]
     python scripts/run_log.py <workspace> attach <batch> <case> [--bug ID | --new-defect FILE.json]
         [--evidence PATH ...] [--invalid PATH ... --reason "<why>"] [--replace-link]
+    python scripts/run_log.py <workspace> subset <source-batch> <new-batch> --case TC-X [--case TC-Y ...] [--reason TEXT]
     python scripts/run_log.py <workspace> remove <batch> <case>
     python scripts/run_log.py <workspace> mode <batch> "<kind>: <why>"
 
+- Subset (plan Q1, 10.11.2026): `subset` writes a NEW batch with only the named cases of an existing one, copied
+  unchanged, with `derived_from` (original batch, its SHA-256, cases, reason, when). The original is never touched. A result
+  has an identity (case, status, observed text, time of execution; adapters/excel/base.py `result_key`) and the apply
+  refuses a result already applied from another batch, so the full batch and its partial batches (or two partial
+  batches) can never apply the same result twice. The audit lists the overlap and the derivation.
+- Proof (plan Q2, 10.11.2026): `add` takes `--observed` (seen on screen, in a log or in the evidence; `label: text`),
+  `--claimed` (the assistant under test said it; not verified), `--inferred` (concluded, not seen) and `--requires-observed
+  LABEL` (what the case needs to have been observed). The result keeps them in `proof`. The audit flags a Pass whose
+  `proof` has nothing observed or lacks a required observation; a result without `proof` (all the earlier ones) is only
+  counted, never judged or rewritten.
 - Times. Every item has "ts", the time of the EXECUTION (methodology 7.1), and "recorded_at", the time the item was
   written. `add` without --executed-at records an execution that is happening now: ts = recorded_at = the clock. An
   observation made EARLIER (a tester's notes, a run the day before) is recorded with --executed-at and
@@ -92,6 +103,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -313,6 +325,27 @@ def applied(workspace: str, proj: dict, name: str) -> str | None:
     return None
 
 
+def proposed_case_files(workspace: str, case: str) -> list[str]:
+    """The cases files (cases/*.json, never the .dryrun review) of the workspace that propose `case`, as relative paths.
+    A proposal is not in the library: its result may be recorded with --proposed and waits until the case is added."""
+    out = []
+    folder = os.path.join(workspace, "cases")
+    if not os.path.isdir(folder):
+        return out
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith(".json") or name.endswith(".dryrun.json"):
+            continue
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8-sig") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        cases = data.get("cases") if isinstance(data, dict) else None
+        if isinstance(cases, list) and any(isinstance(c, dict) and str(c.get("id") or "").strip() == case for c in cases):
+            out.append(f"cases/{name}")
+    return out
+
+
 def library_cases(workspace: str, proj: dict) -> tuple[set[str], str]:
     """The IDs of the project's case library and what it was read from: the workbook, or tracker/cases.json. A library
     that cannot be read is a UsageError, never an empty answer: an unknown ID must not pass for lack of a library."""
@@ -358,11 +391,13 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         new_defect: dict | None = None, evidence: list[str] | None = None, environment: str | None = None,
         build: str | None = None, now: datetime | None = None, replace: bool = False,
         mode: str | None = None, executed_at: str | None = None,
-        executed_source: str | None = None, ended_at: str | None = None) -> tuple[str, dict | None]:
+        executed_source: str | None = None, ended_at: str | None = None,
+        proof: dict | None = None, proposed: bool = False) -> tuple[str, dict | None]:
     """Appends the result of `case`, or replaces it with `replace`; (path, the result replaced or None). Refused /
     UsageError as in the header. `mode`: as `set_mode`, checked before the result is written. `ended_at`: the end of
     the execution's window (`ts` is its start)."""
     mode = check_mode(mode) if mode is not None else None
+    proof = check_proof(proof)
     executed_at, executed_source = check_executed(executed_at, executed_source, now)
     ended_at = check_ended(ended_at, executed_at, now)
     try:
@@ -385,11 +420,18 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
         raise UsageError("--new-defect must hold a JSON object")
     check_defect(proj, new_defect)
     known, source = library_cases(workspace, proj)
+    pending = None
     if case.strip() not in known:
-        close = difflib.get_close_matches(case.strip(), sorted(known), n=3, cutoff=0.6)
-        raise UsageError(f"case {case.strip()!r} is not in the project's library ({source})"
-                         + (f"; did you mean {', '.join(close)}?" if close else "")
-                         + ": nothing was written. A new case is added first (/plan-tests)")
+        found = proposed_case_files(workspace, case.strip())
+        if found and proposed:
+            pending = found[0]
+        else:
+            close = difflib.get_close_matches(case.strip(), sorted(known), n=3, cutoff=0.6)
+            raise UsageError(f"case {case.strip()!r} is not in the project's library ({source})"
+                             + (f"; did you mean {', '.join(close)}?" if close else "")
+                             + (f"; it IS proposed in {', '.join(found)}: record its result with --proposed (it stays "
+                                "pending until the case is added to the workbook)" if found else "")
+                             + ": nothing was written. A new case is added first (/plan-tests)")
     path = run_log_path(workspace, name)
     try:
         with workspace_lock(workspace):         # read, change and write the file as one step (audit finding D-02)
@@ -399,14 +441,52 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
                               f"e.g. {next_name(workspace, proj, name)}, with only the cases to correct")
             return _add(path, doc_for=path, case=case, status=status, actual=actual, bug=bug, new_defect=new_defect,
                         evidence=evidence, environment=environment, build=build, now=now, replace=replace, mode=mode,
-                        executed_at=executed_at, executed_source=executed_source, ended_at=ended_at)
+                        executed_at=executed_at, executed_source=executed_source, ended_at=ended_at, proof=proof,
+                        case_pending_add=pending)
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
 
 
+PROOF_KINDS = ("observed", "claimed", "inferred")
+
+
+def check_proof(proof: dict | None) -> dict | None:
+    """The proof block of a result (plan Q2, 10.11.2026): what was OBSERVED (seen on screen, in a log or in the
+    evidence), what the assistant under test CLAIMED (what the assistant said; not verified) and what was INFERRED (concluded
+    from the observed, not seen), plus `requires_observed`: the labels of what the case needs to have been observed to be
+    a Pass. Each entry is a short text, an observed one optionally `label: text`. Returns None for no proof."""
+    if not proof:
+        return None
+    out: dict = {}
+    for kind in (*PROOF_KINDS, "requires_observed"):
+        values = [str(v).strip() for v in (proof.get(kind) or []) if str(v).strip()]
+        if values:
+            out[kind] = list(dict.fromkeys(values))
+    return out or None
+
+
+def proof_gaps(item: dict) -> list[str]:
+    """What a Pass lacks of its proof (empty = nothing lacks, or the result has no proof block: a result from before
+    the block is never judged by it). Used by the audit."""
+    proof = item.get("proof") if isinstance(item, dict) else None
+    if not isinstance(proof, dict):
+        return []
+    gaps = []
+    observed = [str(x) for x in proof.get("observed") or []]
+    if not observed:
+        kinds = [k for k in ("claimed", "inferred") if proof.get(k)]
+        gaps.append("nothing observed" + (f" (only {' and '.join(kinds)})" if kinds else ""))
+    for label in proof.get("requires_observed") or []:
+        want = str(label).strip().casefold()
+        if not any(o.strip().casefold() == want or o.strip().casefold().startswith(want + ":") for o in observed):
+            gaps.append(f"required observation missing: {label}")
+    return gaps
+
+
 def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, new_defect, evidence, environment, build,
          now, replace: bool = False, mode: str | None = None, executed_at: str | None = None,
-         executed_source: str | None = None, ended_at: str | None = None) -> tuple[str, dict | None]:
+         executed_source: str | None = None, ended_at: str | None = None,
+         proof: dict | None = None, case_pending_add: str | None = None) -> tuple[str, dict | None]:
     doc = read_log(doc_for)
     _same_context(doc, environment, build)
     if mode is not None:
@@ -424,6 +504,10 @@ def _add(path: str, *, doc_for: str, case: str, status: str, actual: str, bug, n
         item["executed_source"] = executed_source
     if ended_at:
         item["ended_at"] = ended_at
+    if proof:
+        item["proof"] = proof
+    if case_pending_add:
+        item["case_pending_add"] = case_pending_add      # the case is only PROPOSED (cases/<file>): not yet in the workbook
     if bug:
         item["bug"] = bug
     if new_defect:
@@ -681,6 +765,53 @@ def remove(workspace: str, batch: str, case: str) -> tuple[str, dict]:
     except WorkspaceBusy as e:
         raise Refused(str(e)) from None
     return path, gone
+
+
+def subset(workspace: str, source: str, target: str, cases: list[str], reason: str | None = None,
+           now: datetime | None = None) -> tuple[str, list[dict]]:
+    """A NEW batch with only the named cases of an existing one (plan Q1, 10.11.2026): (path, the results copied).
+    The results are copied UNCHANGED (same case, status, observed text, time, evidence, bug), so a result keeps its
+    identity (`result_key`) and can be applied only once, from the original or from any partial batch. The original is
+    never touched; the new file records where it comes from (`derived_from`: batch, the SHA-256 of the original file,
+    the cases, the reason, when). Refused: an unknown case, a target that exists or was applied, the source itself."""
+    try:
+        proj = read_project(workspace)
+    except FileNotFoundError as e:
+        raise UsageError(str(e)) from None
+    src, dst = batch_id(source), batch_id(target)
+    if src == dst:
+        raise UsageError("the new batch needs another name than the original")
+    wanted = list(dict.fromkeys(c.strip() for c in cases if c and c.strip()))
+    if not wanted:
+        raise UsageError("name the cases to copy (--case TC-X-001, repeated)")
+    src_path, dst_path = run_log_path(workspace, src), run_log_path(workspace, dst)
+    if not os.path.isfile(src_path):
+        raise UsageError(f"{src} has no run log (runs/{os.path.basename(src_path)})")
+    where = applied(workspace, proj, dst)
+    if os.path.exists(dst_path) or where:
+        raise Refused(f"{dst} already exists" + (f" and was {where}" if where else "")
+                      + f": choose another name, e.g. {next_name(workspace, proj, dst)}")
+    try:
+        with workspace_lock(workspace):
+            doc = read_log(src_path)
+            by_case: dict = {}
+            for item in doc["results"]:
+                if isinstance(item, dict):
+                    by_case.setdefault(str(item.get("tc") or "").strip(), []).append(item)
+            unknown = [c for c in wanted if c not in by_case]
+            if unknown:
+                raise UsageError(f"not in {src}: {', '.join(unknown)} (results: {', '.join(sorted(by_case)) or 'none'})")
+            copied = [json.loads(json.dumps(i)) for c in wanted for i in by_case[c]]
+            with open(src_path, "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+            new_doc = {k: json.loads(json.dumps(v)) for k, v in doc.items() if k not in ("results", "derived_from")}
+            new_doc["derived_from"] = {"batch": src, "file_sha256": digest, "cases": wanted,
+                                       "reason": reason or "", "created_at": (now or datetime.now()).isoformat(timespec="seconds")}
+            new_doc["results"] = copied
+            write_log(dst_path, new_doc)
+    except WorkspaceBusy as e:
+        raise Refused(str(e)) from None
+    return dst_path, copied
 
 
 def _is_question(status) -> bool:
@@ -999,6 +1130,18 @@ def main(argv=None) -> int:
     p.add_argument("--ended-at", metavar="WHEN",
                    help="when the case ENDED (the end of its window; `ts` is the start): needs --executed-at with a "
                         "known time; not before it, not in the future")
+    p.add_argument("--observed", action="append", metavar="TEXT",
+                   help="what was OBSERVED (seen on screen, in a log or in the evidence); `label: text` names the "
+                        "observation; repeat the option")
+    p.add_argument("--claimed", action="append", metavar="TEXT",
+                   help="what the assistant under test CLAIMED (what the assistant said; not verified); repeat the option")
+    p.add_argument("--inferred", action="append", metavar="TEXT",
+                   help="what was INFERRED from the observed (not seen); repeat the option")
+    p.add_argument("--requires-observed", action="append", metavar="LABEL",
+                   help="a label that must appear as an observation for a Pass to be sound (audit flags a Pass without it)")
+    p.add_argument("--proposed", action="store_true",
+                   help="the case is only PROPOSED in cases/*.json (not yet in the workbook): record its result, marked "
+                        "case_pending_add; the apply refuses it until the case is added")
     output.add_flags(p)
     p = sub.add_parser("retime", help="correct only the time of a result in a batch not yet applied")
     p.add_argument("batch")
@@ -1026,6 +1169,11 @@ def main(argv=None) -> int:
     p = sub.add_parser("mode", help="write the run log's mode before its first result")
     p.add_argument("batch")
     p.add_argument("value", help='"<kind>: <why>", kind one of ' + ", ".join(MODE_KINDS))
+    p = sub.add_parser("subset", help="a NEW batch with only the named cases of a batch, copied unchanged")
+    p.add_argument("source")
+    p.add_argument("target")
+    p.add_argument("--case", action="append", required=True, metavar="TC", help="a case to copy (repeat the option)")
+    p.add_argument("--reason", help="why only these cases (kept in the new batch, `derived_from`)")
     p = sub.add_parser("remove", help="take one mistaken result out of a batch not yet applied")
     p.add_argument("batch")
     p.add_argument("case")
@@ -1108,6 +1256,12 @@ def main(argv=None) -> int:
             else:
                 print(f"mode: {check_mode(a.value)!r} in {path}")
             return 0
+        if a.command == "subset":
+            path, copied = subset(a.workspace, a.source, a.target, a.case, a.reason)
+            print(f"subset: {len(copied)} result(s) of {a.source} copied unchanged to {path}")
+            print("the original was not touched; each result keeps its identity: the same result is applied only once, "
+                  "from whichever batch")
+            return 0
         if a.command == "remove":
             path, gone = remove(a.workspace, a.batch, a.case)
             print(f"removed: {gone.get('tc')} {gone.get('status')} from {path}")
@@ -1120,7 +1274,9 @@ def main(argv=None) -> int:
         new = _read_defect(a.new_defect) if a.new_defect else None
         path, replaced = add(a.workspace, a.batch, a.case, a.status, a.actual, a.bug, new, a.evidence,
                              a.environment, a.build, replace=a.replace, mode=a.mode,
-                             executed_at=a.executed_at, executed_source=a.executed_source, ended_at=a.ended_at)
+                             executed_at=a.executed_at, executed_source=a.executed_source, ended_at=a.ended_at,
+                             proof={"observed": a.observed, "claimed": a.claimed, "inferred": a.inferred,
+                                    "requires_observed": a.requires_observed}, proposed=a.proposed)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr)
         return 1

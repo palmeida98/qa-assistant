@@ -193,14 +193,14 @@ def workbook_conflict(excel: dict, batch_id: str, workspace: str, environ=None) 
                               f"{WORKBOOK_ENV} (the workbook is chosen from project.yaml) or rename the batch")
 
 
-_CONTROL_HEADERS = ["hash", "applied_at", "label", "items", "new_defects", "batch_id"]
+_CONTROL_HEADERS = ["hash", "applied_at", "label", "items", "new_defects", "batch_id", "result_keys"]
 # control sheets written before the translation (plan 8.11) keep their headers: they are workbook data
 _LEGACY_CONTROL_HEADERS = {"aplicado_em": "applied_at", "etiqueta": "label", "itens": "items",
                            "defeitos_novos": "new_defects", "lote_id": "batch_id"}
 REPORTED_BY_DEFAULT = "Automated QA"
 # fields of the case model (methodology section 2) that add-cases can write (technique-excel.md section 4.1)
 CASE_MODEL_FIELDS = ("title", "area", "feature", "preconditions", "steps", "expected", "role", "platform",
-                     "priority", "technique", "origin")
+                     "priority", "technique", "origin", "pbi_id", "qa_task")
 
 
 class ConfigError(ValueError):
@@ -234,6 +234,36 @@ def batch_hash(batch: list) -> str:
     """Fingerprint of the batch's content (independent of key order)."""
     canon = json.dumps(batch, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def result_key(item: dict) -> str:
+    """The identity of ONE result (plan Q1, 10.11.2026): its case, status, observed text and time of execution. Evidence,
+    bug links and the time it was recorded are not part of it (they can be added later), so a result copied unchanged into
+    a partial batch has the same key as in the original, and the same result can be applied only once, from whichever
+    batch it comes."""
+    canon = json.dumps({"tc": str(item.get("tc", "")).strip(), "status": item.get("status"),
+                        "actual_result": item.get("actual_result"),
+                        "ts": item.get("ts") or ("unknown" if item.get("ts_unknown") else None)},
+                       sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
+
+
+def execution_key(item: dict) -> str | None:
+    """The identity of the EXECUTION a result records: the case and the time it was executed (`ts`). Correcting the status
+    or the observed text of an execution that was already applied does not make it another execution: it keeps this key,
+    and the apply asks for a revision link (`revision_of`) instead of taking it for a new run. None when the time is
+    unknown (such a result is judged by `result_key` only)."""
+    if not item.get("ts"):
+        return None
+    canon = json.dumps({"tc": str(item.get("tc", "")).strip(), "ts": str(item["ts"])}, sort_keys=True,
+                       ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
+
+
+def result_entry(item: dict) -> str:
+    """What the control sheet keeps of a result: `<result key>:<execution key or ->:<case>`. The case is kept so that the apply
+    can tell, for a case, what it already applied (including an execution whose time was never known)."""
+    return f"{result_key(item)}:{execution_key(item) or '-'}:{str(item.get('tc', '')).strip()}"
 
 
 def _req(d: dict, key: str, where: str):
@@ -643,6 +673,150 @@ class ExcelAdapter:
         h = identity or batch_hash(batch)
         return next((x for x in self.applied_batches() if x["hash"] == h), None)
 
+    def _no_results_row(self, row: dict) -> bool:
+        """True when a control row without keys is an add-cases or an annotate record (it applied no results): the file it
+        came from is found by its name and its content hash equals the row's. Read only."""
+        batch_id = row.get("batch_id")
+        if not batch_id:
+            return False
+        for folder in ("cases", "analysis", ""):
+            path = os.path.join(self.base_dir, folder, f"{batch_id}.json")
+            try:
+                with open(path, encoding="utf-8-sig") as f:
+                    data = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            for kind in ("cases", "annotations"):
+                key = "add_cases" if kind == "cases" else "annotate"
+                if isinstance(data.get(kind), list) and batch_hash([{key: data[kind]}]) == row.get("hash"):
+                    return True
+        return False
+
+    def _run_log_origin(self, row: dict):
+        """(entries, proven) of the run log named like the control row: the entries of its results and whether its content is
+        what was applied (the hash of its results equals the row's hash, or its `translated_from`). (None, False) when
+        there is no such file. Read only."""
+        batch_id = row.get("batch_id")
+        if not batch_id:
+            return None, False
+        try:
+            with open(os.path.join(self.base_dir, "runs", f"{batch_id}.json"), encoding="utf-8-sig") as f:
+                doc = json.load(f)
+            results = [r for r in doc.get("results", []) if isinstance(r, dict)]
+            same = batch_hash(doc.get("results", [])) == row.get("hash") or doc.get("translated_from") == row.get("hash")
+        except (OSError, ValueError, AttributeError):
+            return None, False
+        return [result_entry(r) for r in results], bool(same)
+
+    def row_origin(self, row: dict) -> dict:
+        """Where the results of a control row can be known from, and whether that origin is PROVEN (plan Q1, review of
+        10.11.2026): {"entries": [...] | None, "state": ..., "detail": ...}. `stored`: the column `result_keys` written by the
+        apply (authoritative; a run log that no longer matches what was applied is reported in `detail`); `rebuilt`: no column,
+        the run log of the same name and its hash equals the row's (proven); `no-results`: a row of cases or notes recognised by
+        its file and hash; `divergent`: a run log exists but is NOT what was applied (edited after, or another file): unproven;
+        `missing`: nothing to rebuild from. `divergent` and `missing` make the row UNVERIFIABLE. Read only."""
+        raw, stored = row.get("result_keys"), None
+        if raw not in (None, ""):
+            try:
+                stored = [str(e) for e in json.loads(raw)]
+            except (TypeError, ValueError):
+                stored = None
+        entries, proven = self._run_log_origin(row)
+        batch_id = row.get("batch_id") or "<batch id>"
+        if stored is not None:
+            detail = None
+            if entries is not None and not proven:
+                detail = (f"runs/{batch_id}.json is not what was applied (its hash is not the one recorded): the stored keys "
+                          "are used, the file changed after the apply")
+            return {"entries": stored, "state": "stored", "detail": detail}
+        if entries is not None and proven:
+            return {"entries": entries, "state": "rebuilt", "detail": None}
+        if entries is not None:
+            return {"entries": None, "state": "divergent",
+                    "detail": f"runs/{batch_id}.json is not what was applied (its hash is not the one recorded in the row)"}
+        if self._no_results_row(row):
+            return {"entries": [], "state": "no-results", "detail": None}
+        return {"entries": None, "state": "missing", "detail": f"no runs/{batch_id}.json to rebuild them"}
+
+    def applied_results_index(self) -> dict:
+        """What this workbook already applied (plan Q1): {"results": {result key: batch}, "executions": {execution key:
+        (batch, result key)}, "by_case": {case: [{"batch", "ek", "applied_at"}]}, "unverifiable": [text], "warnings": [text]}.
+        An application whose origin cannot be proven (`row_origin`) is listed in `unverifiable` with its batch id, time and items:
+        duplicates cannot be ruled out against it. Read only."""
+        results: dict = {}
+        executions: dict = {}
+        by_case: dict = {}
+        unverifiable: list = []
+        warnings: list = []
+        for row in self.applied_batches():
+            origin = self.row_origin(row)
+            batch_id = row.get("batch_id")
+            name = batch_id or row.get("label") or "?"
+            if origin["entries"] is None:
+                unverifiable.append(f"{batch_id or '(no batch id)'} applied at {row.get('applied_at')} "
+                                    f"({row.get('items')} item(s)): no result_keys in the control sheet and "
+                                    f"{origin['detail']}")
+                continue
+            if origin["detail"]:
+                warnings.append(f"{batch_id}: {origin['detail']}")
+            for entry in origin["entries"]:
+                rk, _, rest = entry.partition(":")
+                ek, _, tc = rest.partition(":")
+                ek = None if ek in ("", "-") else ek
+                results.setdefault(rk, name)
+                if ek:
+                    executions.setdefault(ek, (name, rk))
+                if tc:
+                    by_case.setdefault(tc, []).append({"batch": name, "ek": ek, "applied_at": str(row.get("applied_at") or "")})
+        return {"results": results, "executions": executions, "by_case": by_case, "unverifiable": unverifiable,
+                "warnings": warnings}
+
+    def duplicate_results(self, batch: list, batch_id: str | None = None) -> list[str]:
+        """Why the results of `batch` cannot be applied (empty = they can; plan Q1):
+        - a result already applied from ANOTHER batch (a partial batch and its original, or two partial batches);
+        - the correction of an execution already applied (same case and time, another status or text) with no `revision_of`
+          link to the batch that applied it;
+        - a result WITHOUT a time of execution for a case that already has an applied result: a new execution cannot be told
+          from a correction, and no time is ever invented: record the time (`--executed-at` with its source) or a revision;
+        - a result WITH a time, for a case whose applied execution has no time, when it is not later than the moment that
+          application was written: it could be the correction of that execution (a later one is certainly a new execution);
+        - an application of this workbook that cannot be checked (its origin is named).
+        The batch's own earlier application is not a duplicate here (its hash and its id are handled before)."""
+        index = self.applied_results_index()
+        out = []
+        for item in batch:
+            if not isinstance(item, dict):
+                continue
+            tc, rk, ek = str(item.get("tc", "?")).strip(), result_key(item), execution_key(item)
+            prior = [p for p in index["by_case"].get(tc, []) if p["batch"] != batch_id]
+            link = item.get("revision_of")
+            linked = isinstance(link, dict) and link.get("batch") in {p["batch"] for p in prior}
+            if rk in index["results"] and index["results"][rk] != batch_id:
+                out.append(f"{tc} (already applied from {index['results'][rk]})")
+            elif ek and ek in index["executions"] and index["executions"][ek][0] != batch_id:
+                origin = index["executions"][ek][0]
+                if not (isinstance(link, dict) and link.get("batch") == origin):
+                    out.append(f"{tc} (an execution already applied from {origin} at the same time, with another status or "
+                               "text: a correction is recorded as a revision (`revision_of`, run_log.py resolve), not as "
+                               "a new execution)")
+            elif ek is None and prior and not linked:
+                out.append(f"{tc} (no time of execution and the case already has a result applied from "
+                           f"{', '.join(sorted({p['batch'] for p in prior}))}: a new execution cannot be told from a correction; "
+                           "record the time of execution with its source (run_log.py add --executed-at --executed-source) or "
+                           "a revision (`revision_of`))")
+            elif ek and not linked:
+                untimed = [p for p in prior if p["ek"] is None]
+                if untimed and str(item.get("ts")) <= max(p["applied_at"] for p in untimed):
+                    out.append(f"{tc} (the case has a result applied from {untimed[-1]['batch']} with no time of execution, written "
+                               f"at {untimed[-1]['applied_at']}, and this result is not later than that: it may be its correction; "
+                               "record a revision (`revision_of`) or a later time of execution)")
+        if index["unverifiable"]:
+            out.append("duplicates cannot be ruled out against: " + "; ".join(index["unverifiable"])
+                       + " (restore the run log or reconcile the row, `python -m adapters.excel.reconcile`, before applying)")
+        return out
+
     # ------------------------------------------------------------------
     # Applying a batch
     # ------------------------------------------------------------------
@@ -666,7 +840,9 @@ class ExcelAdapter:
             if not tc:
                 problems.append(f"{where}: 'tc' is missing")
             elif tc not in existing:
-                problems.append(f"{where}: the case does not exist in the workbook")
+                problems.append(f"{where}: the case does not exist in the workbook"
+                                + (" (its result is marked case_pending_add: add the case first with "
+                                   "`python -m adapters.excel.add_cases`, then apply)" if item.get("case_pending_add") else ""))
             seen[tc] += 1
             if item.get("status") in (None, ""):
                 problems.append(f"{where}: 'status' is missing")
@@ -747,6 +923,10 @@ class ExcelAdapter:
             if missing:
                 problems.append("--keep-previous needs the notes column (excel.cases.columns.notes) in every case "
                                 f"sheet; missing in {missing}")
+        duplicates = self.duplicate_results(batch, batch_id)
+        if duplicates:
+            problems.append("results that cannot be applied (the same result is never applied twice; apply only the cases "
+                            "not yet applied, e.g. with `run_log.py subset`): " + "; ".join(duplicates))
         if problems:
             raise InvalidBatch(problems)
 
@@ -821,7 +1001,8 @@ class ExcelAdapter:
         ctl = self._control_ws(create=True)
         record = {"hash": h_batch, "applied_at": self._now().isoformat(timespec="seconds"),
                   "label": label, "items": len(batch), "new_defects": ", ".join(new_ids),
-                  "batch_id": batch_id}
+                  "batch_id": batch_id,
+                  "result_keys": json.dumps([result_entry(r) for r in batch if isinstance(r, dict)])}
         ctl.append([record.get(name) for name in self._control_names(ctl)])
         return {"applied": True, "hash": h_batch, "new_defects": new_ids, "replaced_results": replaced}
 
@@ -987,7 +1168,8 @@ class ExcelAdapter:
         label = label or f"[{self._now().date().isoformat()}]"
         ctl = self._control_ws(create=True)
         record = {"hash": h_cases, "applied_at": self._now().isoformat(timespec="seconds"),
-                  "label": label, "items": len(cases), "new_defects": "", "batch_id": batch_id}
+                  "label": label, "items": len(cases), "new_defects": "", "batch_id": batch_id,
+                  "result_keys": "[]"}            # a row of cases: it applies no results
         ctl.append([record.get(name) for name in self._control_names(ctl)])
         return {"added": True, "hash": h_cases, "cases": plan}
 
