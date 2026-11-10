@@ -281,6 +281,11 @@ def audit_maps(workspace: str, platforms: list[str]) -> dict:
             entry["out_of_scope"] = f"the map covers {', '.join(scope)}; the audit covers {', '.join(known)}"
             out["maps"].append(entry)
             continue
+        if several_workbooks(workspace) and not [p for p in mine if p]:
+            # several workbooks and neither the map nor the audited batches say a platform: the default workbook is never guessed
+            entry["undetermined"] = True
+            out["maps"].append(entry)
+            continue
         try:
             for p in mine:
                 entry["reports"].append(report(workspace, amap, True, p))
@@ -307,6 +312,10 @@ def audit_lines(ac: dict) -> list[str]:
     for m in ac["maps"]:
         if m["error"]:
             lines.append(f"acceptance criteria, PBI {m['pbi']}: not assessed ({m['error']})")
+            continue
+        if m.get("undetermined"):
+            lines.append(f"acceptance criteria, PBI {m['pbi']}: coverage not assessed: platform undetermined (several workbooks; "
+                         "neither the map's `platforms` nor the audited batches say one)")
             continue
         if m.get("out_of_scope"):
             lines.append(f"acceptance criteria, PBI {m['pbi']}: out of scope of this audit ({m['out_of_scope']}); not evaluated")

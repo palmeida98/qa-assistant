@@ -162,6 +162,34 @@ class AcAudit(base.Base):
         self.assertEqual(code, 1)                      # AC2 has no case, but it ran with no platform
         self.assertIn("AC2  UNCOVERED", out)
 
+    def test_the_same_id_on_android_and_ios_with_no_platform_to_choose_is_not_assessed(self):
+        # batches whose platform cannot be read (no run.platform, names match no report.platforms pattern)
+        self.set_status(CFG["file"], "TC-SHOP-001", "Pass")
+        self.set_status(self.ios_file, "TC-SHOP-001", "Fail")
+        self.map()
+        self.batch("batch_x_01", [base.item("TC-SHOP-001", "Pass", "2026-11-10T09:00:00")], run=RUN)
+        rep = qr.audit(self.ws, self.proj, qr.load_batches(self.ws, self.proj))
+        m = rep["ac_coverage"]["maps"][0]
+        self.assertEqual((m["reports"], m.get("undetermined")), ([], True))
+        text = qr.render_audit(rep, True)
+        self.assertIn("coverage not assessed: platform undetermined", text)
+        self.assertNotIn("complete coverage", text)
+        # the map's own scope determines it: each platform is then read from its own workbook
+        self.set_scope(["android", "ios"])
+        rep = qr.audit(self.ws, self.proj, qr.load_batches(self.ws, self.proj))
+        m = rep["ac_coverage"]["maps"][0]
+        self.assertEqual({r["platform"]: r["criteria"][0]["verdict"] for r in m["reports"]},
+                         {"android": "passed", "ios": "open"})
+
+    def test_a_single_workbook_project_keeps_reading_the_default_workbook_in_the_audit(self):
+        del self.proj["excel"]["workbooks"]
+        self.write_project()
+        self.map()
+        self.batch("batch_x_01", [base.item("TC-SHOP-001", "Pass", "2026-11-10T09:00:00")], run=RUN)
+        rep = qr.audit(self.ws, self.proj, qr.load_batches(self.ws, self.proj))
+        m = rep["ac_coverage"]["maps"][0]
+        self.assertEqual(([r["platform"] for r in m["reports"]], m.get("undetermined")), ([None], None))
+
     def test_a_source_that_is_not_available_is_not_an_uncovered_criterion(self):
         self.map(kind="none", cases=())
         text = qr.render_audit(self.audit(), True)

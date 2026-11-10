@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ## [Unreleased]
 
 ### Fixed (review of PR #15, 2026-11-10)
+- Criteria coverage in the audit: with several workbooks and no platform from the map or the audited batches, the audit says
+  «coverage not assessed: platform undetermined» (the default workbook is not guessed); one workbook is unchanged.
 - Proof: a comparison side counts only as `before <subject>: <text>` / `after <subject>: <text>` with the exact subject and a
   non-empty text (subjects sharing a prefix are not confused); an `--observed-absence` counts as a direct observation but
   never satisfies a comparison; results without `proof` are still never judged.

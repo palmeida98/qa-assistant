@@ -166,7 +166,7 @@ checkout; nothing is installed for the user and the system Python is never used 
 - **Map the criteria to cases.** `ac_coverage.py init <pbi>` reads the criteria of the ticket memory; the mapping of cases is
   a planning decision (the audit now shows the coverage of every `analysis/ac_map_*.json` per platform, from that platform's workbook
   and run logs, and the cases whose latest result differs between platforms; no map = coverage not assessed, not «uncovered»; a map's `platforms` is intersected with the audited platforms, and a map outside them is
-  shown as out of scope; the standalone `report` with several workbooks gives one report per platform or needs `--platform`); `report` shows which criteria are uncovered, not run, passed, partly passed or open, and says when the
+  shown as out of scope, and with several workbooks and no platform from the map or the batches it says «coverage not assessed: platform undetermined»; the standalone `report` with several workbooks gives one report per platform or needs `--platform`); `report` shows which criteria are uncovered, not run, passed, partly passed or open, and says when the
   source of the criteria is not available or inferred. It shows the workbook status, the latest run-log result and a note
   «under review» apart, and never reports complete coverage while a mapped result is under review or differs from its run
   log. A criterion with no case is a gap to say, never to hide.
