@@ -45,6 +45,10 @@
    ONE verifiable expected result, role, platform, module, technique, priority and origin.
    If a case has several expected results, split it (section 5.3).
 5. The expected result comes from the specification, never from the application's current behaviour.
+5a. An expected result that is a NEGATION or a change («no duplicate», «unchanged», «nothing sent») is proven either by
+   an absence seen directly (`run_log add --observed-absence`) or by a comparison: plan the before and after observations
+   and record the result with `--requires-comparison <subject>` and `before <subject>:` / `after <subject>:` observations.
+   The audit flags a Pass that depends on a comparison and lacks one of them (rules.md section 15); earlier results are never judged.
 6. The priority derives from the feature's risk, unless the project has a different rule.
 7. Before proposing, look for equivalent existing cases and flag duplicates (section 10).
 8. Present the cases as PROPOSALS. They only go into the workbook/tracker after the user approves them

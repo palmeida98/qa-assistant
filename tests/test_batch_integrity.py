@@ -496,6 +496,53 @@ class Proof(Fixture):
         flags = [t for t, must in qr._audit_flags(e) if must]
         self.assertTrue(any(t.startswith("Pass without the proof its case requires") for t in flags))
 
+    def test_a_pass_that_depends_on_a_comparison_needs_before_and_after(self):
+        self.add("TC-SHOP-001", "Pass", proof={"observed": ["after documents: 3"], "requires_comparison": ["documents"]})
+        self.add("TC-SHOP-002", "Pass", proof={"observed": ["before documents: 3", "after documents: 3"],
+                                               "requires_comparison": ["documents"]})
+        self.add("TC-SHOP-003", "Pass", proof={"observed": ["panel: no duplicate card"],
+                                               "absent_observed": ["panel: no duplicate card"]})
+        e = self.entry()
+        self.assertEqual(e["proof_problems"], [("TC-SHOP-001: comparison required for documents: observation of before "
+                                                "missing (record `before documents: <what was seen>` with its evidence)")])
+        self.assertEqual(e["absence_observed"], ["TC-SHOP-003: panel: no duplicate card"])
+        flags = dict(qr._audit_flags(e))
+        self.assertIs(flags["absence observed directly (not a comparison): TC-SHOP-003: panel: no duplicate card"], False)
+        self.assertTrue(e["to_fix"])
+
+    def gaps(self, proof, status="Pass"):
+        import run_log as rl2
+        return rl2.proof_gaps({"status": status, "proof": proof})
+
+    def test_a_comparison_side_needs_the_exact_subject_and_a_non_empty_text(self):
+        need = {"requires_comparison": ["documents"]}
+        both = {"observed": ["before documents: 3", "After Documents: 3"], **need}      # case does not matter
+        self.assertEqual(self.gaps(both), [])
+        empty = self.gaps({"observed": ["before documents:", "after documents:   "], **need})
+        self.assertEqual(len(empty), 1)
+        self.assertIn("observation of before and after missing", empty[0])
+        self.assertIn("before and after", self.gaps({"observed": ["before documents", "after documents"], **need})[0])
+        self.assertIn("observation of after missing", self.gaps({"observed": ["before documents: 3"], **need})[0])
+
+    def test_subjects_that_share_a_prefix_are_not_confused(self):
+        longer = ["before documents extra: 3", "after documents extra: 3"]
+        self.assertEqual(len(self.gaps({"observed": longer, "requires_comparison": ["documents"]})), 1)
+        self.assertEqual(self.gaps({"observed": longer, "requires_comparison": ["documents extra"]}), [])
+        both = longer + ["before documents: 3", "after documents: 3"]
+        self.assertEqual(self.gaps({"observed": both, "requires_comparison": ["documents", "documents extra"]}), [])
+
+    def test_an_absence_is_a_direct_observation_but_never_satisfies_a_comparison(self):
+        absent = {"absent_observed": ["panel: no duplicate card"]}
+        self.assertEqual(self.gaps(absent), [])                                    # not «nothing observed»
+        self.assertEqual(self.gaps({**absent, "requires_observed": ["panel"]}), []) # counts for a required observation
+        sides = {"absent_observed": ["before documents: 3", "after documents: 3"], "requires_comparison": ["documents"]}
+        self.assertEqual(len(self.gaps(sides)), 1)                                 # but not for a comparison
+        self.assertIn("observation of before and after missing", self.gaps(sides)[0])
+
+    def test_a_result_without_proof_is_never_judged_even_with_comparison_words(self):
+        self.assertEqual(rl.proof_gaps({"status": "Pass"}), [])
+        self.assertEqual(rl.proof_gaps({"status": "Pass", "actual_result": "before documents: 3"}), [])
+
     def test_results_without_a_proof_block_are_only_counted_never_judged(self):
         self.add("TC-SHOP-001", "Pass")                                   # recorded without proof: as every earlier result
         self.add("TC-SHOP-002", "Fail", proof={"inferred": ["x"]})         # not a Pass: never judged

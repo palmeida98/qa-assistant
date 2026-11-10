@@ -81,9 +81,45 @@ def init(workspace: str, pbi: int | str) -> dict:
             "criteria": [{"id": f"AC{i}", "text": t, "cases": []} for i, t in enumerate(criteria, 1)]}
 
 
-def _library(workspace: str):
+def _workbook_of(workspace: str, platform: str | None) -> str | None:
+    """The file of the `excel.workbooks` entry of `platform` (its `platform`, else its key), or None (= the default one)."""
+    if not platform:
+        return None
+    from common import read_project
+
+    from adapters.excel.base import workbook_patterns
+    excel = (read_project(workspace).get("excel") or {})
+    for key, file, _pats in workbook_patterns(excel):
+        if str(((excel.get("workbooks") or {}).get(key) or {}).get("platform") or key).lower() == platform.lower():
+            return file
+    return None
+
+
+def known_platforms(workspace: str) -> list[str]:
+    """The platforms the project names: `report.platforms` and the `platform` (else the key) of each `excel.workbooks` entry."""
+    from common import read_project
+
+    from adapters.excel.base import workbook_patterns
+    proj = read_project(workspace)
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    names = [str(k).lower() for k in ((proj.get("report") or {}).get("platforms") or {})] \
+        if isinstance(proj.get("report"), dict) else []
+    names += [str(((excel.get("workbooks") or {}).get(k) or {}).get("platform") or k).lower()
+              for k, _f, _p in workbook_patterns(excel)]
+    return list(dict.fromkeys(names))
+
+
+def several_workbooks(workspace: str) -> bool:
+    from common import read_project
+
+    from adapters.excel.base import workbook_patterns
+    excel = read_project(workspace).get("excel")
+    return bool(workbook_patterns(excel if isinstance(excel, dict) else {}))
+
+
+def _library(workspace: str, platform: str | None = None):
     from adapters.excel.base import ExcelAdapter
-    ad = ExcelAdapter.from_project(workspace)
+    ad = ExcelAdapter.from_project(workspace, file=_workbook_of(workspace, platform))
     ad.load()
     cols = ad.cfg["cases"]["columns"]
     out = {}
@@ -113,9 +149,9 @@ def verdict(statuses: list[str], not_run_word: str | None, pass_words: set[str],
     return "partly passed"
 
 
-def _latest_run_logs(workspace: str, cases: set[str]) -> dict:
+def _latest_run_logs(workspace: str, cases: set[str], platform: str | None = None) -> dict:
     """{case: {"status", "batch", "ts", "evidence": n, "applied"}} of the LATEST result of each case in the run logs
-    (by time of execution), read only. {} when the workspace has no run logs or no project."""
+    (by time of execution) of the same `platform` (all when None), read only. {} when the workspace has no run logs or no project."""
     try:
         import qa_report as qr
         from common import read_project
@@ -125,6 +161,8 @@ def _latest_run_logs(workspace: str, cases: set[str]) -> dict:
         return {}
     best: dict = {}
     for b in batches:
+        if platform and qr.platform_of(b, proj) != platform.lower():
+            continue
         for r in b["results"]:
             tc = str(r.get("tc"))
             if tc in cases:
@@ -141,14 +179,14 @@ def _entry(x) -> dict:
         {"case": str(x.get("case")), "why": str(x.get("why") or ""), "required": bool(x.get("required"))}
 
 
-def report(workspace: str, amap: dict, run_logs: bool = True) -> dict:
+def report(workspace: str, amap: dict, run_logs: bool = True, platform: str | None = None) -> dict:
     """Per criterion: `cases` (they COVER it: the verdict comes from them) and `related` (verifications of the same PBI that
     are not the criterion's own text; a related one marked `required` blocks a plain `passed` while it is not a pass). Each
     association carries a short `why`. See the module docstring for the verdict words and for complete coverage."""
-    library, not_run, statuses = _library(workspace)
+    library, not_run, statuses = _library(workspace, platform)
     passes = _pass_words(statuses)
     wanted = {_entry(x)["case"] for c in amap.get("criteria") or [] for k in ("cases", "related") for x in c.get(k) or []}
-    logs = _latest_run_logs(workspace, wanted) if run_logs else {}
+    logs = _latest_run_logs(workspace, wanted, platform) if run_logs else {}
     src = amap.get("criteria_source") or {}
     kind = src.get("kind") or "none"
     missing_cases, unconfirmed, required_open = [], [], []
@@ -206,8 +244,90 @@ def report(workspace: str, amap: dict, run_logs: bool = True) -> dict:
     fail = (kind == "none" or any(not r["cases"] for r in rows) or bool(missing_cases) or bool(unconfirmed)
             or bool(required_open))
     complete = not fail and kind == "ticket-memory"
-    return {"pbi": amap.get("pbi"), "title": amap.get("title"), "source": src, "criteria": rows, "problems": problems,
+    return {"pbi": amap.get("pbi"), "platform": platform, "title": amap.get("title"), "source": src, "criteria": rows, "problems": problems,
             "limitations": limitations, "complete": complete, "exit": 1 if fail else 0}
+
+
+def audit_maps(workspace: str, platforms: list[str]) -> dict:
+    """What `qa_report.py audit` shows of the criteria coverage (Q3, phase 19). Read only. For each map in
+    analysis/ac_map_*.json and each platform of the audited batches: the report built from THAT platform's workbook and run
+    logs; and the cases whose latest result DIFFERS between platforms (the same ID passes on one and fails on the other).
+    A map may say `"platforms": ["android"]` to limit the evaluation to the platforms in its scope (a cycle that is Android only
+    does not report iOS as uncovered). Three situations are kept apart: `maps: []` = no map exists, so coverage was NOT assessed (never read as «no criterion
+    is covered»); a map whose criteria source is `none` = the source of the criteria is not available; a criterion with no
+    case = uncovered. Nothing here changes the batches' `to_fix`."""
+    paths = sorted(glob.glob(os.path.join(workspace, "analysis", "ac_map_*.json")))
+    plats = [p for p in dict.fromkeys(platforms) if p] or [None]
+    out: dict = {"maps": [], "unreadable": []}
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                amap = json.load(f)
+        except (OSError, ValueError) as e:
+            out["unreadable"].append(f"{os.path.relpath(path, workspace)}: {e}")
+            continue
+        entry = {"map": os.path.relpath(path, workspace), "pbi": amap.get("pbi"), "reports": [], "platform_differences": [],
+                 "error": None}
+        scope = [str(x).lower() for x in amap.get("platforms") or []]
+        known = [p for p in plats if p]
+        # the platforms to evaluate = the map's scope ∩ the audited platforms; no audited platform is known: the map's own
+        if not scope:
+            mine = plats
+        elif known:
+            mine = [p for p in known if p in scope]
+        else:
+            mine = scope
+        if scope and known and not mine:
+            entry["out_of_scope"] = f"the map covers {', '.join(scope)}; the audit covers {', '.join(known)}"
+            out["maps"].append(entry)
+            continue
+        if several_workbooks(workspace) and not [p for p in mine if p]:
+            # several workbooks and neither the map nor the audited batches say a platform: the default workbook is never guessed
+            entry["undetermined"] = True
+            out["maps"].append(entry)
+            continue
+        try:
+            for p in mine:
+                entry["reports"].append(report(workspace, amap, True, p))
+            if len([p for p in mine if p]) > 1:
+                cases = sorted({str(c.get("case") if isinstance(c, dict) else c)
+                                for k in amap.get("criteria") or [] for key in ("cases", "related") for c in k.get(key) or []})
+                latest = {p: _latest_run_logs(workspace, set(cases), p) for p in mine}
+                for tc in cases:
+                    seen = {p: str(latest[p][tc]["status"]) for p in mine if tc in latest[p]}
+                    if len(set(seen.values())) > 1:
+                        entry["platform_differences"].append(f"{tc}: " + ", ".join(f"{p} {v}" for p, v in seen.items()))
+        except Exception as e:      # noqa: BLE001 - one unreadable workbook must not stop the audit of the rest
+            entry["error"] = f"{type(e).__name__}: {e}"
+        out["maps"].append(entry)
+    return out
+
+
+def audit_lines(ac: dict) -> list[str]:
+    """The lines of the audit for `audit_maps`."""
+    if not ac["maps"] and not ac["unreadable"]:
+        return [("acceptance criteria: no map in analysis/ac_map_*.json: coverage NOT assessed (a missing map is not the "
+                 "same as a criterion with no case; /plan-tests step 1c creates one)")]
+    lines = [f"acceptance criteria: unreadable map {u}" for u in ac["unreadable"]]
+    for m in ac["maps"]:
+        if m["error"]:
+            lines.append(f"acceptance criteria, PBI {m['pbi']}: not assessed ({m['error']})")
+            continue
+        if m.get("undetermined"):
+            lines.append(f"acceptance criteria, PBI {m['pbi']}: coverage not assessed: platform undetermined (several workbooks; "
+                         "neither the map's `platforms` nor the audited batches say one)")
+            continue
+        if m.get("out_of_scope"):
+            lines.append(f"acceptance criteria, PBI {m['pbi']}: out of scope of this audit ({m['out_of_scope']}); not evaluated")
+            continue
+        for rep in m["reports"]:
+            where = f" on {rep['platform']}" if rep["platform"] else ""
+            states = ", ".join(f"{r['id']} {r['verdict']}" for r in rep["criteria"]) or "no criteria in the map"
+            lines.append(f"acceptance criteria, PBI {m['pbi']}{where}: complete coverage "
+                         f"{'yes' if rep['complete'] else 'NO'} ({states})")
+            lines += [f"    ! {p}" for p in rep["problems"]]
+        lines += [f"    ! same case, different result between platforms: {d}" for d in m["platform_differences"]]
+    return lines
 
 
 def _case_text(c: dict) -> str:
@@ -245,6 +365,8 @@ def main(argv=None) -> int:
     p.add_argument("map")
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-run-logs", action="store_true", help="read only the workbook (the report then says what it cannot see)")
+    p.add_argument("--platform", help="use the workbook and the run logs of this platform. A project with several workbooks without it gets one report "
+                        "per platform (the map's scope); an unknown platform is an error. One workbook: optional")
     a = ap.parse_args(argv)
     if a.command == "init":
         amap = init(a.workspace, a.pbi)
@@ -263,9 +385,27 @@ def main(argv=None) -> int:
     path = a.map if os.path.isabs(a.map) else os.path.join(a.workspace, a.map)
     with open(path, encoding="utf-8-sig") as f:
         amap = json.load(f)
-    rep = report(a.workspace, amap, run_logs=not a.no_run_logs)
-    print(json.dumps(rep, ensure_ascii=False, indent=1) if a.json else render(rep), end="")
-    return rep["exit"]
+    wanted = [a.platform.strip().lower()] if a.platform else []
+    if several_workbooks(a.workspace):
+        known = known_platforms(a.workspace)
+        if wanted and wanted[0] not in known:
+            print(f"error: --platform {a.platform!r} is not a platform of this project ({', '.join(known) or 'none named'})",
+                  file=sys.stderr)
+            return 2
+        if not wanted:      # several workbooks: one report per platform (the map's scope when it has one), never a guess
+            scope = [str(x).lower() for x in amap.get("platforms") or []]
+            wanted = [p for p in known if not scope or p in scope]
+            if not wanted:
+                print("error: the project has several workbooks and no platform could be chosen: pass --platform "
+                      f"({', '.join(known) or 'none named'})", file=sys.stderr)
+                return 2
+    reps = [report(a.workspace, amap, run_logs=not a.no_run_logs, platform=p) for p in wanted or [None]]
+    code = max(r["exit"] for r in reps)
+    if a.json:
+        print(json.dumps(reps[0] if len(reps) == 1 else {"reports": reps, "exit": code}, ensure_ascii=False, indent=1))
+    else:
+        print("\n".join(f"== platform: {r['platform']} ==\n" + render(r) if len(reps) > 1 else render(r) for r in reps), end="")
+    return code
 
 
 if __name__ == "__main__":
