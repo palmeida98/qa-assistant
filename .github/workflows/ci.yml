@@ -211,7 +211,7 @@ jobs:
       - name: LibreOffice-dependent tests
         run: |
           set -o pipefail
-          python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_excel_recalc_flows -v 2>&1 | tee golden-unit.log
+          python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_excel_recalc_flows tests.test_apply_template -v 2>&1 | tee golden-unit.log
       - name: Counts and skips in the summary
         if: ${{ !cancelled() }}
         run: python scripts/ci_test_summary.py golden-unit.log --title "LibreOffice-dependent tests (golden)" --max-skips 0

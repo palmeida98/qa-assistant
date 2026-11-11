@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (QA apply template, 2026-11-11)
+- `docs/workspace/ci/apply.yml`: the workspace's `QA apply` no longer runs on a push to `main`. It started on every push that touched `runs/**`,
+  applied without a dry run and without a preview token, committed and pushed to `main` and commented on pull requests ("the merge is
+  the approval"). Now the only trigger is `workflow_dispatch`; the default mode is a dry run (it refuses a `proposed` bug or a `Question`,
+  writes nothing, prints the review and, for Excel, the `v2-` token); `mode: apply` needs the typed approval `APPLY <batch>` and the
+  reviewed token (a wrong or stale one is refused by `--expect`, nothing written) and pushes only a new branch `qa-apply/<batch>-<run>`
+  with the project's workbook(s) or `tracker/` (any other changed file stops it). No pull request is opened, `main` is never pushed to,
+  permissions are read-only except the apply job's branch push, Actions are pinned to a commit, and the framework is the public
+  repository by default (`QA_ASSISTANT_REPOSITORY`, `QA_ASSISTANT_REF`, optional `QA_ASSISTANT_TOKEN`). Jira / Azure DevOps keep `--yes`
+  behind the typed approval (no token exists there). `workspace_ci.py apply-merged` is no longer called by the template.
+- New `tests/test_apply_template.py` (structure; and the template's own shell blocks end to end on the fictional demo with a local fake
+  remote, run in the `golden` job). `docs/workspace/ci/README.md`, `pr-body.md` and `technique-mobile.md` §11.4 describe it. A workspace that
+  installed the old copy keeps it until it runs `workspace_ci.py <workspace> install` again.
+
 ### Changed (CI audit, 2026-11-11)
 - `ci.yml`: `main` and manual runs are no longer cancelled by a newer push (each commit keeps its result); a pull request
   keeps one run. New `workflow_dispatch`. Job `changes`: the three browser jobs run on a pull request only when it touches

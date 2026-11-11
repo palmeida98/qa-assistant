@@ -15,7 +15,8 @@ them — they read project.yaml.
     post-check --run-log R [--report F]     the checks after the agent, before anything is committed (plan 11.5)
     pr-body --run-log R ...                 the pull request's body from .github/qa/pr-body.md (plan 11.6)
   and the apply workflow (docs/workspace/ci/apply.yml), after the merge:
-    apply-merged --before SHA --after SHA   apply each run log the push added or changed (plan 11.6)
+    apply-merged --before SHA --after SHA   LEGACY (no longer used by the QA apply template: it applies without a dry run and
+                                            pushes to main): apply each run log the push added or changed (plan 11.6)
 
 - install: copies the templates into the workspace (.github/workflows/qa-mobile.yml, ...), lists the secrets and
   the variable the workflows need and which exist (`gh secret list`), and checks that the repository is private
@@ -825,7 +826,7 @@ def main(argv=None) -> int:
     p.add_argument("--started", default="", help="epoch seconds of the job's start")
     p.add_argument("--agent", help="claude -p --output-format json")
     p.add_argument("--checks", help="post-check's report")
-    p = sub.add_parser("apply-merged", help="(apply workflow) apply the run logs of a merge")
+    p = sub.add_parser("apply-merged", help="LEGACY, no longer used by the apply template (it applies without a dry run and pushes to main): apply the run logs of a merge")
     p.add_argument("--before", required=True)
     p.add_argument("--after", required=True)
     a = ap.parse_args(argv)
