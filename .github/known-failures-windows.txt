@@ -1,0 +1,24 @@
+# Tests of the whole suite that fail on Windows (windows-latest, Python 3.12) and are KNOWN: first listed on 11.11.2026 from the
+# run of commit bf71daf (CI run 42927533093, job "tests-os (windows-latest)", command
+#   PYTHONUTF8=1 python -m unittest discover -s tests -v ).
+# The "Windows suite" workflow lists them apart from any new failure but stays RED while any test fails: Windows is
+# UNCONFIRMED until this file is empty. Causes seen: files still open when replaced (WinError 32/5) and POSIX-only
+# assumptions in the guard and the output tests. Each is a defect of its own, not fixed by the CI work.
+# One test id per line (module.Class.method); remove a line when its test passes.
+test_audit_evidence.Reports.test_the_summary_and_the_technical_report_show_valid_invalid_and_missing_evidence
+test_batch_integrity.Compatibility.test_rows_of_added_cases_and_notes_are_not_unverifiable_but_only_when_their_file_is_found
+test_batch_integrity.Compatibility.test_the_rows_of_notes_keep_an_empty_list_of_results
+test_batch_integrity.Gaps.test_the_rows_of_notes_keep_an_empty_list_of_results
+test_batch_integrity.PartialBatches.test_the_control_sheet_keeps_the_result_keys_and_an_old_row_is_rebuilt_from_its_run_log
+test_guard_destructive.Guard.test_a_file_that_is_being_written_is_checked_for_the_same_calls
+test_guard_destructive.Guard.test_a_python_script_named_by_the_command_is_read_before_it_runs
+test_guard_destructive.Guard.test_a_recursive_rm_strictly_inside_the_scratchpad_is_allowed
+test_guard_destructive.Guard.test_as_a_hook_it_exits_2_with_the_reason_to_block_0_to_allow_and_never_blocks_unreadable_input
+test_guard_destructive.Guard.test_find_with_delete_and_git_clean_are_refused_outside_the_scratchpad
+test_guard_destructive.Guard.test_rmtree_in_the_command_text_needs_a_literal_path_inside_the_scratchpad
+test_guard_destructive.Guard.test_the_extra_scratchpad_of_the_environment_is_honoured_for_tests_only
+test_output_layer.DryRunOfAddCases.test_the_card_is_short_and_the_review_file_holds_every_cell_in_full
+test_output_layer.DryRunOfTheApply.test_the_card_is_short_and_the_review_file_holds_every_value_in_full_with_the_same_token
+test_output_layer.ResultsAndProgress.test_a_result_is_one_line_with_the_platform_the_evidence_and_what_comes_next
+test_run_log_times_resolve.ResolveQuestion.test_an_applied_batch_is_never_touched_the_decision_goes_to_a_new_batch
+test_run_log_times_resolve.ResolveQuestion.test_the_new_batch_applies_with_its_own_dry_run_and_changes_the_workbook_only_then

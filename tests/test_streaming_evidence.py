@@ -243,16 +243,18 @@ class OwnClock(unittest.TestCase):
                 time.sleep(0.03)
                 return PNG
             with mock.patch.object(dv, "BURST_MIN_INTERVAL", 0.05), mock.patch.object(dv, "capture_png", capture):
-                b = dv.Burst(cfg, "", "clock", None, 50, 1.0, 0.2, 5)
+                # interval 0.5 s, not 0.2 s: a gap is more than 1.5 x the interval, and a shared macOS runner adds about
+                # 0.1 s to every timer wait, which was 0.32 s against a 0.3 s limit (the product was fine)
+                b = dv.Burst(cfg, "", "clock", None, 50, 2.5, 0.5, 5)
                 b.mark_sent()
                 b.start()
-                stop = time.monotonic() + 1.2
+                stop = time.monotonic() + 2.8
                 while time.monotonic() < stop:          # the main loop reads the screen slowly meanwhile
                     time.sleep(0.4)
                 b.stop("settled")
             self.assertFalse(b._thread.is_alive())
             m = b.manifest()
-            self.assertGreaterEqual(len(m["files"]), 4)            # about 1.0 s / 0.2 s, never one per 0.4 s reading
+            self.assertGreaterEqual(len(m["files"]), 3)            # about 2.5 s / 0.5 s; tied to the 0.4 s readings it would be gaps of 0.8 s
             self.assertEqual(m["gaps"], [])
             self.assertIn(m["stopped_by"], ("seconds", "settled"))
             self.assertTrue(threading.active_count() >= 1)
