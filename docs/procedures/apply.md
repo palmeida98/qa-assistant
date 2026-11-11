@@ -103,4 +103,10 @@ Ask the user for the final status, the reason and who decided it (and where the 
    progress view is the tracker's own reports (methodology.md section 4.2).
 9. A run log from a REMOTE run (runs/batch_<name>_r<run id>.json, from a pull request of the workspace's CI;
    technique-mobile.md section 11) is never applied here: its pull request is the review (proposed bugs approved
-   by removing "proposed", each Question answered), and after the merge qa-apply.yml applies it. Pull main first.
+   by removing "proposed", each Question answered). The merge applies nothing. Applying is a separate, manual step:
+   the workspace's `qa-apply.yml` starts only by `workflow_dispatch` (a push to main starts nothing). Its default
+   mode is a dry run: it writes nothing, refuses a run log that still has a `proposed` bug or a Question, and shows
+   the review (for Excel, the cells and a preview token). `mode: apply` needs the typed approval `APPLY <batch>` and,
+   for Excel, the token of the dry run the user reviewed (Jira / Azure DevOps have no token: the typed approval and
+   the dry run are the guard). The result goes to a new branch `qa-apply/<batch>-<run id>`, never to main, and the user
+   reviews and merges that pull request. Pull main first (docs/workspace/ci/README.md, "Applying a run log").
