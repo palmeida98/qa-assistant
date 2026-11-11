@@ -5,6 +5,7 @@ Fake interpreters are small shell scripts (POSIX); the real probe is also run ag
 """
 
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -140,6 +141,48 @@ class Launcher(unittest.TestCase):
             done = self.run_launcher("run", "-m", "adapters.excel.apply", "--help", cwd=elsewhere)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("--expect", done.stdout)
+
+    def test_child_env_drops_the_repository_variables_and_keeps_the_rest(self):
+        env = qp.child_env({"GIT_DIR": "/x/.git", "GIT_INDEX_FILE": "/x/.git/index", "GIT_AUTHOR_NAME": "a", "HOME": "/h"}, "/py")
+        self.assertEqual(env, {"GIT_AUTHOR_NAME": "a", "HOME": "/h", "PYTHONPATH": "/py"})
+
+    def test_the_list_covers_every_variable_workspace_git_already_drops(self):
+        import workspace_git
+        self.assertLessEqual(set(workspace_git.HOOK_VARIABLES), set(qp.REPOSITORY_VARIABLES))
+
+    @unittest.skipUnless(shutil.which("git"), "git is needed")
+    def test_a_command_run_from_a_hook_does_not_touch_the_index_of_the_repository_being_committed(self):
+        """What a pre-commit hook gives a linked worktree (absolute GIT_DIR and GIT_INDEX_FILE) must not reach a temporary repo."""
+        ident = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+        with tempfile.TemporaryDirectory() as real:
+            def git(*a, cwd=real):
+                return subprocess.run(["git", *ident, *a], cwd=cwd, capture_output=True, text=True, check=True).stdout
+            git("init", "-q")
+            for name in ("a.txt", "b.txt"):
+                with open(os.path.join(real, name), "w", encoding="utf-8") as f:
+                    f.write(name)
+            git("add", "-A")
+            git("commit", "-q", "-m", "base")
+            with open(os.path.join(real, "a.txt"), "w", encoding="utf-8") as f:
+                f.write("staged change")
+            git("add", "a.txt")
+            before = git("status", "--porcelain")
+            hook_env = {**os.environ, "GIT_DIR": os.path.join(real, ".git"), "GIT_INDEX_FILE": os.path.join(real, ".git", "index")}
+            code = ("import subprocess, tempfile, os\n"
+                    "t = tempfile.mkdtemp()\n"
+                    "open(os.path.join(t, 'f.txt'), 'w').write('x')\n"
+                    "for a in (['init', '-q'], ['add', '-A']):\n"
+                    "    subprocess.run(['git', *a], cwd=t, check=True)\n")
+            done = self.run_launcher("run", "-c", code, env=hook_env)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(git("status", "--porcelain"), before)
+
+    def test_run_gives_the_command_no_repository_variable(self):
+        hook_env = {**os.environ, "GIT_DIR": "/nowhere/.git", "GIT_INDEX_FILE": "/nowhere/.git/index", "GIT_PREFIX": "sub/"}
+        code = "import os; print(sorted(k for k in os.environ if k in ('GIT_DIR', 'GIT_INDEX_FILE', 'GIT_PREFIX')))"
+        done = self.run_launcher("run", "-c", code, env=hook_env)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(), "[]")
 
     def test_a_missing_explicit_choice_exits_3_with_what_to_do(self):
         env = {**os.environ, "QA_PYTHON": os.path.join(tempfile.gettempdir(), "absent-python")}

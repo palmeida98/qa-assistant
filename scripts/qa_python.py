@@ -32,6 +32,13 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIRED = ("yaml", "openpyxl")                  # what every script needs; the rest is checked by its own script
 MINIMUM = (3, 12)
+# What git exports to a hook (pre-commit, commit-msg ...) to say WHICH repository is being committed. In a normal checkout GIT_INDEX_FILE
+# is relative (".git/index"), so a `git init` in a temporary folder is not affected; in a LINKED WORKTREE GIT_DIR and GIT_INDEX_FILE are
+# absolute, and any git command a test runs in a temporary repository would read and write the index of the repository being committed
+# (hundreds of staged deletions, observed 11.11.2026). The command that `run` starts gets the environment of the folder it runs in, not
+# the one of the hook that started it.
+REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+                        "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_IMPLICIT_WORK_TREE")
 PROBE = ("import sys\n"
          f"assert sys.version_info >= {MINIMUM}, 'Python %d.%d is older than {MINIMUM[0]}.{MINIMUM[1]}' "
          "% sys.version_info[:2]\n"
@@ -142,6 +149,13 @@ def instructions(root: str = ROOT, tried=()) -> str:
     return "\n".join(lines)
 
 
+def child_env(environ, pythonpath: str) -> dict:
+    """The environment of the command `run` starts: PYTHONPATH set, git's repository-location variables removed."""
+    env = {k: v for k, v in environ.items() if k not in REPOSITORY_VARIABLES}
+    env["PYTHONPATH"] = pythonpath
+    return env
+
+
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] in ("-h", "--help"):
@@ -165,7 +179,7 @@ def main(argv=None) -> int:
             args[0] = os.path.join(ROOT, args[0])
         # -m modules (adapters.*, qa_audit) are importable from the checkout, whatever the current directory
         path = [ROOT, os.path.join(ROOT, "src")] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
-        env = dict(os.environ, PYTHONPATH=os.pathsep.join(path))
+        env = child_env(os.environ, os.pathsep.join(path))
         return subprocess.call([*found["command"], *args], env=env)
     if argv[:1] == ["--json"]:
         print(json.dumps({"python": found["command"], "source": found["source"],
