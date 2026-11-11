@@ -67,8 +67,14 @@ class Fixture(base.Base):
         return quiet(ap.apply, self.ws, os.path.join("runs", f"{name}.json"), recalc=False, now=NOW)
 
     def control(self):
+        # A read-only workbook keeps the file open until it is closed or collected. It sits in a reference cycle, so only the
+        # garbage collector would free it, at a moment that depends on what ran before: on Windows the next apply of the same
+        # workbook (os.replace) then failed with WinError 5/32, or not, depending on the composition of the suite (11.11.2026).
         wb = openpyxl.load_workbook(os.path.join(self.ws, CFG["file"]), read_only=True)
-        return [r for r in wb["_qa_batches"].iter_rows(min_row=2, values_only=True)] if "_qa_batches" in wb.sheetnames else []
+        try:
+            return [r for r in wb["_qa_batches"].iter_rows(min_row=2, values_only=True)] if "_qa_batches" in wb.sheetnames else []
+        finally:
+            wb.close()
 
 
 class PartialBatches(Fixture):
