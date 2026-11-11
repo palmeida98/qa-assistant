@@ -34,6 +34,7 @@ def write(content, sid=SID, tool="Write"):
     return g.decide({"tool_name": tool, "tool_input": {"file_path": f"{SP}/h.py", key: content}, "session_id": sid})
 
 
+@unittest.skipIf(os.name == "nt", "guard_destructive is a POSIX hook: its scratchpad paths, the ':' of QA_SCRATCHPAD and the parsing of the command are POSIX")
 class Guard(unittest.TestCase):
     def test_a_recursive_rm_strictly_inside_the_scratchpad_is_allowed(self):
         for cmd in (f"rm -rf {SP}/a", f"rm -r {SP}/a/b {SP}/c", f"rm -fr {SP}/a", f"/bin/rm --recursive {SP}/a",

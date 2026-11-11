@@ -18,6 +18,14 @@ It reads the command line, python files the command names and the text being wri
 (a path read from a file or a network call), a non-python script, or another interpreter it does not recognise. It is a safety
 net for the mistake that happened, not a sandbox, and it is **not active until installed**.
 
+## Platform: POSIX only (macOS, Linux)
+The scratchpad it protects is a POSIX path (`/private/tmp/claude-<uid>/…`, also under `/tmp`), `QA_SCRATCHPAD` is split on `:` and
+the command is parsed as a POSIX shell line. It is **not supported on Windows**, and its tests are skipped there (reason:
+"guard_destructive is a POSIX hook"). Observed on `windows-latest` (11.11.2026, Python 3.12.10): after `os.path.normpath` the paths
+use a backslash and never match the scratchpad pattern, so every recursive deletion is refused (it fails closed: safe, and of no
+use); the exception is a python script named in the command with a backslash path, which the POSIX parsing mangles
+(`C:Users…`), so the script is not read and is not checked. Do not install it on Windows expecting protection.
+
 ## Installing it (a configuration change: the user approves it)
 In the workspace's `.claude/settings.json` (or the user's `~/.claude/settings.json`), with `<qa>` the QA Assistant checkout:
 
@@ -36,4 +44,4 @@ In the workspace's `.claude/settings.json` (or the user's `~/.claude/settings.js
 Check it with a harmless command such as `rm -rf /private/tmp/claude-0/none` (it must be blocked) before relying on it.
 
 ## Tests
-`python -m unittest tests.test_guard_destructive` (fictional paths; nothing is ever deleted).
+`python -m unittest tests.test_guard_destructive` (fictional paths; nothing is ever deleted). Skipped on Windows (POSIX only, above).
