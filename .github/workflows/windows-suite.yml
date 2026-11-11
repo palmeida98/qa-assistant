@@ -45,7 +45,7 @@ jobs:
       - name: Counts, skips and known failures in the summary
         if: ${{ !cancelled() }}
         run: |
-          python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, windows-latest)" --known-failures .github/known-failures-windows.txt --banner "Windows is UNCONFIRMED: the whole suite has known failures (this check stays red until they are fixed)" --allow-skip "needs LibreOffice" --allow-skip "\\(Linux\\)" --allow-skip "fake interpreters are shell scripts" --allow-skip "time.tzset" --allow-skip "no permissions"
+          python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, windows-latest)" --known-failures .github/known-failures-windows.txt --banner "Windows is UNCONFIRMED: the whole suite has known failures (this check stays red until they are fixed)" --allow-skip "needs LibreOffice" --allow-skip "\\(Linux\\)" --allow-skip "fake interpreters are shell scripts" --allow-skip "time.tzset" --allow-skip "no permissions" --allow-skip "guard_destructive is a POSIX hook"
       - name: Keep the log
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

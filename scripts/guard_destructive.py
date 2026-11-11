@@ -14,6 +14,8 @@ The scratchpad is `/private/tmp/claude-<uid>/<project>/<session_id>/scratchpad` 
 `session_id` of the hook's input; `QA_SCRATCHPAD` (folders separated by `:`) adds to it for tests. Without a session
 id nothing is allowed.
 
+PLATFORM: POSIX only (macOS, Linux). It is not supported on Windows: see docs/technique-destructive-guard.md, "Platform".
+
 LIMITS (honest): it reads the command line, python files that the command names and the text being written; it cannot
 see a deletion built at run time (a path assembled from variables is refused, a path read from a file is not seen),
 a script that is not a python file, or an interpreter/binary other than the ones it recognises. It is a safety net
