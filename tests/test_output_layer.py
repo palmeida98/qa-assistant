@@ -193,7 +193,7 @@ class Workspace(unittest.TestCase):
         for folder, _, files in os.walk(self.ws):
             for n in files:
                 with open(os.path.join(folder, n), "rb") as f:
-                    out[os.path.relpath(os.path.join(folder, n), self.ws)] = hashlib.sha256(f.read()).hexdigest()
+                    out[os.path.relpath(os.path.join(folder, n), self.ws).replace(os.sep, "/")] = hashlib.sha256(f.read()).hexdigest()
         return out
 
 
@@ -315,7 +315,7 @@ class ResultsAndProgress(Workspace):
         self.assertEqual(self.cli(rl, "plan", "a_01", "batches/plan.yaml")[0], 0)
         code, out = self.add("TC-SHOP-001", "Pass", "--evidence", "evidence/a.png", "evidence/b.png")
         self.assertEqual(code, 0, out)
-        self.assertEqual(out.strip(), "added: [android] TC-SHOP-001 Pass · 2 evidence path(s) · runs/batch_a_01.json "
+        self.assertEqual(out.strip(), "added: [android] TC-SHOP-001 Pass · 2 evidence path(s) · " + os.path.join("runs", "batch_a_01.json") + " "
                                       "· next: TC-SHOP-002")
         self.assertNotIn(self.ws, out)                                         # a relative path, not an absolute one
         code, out = self.add("TC-SHOP-001", "Pass", "--detail", batch="a_02")
