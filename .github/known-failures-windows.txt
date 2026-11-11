@@ -7,7 +7,8 @@
 # One test id per line (module.Class.method); remove a line when its test passes.
 # 11.11.2026: the four test_batch_integrity entries were removed. They failed with WinError 5/32 because the test helper left a read-only
 # workbook open (freed only by the garbage collector, so the result followed the composition of the suite); the helper now closes it.
-test_audit_evidence.Reports.test_the_summary_and_the_technical_report_show_valid_invalid_and_missing_evidence
+# 11.11.2026: six entries removed (test_run_log_times_resolve, test_output_layer, test_audit_evidence). Windows path separators: the `digests`
+# helpers returned keys with a backslash and three messages are printed with the platform separator, while the tests expected a slash.
 test_guard_destructive.Guard.test_a_file_that_is_being_written_is_checked_for_the_same_calls
 test_guard_destructive.Guard.test_a_python_script_named_by_the_command_is_read_before_it_runs
 test_guard_destructive.Guard.test_a_recursive_rm_strictly_inside_the_scratchpad_is_allowed
@@ -15,8 +16,3 @@ test_guard_destructive.Guard.test_as_a_hook_it_exits_2_with_the_reason_to_block_
 test_guard_destructive.Guard.test_find_with_delete_and_git_clean_are_refused_outside_the_scratchpad
 test_guard_destructive.Guard.test_rmtree_in_the_command_text_needs_a_literal_path_inside_the_scratchpad
 test_guard_destructive.Guard.test_the_extra_scratchpad_of_the_environment_is_honoured_for_tests_only
-test_output_layer.DryRunOfAddCases.test_the_card_is_short_and_the_review_file_holds_every_cell_in_full
-test_output_layer.DryRunOfTheApply.test_the_card_is_short_and_the_review_file_holds_every_value_in_full_with_the_same_token
-test_output_layer.ResultsAndProgress.test_a_result_is_one_line_with_the_platform_the_evidence_and_what_comes_next
-test_run_log_times_resolve.ResolveQuestion.test_an_applied_batch_is_never_touched_the_decision_goes_to_a_new_batch
-test_run_log_times_resolve.ResolveQuestion.test_the_new_batch_applies_with_its_own_dry_run_and_changes_the_workbook_only_then

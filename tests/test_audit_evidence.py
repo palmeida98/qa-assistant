@@ -134,8 +134,8 @@ class Reports(Evidence):
         self.mixed()
         code, out = self.run_("report", "--name", "demo")
         self.assertEqual(code, 1)                                           # something to fix: the exit says so
-        self.assertIn("written: exports/demo.technical.md", out)
-        self.assertIn("written: exports/demo.summary.md", out)
+        self.assertIn("written: " + os.path.join("exports", "demo.technical.md"), out)
+        self.assertIn("written: " + os.path.join("exports", "demo.summary.md"), out)
         summary, technical = self.read("demo.summary.md"), self.read("demo.technical.md")
         self.assertIn("Evidence: 2 valid · 2 marked invalid (kept on file, not proof) · 1 named but missing.", summary)
         self.assertIn("result(s) whose only evidence is invalid: TC-SHOP-002", summary)

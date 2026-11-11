@@ -68,7 +68,7 @@ class Base(unittest.TestCase):
         for folder, _, files in os.walk(self.ws):
             for n in files:
                 with open(os.path.join(folder, n), "rb") as f:
-                    out[os.path.relpath(os.path.join(folder, n), self.ws)] = hashlib.sha256(f.read()).hexdigest()
+                    out[os.path.relpath(os.path.join(folder, n), self.ws).replace(os.sep, "/")] = hashlib.sha256(f.read()).hexdigest()
         return out
 
     def totals(self):
