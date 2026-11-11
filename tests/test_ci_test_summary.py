@@ -10,6 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
@@ -64,8 +65,9 @@ NO TESTS RAN
 """
 
 
-def run(log, *args):
-    with tempfile.TemporaryDirectory() as tmp:
+def run(log, *args, github=False):
+    # the format of the error line depends on the environment: pin it, so the test says the same on a laptop and in the CI
+    with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true" if github else ""}), tempfile.TemporaryDirectory() as tmp:
         p = os.path.join(tmp, "unit.log")
         with open(p, "w", encoding="utf-8") as f:
             f.write(log)
@@ -95,6 +97,11 @@ class Summary(unittest.TestCase):
         self.assertIn("ERROR mod.A.test_b", out)
         self.assertIn("did not end with OK", out)
         self.assertIn("ERROR:", err)
+
+    def test_in_github_actions_the_error_is_an_annotation(self):
+        code, _, err, _ = run(FAIL_LOG, "--title", "unit tests", github=True)
+        self.assertEqual(code, 1)
+        self.assertIn("::error title=unit tests::", err)
 
     def test_no_test_ran_is_a_failure(self):
         code, out, _, _ = run(EMPTY_LOG)

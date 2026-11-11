@@ -5,6 +5,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (CI audit, 2026-11-11)
+- `ci.yml`: `main` and manual runs are no longer cancelled by a newer push (each commit keeps its result); a pull request
+  keeps one run. New `workflow_dispatch`. Job `changes`: the three browser jobs run on a pull request only when it touches
+  `src/`, `tests/integration/`, `tests/fixtures/`, `pyproject.toml`, `requirements.txt` or `.github/` (14 of the 17 pull
+  requests of the previous repository touched none of them; the browsers were about 21 of 25 runner minutes per run).
+  `qa-audit` reports "skipped by design"; new `ci-status`, the single check to require when protecting `main`.
+- New `scripts/ci_test_summary.py` (tests in `tests/test_ci_test_summary.py`): counts and skips by reason in the summary;
+  fails when no test ran or a skip has no allowed reason (`golden`: none allowed).
+- New jobs `tests-macos` (the whole suite) and `tests-windows` (the two Windows-only tests, which were skipped everywhere
+  else). The whole suite fails 22 tests on Windows (known, not fixed here).
+- Actions pinned to a full commit SHA, `persist-credentials: false`, `timeout-minutes` on every job, logs of a failed run
+  kept 7 days, a wait loop instead of `sleep 2` in `install`, `pre-commit` pinned; `.github/dependabot.yml` for the actions.
+- `demo-e2e` and `demo-secrets` leave `ci.yml`: `demo-e2e.yml` (manual, weekly when `DEMO_E2E_SCHEDULE` is `true`) fails
+  with a clear message, instead of being skipped, when its secrets are missing.
+- Test fix: `test_the_cadence_does_not_depend_on_the_readings` used a 0.2 s interval with a 0.3 s limit and failed on a shared
+  macOS runner (0.32 s); the interval is 0.5 s now (the product was fine).
+
 ### Fixed (review of PR #15, 2026-11-10)
 - Criteria coverage in the audit: with several workbooks and no platform from the map or the audited batches, the audit says
   «coverage not assessed: platform undetermined» (the default workbook is not guessed); one workbook is unchanged.
