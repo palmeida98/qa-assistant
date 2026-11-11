@@ -5,11 +5,9 @@
 # UNCONFIRMED until this file is empty. Causes seen: files still open when replaced (WinError 32/5) and POSIX-only
 # assumptions in the guard and the output tests. Each is a defect of its own, not fixed by the CI work.
 # One test id per line (module.Class.method); remove a line when its test passes.
+# 11.11.2026: the four test_batch_integrity entries were removed. They failed with WinError 5/32 because the test helper left a read-only
+# workbook open (freed only by the garbage collector, so the result followed the composition of the suite); the helper now closes it.
 test_audit_evidence.Reports.test_the_summary_and_the_technical_report_show_valid_invalid_and_missing_evidence
-test_batch_integrity.Compatibility.test_rows_of_added_cases_and_notes_are_not_unverifiable_but_only_when_their_file_is_found
-test_batch_integrity.Compatibility.test_the_rows_of_notes_keep_an_empty_list_of_results
-test_batch_integrity.Gaps.test_the_rows_of_notes_keep_an_empty_list_of_results
-test_batch_integrity.PartialBatches.test_the_control_sheet_keeps_the_result_keys_and_an_old_row_is_rebuilt_from_its_run_log
 test_guard_destructive.Guard.test_a_file_that_is_being_written_is_checked_for_the_same_calls
 test_guard_destructive.Guard.test_a_python_script_named_by_the_command_is_read_before_it_runs
 test_guard_destructive.Guard.test_a_recursive_rm_strictly_inside_the_scratchpad_is_allowed
