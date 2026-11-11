@@ -8,13 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 ### Changed (CI audit, 2026-11-11)
 - `ci.yml`: `main` and manual runs are no longer cancelled by a newer push (each commit keeps its result); a pull request
   keeps one run. New `workflow_dispatch`. Job `changes`: the three browser jobs run on a pull request only when it touches
-  `src/`, `tests/integration/`, `tests/fixtures/`, `pyproject.toml`, `requirements.txt` or `.github/` (14 of the 17 pull
+  `src/`, `tests/integration/`, `tests/fixtures/`, `scripts/ci_test_summary.py`, `pyproject.toml`, `requirements.txt` or `.github/` (14 of the 17 pull
   requests of the previous repository touched none of them; the browsers were about 21 of 25 runner minutes per run).
   `qa-audit` reports "skipped by design"; new `ci-status`, the single check to require when protecting `main`.
 - New `scripts/ci_test_summary.py` (tests in `tests/test_ci_test_summary.py`): counts and skips by reason in the summary;
   fails when no test ran or a skip has no allowed reason (`golden`: none allowed).
-- New jobs `tests-macos` (the whole suite) and `tests-windows` (the two Windows-only tests, which were skipped everywhere
-  else). The whole suite fails 22 tests on Windows (known, not fixed here).
+- New jobs `tests-macos` (the whole suite) and `windows-only-tests` (the two Windows-only tests, which were skipped everywhere
+  else; the name says what it covers). New workflow `windows-suite.yml`: the whole suite on Windows, **red while it has failing
+  tests** (17 known ones, `.github/known-failures-windows.txt`, listed apart from any new failure; not part of `ci-status`).
+  Windows is unconfirmed until that file is empty. `tests/test_ci_filter.py` keeps the path filter of the `changes` job honest.
 - Actions pinned to a full commit SHA, `persist-credentials: false`, `timeout-minutes` on every job, logs of a failed run
   kept 7 days, a wait loop instead of `sleep 2` in `install`, `pre-commit` pinned; `.github/dependabot.yml` for the actions.
 - `demo-e2e` and `demo-secrets` leave `ci.yml`: `demo-e2e.yml` (manual, weekly when `DEMO_E2E_SCHEDULE` is `true`) fails

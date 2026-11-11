@@ -1,0 +1,55 @@
+# The WHOLE unit-test suite on Windows. It is a separate workflow, and it is RED while Windows has failing tests: the
+# framework is developed and used on macOS and Windows is UNCONFIRMED (README, "Validation and CI").
+# - It is NOT part of ci.yml's `ci-status`, so it does not block a merge, but nothing hides its result: the check is
+#   failed, the summary says "Windows is UNCONFIRMED" and lists the known failures (.github/known-failures-windows.txt)
+#   apart from any NEW failure (a regression), and the exit code stays 1 while anything fails.
+# - The two tests that only exist for Windows run (and are required) in ci.yml, job `windows-only-tests`.
+# - When the baseline file is empty and this workflow is green, Windows can be called supported and this workflow can
+#   be folded into ci.yml as a required job.
+name: Windows suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-suite-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  windows-suite:
+    name: windows-suite (UNCONFIRMED, known failures)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pillow==12.3.0
+      - name: Unit tests (the whole suite)
+        run: |
+          set -o pipefail
+          PYTHONUTF8=1 python -m unittest discover -s tests -v 2>&1 | tee unit.log
+      - name: Counts, skips and known failures in the summary
+        if: ${{ !cancelled() }}
+        run: |
+          python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, windows-latest)" --known-failures .github/known-failures-windows.txt --banner "Windows is UNCONFIRMED: the whole suite has known failures (this check stays red until they are fixed)" --allow-skip "needs LibreOffice" --allow-skip "\\(Linux\\)" --allow-skip "fake interpreters are shell scripts" --allow-skip "time.tzset" --allow-skip "no permissions"
+      - name: Keep the log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: unit-log-windows-suite
+          path: unit.log
+          retention-days: 7

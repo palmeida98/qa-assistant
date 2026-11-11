@@ -232,14 +232,15 @@ with the tests. The browser integration tests (`qa-audit`) ran only in the CI, o
 Numbers change with the code: the CI writes the current counts and every skip with its reason in each run's summary.
 
 GitHub Actions runs on each pull request, on `main` and on demand (`workflow_dispatch`): `lint`, `tests` (Ubuntu),
-`tests-macos` (the whole suite) and `tests-windows` (the two tests that only exist for Windows), `secrets`, `golden`
+`tests-macos` (the whole suite) and `windows-only-tests` (only the two tests that exist for Windows), `secrets`, `golden`
 (with LibreOffice), `qa-audit` (Chromium, Firefox and WebKit in parallel, a cross-engine comparison, one aggregate
 status), `install` (a clean clone: the audit of the local fixture site, then the eight skills synced to a temporary
 folder and their preflight on the fictional demo) and `ci-status`, the single check to require when protecting `main`
 (success only when every job above succeeded).
 
 - **Pull request vs `main`.** On a pull request the three browser jobs (about 80% of the runner minutes) run only when it
-  touches `src/`, the integration tests or the fixture site, the dependency files or `.github/` (job `changes`); otherwise
+  touches `src/`, the integration tests or the fixture site, the summary script they call, the dependency files or `.github/`
+  (job `changes`; `tests/test_ci_filter.py` checks the list); otherwise
   `qa-audit` says "skipped by design" and `ci-status` still passes. `main` and a manual run always run everything. A pull
   request keeps one run (a newer push cancels the older); `main` runs are never cancelled, so every commit keeps its result.
 - **What "green" means.** Each test job writes its counts and skips, by reason, to the run's summary
@@ -247,8 +248,11 @@ folder and their preflight on the fictional demo) and `ci-status`, the single ch
   all). A skipped test proved nothing. A failed run keeps its logs for 7 days.
 - **Supply chain.** Actions are pinned to a full commit SHA (a comment names the tag) and Dependabot proposes updates;
   the token is read-only and checkouts keep no credentials.
-- **Windows.** Only the two Windows-only tests run there. The whole suite is **not** green on Windows: 22 of 1814 tests
-  failed on 10.11.2026 (files still open when they are replaced, `WinError 32`/`5`), so Windows stays unconfirmed.
+- **Windows is UNCONFIRMED.** `windows-only-tests` runs just the two tests that exist for Windows (the check says nothing about
+  the rest). The whole suite is the separate **Windows suite** workflow, which is **red** while it has known failures: 17 tests
+  fail on Windows (`.github/known-failures-windows.txt`: files still open when replaced, `WinError 32`/`5`, and POSIX
+  assumptions). Its summary lists the known failures apart from any new one and the check stays failed until the list is empty;
+  it is not part of `ci-status`, so it does not block a merge, and nothing hides it.
 
 **`demo-e2e` is a separate workflow** (`demo-e2e.yml`), not a CI check: it runs Playwright specs against a public practice
 site and needs the repository secrets `DEMO_SAUCE_STANDARD_USER`, `DEMO_SAUCE_LOCKED_OUT_USER` and `DEMO_SAUCE_PASSWORD`
@@ -273,7 +277,7 @@ penetration test or an accessibility certification, and only sites you are autho
 - **Trackers:** Azure DevOps and Jira + Xray writes still need a pilot on a test instance (next step for the proof of concept).
 - **Agent behaviour is not formally evaluated.** The tests check the contracts, the scripts and the documents; whether an
   agent follows a skill in a real session is covered by prepared scenarios that have not been run.
-- **Platforms:** developed and used on macOS; the CI runs the suite on Linux and macOS and the browsers on Linux. Windows is not confirmed (see above); Firefox and WebKit on macOS are not confirmed here.
+- **Platforms:** developed and used on macOS; the CI runs the suite on Linux and macOS and the browsers on Linux. Windows is unconfirmed (17 known failing tests, see above); Firefox and WebKit on macOS are not confirmed here.
 - **Remote execution** (a workspace's CI on a runner) exists but is outside this version and not validated end to end.
 - **Mobile:** Android (Maestro, emulator, companion driver) and iPhone (WebDriverAgent) tooling exist; each real device and
   build is verified in its own project, never assumed.

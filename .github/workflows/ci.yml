@@ -28,8 +28,8 @@ permissions:
 
 jobs:
   changes:
-    # does this pull request touch what the browser jobs test? (src/, the integration tests and the fixture site,
-    # the dependency files, the CI itself). Any doubt -- an error, main, a manual run -- means yes.
+    # does this pull request touch what the browser jobs test or run? (src/, the integration tests and the fixture site,
+    # the summary script they call, the dependency files, the CI itself). tests/test_ci_filter.py keeps this list honest. Any doubt -- an error, main, a manual run -- means yes.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -44,7 +44,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PATTERN: '^(src/|tests/integration/|tests/fixtures/|pyproject\.toml$|requirements\.txt$|\.github/)'
+          PATTERN: '^(src/|tests/integration/|tests/fixtures/|scripts/ci_test_summary\.py$|pyproject\.toml$|requirements\.txt$|\.github/)'
         run: |
           engine=true
           files=""
@@ -136,12 +136,11 @@ jobs:
           path: unit.log
           retention-days: 7
 
-  tests-windows:
-    # only the two tests that exist for Windows (they are skipped everywhere else, so they had never run): the extended
+  windows-only-tests:
+    # ONLY the two tests that exist for Windows (so this check says nothing about the rest of the suite on Windows: that is the
+    # separate "Windows suite" workflow, red while it has known failures); the two tests (they are skipped everywhere else, so they had never run): the extended
     # form of a path and the real NUL device. --max-skips 0: if they are skipped here, the check fails.
-    # NOT the whole suite: on 10.11.2026 22 of its 1814 tests failed on Windows (file handles still open when a file is
-    # replaced, WinError 32/5, in test_batch_integrity, test_guard_destructive, test_output_layer,
-    # test_run_log_times_resolve and test_audit_evidence): known portability defects, a task of their own.
+    # NOT the whole suite: 17 tests of it fail on Windows (see .github/known-failures-windows.txt), a task of their own.
     runs-on: windows-latest
     timeout-minutes: 10
     defaults:
@@ -162,7 +161,8 @@ jobs:
           PYTHONUTF8=1 python -m unittest -v tests.test_common.ExtendedLengthPaths.test_a_path_answered_in_extended_form_is_still_inside_the_workspace tests.test_workspace_ci.IsTerminal.test_the_real_nul_device_is_not_a_console 2>&1 | tee unit.log
       - name: Counts and skips in the summary
         if: ${{ !cancelled() }}
-        run: python scripts/ci_test_summary.py unit.log --title "Windows-only tests" --max-skips 0
+        run: |
+          python scripts/ci_test_summary.py unit.log --title "Windows-only tests (not the whole suite)" --max-skips 0 --banner "Scope: only the 2 tests that exist for Windows. Windows is UNCONFIRMED: see the Windows suite workflow."
       - name: Keep the log of a failed run
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -384,7 +384,7 @@ jobs:
     # the single check to require when protecting main: success only when every job above ended in success (the engine
     # jobs through `qa-audit`, which is also a success when they were skipped by design). A job that was skipped, failed
     # or cancelled for any other reason makes this check fail, so no path filter can leave a required check "Pending".
-    needs: [changes, lint, tests, tests-macos, tests-windows, secrets, golden, qa-audit, install]
+    needs: [changes, lint, tests, tests-macos, windows-only-tests, secrets, golden, qa-audit, install]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -400,5 +400,7 @@ jobs:
           print("\n".join(lines))
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
               f.write("### ci-status\n" + "\n".join(f"- {line}" for line in lines) + "\n")
+              f.write("\n**Windows is UNCONFIRMED**: `windows-only-tests` covers 2 tests only; the whole suite is the separate "
+                      "*Windows suite* workflow, which is red while it has known failures and is not part of this check.\n")
           sys.exit(0 if all(i["result"] == "success" for i in needs.values()) else 1)
           PY

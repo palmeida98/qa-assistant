@@ -207,5 +207,73 @@ class Summary(unittest.TestCase):
         self.assertEqual(len(info["bad"]), 1)
 
 
+class KnownFailures(unittest.TestCase):
+    """Windows: the whole suite fails some tests that are known. The summary lists them apart from the new ones, but
+    the exit code stays 1 while anything fails: a known failure never turns the check green."""
+
+    def baseline(self, tmp, ids):
+        p = os.path.join(tmp, "known.txt")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("# comment\n" + "\n".join(ids) + "\n")
+        return p
+
+    def run_with(self, log, ids, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            known = self.baseline(tmp, ids)
+            lp = os.path.join(tmp, "unit.log")
+            with open(lp, "w", encoding="utf-8") as f:
+                f.write(log)
+            gh_out = os.path.join(tmp, "out.txt")
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "", "GITHUB_OUTPUT": gh_out}), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = cts.main([lp, "--known-failures", known, *extra])
+            output = ""
+            if os.path.exists(gh_out):
+                with open(gh_out, encoding="utf-8") as f:
+                    output = f.read()
+            return code, out.getvalue(), output
+
+    def test_only_known_failures_still_exit_1_and_are_counted(self):
+        code, out, gh = self.run_with(FAIL_LOG, ["mod.A.test_a", "mod.A.test_b"], "--banner", "Windows is UNCONFIRMED")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.splitlines()[2].startswith("**Windows is UNCONFIRMED"))
+        self.assertIn("known (listed in the baseline): 2", out)
+        self.assertIn("new, not in the baseline: 0", out)
+        self.assertIn("known_failures=2", gh)
+        self.assertIn("new_failures=0", gh)
+
+    def test_a_new_failure_is_named(self):
+        code, out, gh = self.run_with(FAIL_LOG, ["mod.A.test_a"])
+        self.assertEqual(code, 1)
+        self.assertIn("NEW mod.A.test_b", out)
+        self.assertIn("new_failures=1", gh)
+
+    def test_a_baseline_entry_that_passes_is_reported(self):
+        code, out, gh = self.run_with(FAIL_LOG, ["mod.A.test_a", "mod.A.test_b", "mod.A.test_gone"])
+        self.assertIn("no longer failing: 1 (remove them from the file)", out)
+        self.assertIn("mod.A.test_gone", out)
+        self.assertIn("fixed=1", gh)
+        self.assertEqual(code, 1)
+
+    def test_no_failures_with_a_baseline_is_green(self):
+        code, out, _gh = self.run_with(OK_LOG, ["mod.A.test_a"])
+        self.assertEqual(code, 0)
+        self.assertIn("no longer failing: 1", out)
+
+    def test_a_repeated_error_counts_once(self):
+        log = FAIL_LOG.replace("ERROR: test_b (mod.A.test_b)", "ERROR: test_b (mod.A.test_b)\n----\nERROR: test_b (mod.A.test_b)")
+        info = cts.parse(log)
+        self.assertEqual(info["bad_ids"], ["mod.A.test_a", "mod.A.test_b"])
+
+    def test_an_unreadable_baseline_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lp = os.path.join(tmp, "unit.log")
+            with open(lp, "w", encoding="utf-8") as f:
+                f.write(OK_LOG)
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cts.main([lp, "--known-failures", os.path.join(tmp, "missing.txt")]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
