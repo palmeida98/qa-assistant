@@ -22,3 +22,5 @@ Read only what the current task needs. This proposed index does not move or repl
 The roadmap, audit reports and old migration notes explain history. They are not daily setup instructions and do not override the current skill contract or project rules.
 Keep runtime documents at their existing paths: the skills, scripts, packaging and tests refer to them.
 Client data belongs only in the separate workspace. A documentation proposal does not authorise tests, tracker writes, installation, Git mutations or publication.
+
+<!-- ensaio: documentation-only change, NOT TO MERGE -->
