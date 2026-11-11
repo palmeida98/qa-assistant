@@ -8,7 +8,7 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 | Template | Copied to (by `scripts/workspace_ci.py install`) | What it is |
 |---|---|---|
 | `mobile.yml` | `.github/workflows/qa-mobile.yml` | runs a batch on an emulator, opens a pull request |
-| `apply.yml` | `.github/workflows/qa-apply.yml` | applies the merged run logs with the project's adapter |
+| `apply.yml` | `.github/workflows/qa-apply.yml` | applies ONE run log, only when you ask (manual), after a dry run you reviewed; the result goes to a review branch, never to `main` |
 | `agent-prompt.md` | `.github/qa/agent-prompt.md` | the prompt of Claude Code headless (conversational mode) |
 | `pr-body.md` | `.github/qa/pr-body.md` | the pull request's body, filled by `workspace_ci.py pr-body` |
 
@@ -53,8 +53,7 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
 4. **Variables** (same page, tab Variables): `QA_ASSISTANT_REPOSITORY` = `<owner>/qa-assistant` and, optionally,
    `QA_ASSISTANT_REF` (default `main`).
 5. **Spending limit at 0** (above).
-6. **`main` accepts the apply workflow's commit**: `qa-apply.yml` commits the updated workbook (or `tracker/`) to
-   `main` with the workflow's token after each merge. A branch rule on `main` would have to let GitHub Actions push.
+6. **Nothing to allow on `main`**: `qa-apply.yml` never pushes to `main`; it pushes a new branch `qa-apply/<batch>-<run id>` and you open and merge the pull request (a branch rule on `main` needs no exception for Actions).
 
 ## Running a batch
 
@@ -69,7 +68,7 @@ every value comes from the workspace's `project.yaml` (`ci:` and `mobile:`). The
    it on the emulator, deletes your comment and closes the issue.
 5. Review the pull request: the run log, the evidence, the proposed bugs and the questions. Edit the run log in the
    pull request (drop or change a proposed bug, remove `"proposed"` to approve it, answer each `Question` with the
-   final status), then merge. `qa-apply.yml` applies it and comments the result.
+   final status), then merge. Applying it is a separate, manual step: see "Applying a run log" below.
 
 The runner tests on its emulator (`emulator-5554`) through `adb`, whatever `mobile.serial` and `mobile.input` say:
 `qa-mobile.yml` sets `QA_MOBILE_SERIAL` and `QA_MOBILE_INPUT`, which the device scripts read before `project.yaml`
@@ -82,3 +81,14 @@ Fail. The time each run took and the agent's turns are in the pull request.
 Every run uploads a **diagnostics** artifact (7 days): the emulator's output, Maestro's logs and screenshots, the
 agent's result and the checks. A run that stops before any case opens no pull request: the artifact and the job's
 log say why.
+
+## Applying a run log
+
+`qa-apply.yml` no longer runs on a push to `main`: it used to apply without a dry run, commit and push to `main` by itself ("the merge is the approval"). Now it starts only when you ask (Actions > QA apply > Run workflow, or `gh workflow run qa-apply.yml -f batch=<batch> -f mode=dry-run`), and only the owner of the repository can start the dry run.
+
+1. **Dry run** (`mode: dry-run`, the default): refuses a run log with a `proposed` bug or a `Question`, writes nothing, and puts the review in the job summary: for Excel the cells and a preview token `v2-...`.
+2. **Review** it. If it is not what you approved, stop.
+3. **Apply** (`mode: apply`) with `approval` = `APPLY <batch>` and, for Excel, `expect` = the token you reviewed. The adapter refuses, writing nothing, when the batch, `project.yaml` or a workbook changed since (a stale token). Jira / Azure DevOps have no preview token: the typed approval is the guard and the workflow sends with `--yes` only in this mode.
+4. The result is pushed to a **new branch** `qa-apply/<batch>-<run id>` with only the project's workbook(s) or `tracker/`; the summary prints the compare link. Open the pull request, review the diff and merge it yourself. Any other changed file stops the push.
+
+The framework is the public `qa-assistant` by default (`QA_ASSISTANT_REPOSITORY` and `QA_ASSISTANT_REF` variables override it; a private fork also sets the `QA_ASSISTANT_TOKEN` secret). Permissions: read-only, and `contents: write` only in the apply job, to push the branch. Excel needs LibreOffice, which the workflow installs. Validated with the fictional demo and a local fake remote (`tests/test_apply_template.py`); the first real run on GitHub is a dry run of a batch you already applied.

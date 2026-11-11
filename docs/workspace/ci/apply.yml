@@ -1,77 +1,258 @@
-# QA apply — applies the run logs merged into main with the project's adapter (methodology 9.4 and 12.4,
-# technique-mobile.md section 11.4). The merge of the run's pull request is the user's approval: the Excel workbook
-# is updated (LibreOffice recalculates it), or the results and bugs are sent to Jira / Azure DevOps with --yes.
-# A run log with "proposed" or Question left is never applied: the job fails and names it.
+# QA apply — applies ONE run log to the project's tracker, only when asked and only after a dry run the user reviewed
+# (methodology 9.4 and 12.4, technique-mobile.md section 11.4).
 #
 # Template of qa-assistant (docs/workspace/ci/apply.yml), copied to .github/workflows/qa-apply.yml by
 # `python scripts/workspace_ci.py <workspace> install`. Nothing of the project is written here.
+#
+# It used to run on every push to main that touched runs/** ("the merge is the approval"): it applied without a dry run and
+# without a preview token, committed and PUSHED TO MAIN by itself and commented on pull requests. That bypasses the review
+# every apply is meant to have. Now:
+#   - the ONLY trigger is workflow_dispatch: a push to main starts nothing (no push, pull_request, schedule or workflow_run);
+#   - mode "dry-run" (default) writes nothing: it refuses a run log with a proposal or a Question and puts the review (and,
+#     for Excel, the preview token) in the job summary;
+#   - mode "apply" needs the typed approval `APPLY <batch>` and, for Excel, the preview token of the dry run you reviewed
+#     (`expect`): the adapter refuses, writing nothing, when the batch, project.yaml or a workbook changed since;
+#   - the result goes to a NEW BRANCH `qa-apply/<batch>-<run id>` (only the project's workbook(s) or tracker/), never to
+#     main; you open the pull request, review the diff and merge it yourself.
+# Jira / Azure DevOps (adapters.tracker): no preview token exists there, so the guard is the typed approval and the dry run
+# of this same workflow run; it sends with `--yes` only in mode apply.
+# How to run it: docs/workspace/ci/README.md ("Applying a run log").
 
 name: QA apply
 
 on:
-  push:
-    branches: [main]
-    paths: ["runs/**"]
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "Run log name without path or extension (runs/<batch>.json)"
+        required: true
+        type: string
+      mode:
+        description: "dry-run (default, writes nothing) | apply (needs the approval, and expect for Excel)"
+        required: true
+        type: choice
+        options: [dry-run, apply]
+        default: dry-run
+      expect:
+        description: "Apply, Excel only: the preview token (v2-...) of the dry run you reviewed"
+        required: false
+        type: string
+        default: ""
+      approval:
+        description: "Apply only: type exactly APPLY <batch>"
+        required: false
+        type: string
+        default: ""
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 concurrency:
-  group: qa-apply            # one application at a time: the workbook and tracker/ are written in order
+  group: qa-apply            # one run at a time: the workbook and tracker/ are written in order
   cancel-in-progress: false
 
+env:
+  # the framework: the public repository by default (no token needed); a private fork sets the variable and the secret
+  QA_REPOSITORY: ${{ vars.QA_ASSISTANT_REPOSITORY || 'palmeida98/qa-assistant' }}
+  QA_REF: ${{ vars.QA_ASSISTANT_REF || 'main' }}
+
 jobs:
-  apply:
+  dry-run:
+    if: ${{ github.actor == github.repository_owner }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
     env:
       WS: ${{ github.workspace }}/ws
       QA: ${{ github.workspace }}/qa
-      GH_TOKEN: ${{ github.token }}
+      BATCH: ${{ inputs.batch }}
     steps:
-      - name: Checkout the workspace
-        uses: actions/checkout@v5
+      - name: The batch name is a plain run log name
+        run: |
+          case "$BATCH" in
+            batch_*) ;;
+            *) echo "::error title=QA apply::the batch must be a run log name starting with batch_ (got: $BATCH)"; exit 1;;
+          esac
+          if printf '%s' "$BATCH" | grep -Eq '[^A-Za-z0-9_.-]|\.\.'; then
+            echo "::error title=QA apply::the batch name has characters that are not allowed"; exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: ws
-          fetch-depth: 0
-
-      - name: Checkout qa-assistant (read-only token)
-        uses: actions/checkout@v5
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: ${{ vars.QA_ASSISTANT_REPOSITORY }}
-          ref: ${{ vars.QA_ASSISTANT_REF || 'main' }}
-          token: ${{ secrets.QA_ASSISTANT_TOKEN }}
+          repository: ${{ env.QA_REPOSITORY }}
+          ref: ${{ env.QA_REF }}
+          token: ${{ secrets.QA_ASSISTANT_TOKEN || github.token }}
           path: qa
           persist-credentials: false
-
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: qa/requirements.txt
-
-      - name: Python requirements
-        run: pip install -r "$QA/requirements.txt"
-
-      - name: LibreOffice for the workbook's recalculation (tracker excel)
+      - run: pip install -r "$QA/requirements.txt"
+      - name: The tracker of the project
+        id: tracker
         run: |
-          if [ "$(yq -r '.tracker' "$WS/project.yaml")" = "excel" ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-calc > /dev/null
-          fi
-
-      - name: .env from the Actions secrets named in ci.secrets (the tracker's credentials; never printed)
+          t=$(cd "$QA" && python -c "import sys,yaml; print((yaml.safe_load(open(sys.argv[1], encoding='utf-8')) or {}).get('tracker',''))" "$WS/project.yaml")
+          case "$t" in excel|jira|azure-devops) ;; *) echo "::error title=QA apply::tracker '$t' has no adapter to apply a run log"; exit 1;; esac
+          echo "tracker=$t" >> "$GITHUB_OUTPUT"
+      - name: LibreOffice for the workbook's recalculation (tracker excel)
+        if: ${{ steps.tracker.outputs.tracker == 'excel' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-calc > /dev/null
+      - name: ".env from the Actions secrets named in ci.secrets (Jira / Azure DevOps credentials; never printed)"
+        if: ${{ steps.tracker.outputs.tracker != 'excel' }}
         env:
           QA_SECRETS_JSON: ${{ toJSON(secrets) }}
         run: python "$QA/scripts/workspace_ci.py" "$WS" write-env
-
-      - name: Apply the merged run logs, commit, comment on the pull request
+      - name: A run log with a proposal or a Question left is never applied
+        run: |
+          test -f "$WS/runs/$BATCH.json" || { echo "::error title=QA apply::runs/$BATCH.json does not exist"; exit 1; }
+          cd "$QA"
+          python - <<'PY'
+          import os, sys
+          sys.path[:0] = [os.path.join(os.environ["QA"], "scripts"), os.environ["QA"]]
+          import run_log, workspace_ci
+          why = workspace_ci.refusals(run_log.read_log(os.path.join(os.environ["WS"], "runs", os.environ["BATCH"] + ".json")))
+          if why:
+              print("\n".join("::error title=QA apply::" + w for w in why))
+              sys.exit(1)
+          PY
+      - name: Dry run (writes nothing)
         env:
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
+          TRACKER: ${{ steps.tracker.outputs.tracker }}
+        run: |
+          cd "$QA"
+          set -o pipefail
+          if [ "$TRACKER" = excel ]; then
+            python -m adapters.excel.apply "$WS" "$WS/runs/$BATCH.json" --dry-run --detail 2>&1 | tee "$RUNNER_TEMP/dry-run.txt"
+            token=$(grep -oE 'v2-[0-9a-f]+' "$RUNNER_TEMP/dry-run.txt" | tail -1 || true)
+            test -n "$token" || { echo "::error title=QA apply::the dry run printed no preview token"; exit 1; }
+          else
+            python -m adapters.tracker "$WS" apply "$WS/runs/$BATCH.json" 2>&1 | tee "$RUNNER_TEMP/dry-run.txt"
+            token="(none: $TRACKER has no preview token; the approval below is the guard)"
+          fi
+          {
+            echo "### QA apply: dry run of \`$BATCH\` ($TRACKER)"
+            echo
+            echo "Nothing was written. Review it; to apply exactly this, run the workflow again with:"
+            echo
+            echo "- mode: \`apply\`"
+            if [ "$TRACKER" = excel ]; then echo "- expect: \`$token\`"; else echo "- expect: leave empty ($token)"; fi
+            echo "- approval: \`APPLY $BATCH\`"
+            echo
+            echo '```'
+            head -c 60000 "$RUNNER_TEMP/dry-run.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: dry-run
+    if: ${{ inputs.mode == 'apply' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write            # only to push a NEW branch; never main (checked below)
+    env:
+      WS: ${{ github.workspace }}/ws
+      QA: ${{ github.workspace }}/qa
+      BATCH: ${{ inputs.batch }}
+      EXPECT: ${{ inputs.expect }}
+      APPROVAL: ${{ inputs.approval }}
+    steps:
+      - name: The approval is given
+        run: |
+          [ "$APPROVAL" = "APPLY $BATCH" ] || { echo "::error title=QA apply::approval must be exactly: APPLY $BATCH"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: ws
+          fetch-depth: 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ env.QA_REPOSITORY }}
+          ref: ${{ env.QA_REF }}
+          token: ${{ secrets.QA_ASSISTANT_TOKEN || github.token }}
+          path: qa
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: qa/requirements.txt
+      - run: pip install -r "$QA/requirements.txt"
+      - name: The tracker of the project and the token
+        id: tracker
+        run: |
+          t=$(cd "$QA" && python -c "import sys,yaml; print((yaml.safe_load(open(sys.argv[1], encoding='utf-8')) or {}).get('tracker',''))" "$WS/project.yaml")
+          case "$t" in excel|jira|azure-devops) ;; *) echo "::error title=QA apply::tracker '$t' has no adapter to apply a run log"; exit 1;; esac
+          if [ "$t" = excel ]; then
+            printf '%s' "$EXPECT" | grep -Eq '^v2-[0-9a-f]+$' || { echo "::error title=QA apply::expect must be the v2- preview token of the reviewed dry run"; exit 1; }
+          fi
+          echo "tracker=$t" >> "$GITHUB_OUTPUT"
+      - name: LibreOffice for the workbook's recalculation (tracker excel)
+        if: ${{ steps.tracker.outputs.tracker == 'excel' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-calc > /dev/null
+      - name: ".env from the Actions secrets named in ci.secrets (Jira / Azure DevOps credentials; never printed)"
+        if: ${{ steps.tracker.outputs.tracker != 'excel' }}
+        env:
+          QA_SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" write-env
+      - name: "Apply (Excel: with --expect, refused if anything changed since the dry run)"
+        env:
+          TRACKER: ${{ steps.tracker.outputs.tracker }}
+        run: |
+          cd "$QA"
+          if [ "$TRACKER" = excel ]; then
+            python -m adapters.excel.apply "$WS" "$WS/runs/$BATCH.json" --expect "$EXPECT"
+          else
+            python -m adapters.tracker "$WS" apply "$WS/runs/$BATCH.json" --yes
+          fi
+      - name: Push a new branch with the project's files only (never main)
+        env:
+          TRACKER: ${{ steps.tracker.outputs.tracker }}
         run: |
           cd "$WS"
+          # the files this tracker may change, read from project.yaml (Excel: the workbook(s); the others: tracker/)
+          allowed=$(cd "$QA" && python - <<'PY'
+          import os, yaml
+          cfg = yaml.safe_load(open(os.path.join(os.environ["WS"], "project.yaml"), encoding="utf-8")) or {}
+          if cfg.get("tracker") == "excel":
+              ex = cfg.get("excel") or {}
+              files = [ex.get("file")] + [w.get("file") if isinstance(w, dict) else w for w in (ex.get("workbooks") or {}).values()]
+              print("\n".join(sorted({f for f in files if f})))
+          else:
+              print("tracker/")
+          PY
+          )
+          printf 'allowed:\n%s\n' "$allowed"
+          [ -n "$allowed" ] || { echo "::error title=QA apply::project.yaml names no file this apply may change"; exit 1; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python "$QA/scripts/workspace_ci.py" "$WS" apply-merged --before "$BEFORE" --after "$AFTER"
+          branch="qa-apply/${BATCH}-${GITHUB_RUN_ID}"
+          test "$branch" != main
+          changed=$(git status --porcelain | awk '{print $2}')
+          printf 'changed by the apply:\n%s\n' "$changed"
+          unexpected=""
+          for f in $changed; do
+            ok=no
+            for a in $allowed; do
+              case "$f" in "$a"|"$a"*) ok=yes;; esac
+            done
+            [ "$ok" = yes ] || unexpected="$unexpected $f"
+          done
+          [ -z "$unexpected" ] || { echo "::error title=QA apply::unexpected files changed:$unexpected"; exit 1; }
+          [ -n "$changed" ] || { echo "::error title=QA apply::the apply changed nothing"; exit 1; }
+          git switch -c "$branch"
+          for a in $allowed; do git add -- "$a" 2>/dev/null || true; done
+          git commit -q -m "QA apply: $BATCH (${EXPECT:-reviewed dry run})"
+          git push origin "refs/heads/$branch:refs/heads/$branch"
+          {
+            echo "### QA apply: \`$BATCH\` applied"
+            echo
+            echo "The change is on branch \`$branch\` (not on main). Review the diff and open the pull request yourself:"
+            echo
+            echo "https://github.com/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1"
+          } >> "$GITHUB_STEP_SUMMARY"

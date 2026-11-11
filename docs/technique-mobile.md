@@ -261,7 +261,7 @@ A batch can run on a **GitHub-hosted Linux runner** started from the workspace's
 10. **Checks** after the run (`workspace_ci.py post-check`): the run log is valid for the adapter (without applying), no `.env` value in any file to be committed, every new bug `"proposed": true`.
 11. **Pull request**: `runs/`, `evidence/` and `context.md` committed to a branch `run/<batch>-<run id>`, pushed, and a pull request opened with the body of `pr-body.md` (build, batch, totals, proposed bugs, questions, time and turns). The runner never pushes to `main`.
 
-After the merge, a second workflow (`apply.yml`) applies each new run log with the project's adapter (§11.4).
+Applying a run log is a separate, manual workflow (`apply.yml`, §11.4): the merge applies nothing.
 
 The workflow's input `login: skip` checks the pipeline without the owner (no login; the agent is told so and marks every case Blocked): its pull request is never merged. Every run uploads a diagnostics artifact (the emulator's output, Maestro's logs and screenshots, the agent's result, the checks; never `.env`), and a run that stops before any case opens no pull request.
 
@@ -290,7 +290,7 @@ Claude Code **headless** (`claude -p`) runs the batch with `/run-tests`, authent
 
 ### 11.4 Review and apply
 
-The pull request is the checkpoint's review: the user edits the run log there (drops or changes a proposed bug, removes `"proposed"` to approve it, answers each `Question` by setting the final status), then merges. `apply.yml` runs on the push to `main` that touches `runs/`: each run log added or changed is applied with the project's adapter (Excel: LibreOffice installed on the runner for the recalculation; Jira / Azure DevOps: `apply --yes`, the merge being the approval), the workbook or `tracker/` is committed, and the result is commented on the pull request. A run log with `"proposed"` or `Question` left is never applied: the workflow fails and names them.
+The pull request is the checkpoint's review: the user edits the run log there (drops or changes a proposed bug, removes `"proposed"` to approve it, answers each `Question` by setting the final status), then merges. The merge applies nothing: `apply.yml` starts only by hand (`workflow_dispatch`; a push to `main` starts nothing). Its dry run (the default mode) refuses a run log with `"proposed"` or `Question` left, writes nothing and prints the review and, for Excel, a preview token; `mode: apply` needs the typed approval `APPLY <batch>` and the token of the dry run reviewed (the adapter refuses a stale one; Jira / Azure DevOps have no token: the approval is the guard) and pushes the result to a new branch `qa-apply/<batch>-<run id>` for you to review and merge, never to `main` (docs/workspace/ci/README.md, "Applying a run log").
 
 ### 11.5 Configuration (`ci:` in `project.yaml`) and limits
 
