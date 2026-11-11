@@ -2,52 +2,97 @@
 
 [![CI](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml)
 
-A QA assistant for [Claude Code](https://claude.com/claude-code): eight skills that follow one written QA method over a
-project workspace, so that analysis, test planning, execution, bug review and reporting are **traceable, resumable and
-approved by a person before anything is written to a workbook or a tracker**.
+Eight [Claude Code](https://claude.com/claude-code) skills that follow one written QA method over a project workspace, so that
+analysis, test planning, execution, bug review and reporting are **traceable, resumable and approved by a person before anything
+is written to a workbook or a tracker**. The method lives in versioned documents, the mechanical parts in tested scripts and
+adapters, the judgement in the skills, and the decisions with you.
 
-> **Status: proof of concept (November 2026).** An actively evolving personal project, not a finished product and not an
-> agent that replaces QA judgement. Each claim below says how far it was verified: implemented, tested with fictional
-> fixtures, or used on a real project. The state of each tracker is in [one table](#trackers-what-is-verified) and in
-> [docs/tracker-validation.md](docs/tracker-validation.md).
+> **Status: proof of concept (November 2026).** An evolving personal project, not a finished product and not an agent that
+> replaces QA judgement. Every claim says how far it was verified: implemented, tested with fictional fixtures, or used on a real
+> project ([trackers](#trackers-what-is-verified), [CI](#ci)).
 >
-> **License:** publicly viewable proprietary source, not open source. Read [LICENSE](LICENSE) before copying or reusing
-> any part of it. Real projects, credentials, evidence and results live in private workspaces, never in this repository.
+> **License: proprietary.** The source is publicly viewable but it is not open source: read [LICENSE](LICENSE) before copying or
+> reusing any part of it. Real projects, credentials, evidence and results live in private workspaces, never in this repository.
 
-## The problem and the purpose of the POC
+## What it gives a QA engineer
 
-QA work with an AI assistant fails in familiar ways: results that cannot be traced to a case or a build, a plan that is
-forgotten between sessions, a "Pass" that nobody can verify, a bug filed twice, a workbook overwritten by a confident
-agent. This project tries one answer: put the **method** in versioned documents, put the **mechanical parts** in tested
-scripts and adapters, let Claude Code do the **judgement** through skills, and keep a **person** in front of every write.
+- **Eight skills, one flow.** You open Claude Code in a project workspace and ask in natural language (or type a skill name).
+  Each skill starts with a *preflight* that checks its contract against the code and the tools really present, and stops with an
+  instruction when something does not match.
+- **Traceability.** A result exists only for a case of the project's library and keeps its time, build and evidence. It is never
+  edited over: a mistaken one is removed, a later execution is a new result. A result with no build is never counted as any build.
+- **Resumable.** State, decisions, blockers and the next action are saved in the workspace (`context.md`, run logs, `memory/`),
+  so another session continues where the last one stopped.
+- **You approve the writes.** Every adapter does a **dry run** by default; a write needs the reviewed preview token or an explicit
+  confirmation, and a stale preview is refused. A new bug is only a *proposal* until you approve it (one bug per problem).
 
-The proof of concept asks one question: *can a QA engineer use Claude Code, with these skills and this method, to run a
-real test cycle on a real project, with less repeated work and no loss of traceability?* This repository is the framework;
-the first real application is a private mobile-app workspace.
+## Quick start
 
-## How it works
+Try the engine on a fictional demo (a shop on public practice sites): offline, nothing real is touched, and no Claude Code
+session is needed for this part.
 
-You open Claude Code in a project's workspace and ask in natural language (or type a skill's name). Each skill starts
-with a **preflight**: it finds the framework, selects the project, checks the skill's contract against the code and the
-tools really present, and stops with an instruction when something does not match.
+**You need:** `git` and Python 3.12+ (checked with 3.12 in CI and 3.13 locally on macOS). Nothing else for the commands below.
 
-| Skill | What it is for | What it writes (in the workspace) |
+```bash
+git clone https://github.com/palmeida98/qa-assistant.git
+cd qa-assistant
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+
+WORK="$(mktemp -d)/demo" && cp -R examples/demo "$WORK"        # work on a temporary copy
+python scripts/workspace_select.py preflight --skill run-tests --workspace "$WORK"
+python -m adapters.tickets "$WORK" ingest "$WORK/tickets/bundle_check1.json" --now 2026-11-02T10:00:00
+python -m adapters.tickets "$WORK" ingest "$WORK/tickets/bundle_check2.json" --now 2026-11-05T16:00:00
+python scripts/qa_report.py "$WORK" totals
+python -m adapters.excel.apply "$WORK" runs/batch_20260924_ui01.json --dry-run --no-recalc
+```
+
+**What you should see:**
+
+| Command | First result |
+|---|---|
+| `preflight` | `Project: demo-saucedemo [demo] (valid)` and one route per kind of test. The accessibility route is `missing: qa-audit, browser chromium` until you install them: such a case would be Blocked (environment), not skipped |
+| `ingest` (first) | `Check 20261102-100000: outcome complete, conclusion first, 2 ticket(s), 0 change(s)` |
+| `ingest` (second) | `Check 20261105-160000: … conclusion changes, 2 ticket(s), 4 change(s)`: the comparison with the last check |
+| `totals` | `Cases with a current result: 26`, Pass 23, Fail 3, `Reconciled … yes` |
+| `adapters.excel.apply` | `DRY RUN … nothing is written to the workbook`, the target workbook and a preview token (`v2-…`); the workbook is byte for byte unchanged |
+
+The walkthrough that adds a pass and a failure with a proposed bug, and the dry run that lists the cells it would change, is in
+[docs/demo-walkthrough.md](docs/demo-walkthrough.md); a test runs it as written. It shows the engine the skills call, not the
+agent's choices ([docs/skills-evals.md](docs/skills-evals.md): scenarios prepared, not yet run).
+
+### Install the skills in Claude Code
+
+```bash
+python scripts/sync_skills.py              # preview: lists each skill as same / different / missing, writes nothing
+python scripts/sync_skills.py --apply      # copies the eight skills to ~/.claude/skills/
+python scripts/workspace_select.py where   # which framework, Python and skill copy are in use
+```
+
+`--apply` **changes your Claude Code configuration**: it copies the eight skills into `~/.claude/skills/` (replacing a copy of the
+same name that differs), removes skills this framework has retired, records this checkout as their source, and leaves skills of
+other origins alone. The preview without `--apply` is supported, and `--target <folder>` installs into a folder of your choice
+instead (the tests use it, and so did the check of this README). Open a new Claude Code session to load changed skills.
+Install the rest (LibreOffice, Node.js, Maestro, tokens…) only as a project's modules need it:
+`python scripts/validate_project.py <workspace> --environment` says what is missing; step by step in
+[docs/workspace/setup.md](docs/workspace/setup.md).
+
+## The eight skills
+
+Each skill's contract (inputs, writes, approvals, failures) is in its `SKILL.md`; the long procedures and the rules they share
+are in [docs/procedures/](docs/procedures/). How to use them: [docs/skills-guide.md](docs/skills-guide.md); specification:
+[docs/skills-spec.md](docs/skills-spec.md).
+
+| Skill | What it is for | Writes (in the workspace) |
 |---|---|---|
-| `/project-context` | Select or set up a workspace; resume it: state, decisions, blockers, tools really available, next actions | `CLAUDE.md`, `project.yaml`, `context.md` (at onboarding) |
-| `/analyze-ticket` | Read a PBI, story, task or bug in Azure DevOps or Jira (**read only**); say what changed since the last check | `memory/` and one generated block of `context.md`; never the tracker |
-| `/plan-tests` | Plan by risk: coverage per requirement and platform, reuse of existing cases, proposals for new ones, ordered batches | `analysis/`, `batches/`; new cases only after approval |
-| `/run-tests` | Run approved cases on mobile, web, API or accessibility and record each result with its evidence | `runs/` (run log), `evidence/` |
-| `/manage-bugs` | Investigate failures, look for existing bugs, prepare proposals or updates for one batch review | bug proposals in the run log, approved ones recorded |
-| `/qa-report` | Audit the run logs; reconciled totals per platform, build and result; a summary for the team | read only (a report file only on request; an Excel dashboard) |
-| `/checkpoint` | Validate and save the session: results, a resume point, what is applied versus still to apply | `context.md`; a batch is applied only after confirmation |
-| `/test-pbi` | Test one PBI end to end through the skills above, resumable in another session | `memory/pbi/<id>.json` plus what each step writes |
-
-Each skill's contract (inputs, writes, approvals, failures) is in its frontmatter; `python scripts/workspace_select.py
-skills` prints the catalogue. Specification: [docs/skills-spec.md](docs/skills-spec.md); how to use them:
-[docs/skills-guide.md](docs/skills-guide.md); the long procedures and the rules they share:
-[docs/procedures/](docs/procedures/).
-
-### The flow
+| [`/project-context`](.claude/skills/project-context/SKILL.md) | Select or set up a workspace; resume it: state, decisions, blockers, tools, next actions | `CLAUDE.md`, `project.yaml`, `context.md` (at onboarding) |
+| [`/analyze-ticket`](.claude/skills/analyze-ticket/SKILL.md) | Read a PBI, story, task or bug in Azure DevOps or Jira (**read only**); what changed since the last check | `memory/`; never the tracker |
+| [`/plan-tests`](.claude/skills/plan-tests/SKILL.md) | Plan by risk: coverage per requirement and platform, reuse of cases, proposals, ordered batches | `analysis/`, `batches/`; new cases only after approval |
+| [`/run-tests`](.claude/skills/run-tests/SKILL.md) | Run approved cases on mobile, web, API or accessibility; record each result with evidence | `runs/`, `evidence/` |
+| [`/manage-bugs`](.claude/skills/manage-bugs/SKILL.md) | Investigate failures, look for existing bugs, prepare proposals for one batch review | proposals in the run log |
+| [`/qa-report`](.claude/skills/qa-report/SKILL.md) | Audit the run logs; reconciled totals per platform, build and result | read only (a report file on request) |
+| [`/checkpoint`](.claude/skills/checkpoint/SKILL.md) | Validate and save the session; what is applied versus still to apply | `context.md`; a batch is applied only after confirmation |
+| [`/test-pbi`](.claude/skills/test-pbi/SKILL.md) | One PBI end to end through the skills above, resumable in another session | `memory/pbi/<id>.json` |
 
 ```mermaid
 flowchart LR
@@ -61,226 +106,128 @@ flowchart LR
   T["/test-pbi<br/>one PBI, resumable"] -.-> C
 ```
 
+The framework (this repository: method, skills, engine) never contains client data; a workspace (a separate private
+repository per project) never contains the method. Layers and sources of truth: [methodology §1](docs/methodology.md).
+
 ## What stays with the person
 
 | Decision | Who | Where it is enforced |
 |---|---|---|
-| Whether to test, which platform, environment and target | The person asks; a request to test authorises the work **inside that scope** (analysis, plan, run, local records) without a second approval | [rules.md §5](docs/procedures/rules.md) |
-| Writing a case, a result or a bug to a workbook or a tracker | The person approves the exact content, after a **dry run** | adapters: a dry run is the default; apply needs a preview token or `--yes`; a stale preview is refused |
-| A new bug | The person (a bug is a *proposal* until approved; one bug per problem) | the run log marks it `proposed`; every adapter refuses it |
-| Commit, push, sync of the skills | The person | never a side effect of a skill |
-| A project's stricter rules | The project (they win over the defaults) | `CLAUDE.md` and what it imports; `/project-context` lists them |
+| Whether to test, on which platform, environment and target | You ask; a request to test authorises the work **inside that scope** | [rules.md §5](docs/procedures/rules.md) |
+| Writing a case, a result or a bug to a workbook or tracker | You approve the exact content after a **dry run** | adapters: dry run by default; apply needs the preview token or `--yes` |
+| A new bug | You (a proposal until approved) | the run log marks it `proposed`; every adapter refuses it |
+| Commit, push, sync of the skills | You | never a side effect of a skill |
+| A project's stricter rules | The project (they win over the defaults) | `CLAUDE.md` and what it imports |
 
-Safeguards against unintended writes, each with tests (none replaces the person's review):
+Safeguards, each with tests and none a substitute for your review: a **destructive-command guard**
+([`scripts/guard_destructive.py`](docs/technique-destructive-guard.md), a hook you install yourself; a text heuristic with false
+positives); **result identity** (the Excel apply refuses a result already applied from another batch; a correction needs an
+explicit `revision_of`); **proof levels** (`run_log.py add --observed/--claimed/--inferred`); **review-file checks**
+(`scripts/check_approval_files.py`, read only, run by you); **acceptance-criteria coverage** (`scripts/ac_coverage.py`). Time of
+execution vs time of record, resolving a Question, and the Excel preview token: [docs/skills-guide.md](docs/skills-guide.md),
+[methodology §7.1 and §9.2](docs/methodology.md).
 
-- **Destructive-command guard** (`scripts/guard_destructive.py`, a Claude Code `PreToolUse` hook you install yourself,
-  [docs/technique-destructive-guard.md](docs/technique-destructive-guard.md)): blocks recursive removals and scripts that
-  contain them outside a scratch directory. It is a text heuristic and can give false positives.
-- **Result identity:** the Excel apply refuses a result already applied from another batch, and a correction of an applied
-  execution needs an explicit `revision_of` link (`run_log.py resolve` writes it).
-- **Review files:** `scripts/check_approval_files.py` is a read-only, heuristic check of plans and comment drafts for
-  truncation, wrong counts and mismatched hashes. You run it; nothing calls it automatically.
-- **Proof and coverage:** `run_log.py add --observed/--claimed/--inferred` and `--requires-comparison` mark what was seen;
-  `scripts/ac_coverage.py` and `qa_report.py audit` cross acceptance-criteria maps with the workbook and the run logs, and
-  never report complete coverage for results under review.
-- **Guarded Azure DevOps writes:** see the tracker table below.
+## QA apply: manual and reviewable
 
-Traceability: a result exists only for a case of the project's library, keeps its time, its build and its evidence, and
-is never edited over (a mistaken one is removed, a later execution is a new result). Finished batches in `history/` are
-immutable. Reconciled totals never add platforms into one percentage, and a result with no build recorded is never
-counted as any build.
+Applying a finished run log to the tracker is a **GitHub Actions workflow of the project's workspace** (template
+[`docs/workspace/ci/apply.yml`](docs/workspace/ci/apply.yml), installed by `python scripts/workspace_ci.py <workspace> install`
+as `qa-apply.yml`). It cannot run by itself:
 
-## Architecture
+1. **Manual only.** The only trigger is `workflow_dispatch` (Actions > *QA apply* > Run workflow); a push, pull request or schedule
+   starts nothing, and only the repository owner can start the dry run.
+2. **Dry run by default.** It writes nothing, refuses a run log that still has a `proposed` bug or a `Question`, and puts the
+   review in the job summary (for Excel the cells and a preview token `v2-…`).
+3. **Approval tied to the reviewed batch.** `mode: apply` needs the typed approval `APPLY <batch>` and, for Excel, the token of the
+   dry run you reviewed; the adapter refuses, writing nothing, if the batch, `project.yaml` or a workbook changed since. Jira and
+   Azure DevOps have no preview token, so there the typed approval and the dry run of the same run are the guard.
+4. **A review branch, never `main`.** The result is pushed to a new branch `qa-apply/<batch>-<run id>` with only the workbook(s) or
+   `tracker/` (any other changed file stops the push). You open the pull request, review the diff and merge it yourself.
 
-```mermaid
-flowchart TB
-  subgraph FW["This repository: the framework"]
-    M["Method: docs/methodology.md, techniques"]
-    S["Eight skills: .claude/skills/"]
-    E["Engine: scripts/, adapters/ (Excel, Azure DevOps, Jira + Xray, tickets)"]
-  end
-  subgraph WS["A workspace per project, outside this repository, its own private git repository"]
-    W["CLAUDE.md · project.yaml · context.md · runs/ · evidence/ · memory/ · history/"]
-  end
-  S -->|"installed in ~/.claude/skills/"| CC["Claude Code"]
-  CC -->|"calls"| E
-  CC -->|"reads and writes only the selected workspace"| W
-```
-
-The framework never contains client data; a workspace never contains the method. Layers, privacy boundary and the order of
-the sources of truth: [methodology §1](docs/methodology.md).
+Validated with the fictional demo and a local fake remote (`tests/test_apply_template.py`). On GitHub it has been exercised for
+the refusal of invalid input only; a dry run of a real batch is still to be done. Procedure:
+[docs/workspace/ci/README.md](docs/workspace/ci/README.md#applying-a-run-log).
 
 ## Trackers: what is verified
 
-| Tracker | Implemented | Verified with fixtures | Used on a real instance |
-|---|---|---|---|
-| **Excel** (workbook) | read cases, add approved cases, apply results and bugs with a dry run and a preview token (`v2-…`, see "Recording results"), dashboard | yes: unit tests and a golden test (LibreOffice) | **yes**, on real projects |
-| **Azure DevOps** (Test Plans + Boards) | import and export cases, send results (one test run per batch), create/update bugs, duplicate search. Separately, a guarded MCP write server (`scripts/ado_write_guard.py`): one comment or one attachment per call on work items assigned to a verified identity, with a read before and after and a confirmation per call; bug creation is implemented but **disabled by default** | yes: fake service and fictional golden; the guard has its own unit tests | the guarded **comments and attachments**: yes, on one real project. Test results, case import/export and bug creation: **no, pilot pending** (needs a test organisation) |
-| **Jira + Xray** (Cloud) | the same four directions (one Test Execution per batch) | yes: fake service and fictional golden | **no: pilot pending** (needs a test site with Xray) |
-| Ticket reading (`/analyze-ticket`) | Azure DevOps and Jira, read only, compared with the last check | yes, and the demo below | Azure DevOps through a logged-in browser: yes; by token, and Jira: no |
-
-Fixtures prove the code follows its specification; they do not prove it works against the real service. Until the pilots
-exist, the Azure DevOps result/bug/case writes and all Jira writes are **implemented and tested with fakes only**; the
-guarded comment and attachment writes are the only tracker writes used on a real instance, and the guard is a local
-safeguard, not a permission model (the tracker does not limit writes per assignee: see
-[docs/technique-ado-write-guard.md](docs/technique-ado-write-guard.md)). No parity between trackers is
-claimed (for example the dashboard is Excel only). Details and what a real pilot needs:
+"Fixtures" means a fake service and fictional golden files: they prove the code follows its specification, not that it works
+against the real service. "Real" means used by the author on a real project, not a test pilot. Full table and what a pilot needs:
 [docs/tracker-validation.md](docs/tracker-validation.md).
 
-## Install
+| Tracker and operation | Implemented | Fixtures | Real service |
+|---|---|---|---|
+| **Excel**: read cases, add approved cases, apply results and bugs (dry run + token), dashboard | yes | yes (unit tests, LibreOffice golden) | **yes**, on real projects |
+| **Azure DevOps**: read tickets (`/analyze-ticket`) | yes | yes | through a logged-in browser: yes; by token: **no** |
+| Azure DevOps: import/export cases, send results (one test run per batch), create/update bugs, duplicate search | yes | yes | **no**, pilot pending (needs a test organisation) |
+| Azure DevOps, guarded MCP server ([`ado_write_guard.py`](docs/technique-ado-write-guard.md)): **one comment** or **one attachment** per call, on work items assigned to a verified identity, read before and after, confirmation per call | yes | yes (own unit tests) | **yes**, comments and attachments, on one real project |
+| Azure DevOps guarded server: **bug creation** | implemented, **disabled by default** | yes | **no** |
+| **Jira + Xray** (Cloud): the same four directions (one Test Execution per batch) and ticket reading | yes | yes | **no**, pilot pending (needs a test site with Xray) |
 
-```bash
-git clone https://github.com/palmeida98/qa-assistant.git
-cd qa-assistant
-python3 -m venv .venv && . .venv/bin/activate          # Python 3.12+
-pip install -r requirements.txt                        # the Excel adapter and the scripts (exact versions)
-pip install -e .                                       # the qa-audit engine (optional; see requirements below)
-python scripts/sync_skills.py --apply                  # copies the eight skills to ~/.claude/skills/, records this checkout
-python scripts/workspace_select.py where               # which framework, Python, imports, skill copy and commit guards run
-```
+So the Azure DevOps result, case and bug writes and every Jira write are **implemented and tested with fakes only**. The guard is
+a local safeguard, not a permission model: the tracker does not limit writes per assignee. No parity between trackers is
+claimed (the dashboard is Excel only).
 
-Where a document says `python`, use the interpreter of this checkout. No `python` on the PATH, or one without PyYAML? `python3 scripts/qa_python.py` (run from the checkout's root) prints the interpreter that can run the framework, or the commands that create a `.venv` for it. From any other directory use absolute paths: `python3 <checkout>/scripts/qa_python.py run <checkout>/scripts/qa_report.py <workspace> audit` runs a command with it (`<checkout>` is the folder you cloned).
+## CI
 
-`sync_skills.py` without `--apply` is a dry run, and `--target <folder>` installs somewhere else (used by the tests). Skills
-of other origins are kept. A new Claude Code session is needed to load changed skills. Workspaces use the global copy, so
-sync from the main checkout once the change is integrated.
+The badge at the top shows the **CI workflow** ([`ci.yml`](.github/workflows/ci.yml)) on `main` and nothing else: it says nothing
+about the Windows suite or `demo-e2e`, which are separate workflows below.
 
-| For | Needs |
+CI runs on every pull request, on push to `main` and on demand (`workflow_dispatch`), with a read-only token, no persisted
+credentials and actions pinned to a commit SHA:
+
+| Job | What |
 |---|---|
-| Everything | git, Python 3.12+, Claude Code; GitHub CLI (`gh`) for a workspace's private remote |
-| Tracker `excel` | LibreOffice (recalculation, the golden test) |
-| `functional-web`, `exploratory` | Node.js 22+ (Playwright MCP, a fixed version) |
-| `accessibility`, `qa-audit` | `pip install -e .` and Playwright browsers (`python -m playwright install chromium`) |
-| `mobile` | Maestro; Android SDK for Android; Xcode and WebDriverAgent for an iPhone ([technique-mobile.md](docs/technique-mobile.md)) |
-| Azure DevOps / Jira | a token in the workspace's `.env` (names in `project.yaml`, values never in a repository) |
+| `lint`, `secrets` | ruff; detect-secrets with a baseline |
+| `tests` (Ubuntu), `tests-macos` | the whole unit suite |
+| `windows-only-tests` | only the two tests that exist for Windows |
+| `golden` | the Excel golden and the LibreOffice-dependent tests |
+| `qa-audit` (Chromium, Firefox, WebKit) | the audit engine against a local fixture site, plus a cross-engine comparison |
+| `install` | a clean clone: the audit of the fixture site, the eight skills synced to a temporary folder and their preflight on the demo |
+| `ci-status` | one aggregate result: success only when every job above succeeded (or, for the browsers, was skipped by design) |
 
-Install only what a project's modules need: `python scripts/validate_project.py <workspace> --environment` says what is
-missing. Workspaces live under a root (by default `../qa-workspaces/` next to the main checkout); start one with
-`/project-context`. Step by step: [docs/workspace/setup.md](docs/workspace/setup.md).
+- **Pull request vs `main`.** On a pull request the three browser jobs (about 80% of the runner minutes) run only when it touches
+  `src/`, the integration tests or the fixture site, the summary script they call, the dependency files or `.github/` (job
+  `changes`; checked by `tests/test_ci_filter.py`); otherwise `qa-audit` reports "skipped by design" and `ci-status` still
+  passes. `main` and manual runs always run everything. A pull request keeps one run (a newer push cancels the older); `main`
+  runs are never cancelled.
+- **`ci-status` is not enforced yet.** It is meant to be the single check to require, but on 11.11.2026 `main` has no branch
+  protection and no ruleset (checked through the GitHub API), so nothing blocks a merge on it today.
+- **What "green" means.** Each test job writes its counts and skips by reason to the run summary and fails if no test ran or a
+  skip has a reason that is not allowed (`golden`: no skip at all). A skipped test proved nothing.
+- **Windows is unconfirmed, and separate.** The **Windows suite** workflow
+  ([`windows-suite.yml`](.github/workflows/windows-suite.yml)) runs the whole suite on Windows, is **red** while tests fail and is
+  not part of `ci-status`. Its known failures are listed in [`.github/known-failures-windows.txt`](.github/known-failures-windows.txt)
+  and reported apart from any new one.
+- **`demo-e2e` is a separate workflow** ([`demo-e2e.yml`](.github/workflows/demo-e2e.yml)), not a CI check: Playwright specs against
+  a public practice site, started by hand or weekly when the repository variable `DEMO_E2E_SCHEDULE` is `true`. It needs the
+  three repository secrets (named in the header of the workflow file); without them it fails with a clear message. No end-to-end coverage is claimed until it has run with executed specs.
 
-## Try it with fictional data (offline, nothing real is touched)
+**Dated results** (commit `2307430`, 11.11.2026): CI [run 42957805137](https://github.com/palmeida98/qa-assistant/actions/runs/42957805137)
+succeeded: Ubuntu 1842 tests run, 0 failed, 23 skipped; macOS 1842 run, 0 failed, 24 skipped; `golden` 44 run, 0 skipped;
+`windows-only-tests` 2 run. **Windows suite** [run 42957805113](https://github.com/palmeida98/qa-assistant/actions/runs/42957805113)
+failed, as expected: 1842 run, 13 failed or errored (all 13 on the known list, 0 new), 32 skipped. `demo-e2e` has not been
+observed running. Numbers change with the code: each run's summary has its own counts. Local and CI environments differ in some
+versions (for example Pillow and LibreOffice); `python scripts/workspace_select.py where` prints the difference.
 
-[`examples/demo`](examples/demo) is a fictional workspace (a demo shop on public practice sites). On a temporary copy:
-
-```bash
-WORK="$(mktemp -d)/demo" && cp -R examples/demo "$WORK"
-python scripts/workspace_select.py preflight --skill run-tests --workspace "$WORK"          # project, tools, routes; read only
-python -m adapters.tickets "$WORK" ingest "$WORK/tickets/bundle_check1.json" --now 2026-11-02T10:00:00
-python -m adapters.tickets "$WORK" ingest "$WORK/tickets/bundle_check2.json" --now 2026-11-05T16:00:00   # "changes"
-python scripts/qa_report.py "$WORK" totals                                                  # reconciled totals
-```
-
-The full path (a run log with a pass and a failure with a proposed bug, then the Excel dry run that lists the cells it would
-change and writes nothing) is in [docs/demo-walkthrough.md](docs/demo-walkthrough.md), and a test runs it as written. This
-shows the engine the skills call; it does not show the agent's choices ([docs/skills-evals.md](docs/skills-evals.md):
-scenarios prepared, not yet run).
-
-## Recording results: execution time, Questions, the Excel token
-
-Details and every command are in [docs/skills-guide.md](docs/skills-guide.md) (the table of scripts); the method is in
-[docs/methodology.md](docs/methodology.md) §7.1 and §9.2.
-
-- **Time of the execution and time of the record.** `ts` is when the case was executed, `recorded_at` when it was written.
-  `run_log.py add` records an execution happening now; an earlier observation takes `--executed-at "2026-11-05T16:21"
-  --executed-source "tester notes"` (a time nobody knows: `--executed-at unknown --executed-source "notes without a time"`). No time zone is ever assigned, and a late record never makes
-  an old execution look newer. `ts` is the start: `--ended-at` adds the end of the window, `run_log.py retime` corrects only the
-  time of a result (the previous one is kept), and `--evidence` may be repeated without losing a path; `attach --invalid <path>
-  --reason …` marks an evidence that shows nothing useful without deleting it.
-- **A Question is resolved, not overwritten.** `python scripts/run_log.py <workspace> resolve <batch> <case> <status> --reason … --decided-by …` keeps
-  the observation, its time and evidence and records the decision; for a batch already applied it goes to a new batch with
-  `--into`. Recording a decision does not apply it, and does not replace an approval the project asks for.
-- **A new bug and its priority.** `run_log.py defect-rule` says whether the project's schema requires a priority; the user
-  decides it at the bug review.
-- **Excel preview token.** The token of a dry run (`v2-…`) also covers `--label`, the reporter, `--no-recalc` and `--now`: apply
-  with the same options. **A token from before version 2 is refused: repeat the dry run to get a new one.**
-
-All of this is checked with fictional data (unit tests, a golden test and an end-to-end test on two fictional layouts, with
-simulated approvals); real use is documented only for the Excel tracker on real projects, and the skills' text is not an
-evaluation of the agent ([docs/skills-evals.md](docs/skills-evals.md)).
-
-## Validation and CI
-
-| Command | What |
-|---|---|
-| `python -m unittest discover -s tests` | Unit tests of the framework and the engine |
-| `python scripts/golden_check.py` | Golden test of the Excel adapter (needs LibreOffice) |
-| `python -m unittest discover -s tests/integration` | `qa-audit` against a local fixture site, in real browsers |
-| `ruff check .` | Lint (ruff 0.16.8) |
-| `pre-commit run --all-files` | detect-secrets, ruff, the private denylist, the golden and the unit tests |
-
-**Validation environments (confirmed on 08.11.2026).** The same code was checked in two environments that are *not* identical:
-
-| | Local (the machine this was developed on) | CI (GitHub Actions) |
-|---|---|---|
-| OS | macOS | Ubuntu 24.04 |
-| Python | 3.12.16 | 3.12.16 |
-| `openpyxl` / `et-xmlfile` / `pyyaml` (pinned in `requirements.txt`) | 3.1.5 / 2.0.0 / 6.0.3 | the same |
-| `playwright`, `ruff` (pinned) | 1.63.0, 0.16.8 | the same |
-| **Pillow** | **13.0.0** (the shared virtual environment also serves a mobile tool, `pymobiledevice3`, which requires Pillow with no version limit) | **12.3.0** (pinned by the `visual` extra) |
-| LibreOffice | 26.8.2.2 (Homebrew) | 24.2.7 (Ubuntu package) |
-| Unit tests (`tests/`) | 1799 run, 0 failures, 3 skipped (re-run on 10.11.2026 on `main`, `591486c`) | each run's `tests` job summary states its own counts and skips (on 08.11.2026: 1292 run, 16 skipped, 14 of them needing LibreOffice) |
-| LibreOffice-dependent tests | run in the same pass | run in the `golden` job (28 tests plus the Excel golden, which passes) |
-
-The environment versions above were confirmed on 08.11.2026; the local unit-test count was refreshed on 10.11.2026. Each CI
-run's own counts are in its summary.
-
-The Pillow difference was **not forced away**: a downgrade in the shared environment could break the mobile tool. The suite
-also passed on 08.11.2026 in a clean throwaway environment built from the pinned versions (Pillow 12.3.0): 1292 tests at the time, the same three skips.
-So the difference is known and has shown no effect on the results, but it is a difference: `python scripts/workspace_select.py
-where` prints it ("a difference, not an incompatibility"), the pin stays the reference, and moving it is a change of its own,
-with the tests. The browser integration tests (`qa-audit`) ran only in the CI, on Linux; they were not run locally for this POC.
-Numbers change with the code: the CI writes the current counts and every skip with its reason in each run's summary.
-
-GitHub Actions runs on each pull request, on `main` and on demand (`workflow_dispatch`): `lint`, `tests` (Ubuntu),
-`tests-macos` (the whole suite) and `windows-only-tests` (only the two tests that exist for Windows), `secrets`, `golden`
-(with LibreOffice), `qa-audit` (Chromium, Firefox and WebKit in parallel, a cross-engine comparison, one aggregate
-status), `install` (a clean clone: the audit of the local fixture site, then the eight skills synced to a temporary
-folder and their preflight on the fictional demo) and `ci-status`, the single check to require when protecting `main`
-(success only when every job above succeeded).
-
-- **Pull request vs `main`.** On a pull request the three browser jobs (about 80% of the runner minutes) run only when it
-  touches `src/`, the integration tests or the fixture site, the summary script they call, the dependency files or `.github/`
-  (job `changes`; `tests/test_ci_filter.py` checks the list); otherwise
-  `qa-audit` says "skipped by design" and `ci-status` still passes. `main` and a manual run always run everything. A pull
-  request keeps one run (a newer push cancels the older); `main` runs are never cancelled, so every commit keeps its result.
-- **What "green" means.** Each test job writes its counts and skips, by reason, to the run's summary
-  (`scripts/ci_test_summary.py`), and fails when no test ran or a skip has a reason that is not allowed (`golden`: no skip at
-  all). A skipped test proved nothing. A failed run keeps its logs for 7 days.
-- **Supply chain.** Actions are pinned to a full commit SHA (a comment names the tag) and Dependabot proposes updates;
-  the token is read-only and checkouts keep no credentials.
-- **Windows is UNCONFIRMED.** `windows-only-tests` runs just the two tests that exist for Windows (the check says nothing about
-  the rest). The whole suite is the separate **Windows suite** workflow, which is **red** while it has known failures: 17 tests
-  fail on Windows (`.github/known-failures-windows.txt`: files still open when replaced, `WinError 32`/`5`, and POSIX
-  assumptions). Its summary lists the known failures apart from any new one and the check stays failed until the list is empty;
-  it is not part of `ci-status`, so it does not block a merge, and nothing hides it.
-
-**`demo-e2e` is a separate workflow** (`demo-e2e.yml`), not a CI check: it runs Playwright specs against a public practice
-site and needs the repository secrets `DEMO_SAUCE_STANDARD_USER`, `DEMO_SAUCE_LOCKED_OUT_USER` and `DEMO_SAUCE_PASSWORD`
-(Actions > demo-e2e > Run workflow; weekly when the repository variable `DEMO_E2E_SCHEDULE` is `true`). Without the secrets it
-fails with a clear message. No end-to-end coverage is claimed until it has run with executed specs.
-
-Privacy guards on every commit: detect-secrets with a baseline, and a private denylist of client names kept outside the
-repository (it reads file names, text, the inside of Office files and the commit message; a missing or unreadable list or
-file is reported, never called clean). Hooks can be bypassed and CI runs after a push, so review stays necessary.
+Privacy guards on every commit: detect-secrets with a baseline and a private denylist kept outside the repository (a missing or
+unreadable list is reported, never called clean). Hooks can be bypassed and CI runs after a push, so review stays necessary.
 
 ## Also in this repository: `qa-audit`
 
-A standalone website audit engine (`qa-audit`, v0.2.0): axe-core accessibility, a keyboard walk, passive security checks,
-performance, functional and opt-in visual checks, in Chromium, Firefox or WebKit, with an HTML and JSON report. It is not a
-penetration test or an accessibility certification, and only sites you are authorised to test should be audited.
-[Guide](docs/qa-audit-guide.md) · [specification](docs/qa-audit.md).
+A standalone website audit engine (v0.2.0): axe-core accessibility, a keyboard walk, passive security checks, performance,
+functional and opt-in visual checks in Chromium, Firefox or WebKit, with an HTML and JSON report. It is not a penetration test or an
+accessibility certification, and only sites you are authorised to test should be audited. [Guide](docs/qa-audit-guide.md) ·
+[specification](docs/qa-audit.md).
 
 ## Limitations and next steps
 
-- **No interface of its own, by decision.** The product is the skills in Claude Code. An earlier local web interface and a
-  multi-project hub were retired from the scope and their code removed (it stays in the git history).
-- **Trackers:** Azure DevOps and Jira + Xray writes still need a pilot on a test instance (next step for the proof of concept).
-- **Agent behaviour is not formally evaluated.** The tests check the contracts, the scripts and the documents; whether an
-  agent follows a skill in a real session is covered by prepared scenarios that have not been run.
-- **Platforms:** developed and used on macOS; the CI runs the suite on Linux and macOS and the browsers on Linux. Windows is unconfirmed (17 known failing tests, see above); Firefox and WebKit on macOS are not confirmed here.
-- **Remote execution** (a workspace's CI on a runner) exists but is outside this version and not validated end to end.
-- **Mobile:** Android (Maestro, emulator, companion driver) and iPhone (WebDriverAgent) tooling exist; each real device and
-  build is verified in its own project, never assumed.
+- **No interface of its own, by decision.** The product is the skills in Claude Code.
+- **Trackers:** Azure DevOps and Jira + Xray writes still need a pilot on a test instance.
+- **Agent behaviour is not formally evaluated.** The tests check contracts, scripts and documents; whether an agent follows a
+  skill in a real session is covered by prepared scenarios that have not been run.
+- **Platforms:** developed and used on macOS; CI runs the suite on Linux and macOS and the browsers on Linux. Windows is
+  unconfirmed; Firefox and WebKit on macOS are not confirmed.
+- **Mobile:** Android (Maestro, emulator, companion driver) and iPhone (WebDriverAgent) tooling exist; each device and build is
+  verified in its own project, never assumed ([docs/technique-mobile.md](docs/technique-mobile.md)).
 - A person reviews every proposal; no productivity or coverage figure is claimed.
 
 ## Documentation
@@ -290,5 +237,5 @@ penetration test or an accessibility certification, and only sites you are autho
 ([browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md),
 [mobile](docs/technique-mobile.md), [Excel](docs/technique-excel.md), [Jira + Xray](docs/technique-jira-xray.md),
 [Azure DevOps](docs/technique-azure-devops.md), [tickets](docs/technique-tickets.md),
-[workspaces](docs/technique-workspaces.md)) · [roadmap](docs/development-plan.md) ·
-[changelog](CHANGELOG.md) · [contributing](CONTRIBUTING.md).
+[workspaces](docs/technique-workspaces.md)) · [roadmap](docs/development-plan.md) · [changelog](CHANGELOG.md) ·
+[contributing](CONTRIBUTING.md).
