@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (Windows status wording, 2026-11-11)
+- The summary banner of the Windows suite, the header of `windows-suite.yml`, comments and the `ci-status` note in `ci.yml`, the header of
+  `.github/known-failures-windows.txt` and the README no longer say that the Windows suite is red or has known failures: since the six
+  path-separator tests were fixed and the POSIX-only guard tests were skipped on Windows, the list is empty and the suite passes. They say
+  what a pass means: 43 skips (the guard, LibreOffice-dependent tests, POSIX features), which prove nothing on Windows, so Windows stays
+  unconfirmed and the workflow stays outside `ci-status`. The check is now named `windows-suite (UNCONFIRMED)`.
+
 ### Changed (QA apply template, 2026-11-11)
 - `docs/workspace/ci/apply.yml`: the workspace's `QA apply` no longer runs on a push to `main`. It started on every push that touched `runs/**`,
   applied without a dry run and without a preview token, committed and pushed to `main` and commented on pull requests ("the merge is

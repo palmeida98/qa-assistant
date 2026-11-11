@@ -1,9 +1,9 @@
 # Tests of the whole suite that fail on Windows (windows-latest, Python 3.12) and are KNOWN: first listed on 11.11.2026 from the
 # run of commit bf71daf (CI run 42927533093, job "tests-os (windows-latest)", command
 #   PYTHONUTF8=1 python -m unittest discover -s tests -v ).
-# The "Windows suite" workflow lists them apart from any new failure but stays RED while any test fails: Windows is
-# UNCONFIRMED until this file is empty. Causes seen: files still open when replaced (WinError 32/5) and POSIX-only
-# assumptions in the guard and the output tests. Each is a defect of its own, not fixed by the CI work.
+# The "Windows suite" workflow lists them apart from any new failure and fails while any test fails. The list is EMPTY since
+# 11.11.2026, which does not make Windows supported: the suite passes with skips (see the header of windows-suite.yml). Causes seen:
+# files still open when replaced (WinError 32/5), the path separator in tests and POSIX-only assumptions in the guard.
 # One test id per line (module.Class.method); remove a line when its test passes.
 # 11.11.2026: the four test_batch_integrity entries were removed. They failed with WinError 5/32 because the test helper left a read-only
 # workbook open (freed only by the garbage collector, so the result followed the composition of the suite); the helper now closes it.
