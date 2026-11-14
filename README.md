@@ -55,7 +55,7 @@ python -m adapters.excel.apply "$WORK" runs/batch_20260924_ui01.json --dry-run -
 | `ingest` (first) | `Check 20261102-100000: outcome complete, conclusion first, 2 ticket(s), 0 change(s)` |
 | `ingest` (second) | `Check 20261105-160000: … conclusion changes, 2 ticket(s), 4 change(s)`: the comparison with the last check |
 | `totals` | `Cases with a current result: 26`, Pass 23, Fail 3, `Reconciled … yes` |
-| `adapters.excel.apply` | `DRY RUN … nothing is written to the workbook`, the target workbook and a preview token (`v2-…`); the workbook is byte for byte unchanged |
+| `adapters.excel.apply` | `DRY RUN … nothing is written to the workbook`, the target workbook (absolute path) and a preview token (`v2-…`, bound to that workbook); the workbook is byte for byte unchanged; the apply itself needs `--expect` |
 
 The walkthrough that adds a pass and a failure with a proposed bug, and the dry run that lists the cells it would change, is in
 [docs/demo-walkthrough.md](docs/demo-walkthrough.md); a test runs it as written. It shows the engine the skills call, not the
@@ -86,7 +86,7 @@ are in [docs/procedures/](docs/procedures/). How to use them: [docs/skills-guide
 | Skill | What it is for | Writes (in the workspace) |
 |---|---|---|
 | [`/project-context`](.claude/skills/project-context/SKILL.md) | Select or set up a workspace; resume it: state, decisions, blockers, tools, next actions | `CLAUDE.md`, `project.yaml`, `context.md` (at onboarding) |
-| [`/analyze-ticket`](.claude/skills/analyze-ticket/SKILL.md) | Read a PBI, story, task or bug in Azure DevOps or Jira (**read only**); what changed since the last check | `memory/`; never the tracker |
+| [`/analyze-ticket`](.claude/skills/analyze-ticket/SKILL.md) | Read a PBI, story, task, issue or bug in Azure DevOps, Jira or Linear (**read only**); what changed since the last check | `memory/`; never the tracker |
 | [`/plan-tests`](.claude/skills/plan-tests/SKILL.md) | Plan by risk: coverage per requirement and platform, reuse of cases, proposals, ordered batches | `analysis/`, `batches/`; new cases only after approval |
 | [`/run-tests`](.claude/skills/run-tests/SKILL.md) | Run approved cases on mobile, web, API or accessibility; record each result with evidence | `runs/`, `evidence/` |
 | [`/manage-bugs`](.claude/skills/manage-bugs/SKILL.md) | Investigate failures, look for existing bugs, prepare proposals for one batch review | proposals in the run log |
@@ -241,5 +241,5 @@ accessibility certification, and only sites you are authorised to test should be
 ([browser](docs/technique-browser.md), [API](docs/technique-api.md), [accessibility](docs/technique-accessibility.md),
 [mobile](docs/technique-mobile.md), [Excel](docs/technique-excel.md), [Jira + Xray](docs/technique-jira-xray.md),
 [Azure DevOps](docs/technique-azure-devops.md), [tickets](docs/technique-tickets.md),
-[workspaces](docs/technique-workspaces.md)) · [roadmap](docs/development-plan.md) · [changelog](CHANGELOG.md) ·
+[specifications](docs/technique-specs.md), [workspaces](docs/technique-workspaces.md)) · [roadmap](docs/development-plan.md) · [changelog](CHANGELOG.md) ·
 [contributing](CONTRIBUTING.md).

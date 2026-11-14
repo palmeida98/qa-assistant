@@ -85,6 +85,46 @@ def workbook_for(excel: dict, batch_id: str | None, environ=None) -> tuple[str, 
     return configured_workbook(excel, batch_id)
 
 
+WORKBOOK_EXTENSIONS = (".xlsx", ".xlsm")
+
+
+def explicit_workbook(workspace: str, flag: str | None = None, environ=None) -> tuple[str | None, str | None]:
+    """The explicit destination of a command (technique-excel.md section 1.2): (workspace-relative path, where it came
+    from), or (None, None) when none was given. `--workbook` and `$QA_WORKBOOK` must name the same file when both are
+    given. An explicit path is never ignored nor replaced: one outside the workspace, missing or not a workbook raises
+    ConfigError (nothing is read or written)."""
+    environ = os.environ if environ is None else environ
+    env = str(environ.get(WORKBOOK_ENV, "") or "").strip()
+    flag = str(flag or "").strip()
+    root = os.path.realpath(workspace)
+
+    def real(x):
+        return os.path.realpath(x if os.path.isabs(x) else os.path.join(root, x))
+    if flag and env and os.path.normcase(real(flag)) != os.path.normcase(real(env)):
+        raise ConfigError(f"--workbook {flag} and ${WORKBOOK_ENV}={env} name different workbooks: give one. "
+                          "Nothing was written.")
+    value, source = (flag, "--workbook") if flag else (env, f"${WORKBOOK_ENV}")
+    if not value:
+        return None, None
+    full = real(value)
+    if os.path.commonpath([os.path.normcase(full), os.path.normcase(root)]) != os.path.normcase(root):
+        raise ConfigError(f"{source}={value} is outside the workspace ({full}): a write stays in the workspace; to "
+                          "simulate, copy the whole workspace and pass the copy as the workspace. Nothing was written.")
+    if not os.path.isfile(full):
+        raise ConfigError(f"{source}={value} does not exist ({full}). Nothing was written.")
+    if os.path.splitext(full)[1].lower() not in WORKBOOK_EXTENSIONS:
+        raise ConfigError(f"{source}={value} is not a workbook ({', '.join(WORKBOOK_EXTENSIONS)}). Nothing was written.")
+    return os.path.relpath(full, root).replace(os.sep, "/"), source
+
+
+def same_workbook(workspace: str, a: str, b: str) -> bool:
+    root = os.path.realpath(workspace)
+
+    def real(x):
+        return os.path.normcase(os.path.realpath(x if os.path.isabs(x) else os.path.join(root, x)))
+    return real(a) == real(b)
+
+
 class Route(tuple):
     """The workbook of a batch: (file, source, platform, problem). `problem` is None when the route is certain; any
     text means the batch must not be applied (nor its application read from one workbook only)."""

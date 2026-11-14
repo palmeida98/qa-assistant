@@ -14,6 +14,8 @@ JIRA_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*")
 SOURCE_PREFIX = re.compile(r"([A-Za-z0-9][A-Za-z0-9_-]*):(.+)")
 ADO_PATH = re.compile(r"/(?:_workitems/edit|_apis/wit/workitems)/(\d+)", re.IGNORECASE)
 JIRA_PATH = re.compile(r"/browse/([A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*)")
+LINEAR_PATH = re.compile(r"/issue/([A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*)(?:/|$)")
+KEY_SERVICES = ("jira", "linear")      # services whose tickets are keys like ABC-123
 JIRA_PARAM = re.compile(r"[?&](?:selectedIssue|issueKey)=([A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*)")
 
 
@@ -26,17 +28,34 @@ def _resolve_url(config, text: str) -> tuple[str, str]:
         same = u.netloc.lower() == base.netloc.lower() and u.path.lower().startswith(base.path.lower().rstrip("/") + "/")
         if not same:
             continue
-        match = (ADO_PATH.search(u.path) if source.service == "azure-devops"
-                 else JIRA_PATH.search(u.path) or JIRA_PARAM.search(text))
+        if source.service == "azure-devops":
+            match = ADO_PATH.search(u.path)
+        elif source.service == "linear":
+            match = LINEAR_PATH.search(u.path)
+        else:
+            match = JIRA_PATH.search(u.path) or JIRA_PARAM.search(text)
         if match:
             matches.append((source, match.group(1)))
     # two sources can share an organisation: the project in the link decides
     exact = [m for m in matches if f"/{urllib.parse.quote(str(m[0].cfg.get('project')))}/".lower() in u.path.lower()]
     if exact or matches:
         source, tid = (exact or matches)[0]
-        return source.id, tid
+        return source.id, tid.upper() if source.service == "linear" else tid
     raise InvalidInput(f"{text}: not a ticket link of a configured source (tickets.sources); a link to another "
                        "host is never opened with a credential")
+
+
+def _key_candidates(config, prefix: str) -> list[str]:
+    """The sources a key ABC-123 may belong to. Within one service, the old rule: the sources that declare the prefix,
+    else all of that service. Across services (Jira and Linear), a source of another service that declares no prefix
+    could hold the key too, so it stays a candidate: the ambiguity is asked, never resolved by guessing."""
+    keyed = [s for s in config.sources.values() if s.service in KEY_SERVICES]
+    exact = [s for s in keyed if prefix in s.key_prefixes()]
+    if not exact:
+        return [s.id for s in keyed]
+    services = {s.service for s in exact}
+    open_elsewhere = [s for s in keyed if s.service not in services and not s.key_prefixes()]
+    return [s.id for s in exact + open_elsewhere]
 
 
 def resolve_ref(config, text: str) -> tuple[str, str]:
@@ -51,10 +70,7 @@ def resolve_ref(config, text: str) -> tuple[str, str]:
         candidates = [s.id for s in config.sources.values() if s.service == "azure-devops"]
     elif JIRA_KEY.fullmatch(text):
         text = text.upper()
-        jira = [s for s in config.sources.values() if s.service == "jira"]
-        project = text.rsplit("-", 1)[0]
-        exact = [s.id for s in jira if s.cfg.get("project_key") == project]
-        candidates = exact or [s.id for s in jira]
+        candidates = _key_candidates(config, text.rsplit("-", 1)[0])
     else:
         raise InvalidInput(f"{text!r} is not a link, an id, a key or <source>:<id>")
     if not candidates:

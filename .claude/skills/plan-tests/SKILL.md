@@ -13,8 +13,9 @@ metadata:
   failures: "An ambiguity that changes an expected result: a question, never an assumption; the case waits. A library that cannot be read: stop, never propose duplicates blind."
   resume: "The newest analysis/ file and batches/; a batch already saved is not rewritten, a new version gets a new name; a confirmation still valid for the same plan is not asked again."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/workspace_select.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/planning.md, heuristics.md, methodology.md"
+  requires-scripts: "scripts/workspace_select.py, scripts/quarantine.py, scripts/qa_python.py"
+  requires-tools: "spec"
+  requires-docs: "procedures/rules.md, procedures/planning.md, procedures/quarantine.md, heuristics.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -40,7 +41,12 @@ metadata:
    obsolete. A match that is not certain is asked, never guessed.
 3. Keep three lists apart: confirmed requirements (each with its source and date), assumptions (what the plan relies
    on without a source), and coverage suggestions (risks, heuristics.md, negative and edge cases). An ambiguity that
-   changes an expected result is a question to the user; the case waits for the answer.
+   changes an expected result is a question to the user; the case waits for the answer. With a `spec source` line
+   in the preflight, each confirmed requirement carries its `spec_refs` (technique-specs.md section 4; the plan keeps
+   them in a ```json spec_refs block written with `python <qa>/scripts/spec_refs.py <workspace> cite <path>#<rule id>`) and the
+   matrix of step 4 a column with the rule and its revision; a point where the specification and the tracker
+   diverge stays a question with both texts (section 3), and a case that depends on a background job names the
+   evidence that the job ran (section 6).
 4. Coverage matrix by risk: each requirement, decision or acceptance criterion -> the cases (existing or new) -> the
    platforms in scope (Android, iOS, web, API, by the project's modules), with a priority from impact, probability,
    recent changes and the dependencies affected. Include the negative and boundary cases and the regression of the
@@ -53,6 +59,15 @@ metadata:
    duplicates, approval before they enter the library; ids only from the adapter's dry run).
 6. Batches: procedures/planning.md section C. One platform and one build per batch; preconditions, test data (the
    workspace's prefix), order, dependencies, login per role; cases planned = cases selected.
+   Quarantines (procedures/quarantine.md), when the workspace has them: for the batch's platform, build and environment
+   python <qa>/scripts/quarantine.py <workspace> scope --platform <p> --build <observed> [--environment <key>]
+   lists the cases a QA-approved quarantine covers. Show each in the plan's review with its bug and link, the reason, the
+   scope and the exit condition; the QA chooses per case: left out (the plan's `excluded:`) or a directed retest
+   (`retest:`, and in `cases:`). Never leave a case out, nor propose a quarantine as decided, without that choice; then
+   check the plan with the same command and --plan batches/<name>.yaml (exit 1: fix it). Nothing else changes: cases
+   not covered, another platform, build or environment are planned as usual. On resuming, a decision already in the
+   plan is reused while the same quarantine is active and holds for the batch's context (the check passes); when the
+   build, platform, environment or quarantine changed, the check fails: show the new scope and ask the QA again.
 7. Save the analysis in analysis/ (format of procedures/planning.md section A, a new file per version) with the
    matrix and the plan, and present it. Then, by what the user asked (rules.md sections 5 and 8):
    - a request to test, within its platforms, environment and targets, and a workspace whose CLAUDE.md asks for no

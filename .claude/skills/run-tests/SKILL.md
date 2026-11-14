@@ -13,7 +13,7 @@ metadata:
   failures: "No target or a missing tool: those cases Blocked (environment), never Pass, the others go on. A tool failure (capture, driver, timeout): one retry, then Blocked (tool), never a defect on its own. A doubt: Question."
   resume: "The run log of the batch: a case with a result and enough evidence is not run again; a build that changed means a new batch."
   requires-scripts: "scripts/run_log.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/quarantine.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
   requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, qa-audit, browser, mcp, .env"
   routes: "functional-web: procedures/run-web.md; exploratory: procedures/run-web.md; api: procedures/run-api.md; accessibility: procedures/run-accessibility.md; mobile: procedures/run-mobile.md"
   next-check: "yes"
@@ -38,12 +38,26 @@ metadata:
    the run follows the plan without asking to approve it again, unless the workspace's CLAUDE.md asks for that
    approval (then wait for it, and say which rule). An approval already given and still valid is not asked again.
    A case that is not in the library is refused by run_log.py: it goes through /plan-tests.
+   With quarantines in the workspace (procedures/quarantine.md), before the first case and on every resume, check the
+   plan against the batch's platform, build and environment:
+   python <qa>/scripts/quarantine.py <workspace> scope --platform <p> --build <observed> [--environment <key>] --plan batches/<name>.yaml
+   Exit 1 (a covered case without the QA's decision, or a decision whose quarantine no longer holds here): stop that
+   part and go back to /plan-tests for a new confirmation; the cases the problem does not touch go on. run_log.py add
+   refuses the same cases, writing nothing.
 2. Route: follow the procedure the preflight's `Route:` line gives for the module of these cases: mobile (Android or
    iOS) -> procedures/run-mobile.md; web and web exploratory -> procedures/run-web.md; API -> procedures/run-api.md;
    accessibility -> procedures/run-accessibility.md. A route whose tools are `missing`: say what is missing and how to
    get it; those cases are Blocked (environment) and the rest of the batch goes on. One platform per batch.
 3. Before the first case, record how the batch runs: python <qa>/scripts/run_log.py <workspace> mode <batch>
-   "<conversational|flows|assisted|manual>: <why>" (never by editing the JSON). Then confirm and record: the
+   "<conversational|flows|assisted|manual>: <why>" (never by editing the JSON). A batch with its plan in
+   batches/<name>.yaml records it next, before any action on the target or any result:
+   python <qa>/scripts/run_log.py <workspace> plan <batch> batches/<name>.yaml
+   then python <qa>/scripts/run_log.py <workspace> progress <batch> shows the order, the cases left out and the
+   next case. This check is the skill's, before the first action on the target: device.py and run_mobile.py do not
+   look at the plan; run_log.py add refuses a result written too early (a plan with `approval:`, `excluded:` or
+   `retest:` not recorded, two own plans with decisions, or a run log following another plan), writing nothing. On
+   resuming, progress reuses the plan already recorded; a `PLAN TO REVALIDATE` or `PLAN TO RESOLVE` line goes back to
+   /plan-tests and the QA before the next case (the results already recorded are kept). Then confirm and record: the
    environment (a test one, never production); the target (device and OS, browser, or base URL; an iPhone not ready:
    show the `blocked by:` and `next:` of device.py check / doctor, never guess "the cable"); the build OBSERVED now
    (mobile: the `Next:` line, device.py check), next to the
@@ -74,6 +88,10 @@ metadata:
    Fail by itself.
 6. A Fail: keep its evidence and hand it to /manage-bugs at the end of the batch (proposals, reviewed together). Never
    create or publish a bug here.
+   Quarantine (procedures/quarantine.md): a case of the plan's `excluded:` is not run and gets no result in the run log
+   (progress shows it as left out); the rest of the batch runs as planned. A case of `retest:` records what was observed
+   with its evidence: the known failure as Fail with --bug <the quarantine's bug>; a different failure as a Fail without
+   that link (for the normal review); a pass as Pass, said to the QA at the end: the quarantine stays until the QA decides.
 7. Every 15 to 20 cases, and at the end, /checkpoint (saving locally needs no approval). End with a short summary:
    cases run per status and per platform, blocked with the reason (environment or tool apart), inconclusive ones
    (Question), Fails for /manage-bugs, the platforms in scope not run, and the run log's path.

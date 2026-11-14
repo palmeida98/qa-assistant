@@ -21,11 +21,17 @@ Rule before every write (a stable identity id, never the display name):
   (assignee, revision) or any error blocks. Attachments link with a JSON Patch `test` on /rev, so a concurrent change refuses
   the write. A comment POST has no revision precondition: the re-read narrows that window, it does not remove it.
 
-Bug creation (plan C, 10.11.2026; disabled by default; never exercised against a real project by this code's tests): a bug
-is created only under a parent that is a PBI or a QA task of the project ASSIGNED to the verified identity (checked by stable
-id), is born assigned to that identity (the unique name read from the parent, never an argument) with the parent's area and
-iteration, in ONE request that carries the fields and the Parent link, with only the listed fields, a payload hash the user
-approved and a duplicate search first. Whether Azure DevOps commits the fields and the link together is NOT PROVEN (the
+Bug creation (plan C, 10.11.2026; disabled by default; first used against the real project on 13.11.2026): a bug is created
+only under a parent that is a PBI or a QA task of the project ASSIGNED to the verified identity (checked by stable id), is born
+UNASSIGNED (13.11.2026: System.AssignedTo is not sent; the Bug type of the project has no default and does not require it, and
+the read-back refuses to call a bug with any assignee "verified") with the parent's area and iteration, in ONE request that
+carries the fields and the Parent link, with only the listed fields, a payload hash the user approved and a duplicate search
+first.
+The steps that follow a creation (attachments and the creation comment) need a write on the new, unassigned bug. Only that
+case is opened, and narrowly: the bug must be in the guard's ledger of bugs it created (the --created-bugs-file, or this
+process's memory), still be a Bug, still have NO assignee, have been created by the verified identity and keep, as its Parent,
+the parent recorded at creation, which must itself pass the normal check (assigned to the verified identity). Every other
+unassigned item stays refused, and once anyone assigns the bug the normal rule applies. Whether Azure DevOps commits the fields and the link together is NOT PROVEN (the
 documentation shows the request, not a guarantee): the result is always read back and a bug created without the parent, or
 different from what was approved, is reported with its id (ATOMICITY_PROVEN = False); nothing is repeated, corrected or
 deleted. After a timeout or any uncertain answer the guard looks for the bug first and never sends the request again.
@@ -41,6 +47,10 @@ read-only credential used for the checks, so the read path can be validated befo
 with whitespace or control characters INSIDE is refused at startup (writes disabled, status says so; never the value).
 ADO_GUARD_WRITE_PAT_EXPIRES / ADO_GUARD_READ_PAT_EXPIRES (optional ISO dates, not secret): the status reports the days left.
 --report-dir / ADO_GUARD_REPORT_DIR (optional): one small JSON report per successful comment or attachment (no text, no content).
+--created-bugs-file / ADO_GUARD_CREATED_BUGS_FILE (optional): the ledger of bugs this guard created (ids, parent, time, payload
+hash; no content). Without it the ledger lives only in the process, so the steps after a creation must happen before a restart.
+Video evidence (13.11.2026): .mp4/.mov/.webm up to 60 MB, only with a review record next to it (<file>.review.json with
+"reviewed": true and "personal_data": "none" or "masked"): a video is checked for personal data and credentials before it goes.
 """
 from __future__ import annotations
 
@@ -58,10 +68,14 @@ import urllib.parse
 import urllib.request
 
 SERVER_NAME = "ado-write-guard"
-SERVER_VERSION = "1.0.0"
+SERVER_VERSION = "1.2.0"   # 1.2.0 (13.11.2026): final preview of the fields, project mapping, patch hash; 1.1.0: unassigned bugs, ledger, video
 MAX_COMMENT = 20000
 MAX_FILE = 10 * 1024 * 1024
-ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md"}
+MAX_VIDEO = 60 * 1024 * 1024        # Azure DevOps accepts up to 130 MB in one upload; a demonstration clip should be short
+VIDEO_EXT = {".mp4", ".mov", ".webm"}
+ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".pdf", ".txt", ".md"} | VIDEO_EXT
+VIDEO_REVIEW_SUFFIX = ".review.json"
+VIDEO_PERSONAL_DATA_OK = ("none", "masked")
 API_COMMENTS = "7.1-preview.4"
 API = "7.1"
 BUG_TYPE = "Bug"
@@ -69,11 +83,22 @@ PARENT_TYPES = ("Product Backlog Item", "Task")
 BUG_FIELDS = {"title": "System.Title", "repro_steps": "Microsoft.VSTS.TCM.ReproSteps",
               "system_info": "Microsoft.VSTS.TCM.SystemInfo", "acceptance_criteria": "Microsoft.VSTS.Common.AcceptanceCriteria"}
 MAX_TITLE, MAX_BODY = 255, 30000
+BUG_LABELS = {"title": "Title", "repro_steps": "Repro Steps", "system_info": "System Info",
+              "acceptance_criteria": "Acceptance Criteria"}
+EXTRA_KEY = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+EXTRA_REF = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
+EXTRA_REF_DENIED = {"Microsoft.VSTS.Common.Priority", "Microsoft.VSTS.Common.Severity", "Microsoft.VSTS.Common.ValueArea",
+                    "Microsoft.VSTS.Build.FoundIn", "Microsoft.VSTS.Build.IntegrationBuild", "Microsoft.VSTS.Common.Activity",
+                    "Microsoft.VSTS.Scheduling.Effort", "Microsoft.VSTS.Common.StateCode", *BUG_FIELDS.values()}
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+CREDENTIAL = re.compile(r"\b(password|passwd|pwd|senha|palavra-passe|token|pat)\s*[:=]\s*\S", re.IGNORECASE)
+BUG_CONFIG_KEYS = {"labels", "fields", "checks", "notices", "require_patch_hash"}
 ATOMICITY_PROVEN = False   # fields and Parent link in one request: the API accepts it; a guarantee that it is all-or-nothing is not documented
 PARENT_REL = "System.LinkTypes.Hierarchy-Reverse"
 EXPIRY_WARNING_DAYS = 3
 DUPLICATE_MSG = "an identical comment already exists on this work item: not published twice"
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_WS_BEFORE_CLOSE = re.compile(r"\s+(</)")
 ORG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")      # a name only: never a URL, a path or a query
 UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -82,8 +107,86 @@ class Blocked(Exception):
     """A write that must not happen; the message is the reason shown to the user."""
 
 
+class ConfigError(ValueError):
+    """The project's write_guard.bugs section cannot be used: the guard does not start."""
+
+
+def _rules(section, what: str, keys) -> dict:
+    out = {}
+    for key, rules in (section or {}).items():
+        if key not in keys:
+            raise ConfigError(f"write_guard.bugs.{what}: {key!r} is not a field of the bug ({', '.join(sorted(keys))})")
+        if not isinstance(rules, list):
+            raise ConfigError(f"write_guard.bugs.{what}.{key} must be a list of {{name, pattern}}")
+        out[key] = []
+        for r in rules:
+            if not isinstance(r, dict) or not str(r.get("name") or "").strip() or not isinstance(r.get("pattern"), str):
+                raise ConfigError(f"write_guard.bugs.{what}.{key}: each rule needs a name and a pattern")
+            try:
+                rx = re.compile(r["pattern"], re.IGNORECASE | re.MULTILINE)
+            except re.error as e:
+                raise ConfigError(f"write_guard.bugs.{what}.{key}: pattern of {r['name']!r} is not a valid regex ({e})") from None
+            out[key].append((str(r["name"]).strip(), rx))
+    return out
+
+
+def load_bug_config(section) -> dict:
+    """The project's `write_guard.bugs` (project.yaml), validated: labels, extra fields, checks, notices. None or {} gives
+    the defaults (the four standard fields, as before)."""
+    section = section or {}
+    if not isinstance(section, dict):
+        raise ConfigError("write_guard.bugs must be a mapping")
+    unknown = set(section) - BUG_CONFIG_KEYS
+    if unknown:
+        raise ConfigError(f"write_guard.bugs: unknown key(s) {sorted(unknown)} (known: {sorted(BUG_CONFIG_KEYS)})")
+    fields = {}
+    for key, spec in (section.get("fields") or {}).items():
+        spec = {"reference": spec} if isinstance(spec, str) else spec
+        if not EXTRA_KEY.match(str(key)) or key in BUG_FIELDS:
+            raise ConfigError(f"write_guard.bugs.fields: {key!r} is not a valid extra key (lower case; not one of "
+                              f"{', '.join(BUG_FIELDS)})")
+        ref = str((spec or {}).get("reference") or "")
+        if not EXTRA_REF.match(ref) or ref.startswith("System.") or ref in EXTRA_REF_DENIED:
+            raise ConfigError(f"write_guard.bugs.fields.{key}: {ref!r} cannot be written by the guard (a confirmed "
+                              "reference name of a content field; never System.*, management fields or the four standard ones)")
+        if ref in {f["reference"] for f in fields.values()}:
+            raise ConfigError(f"write_guard.bugs.fields.{key}: {ref} is mapped twice")
+        fields[key] = {"reference": ref, "label": str(spec.get("label") or ref), "required": bool(spec.get("required"))}
+    labels = dict(BUG_LABELS)
+    for key, label in (section.get("labels") or {}).items():
+        if key not in BUG_FIELDS or not str(label or "").strip():
+            raise ConfigError(f"write_guard.bugs.labels: {key!r} is not a standard field (extra fields carry their own label)")
+        labels[key] = str(label).strip()
+    keys = set(BUG_FIELDS) | set(fields)
+    return {"labels": labels, "fields": fields, "checks": _rules(section.get("checks"), "checks", keys),
+            "notices": _rules(section.get("notices"), "notices", keys),
+            "require_patch_hash": bool(section.get("require_patch_hash"))}
+
+
+def load_project_bug_config(path: str) -> dict:
+    """`write_guard.bugs` of a workspace's project.yaml (PyYAML, as in the rest of the framework)."""
+    try:
+        import yaml
+    except ImportError:
+        raise ConfigError("--project-yaml needs PyYAML (run the guard with the framework's interpreter)") from None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError) as e:
+        raise ConfigError(f"{path} cannot be read ({type(e).__name__})") from None
+    return load_bug_config(((doc.get("write_guard") or {}) if isinstance(doc, dict) else {}).get("bugs"))
+
+
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def html_equivalent(stored, approved) -> bool:
+    """Azure DevOps stores rich-text fields with a space added before closing tags (`</div>`, `</li>`, `</ol>`, `</ul>`; seen on
+    13.11.2026 on two real bugs). Equal when the only difference is whitespace right before a closing tag; nothing else."""
+    if not isinstance(stored, str) or not isinstance(approved, str):
+        return stored == approved
+    return _WS_BEFORE_CLOSE.sub(r"\1", stored).strip() == _WS_BEFORE_CLOSE.sub(r"\1", approved).strip()
 
 
 def utc_now() -> datetime.datetime:
@@ -257,7 +360,8 @@ class Http:
 class Guard:
     def __init__(self, org: str, project: str, identity_id: str, allowed_dir: str, http, log=None, write_enabled=True,
                  allow_bug_create: bool = False, credentials: dict | None = None, expiries: dict | None = None,
-                 report_dir: str | None = None, clock=None):
+                 report_dir: str | None = None, clock=None, created_bugs_file: str | None = None,
+                 bug_config: dict | None = None):
         if not UUID.match(identity_id or ""):
             raise ValueError("identity id must be the stable Azure DevOps identity id (a GUID), not a name")
         if not ORG.match(org or ""):
@@ -275,19 +379,65 @@ class Guard:
         self.report_dir = report_dir or None
         self.clock = clock or utc_now
         self.base = f"https://dev.azure.com/{urllib.parse.quote(org)}"
+        self.created_bugs_file = created_bugs_file or None
+        self._created_bugs: dict = {}       # bug id -> parent id, for the bugs this process created
+        self.bug_config = bug_config if bug_config is not None else load_bug_config(None)
+
+    # ---- the ledger of bugs this guard created ----------------------------------------------------------------------
+    def _ledger(self) -> dict:
+        """bug id -> parent id: this process's memory plus the ledger file (when configured and readable)."""
+        out = dict(self._created_bugs)
+        if self.created_bugs_file and os.path.isfile(self.created_bugs_file):
+            try:
+                with open(self.created_bugs_file, encoding="utf-8") as fh:
+                    rows = json.load(fh)
+                for r in rows if isinstance(rows, list) else []:
+                    b, p = r.get("bug_id") if isinstance(r, dict) else None, r.get("parent_id") if isinstance(r, dict) else None
+                    if isinstance(b, int) and isinstance(p, int) and not isinstance(b, bool):
+                        out.setdefault(b, p)
+            except (OSError, ValueError):
+                pass                       # an unreadable ledger opens nothing: only the memory counts
+        return out
+
+    def _record_created(self, bug_id: int, parent_id: int, payload_sha256: str):
+        """Remember a bug this guard created; None when recorded, else why the FILE could not be written (the memory is)."""
+        self._created_bugs[bug_id] = parent_id
+        if not self.created_bugs_file:
+            return None
+        try:
+            rows = []
+            if os.path.isfile(self.created_bugs_file):
+                with open(self.created_bugs_file, encoding="utf-8") as fh:
+                    rows = json.load(fh)
+                if not isinstance(rows, list):
+                    raise ValueError("the ledger is not a list")
+            rows.append({"bug_id": bug_id, "parent_id": parent_id, "payload_sha256": payload_sha256,
+                         "created_utc": self.clock().astimezone(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")})
+            d = os.path.dirname(os.path.abspath(self.created_bugs_file))
+            os.makedirs(d, exist_ok=True)
+            tmp = self.created_bugs_file + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(rows, fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
+            os.replace(tmp, self.created_bugs_file)
+            return None
+        except Exception as e:  # noqa: BLE001 - the bug exists; only the ledger file failed
+            return f"{type(e).__name__}: the ledger file was not updated (this process still remembers the bug)"
 
     # ---- reads --------------------------------------------------------------------------------------------------
     def _wi(self, wid: int) -> dict:
         url = (f"{self.base}/{urllib.parse.quote(self.project)}/_apis/wit/workitems/{wid}"
-               f"?fields=System.Id,System.Title,System.TeamProject,System.AssignedTo,System.WorkItemType,System.State,System.Rev"
+               f"?fields=System.Id,System.Title,System.TeamProject,System.AssignedTo,System.WorkItemType,System.State,System.Rev,"
+               f"System.CreatedBy,System.Parent"
                f"&api-version={API}")
         status, data = self.http.request("GET", url)
         if status != 200 or not isinstance(data, dict) or "fields" not in data:
             raise Blocked(f"work item {wid} could not be read (status {status}): write blocked")
         return data
 
-    def check(self, wid: int) -> dict:
-        """Raise Blocked unless the work item is in the project and assigned to the verified identity."""
+    def check(self, wid: int, allow_guard_bug: bool = True) -> dict:
+        """Raise Blocked unless the work item is in the project and assigned to the verified identity (or, when allowed, is an
+        unassigned bug this guard created: see _check_unassigned_guard_bug)."""
         if not isinstance(wid, int) or isinstance(wid, bool) or wid <= 0:
             raise Blocked("work_item_id must be a positive integer (no batches, no lists)")
         d = self._wi(wid)
@@ -298,7 +448,9 @@ class Guard:
             raise Blocked(f"work item is in project {f.get('System.TeamProject')!r}, not {self.project!r}")
         a = f.get("System.AssignedTo")
         if not a:
-            raise Blocked("work item has no assignee: write blocked")
+            if not allow_guard_bug:
+                raise Blocked("work item has no assignee: write blocked")
+            return self._check_unassigned_guard_bug(wid, d)
         if not isinstance(a, dict) or not a.get("id"):
             raise Blocked("assignee identity cannot be confirmed (no stable id returned): write blocked")
         if str(a["id"]).lower() != self.identity_id:
@@ -310,16 +462,48 @@ class Guard:
                 "type": f.get("System.WorkItemType"), "project": self.project, "organisation": self.org,
                 "assigned_to_verified": True}
 
+    def _check_unassigned_guard_bug(self, wid: int, d: dict) -> dict:
+        """The ONE exception to "assigned to the verified identity": a bug this guard created, still unassigned, so that its
+        attachments and creation comment can follow. Anything else without an assignee stays refused."""
+        f = d["fields"]
+        parent_id = self._ledger().get(wid)
+        if parent_id is None:
+            raise Blocked("work item has no assignee: write blocked")
+        if f.get("System.WorkItemType") != BUG_TYPE:
+            raise Blocked("work item has no assignee and is not a Bug: write blocked")
+        creator = f.get("System.CreatedBy")
+        if not isinstance(creator, dict) or str(creator.get("id", "")).lower() != self.identity_id:
+            raise Blocked("unassigned bug not created by the verified identity: write blocked")
+        if f.get("System.Parent") != parent_id:
+            raise Blocked("unassigned bug no longer has the parent it was created under: write blocked")
+        try:
+            self.check(parent_id, allow_guard_bug=False)  # the parent itself: assigned by stable id (never another exception)
+        except Blocked as e:
+            raise Blocked(f"unassigned bug: its parent {parent_id} no longer passes the check ({e}): write blocked") from None
+        rev = d.get("rev", f.get("System.Rev"))
+        if not isinstance(rev, int):
+            raise Blocked("revision could not be read: write blocked")
+        return {"id": wid, "rev": rev, "title": f.get("System.Title"), "state": f.get("System.State"),
+                "type": f.get("System.WorkItemType"), "project": self.project, "organisation": self.org,
+                "assigned_to_verified": False,
+                "allowed_as": f"unassigned bug created by this guard under {parent_id} (attachments and comments only)"}
+
     def status(self) -> dict:
         today = self.clock().astimezone(datetime.UTC).date()
-        return {"organisation": self.org, "project": self.project, "verified_identity_id": self.identity_id,
+        return {"server_version": SERVER_VERSION, "organisation": self.org, "project": self.project, "verified_identity_id": self.identity_id,
                 "allowed_attachment_folder": self.allowed_dir, "writes_enabled": self.write_enabled,
                 "write_credential": self.credentials.get("write"), "read_credential": self.credentials.get("read"),
                 "credential_expiry": {k: expiry_facts(self.expiries.get(k), today) for k in ("write", "read")},
                 "publication_reports": self.report_dir or "off",
                 "startup_probe": self.startup_probe or "not run (opt-in: --probe-on-start / ADO_GUARD_PROBE_ON_START=1)",
                 "tools": sorted(KNOWN), "bug_creation": "enabled" if (self.allow_bug_create and self.write_enabled) else "disabled",
-                "bug_creation_atomicity_proven": ATOMICITY_PROVEN,
+                "bug_creation_atomicity_proven": ATOMICITY_PROVEN, "new_bug_assignee": "unassigned",
+                "created_bugs_ledger": self.created_bugs_file or "process memory only",
+                "bug_fields": {"standard": {k: self.bug_config["labels"][k] for k in BUG_FIELDS},
+                               "extra": {k: f"{v['label']} ({v['reference']})" for k, v in self.bug_config["fields"].items()},
+                               "require_patch_hash": self.bug_config["require_patch_hash"]},
+                "video_attachments": {"extensions": sorted(VIDEO_EXT), "max_mb": MAX_VIDEO // (1024 * 1024),
+                                      "review_record": f"<file>{VIDEO_REVIEW_SUFFIX}"},
                 "blocked_by_design": ["links other than the new bug's Parent", "field updates", "Assigned To changes", "state changes",
                                       "deleting", "batches", "unknown tools"]}
 
@@ -483,10 +667,27 @@ class Guard:
         if ext not in ALLOWED_EXT:
             raise Blocked(f"file type {ext!r} is not allowed")
         size = os.path.getsize(real)
-        if size == 0 or size > MAX_FILE:
+        if size == 0 or size > (MAX_VIDEO if ext in VIDEO_EXT else MAX_FILE):
             raise Blocked("file is empty or larger than the limit")
+        if ext in VIDEO_EXT:
+            self._check_video_review(real)
         with open(real, "rb") as fh:
             return os.path.basename(real), fh.read()
+
+    @staticmethod
+    def _check_video_review(real: str) -> None:
+        """A video goes only after someone watched it for personal data and credentials: <file>.review.json next to it."""
+        review = real + VIDEO_REVIEW_SUFFIX
+        if not os.path.isfile(review):
+            raise Blocked(f"a video needs its review record ({os.path.basename(review)}) next to it: watch it for personal "
+                          "data and credentials first")
+        try:
+            with open(review, encoding="utf-8") as fh:
+                r = json.load(fh)
+        except (OSError, ValueError):
+            raise Blocked("the video's review record could not be read as JSON") from None
+        if not isinstance(r, dict) or r.get("reviewed") is not True or r.get("personal_data") not in VIDEO_PERSONAL_DATA_OK:
+            raise Blocked('the video\'s review record must say "reviewed": true and "personal_data": "none" or "masked"')
 
     def attach_file(self, wid, file_path, comment="") -> dict:
         self._require_write()
@@ -523,8 +724,10 @@ class Guard:
         return " ".join(str(t).split()).casefold()
 
     @staticmethod
-    def _clean_args(args: dict) -> dict:
-        """The fields of a bug, validated. Anything else is refused by the tool's own schema before this."""
+    def _clean_args(args: dict, config: dict | None = None) -> dict:
+        """The fields of a bug, validated. Anything else is refused by the tool's own schema before this. The extra
+        fields are those of the project's mapping (`write_guard.bugs.fields`), carried with their reference names."""
+        config = config if config is not None else load_bug_config(None)
         parent = args.get("parent_id")
         if not isinstance(parent, int) or isinstance(parent, bool) or parent <= 0:
             raise Blocked("parent_id must be a positive integer (one parent, no lists)")
@@ -540,14 +743,52 @@ class Guard:
             if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", v) or (key == "title" and ("\n" in v or "\r" in v)):
                 raise Blocked(f"{key} has characters that are not allowed (control characters; a title is one line)")
             out[key] = v
+        extra = args.get("extra_fields")
+        if extra is None:
+            extra = {}
+        if not isinstance(extra, dict):
+            raise Blocked("extra_fields must be an object of field key -> text")
+        mapped = config["fields"]
+        unknown = sorted(set(extra) - set(mapped))
+        if unknown:
+            raise Blocked(f"extra_fields {unknown} are not mapped in this project's write_guard.bugs.fields "
+                          f"({', '.join(sorted(mapped)) or 'none'}): nothing is sent to an unconfirmed field")
+        out["extra_fields"] = {}
+        for key, spec in mapped.items():
+            v = extra.get(key)
+            if v is None or (isinstance(v, str) and not v.strip()):
+                if spec["required"]:
+                    raise Blocked(f"{key} ({spec['label']}) is required by this project's mapping")
+                continue
+            if not isinstance(v, str) or len(v) > MAX_BODY:
+                raise Blocked(f"{key} must be a text of 1..{MAX_BODY} characters")
+            if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", v):
+                raise Blocked(f"{key} has characters that are not allowed (control characters)")
+            out["extra_fields"][key] = {"reference": spec["reference"], "value": v}
+        texts = [(k, out[k]) for k in BUG_FIELDS] + [(k, e["value"]) for k, e in out["extra_fields"].items()]
+        for key, text in texts:
+            if EMAIL.search(text or ""):
+                raise Blocked(f"{key} has an e-mail address: personal addresses never go in a bug (name the QA account "
+                              "by its alias or role, or say it is to confirm)")
+            if CREDENTIAL.search(text or ""):
+                raise Blocked(f"{key} looks like it carries a credential (password/token/pat followed by : or =): "
+                              "credentials never go in a bug")
         return out
 
     @staticmethod
     def payload_hash(clean: dict) -> str:
-        """SHA-256 of the canonical JSON of what is sent: the parent and the four content fields."""
-        canon = json.dumps({k: clean[k] for k in ("parent_id", "title", "repro_steps", "system_info", "acceptance_criteria")},
-                           ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        """SHA-256 of the canonical JSON of what is sent: the parent, the four content fields and, only when there are
+        any, the extra fields with their reference names (so a project without them keeps the hash it had)."""
+        body = {k: clean[k] for k in ("parent_id", "title", "repro_steps", "system_info", "acceptance_criteria")}
+        if clean.get("extra_fields"):
+            body["extra_fields"] = clean["extra_fields"]
+        canon = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return sha256_text(canon)
+
+    @staticmethod
+    def patch_hash(patch: list) -> str:
+        """SHA-256 of the exact JSON Patch the creation sends (fields, area and iteration of the parent, Parent link)."""
+        return sha256_text(json.dumps(patch, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
 
     def _wi_full(self, wid: int) -> dict:
         url = f"{self.base}/{urllib.parse.quote(self.project)}/_apis/wit/workitems/{wid}?$expand=relations&api-version={API}"
@@ -558,7 +799,7 @@ class Guard:
 
     def _check_parent(self, parent_id: int) -> dict:
         """The parent, fully read, only if it is a PBI or a QA task of the project assigned to the verified identity."""
-        info = self.check(parent_id)                         # project, stable assignee id, revision
+        info = self.check(parent_id, allow_guard_bug=False)  # project, stable assignee id, revision
         full = self._wi_full(parent_id)
         f = full["fields"]
         # With $expand=relations the real API returns the id at the top level and NOT inside `fields` (verified against the
@@ -572,9 +813,6 @@ class Guard:
             raise Blocked("the parent task is not a QA task (its title does not start with «QA»)")
         if f.get("System.State") == "Removed":
             raise Blocked("the parent is Removed")
-        a = f.get("System.AssignedTo") or {}
-        if not a.get("uniqueName"):
-            raise Blocked("the parent's assignee has no unique name to give the bug: creation blocked")
         for key in ("System.AreaPath", "System.IterationPath"):
             if not f.get(key):
                 raise Blocked(f"the parent has no {key}: creation blocked")
@@ -588,7 +826,8 @@ class Guard:
         if status != 200 or not isinstance(rows, list):
             raise Blocked(f"the {BUG_TYPE} type could not be read (status {status}): bug creation blocked")
         have = {r.get("referenceName"): r for r in rows if isinstance(r, dict)}
-        writes = {*BUG_FIELDS.values(), "System.AssignedTo", "System.AreaPath", "System.IterationPath"}
+        writes = {*BUG_FIELDS.values(), "System.AreaPath", "System.IterationPath"}
+        writes |= {f["reference"] for f in self.bug_config["fields"].values()}
         missing = sorted(f for f in writes if f not in have and f != "Microsoft.VSTS.Common.AcceptanceCriteria")
         if missing:
             raise Blocked(f"the {BUG_TYPE} type of this process has no field {', '.join(missing)}: bug creation blocked")
@@ -599,6 +838,10 @@ class Guard:
                                                      "System.AreaId", "System.IterationId",     # set through the paths below
                                                      "System.Rev", "System.ChangedDate", "System.CreatedDate", "System.CreatedBy",
                                                      "System.ChangedBy", "System.AuthorizedDate", "System.RevisedDate")]
+        assignee = have.get("System.AssignedTo") or {}
+        if assignee.get("alwaysRequired") or assignee.get("defaultValue") not in (None, ""):
+            raise Blocked(f"the {BUG_TYPE} type requires or defaults Assigned To: a bug would not be born unassigned: "
+                          "bug creation blocked")
         if required:
             raise Blocked(f"the {BUG_TYPE} type requires fields this tool does not set and that have no default: "
                           f"{', '.join(required)}: bug creation blocked")
@@ -637,19 +880,117 @@ class Guard:
         ops = [{"op": "add", "path": f"/fields/{BUG_FIELDS['title']}", "value": clean["title"]},
                {"op": "add", "path": f"/fields/{BUG_FIELDS['repro_steps']}", "value": clean["repro_steps"]},
                {"op": "add", "path": f"/fields/{BUG_FIELDS['system_info']}", "value": clean["system_info"]},
-               {"op": "add", "path": "/fields/System.AssignedTo", "value": f["System.AssignedTo"]["uniqueName"]},
                {"op": "add", "path": "/fields/System.AreaPath", "value": f["System.AreaPath"]},
                {"op": "add", "path": "/fields/System.IterationPath", "value": f["System.IterationPath"]}]
         if clean["acceptance_criteria"]:
             ops.append({"op": "add", "path": f"/fields/{BUG_FIELDS['acceptance_criteria']}", "value": clean["acceptance_criteria"]})
+        for e in (clean.get("extra_fields") or {}).values():
+            ops.append({"op": "add", "path": f"/fields/{e['reference']}", "value": e["value"]})
         ops.append({"op": "add", "path": "/relations/-", "value": {
             "rel": PARENT_REL, "url": f"{self.base}/{urllib.parse.quote(self.project)}/_apis/wit/workItems/{clean['parent_id']}",
             "attributes": {"comment": "Bug created by the QA guard"}}})
         return ops
 
+    def _content_checks(self, clean: dict) -> tuple[list, list, list]:
+        """The project's checks and notices on the exact values sent: (checks, missing, notices)."""
+        values = {k: clean.get(k) or "" for k in BUG_FIELDS}
+        values.update({k: e["value"] for k, e in (clean.get("extra_fields") or {}).items()})
+        checks, missing, notices = [], [], []
+        optional = {"acceptance_criteria"} | {k for k, f in self.bug_config["fields"].items() if not f["required"]}
+        for key, rules in self.bug_config["checks"].items():
+            if key in optional and not values.get(key, "").strip():
+                checks += [{"field": self._label(key), "check": name, "result": "not applicable (field left empty)"}
+                           for name, _rx in rules]
+                continue
+            for name, rx in rules:
+                ok = bool(rx.search(values.get(key, "")))
+                checks.append({"field": self._label(key), "check": name, "result": "ok" if ok else "missing"})
+                if not ok:
+                    missing.append(f"{self._label(key)}: {name}")
+        for key, rules in self.bug_config["notices"].items():
+            notices += [f"{self._label(key)}: {name}" for name, rx in rules if rx.search(values.get(key, ""))]
+        return checks, missing, notices
+
+    def _label(self, key: str) -> str:
+        return self.bug_config["labels"].get(key) or (self.bug_config["fields"].get(key) or {}).get("label") or key
+
+    def _fields_preview(self, patch: list) -> list:
+        """One row per field of the patch the creation sends, in its order: label shown in the Board, reference, value."""
+        by_ref = {v: self.bug_config["labels"][k] for k, v in BUG_FIELDS.items()}
+        by_ref.update({f["reference"]: f["label"] for f in self.bug_config["fields"].values()})
+        by_ref.update({"System.AreaPath": "Area", "System.IterationPath": "Iteration"})
+        rows = []
+        for op in patch:
+            if op["path"].startswith("/fields/"):
+                ref = op["path"][len("/fields/"):]
+                rows.append({"label": by_ref.get(ref, ref), "reference": ref, "value": op["value"]})
+        return rows
+
+    def _associated(self, args: dict) -> dict:
+        """The attachments and the creation comment, listed for the review only: never sent by the creation."""
+        files, problems = [], []
+        paths = args.get("attachments") or []
+        if not isinstance(paths, list) or not all(isinstance(x, str) for x in paths):
+            raise Blocked("attachments must be a list of file paths")
+        for path in paths:
+            row = {"file": os.path.basename(path)}
+            try:
+                name, content = self._file(path)
+                row.update({"file": name, "bytes": len(content), "sha256": hashlib.sha256(content).hexdigest(),
+                            "accepted": True})
+                if os.path.splitext(name)[1].lower() in VIDEO_EXT:
+                    with open(os.path.realpath(path) + VIDEO_REVIEW_SUFFIX, encoding="utf-8") as fh:
+                        r = json.load(fh)
+                    row["video_review"] = {"reviewed": r.get("reviewed"), "personal_data": r.get("personal_data")}
+            except Blocked as e:
+                row.update({"accepted": False, "reason": str(e)})
+                problems.append(f"{row['file']}: {e}")
+            files.append(row)
+        comment = args.get("creation_comment")
+        out = {"attachments": files, "attachment_problems": problems,
+               "note": "not part of the bug's hashes and not sent by the creation: after it, each attachment goes through "
+                       "ado_guard_attach_file and the comment through ado_guard_add_comment, each with its own approval"}
+        if comment is not None:
+            if not isinstance(comment, str) or not comment.strip() or len(comment) > MAX_COMMENT:
+                raise Blocked(f"creation_comment must be a text of 1..{MAX_COMMENT} characters")
+            if EMAIL.search(comment) or CREDENTIAL.search(comment):
+                raise Blocked("creation_comment has an e-mail address or a credential: never in a comment")
+            out["creation_comment"] = {"text": comment, "text_sha256": sha256_text(comment), "length": len(comment)}
+        return out
+
+    @staticmethod
+    def _preview_text(rows: list, parent: dict, clean: dict, assoc: dict, checks: list, notices: list,
+                      payload: str, patch_sha: str) -> str:
+        lines = ["PREVIEW OF THE BUG (what the guard sends; nothing is created by this preview)", ""]
+        for r in rows:
+            lines += [f"== {r['label']} [{r['reference']}]", r["value"], ""]
+        f = parent["fields"]
+        lines += [(f"== Parent: {clean['parent_id']} ({f.get('System.WorkItemType')}: {f.get('System.Title')}, rev "
+                   f"{parent['rev']}) · relation {PARENT_REL}"), "== Assigned To: empty (the bug is born unassigned)", ""]
+        if checks:
+            lines.append("== Checks: " + "; ".join(f"{c['field']} · {c['check']}: {c['result']}" for c in checks))
+        if notices:
+            lines.append("== Notices: " + "; ".join(notices))
+        lines.append("== Associated operations (separate approvals):")
+        for a in assoc["attachments"]:
+            extra = ""
+            if a.get("video_review"):
+                extra = f" · video reviewed={a['video_review']['reviewed']} personal_data={a['video_review']['personal_data']}"
+            lines.append(f"   attachment {a['file']}: " + (f"{a['bytes']} bytes, sha256 {a['sha256'][:16]}…{extra}"
+                                                          if a.get("accepted") else f"REFUSED ({a['reason']})"))
+        if assoc.get("creation_comment"):
+            lines.append(f"   creation comment: {assoc['creation_comment']['length']} characters, text_sha256 "
+                         f"{assoc['creation_comment']['text_sha256']}")
+        if not assoc["attachments"] and not assoc.get("creation_comment"):
+            lines.append("   none listed")
+        lines += ["", f"payload_sha256 {payload}", f"patch_sha256   {patch_sha}"]
+        return "\n".join(lines)
+
     def preview_bug(self, args: dict) -> dict:
-        """Read only: every check of a bug creation, and the exact JSON Patch and payload hash to approve."""
-        clean = self._clean_args(args)
+        """Read only: every check of a bug creation, each field as it will be sent (label, reference, value), the exact
+        JSON Patch and the hashes to approve, and the associated operations listed apart."""
+        clean = self._clean_args(args, self.bug_config)
+        assoc = self._associated(args)
         parent = self._check_parent(clean["parent_id"])
         self._check_bug_type()
         children = [int(r["url"].rsplit("/", 1)[1]) for r in parent["relations"]
@@ -657,30 +998,63 @@ class Guard:
         duplicates = self._find_duplicates(clean["title"], children)
         if duplicates:
             raise Blocked("possible duplicate bug(s): " + ", ".join(duplicates) + ": nothing is created; the user decides")
-        return {"ok": True, "creation_enabled": self.allow_bug_create and self.write_enabled, "payload_sha256": self.payload_hash(clean),
+        patch = self._bug_patch(clean, parent)
+        checks, missing, notices = self._content_checks(clean)
+        rows = self._fields_preview(patch)
+        payload, patch_sha = self.payload_hash(clean), self.patch_hash(patch)
+        return {"ok": True, "creation_enabled": self.allow_bug_create and self.write_enabled, "ready": not missing,
+                "missing": missing, "checks": checks, "notices": notices,
+                "payload_sha256": payload, "patch_sha256": patch_sha,
+                "hash_covers": {"payload_sha256": "parent id, title, repro steps, system info, acceptance criteria and the "
+                                                  "extra fields with their reference names",
+                                "patch_sha256": "the exact JSON Patch: every field, the parent's area and iteration, the "
+                                                "Parent relation",
+                                "not_covered": "attachments and the creation comment (separate operations, own approvals)"},
+                "require_patch_hash": self.bug_config["require_patch_hash"],
                 "parent": {"id": clean["parent_id"], "type": parent["fields"].get("System.WorkItemType"),
                            "title": parent["fields"].get("System.Title"), "rev": parent["rev"],
-                           "assigned_to_verified": True}, "assigned_to": "the verified identity (unique name from the parent)",
+                           "assigned_to_verified": True, "relation": PARENT_REL},
+                "assigned_to": "nobody (the bug is born unassigned)",
                 "area_path": parent["fields"]["System.AreaPath"], "iteration_path": parent["fields"]["System.IterationPath"],
-                "atomicity_proven": ATOMICITY_PROVEN, "patch": self._bug_patch(clean, parent)}
+                "fields_preview": rows, "associated_operations": assoc,
+                "preview_text": self._preview_text(rows, parent, clean, assoc, checks, notices, payload, patch_sha),
+                "atomicity_proven": ATOMICITY_PROVEN, "patch": patch}
 
     def _read_back(self, bug_id, clean: dict, parent: dict) -> dict:
         problems = []
         status, data = self.http.request(
             "GET", f"{self.base}/{urllib.parse.quote(self.project)}/_apis/wit/workitems/{bug_id}?$expand=relations&api-version={API}")
         if status != 200 or not isinstance(data, dict) or "fields" not in data:
-            return {"read_back": False, "problems": [f"the bug could not be read back (status {status})"], "rev": None}
+            return {"read_back": False, "problems": [f"the bug could not be read back (status {status})"], "rev": None,
+                    "state": None, "assignee_now": None}
         f = data["fields"]
+        who = f.get("System.AssignedTo")
+        if not who:
+            assignee_now = "unassigned"
+        elif isinstance(who, dict) and str(who.get("id", "")).lower() == self.identity_id:
+            assignee_now = "the verified identity"
+        else:
+            assignee_now = "another identity" + (f" ({who.get('displayName')})" if isinstance(who, dict) and who.get("displayName") else "")
         if f.get("System.WorkItemType") != BUG_TYPE:
             problems.append(f"the type is {f.get('System.WorkItemType')!r}")
         if f.get("System.TeamProject") != self.project:
             problems.append("the project is not the expected one")
-        if str((f.get("System.AssignedTo") or {}).get("id", "")).lower() != self.identity_id:
-            problems.append("the assignee is not the verified identity")
+        if f.get("System.AssignedTo"):
+            problems.append("the bug was born WITH an assignee (expected unassigned): nothing was changed")
+        normalised = []
         for key, ref in BUG_FIELDS.items():
             want = clean.get(key)
             if want and f.get(ref) != want:
-                problems.append(f"{ref} is not what was approved")
+                if key != "title" and html_equivalent(f.get(ref), want):
+                    normalised.append(ref)
+                else:
+                    problems.append(f"{ref} is not what was approved")
+        for e in (clean.get("extra_fields") or {}).values():
+            if f.get(e["reference"]) != e["value"]:
+                if html_equivalent(f.get(e["reference"]), e["value"]):
+                    normalised.append(e["reference"])
+                else:
+                    problems.append(f"{e['reference']} is not what was approved")
         for ref in ("System.AreaPath", "System.IterationPath"):
             if f.get(ref) != parent["fields"].get(ref):
                 problems.append(f"{ref} is not the parent's")
@@ -688,7 +1062,8 @@ class Guard:
         if len(parents) != 1 or str(parents[0].get("url", "")).rsplit("/", 1)[-1] != str(clean["parent_id"]):
             problems.append("the bug is NOT linked to the parent (or has another parent): the link and the fields were not "
                             "committed together")
-        return {"read_back": True, "problems": problems, "rev": data.get("rev", f.get("System.Rev"))}
+        return {"read_back": True, "problems": problems, "rev": data.get("rev", f.get("System.Rev")),
+                "html_normalised": normalised, "state": f.get("System.State"), "assignee_now": assignee_now}
 
     def _locate_after_uncertain(self, clean: dict) -> list:
         """After an answer that does not say whether the bug exists: look for it, never send the request again."""
@@ -701,9 +1076,16 @@ class Guard:
         self._require_write()
         if not self.allow_bug_create:
             raise Blocked("bug creation is DISABLED (ADO_GUARD_ALLOW_BUG_CREATE is not set in the launcher): nothing was written")
-        clean = self._clean_args(args)
+        clean = self._clean_args(args, self.bug_config)
         if self.payload_hash(clean) != str(args.get("payload_sha256") or "").lower():
-            raise Blocked("payload_sha256 does not match the bug: the approved content and the content sent differ")
+            raise Blocked("payload_sha256 does not match the bug: the approved content and the content sent differ "
+                          "(a field, the mapping of a field or the parent changed): preview again and ask for approval")
+        _checks, missing, _notices = self._content_checks(clean)
+        if missing:
+            raise Blocked("the project's checks are missing: " + "; ".join(missing) + ": not created")
+        want_patch = str(args.get("patch_sha256") or "").lower()
+        if self.bug_config["require_patch_hash"] and not want_patch:
+            raise Blocked("this project requires patch_sha256 (from the preview): not created")
         parent = self._check_parent(clean["parent_id"])
         self._check_bug_type()
         children = [int(r["url"].rsplit("/", 1)[1]) for r in parent["relations"]
@@ -714,18 +1096,28 @@ class Guard:
         again = self._check_parent(clean["parent_id"])          # right before writing: the parent has not changed
         if again["rev"] != parent["rev"]:
             raise Blocked("the parent changed between the check and the creation (revision differs): not created")
+        if want_patch and self.patch_hash(self._bug_patch(clean, parent)) != want_patch:
+            raise Blocked("patch_sha256 does not match the request that would be sent (the parent's area or iteration, or "
+                          "a field, changed since the preview): preview again and ask for approval; not created")
         url = f"{self.base}/{urllib.parse.quote(self.project)}/_apis/wit/workitems/${BUG_TYPE}?api-version={API}"
         status, data = self.http.request("POST", url, json.dumps(self._bug_patch(clean, parent)).encode(),
                                          "application/json-patch+json")
         bug_id = data.get("id") if isinstance(data, dict) else None
         if status in (200, 201) and isinstance(bug_id, int):
+            ledger_error = self._record_created(bug_id, clean["parent_id"], self.payload_hash(clean))
             back = self._read_back(bug_id, clean, parent)
-            return {"ok": not back["problems"], "created": True, "bug_id": bug_id, "rev": back["rev"],
-                    "url": f"{self.base}/{urllib.parse.quote(self.project)}/_workitems/edit/{bug_id}",
-                    "payload_sha256": self.payload_hash(clean), "read_back": back["read_back"], "problems": back["problems"],
-                    "atomicity_proven": ATOMICITY_PROVEN,
-                    "note": ("created and verified" if not back["problems"] else
-                             "CREATED BUT NOT AS APPROVED: nothing was corrected, repeated or deleted; the user decides")}
+            out = {"ok": not back["problems"], "created": True, "bug_id": bug_id, "rev": back["rev"],
+                   "url": f"{self.base}/{urllib.parse.quote(self.project)}/_workitems/edit/{bug_id}",
+                   "payload_sha256": self.payload_hash(clean), "read_back": back["read_back"], "problems": back["problems"],
+                   "state": back.get("state"), "assigned_to": back.get("assignee_now"), "atomicity_proven": ATOMICITY_PROVEN,
+                   "note": ("created and verified" if not back["problems"] else
+                            "CREATED BUT NOT AS APPROVED: the bug EXISTS (see bug_id, state, assigned_to): do not create it "
+                            "again; nothing was corrected, repeated or deleted; the user decides")}
+            if back.get("html_normalised"):
+                out["html_normalised_by_azure_devops"] = back["html_normalised"]
+            if ledger_error:
+                out["ledger_error"] = ledger_error
+            return out
         if 400 <= status < 500:                                   # a definite refusal: nothing was created
             msg = str(data.get("message", ""))[:200] if isinstance(data, dict) else ""
             raise Blocked(f"the bug was not created (HTTP {status}{': ' + msg if msg else ''}); nothing was repeated")
@@ -735,9 +1127,12 @@ class Guard:
             out = {"ok": False, "created": "found after an uncertain answer", "candidates": found, "http_status": status,
                    "note": "the request was NOT sent again; check these work items before anything else"}
             if len(found) == 1:
+                self._record_created(found[0], clean["parent_id"], self.payload_hash(clean))
                 back = self._read_back(found[0], clean, parent)
                 out.update({"bug_id": found[0], "read_back": back["read_back"], "problems": back["problems"],
-                            "ok": not back["problems"]})
+                            "ok": not back["problems"], "rev": back["rev"], "state": back.get("state"),
+                            "assigned_to": back.get("assignee_now"),
+                            "url": f"{self.base}/{urllib.parse.quote(self.project)}/_workitems/edit/{found[0]}"})
             return out
         return {"ok": False, "created": "unknown" if found is None else "not found", "http_status": status,
                 "note": ("the answer did not say whether the bug exists and the search found none (or could not run): the request "
@@ -752,17 +1147,17 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
     {"name": "ado_guard_check", "description": "Read one work item and say whether a write would be allowed (project and stable assignee id). Writes nothing.",
      "inputSchema": {"type": "object", "properties": {"work_item_id": {"type": "integer", "minimum": 1}}, "required": ["work_item_id"], "additionalProperties": False}},
-    {"name": "ado_guard_add_comment", "description": "Add ONE comment to ONE work item assigned to the verified identity. Needs the user's explicit approval of the exact text; text_sha256 is the SHA-256 (hex) of the exact text approved.",
+    {"name": "ado_guard_add_comment", "description": "Add ONE comment to ONE work item assigned to the verified identity (or to an unassigned bug this guard created). Needs the user's explicit approval of the exact text; text_sha256 is the SHA-256 (hex) of the exact text approved.",
      "inputSchema": {"type": "object", "properties": {"work_item_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}, "text_sha256": {"type": "string"}}, "required": ["work_item_id", "text", "text_sha256"], "additionalProperties": False}},
     {"name": "ado_guard_preview_comment", "description": "READ ONLY. Run every check of ado_guard_add_comment on this exact text (same code path): project, assignee by stable id, text length, duplicate. Returns text_sha256, duplicate, would_write and the reasons. Writes nothing.",
      "inputSchema": {"type": "object", "properties": {"work_item_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}}, "required": ["work_item_id", "text"], "additionalProperties": False}},
     {"name": "ado_guard_render_markdown", "description": "READ ONLY, local, no network. Deterministic Markdown to HTML of a draft (paragraphs, **bold**, `code`, bullet and numbered lists; HTML is escaped) with the SHA-256 of the HTML, to review before approving. Never applied automatically: the exact text that is approved is the one sent.",
      "inputSchema": {"type": "object", "properties": {"markdown": {"type": "string"}}, "required": ["markdown"], "additionalProperties": False}},
-    {"name": "ado_guard_preview_bug", "description": "READ ONLY. Check a bug creation (parent is a PBI or QA task assigned to the verified identity, the Bug type, duplicates) and return the exact JSON Patch and the payload hash to approve. Writes nothing.",
-     "inputSchema": {"type": "object", "properties": {"parent_id": {"type": "integer", "minimum": 1}, "title": {"type": "string", "maxLength": 255}, "repro_steps": {"type": "string"}, "system_info": {"type": "string"}, "acceptance_criteria": {"type": "string"}}, "required": ["parent_id", "title", "repro_steps", "system_info"], "additionalProperties": False}},
-    {"name": "ado_guard_create_bug", "description": "Create ONE bug under a parent assigned to the verified identity, born assigned to that identity, with the Parent link in the same request. DISABLED unless the launcher enables it. Needs the user's explicit approval of the exact content; payload_sha256 comes from the preview. Never repeats a request and reads the result back.",
-     "inputSchema": {"type": "object", "properties": {"parent_id": {"type": "integer", "minimum": 1}, "title": {"type": "string", "maxLength": 255}, "repro_steps": {"type": "string"}, "system_info": {"type": "string"}, "acceptance_criteria": {"type": "string"}, "payload_sha256": {"type": "string"}}, "required": ["parent_id", "title", "repro_steps", "system_info", "payload_sha256"], "additionalProperties": False}},
-    {"name": "ado_guard_attach_file", "description": "Upload ONE file from the allowed evidence folder and link it to ONE work item assigned to the verified identity, in a single operation. Needs the user's explicit approval of that file.",
+    {"name": "ado_guard_preview_bug", "description": "READ ONLY. Check a bug creation (parent is a PBI or QA task assigned to the verified identity, the Bug type, duplicates, the project's content checks) and return each field as it will be sent (label in the Board, reference name, exact value), the exact JSON Patch, payload_sha256 and patch_sha256 to approve, and the attachments and creation comment listed as separate operations. Writes nothing.",
+     "inputSchema": {"type": "object", "properties": {"parent_id": {"type": "integer", "minimum": 1}, "title": {"type": "string", "maxLength": 255}, "repro_steps": {"type": "string"}, "system_info": {"type": "string"}, "acceptance_criteria": {"type": "string"}, "extra_fields": {"type": "object", "additionalProperties": {"type": "string"}}, "attachments": {"type": "array", "items": {"type": "string"}}, "creation_comment": {"type": "string"}}, "required": ["parent_id", "title", "repro_steps", "system_info"], "additionalProperties": False}},
+    {"name": "ado_guard_create_bug", "description": "Create ONE bug under a parent assigned to the verified identity, born UNASSIGNED, with the Parent link in the same request. DISABLED unless the launcher enables it. Needs the user's explicit approval of the exact content; payload_sha256 comes from the preview. Never repeats a request and reads the result back.",
+     "inputSchema": {"type": "object", "properties": {"parent_id": {"type": "integer", "minimum": 1}, "title": {"type": "string", "maxLength": 255}, "repro_steps": {"type": "string"}, "system_info": {"type": "string"}, "acceptance_criteria": {"type": "string"}, "extra_fields": {"type": "object", "additionalProperties": {"type": "string"}}, "payload_sha256": {"type": "string"}, "patch_sha256": {"type": "string"}}, "required": ["parent_id", "title", "repro_steps", "system_info", "payload_sha256"], "additionalProperties": False}},
+    {"name": "ado_guard_attach_file", "description": "Upload ONE file from the allowed evidence folder and link it to ONE work item assigned to the verified identity (or to an unassigned bug this guard created), in a single operation. A video (.mp4/.mov/.webm, up to 60 MB) needs <file>.review.json next to it (reviewed for personal data and credentials). Needs the user's explicit approval of that file.",
      "inputSchema": {"type": "object", "properties": {"work_item_id": {"type": "integer", "minimum": 1}, "file_path": {"type": "string"}, "comment": {"type": "string", "maxLength": 200}}, "required": ["work_item_id", "file_path"], "additionalProperties": False}},
 ]
 KNOWN = {t["name"]: set(t["inputSchema"]["properties"]) for t in TOOLS}
@@ -860,6 +1255,12 @@ def main(argv=None) -> int:
     ap.add_argument("--allowed-dir", required=True, help="the only folder attachments may come from")
     ap.add_argument("--report-dir", default=(os.environ.get("ADO_GUARD_REPORT_DIR") or "").strip() or None,
                     help="optional folder (or ADO_GUARD_REPORT_DIR): one small JSON report per successful comment or attachment")
+    ap.add_argument("--created-bugs-file", default=(os.environ.get("ADO_GUARD_CREATED_BUGS_FILE") or "").strip() or None,
+                    help="optional ledger (or ADO_GUARD_CREATED_BUGS_FILE) of the bugs this guard created, so that their "
+                         "attachments and creation comment may follow while they are unassigned, across restarts")
+    ap.add_argument("--project-yaml", default=(os.environ.get("ADO_GUARD_PROJECT_YAML") or "").strip() or None,
+                    help="optional (or ADO_GUARD_PROJECT_YAML): the workspace's project.yaml, whose write_guard.bugs maps the "
+                         "bug's extra fields, labels and content checks; a section that cannot be used stops the start")
     ap.add_argument("--probe-on-start", action="store_true",
                     default=(os.environ.get("ADO_GUARD_PROBE_ON_START") or "").strip() == "1",
                     help="opt-in (or ADO_GUARD_PROBE_ON_START=1): ONE read with the write credential at startup, reported in "
@@ -867,6 +1268,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if not a.org:
         ap.error("organisation missing: pass --org or set ADO_GUARD_ORG (nothing was started, nothing was read or written)")
+    try:
+        bug_config = load_project_bug_config(a.project_yaml) if a.project_yaml else load_bug_config(None)
+    except ConfigError as e:
+        ap.error(f"write_guard.bugs: {e} (nothing was started, nothing was read or written)")
     # whitespace at the ends is never part of a token (a paste often adds it); whitespace or control characters INSIDE mean a
     # damaged value: it is refused (writes disabled / read credential unused), never repaired, and only the state is reported
     pat, write_state = screen_credential(os.environ.get("ADO_GUARD_WRITE_PAT"))
@@ -888,7 +1293,7 @@ def main(argv=None) -> int:
     expiries = {"write": os.environ.get("ADO_GUARD_WRITE_PAT_EXPIRES"), "read": os.environ.get("ADO_GUARD_READ_PAT_EXPIRES")}
     guard = Guard(a.org, a.project, a.identity_id, a.allowed_dir, Http(pat, read_pat), log, write_enabled=bool(pat),
                   allow_bug_create=allow_bug, credentials={"write": write_state, "read": read_state}, expiries=expiries,
-                  report_dir=a.report_dir)
+                  report_dir=a.report_dir, created_bugs_file=a.created_bugs_file, bug_config=bug_config)
     if a.probe_on_start:
         guard.startup_probe = startup_probe(guard)
         log({"event": "startup_probe", **guard.startup_probe})

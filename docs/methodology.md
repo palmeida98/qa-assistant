@@ -199,7 +199,7 @@ For each feature, identify:
 
 The analysis is kept in the workspace, in `analysis/<feature>_<YYYYMMDD>.md`, with its date, its sources and its status, so another session continues from it. A new version is a new file. What it infers stays under *Proposed*: neither saving it nor the user reviewing it makes it a requirement (§1.3).
 
-A feature often starts as a ticket. `/analyze-ticket` (`technique-tickets.md`) reads Azure DevOps or Jira, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
+A feature often starts as a ticket. `/analyze-ticket` (`technique-tickets.md`) reads Azure DevOps, Jira or Linear, says what changed since the last check and keeps the result in the workspace's `memory/`. It separates the ticket's **official state** from the **QA situation**, an analytical conclusion that is neither a status of §2 nor a change in the tracker: a closed ticket proves neither that it was tested nor that the fix is in the available build. It also separates confirmed facts, unverified statements, inferences and questions; a comment does not become a requirement by being read (§1.3). It marks no test as run and writes nothing to the tracker.
 
 ### 5.2 Design techniques
 

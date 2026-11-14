@@ -9,6 +9,9 @@
 1a. A feature that starts as a ticket: /analyze-ticket gives its state, changes and relations first.
 2. Identify the feature's source of truth (requirements, specification, Figma, existing cases)
    and respect the hierarchy of section 1.3. If two sources contradict each other, stop and ask.
+   With a `specs:` section in project.yaml, the specification is found, read and cited as technique-specs.md says:
+   each confirmed requirement carries its `spec_refs` (source, path or work item, rule id, revision); a point where
+   the specification and the tracker diverge is a question with both texts, while the confirmed points are planned.
 3. For each role/profile of the project, say whether it reaches the feature and what it can and cannot do.
 4. List the inputs, the states (life cycle), the business rules and the integrations.
 5. Assess the risk: probability of failure x impact for the user or for the business, with the recent changes and
@@ -72,8 +75,10 @@
    qa-assistant, the dry run first:
    python -m adapters.excel.add_cases <workspace> cases/cases_<YYYYMMDD>_<nn>.json --dry-run
    0 = show the user the rows, the fields not written (no column) and the preview token, then, once the user approves
-   THAT preview, run it again without --dry-run and with --expect <token> (the same --label, --no-recalc and --now;
-   refused, nothing written, if the cases file, the workbook or project.yaml changed since);
+   THAT preview, run it again without --dry-run and with --expect <token> (the same --platform or --workbook, --label,
+   --no-recalc and --now; refused, nothing written, if the cases file, the workbook it resolved (shown as an absolute
+   path) or project.yaml changed since; a write without --expect is refused; an explicit --workbook or QA_WORKBOOK that
+   is outside the workspace or is not the --platform's workbook is refused, never ignored: technique-excel.md 1.2);
    4 = an ID that exists, a candidate duplicate (same title in the sheet) or an invalid file: the user decides
    (remove the case or give another ID, never force it). After the write: 2 = cross-check problems (original
    untouched); 3 = recalculation failed; 5 = the summary does not count the new rows: fix its formulas, never the
@@ -95,7 +100,12 @@
    start a session), not ready or to confirm, and why; the user does the login and the consents. A case whose account is not
    ready goes in the plan as Blocked (environment) with that reason, never as a case to run; the rest of the batch goes on.
 1c. Acceptance criteria (rules.md §15): `python scripts/ac_coverage.py <workspace> init <pbi>` writes a map of the PBI's criteria
-   (from the ticket memory; `none` when there are none, and the report says so); map the existing and new cases to each criterion,
+   (from the ticket memory; `none` when there are none, and the report says so). Each criterion's `text` is a transcription:
+   the original lines, breaks, indentation, lists, tables and fenced blocks as the tracker has them (rules.md §17), with its
+   `origin` (ticket, link, section, lines) and `presentation`: `inline` (one short line, it may go in a table cell whole) or
+   `reference` (the cell gets `reference`, e.g. «DS-12 · AC2 · description, lines 12-15», and the text goes whole in its
+   own block below). The split into criteria is a reading aid; `criteria_source.text` keeps the whole field. Never retype,
+   join or shorten a criterion to fit a table; map the existing and new cases to each criterion,
    `report` it and say the uncovered ones in the plan.
 1d. New cases (rules.md §16): write the proposals to `cases/<file>.json` before running anything (one file per platform, or one
    file for both with the `platform` field saying so); each proposal keeps its PBI ID, QA task and origin so the traceability
@@ -118,3 +128,6 @@
 10. Once the plan stands (step 9), save each batch as <workspace>/batches/<name>.yaml -- cases: [<case ID>, ...] in the planned
     order (a name of letters, digits, '.', '_', '-') -- so it can also run remotely: the workspace's CI takes the
     batch's name (python scripts/workspace_ci.py <workspace> check --batch <name>; technique-mobile.md section 11).
+    A plan the QA approved keeps that decision in the file: `approval:` (decided_by, at, ref) and, with quarantines,
+    `excluded:` / `retest:` (procedures/quarantine.md). Such a plan is recorded in the run log
+    (run_log.py plan <batch> batches/<name>.yaml) before the first result: run_log.py add refuses until then.

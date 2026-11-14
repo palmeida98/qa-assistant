@@ -5,6 +5,116 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (an approved batch plan is recorded before the run, 2026-11-14)
+- `run_log.py add` refuses (exit 1, nothing written) the first result of a batch whose own plan
+  `batches/<name>.yaml` (with or without the `batch_` prefix) carries the QA's decision (`approval:`, `excluded:`,
+  `retest:`) until `run_log.py plan` records it; `plan` refuses another file for that batch; `progress` names the
+  command and, before the first result, checks the quarantine in the plan's `run:` context (no false «revalidate»).
+  `workspace_ci.py batch` records the plan of a planned remote batch. Batches without such a plan (ad hoc retests,
+  older batches) are recorded as before. `/run-tests` step 3: mode, plan, progress, then the first case.
+- Two own plans with the QA's decisions (`batches/<name>.yaml` and `batches/batch_<name>.yaml`) are ambiguous: `add`,
+  `plan` and the CI refuse and name both until the QA keeps one; a run log that follows another plan than its own plan
+  with decisions is refused too (recording the own plan keeps the results). `progress` says `PLAN TO RESOLVE`.
+- CI: the step «Resolve the batch» checks a planned batch as `quarantine.py scope --plan` with the run's platform
+  (android), build and environment, before the run log and the step's outputs: a missing or out-of-date decision
+  stops the workflow before the emulator, the flows and the agent. A list of case IDs runs as before.
+
+### Added (bugs: final preview of the fields, write guard 1.2.0, 2026-11-13)
+- `ado_guard_preview_bug` shows every field with the label of the Board's form and its exact value, the Parent,
+  Assigned To empty, the project's checks and notices, the evidence and the creation comment as separate operations,
+  with `payload_sha256` and `patch_sha256`; `ado_guard_create_bug` creates only what was previewed (with
+  `write_guard.require_patch_hash`, the patch hash too). Optional mapping `write_guard.bugs` in project.yaml
+  (labels, extra fields by confirmed reference name, checks, notices), validated by `validate_project.py` and at the
+  guard's start. `procedures/bugs.md`: mapping a bug to the tracker's real fields; `/manage-bugs` shows the preview.
+
+### Changed (bugs: unassigned on creation, ledger, reviewed video; write guard 1.1.0, 2026-11-13)
+- Earlier than the preview: a bug is created without Assigned To and the read-back reports the real assignee; a
+  ledger of the bugs the guard created lets their attachments and creation comment follow without an assignee; a
+  video is attached only with its `<file>.review.json` (reviewed, no personal data or masked; up to 60 MB).
+
+### Added (checkpoint and resume of /test-pbi: open items, intermediate checkpoints, closing, 2026-11-13)
+- `pbi_state.py open|update|close` record what waits on someone (approval, publish, apply, dependency, question)
+  with a stable id and who unblocks it; `saved` records an intermediate checkpoint without changing a step;
+  `mark checkpoint done` is refused (exit 4) while a step is pending or blocked or an item is open, unless the QA
+  decides `--close-with-open --decided-by`. `start`, `show` and `mark` print one state block (`Next:`, waiting on the
+  QA or the team, blocked, published; "nothing pending" only when it is true). `rules.md` §7, `skills-spec.md` §5.1,
+  `/test-pbi` and `/checkpoint`.
+
+### Added (bugs in quarantine, proposal; 2026-11-13)
+- `docs/procedures/quarantine.md`, `rules.md` §18 and `scripts/quarantine.py` (`show`, `propose`, `decide`, `scope`,
+  `report`): a quarantine is the QA's decision, recorded in `memory/quarantine.json` of the workspace (a bug as the run
+  logs link it and, when different, its tracker id; the cases; the platforms, builds and environments; the reason; the
+  exit condition). The assistant proposes; `decide` needs who decided and where. Plans say the QA's choice per covered
+  case (`excluded:` or `retest:`); `report` shows apart the cases left out («<pending status> — <label>», label from
+  `quarantine.excluded_label`), the known failures observed and the retests run.
+- Enforced at the entry point: `run_log.py add` refuses a result for a case left out while its quarantine holds, for a
+  covered case without the QA's decision in the plan, and for an `excluded:` whose quarantine no longer holds (the plan
+  is out of date); `run_log.py progress` names a plan to revalidate. Skills: `/plan-tests`, `/test-pbi`, `/run-tests`
+  (the check before the first case and on resuming), `/manage-bugs`, `/qa-report`, `/checkpoint`.
+- `run_log.py add` and `plan`: in an Excel project with a workbook per platform, a case of the batch's own workbook is
+  in its library (an iOS-only case was refused); the default workbook's cases stay accepted as before.
+
+### Changed (Excel: a preview reads, a write needs its approved token and an unambiguous destination, 2026-11-13)
+- Incident of 13.11.2026 (a workspace's run): an add «simulated on a copy» named the copy only in `$QA_WORKBOOK`, was
+  run with `--platform` (which chose the destination from project.yaml and ignored the variable without a word) and
+  without `--expect`, and wrote into the real workbook of the platform. `technique-excel.md` §1.2 now separates the two:
+- `adapters.excel.apply`, `add_cases` and `reconcile`: from the command line a write needs `--expect <token>` of the
+  approved dry run (exit 4, nothing written, otherwise). The Python API (`apply()`, `add()`) is unchanged for
+  programmatic callers (the golden check, the demo rebuild, which now uses it).
+- An explicit destination (`--workbook <path>`, new in the three commands, or `$QA_WORKBOOK`) is validated and never
+  ignored: outside the workspace, missing, not a workbook, two different values, or a contradiction with `--platform`
+  or the batch's route is refused (`adapters.excel.base.explicit_workbook`). `reconcile` follows the batch's route
+  like the apply (it used `excel.file` or the variable).
+- The apply's token keeps its `v2-` prefix and also hashes the destination (path and content): a token never
+  authorises another workbook, even with the same content. Previews made before this are refused as «out of date» and
+  are regenerated with the same `--dry-run`. The add's and the reconcile's tokens already named the destination.
+- The dry runs show the absolute path resolved on a line never cut, with the token.
+
+### Added (Linear as a ticket source, read only, 2026-11-12)
+- `tickets.sources.<id>.service: linear` (`adapters/tickets/linear.py`): `/analyze-ticket` reads a Linear issue by key,
+  `<source>:<key>` or link through the official GraphQL API, with a personal API key (`api_key_var`) and only the
+  named queries of `linear.ALLOWED` (no mutation; the read-only transport still guards every request). Fields,
+  comments (paged), relations, children, attachments and the history Linear keeps; acceptance criteria from the
+  description's sections under `acceptance_criteria.headings`, word for word with their lines (`origin`). Same
+  memory, comparison and resume as Azure DevOps and Jira; the browser or MCP route takes the same shapes.
+- `sources` says "configuration only: access not confirmed" without `--online` (and `validate_project.py
+  --environment` too); `sources --online` with Linear checks the key's workspace and teams.
+- A key that a Jira and a Linear source may both hold is ambiguous (exit 2): `<source>:<key>` decides.
+- `fields.unavailable` / `fields.partial` / `fields.origin` in a snapshot: a field a source cannot give or gave in
+  part is never compared as a value; a check whose fields came back in part is partial (exit 1), not failed.
+- `pbi_state.py` recognises Linear links (and a Jira `site` link, which it refused before); `ac_coverage.py init`
+  finds a key's ticket memory on a case-sensitive disk and records the ticket, link and section of the criteria.
+
+### Changed (acceptance criteria transcribed word for word, 2026-11-12)
+- `ac_coverage.py init`: each criterion's `text` keeps the original lines, breaks, indentation, lists, tables and
+  fenced blocks (before, its lines were stripped and joined with spaces); a table or a fenced block is never split;
+  `criteria_source.text` keeps the whole field; each criterion has `origin` (ticket, link, section, lines),
+  `presentation` (`inline` or `reference`) and `reference`. `report` shows a criterion by reference with its full
+  transcription below, every line as written (rules.md section 17). Maps written before keep their text as it is.
+- Not in this change: `tracker: linear` (cases, results, bugs), publishing bugs to Linear, a real pilot.
+
+### Added (comparison of `spec_refs` on a resume, 2026-11-11)
+- `scripts/spec_refs.py` (`cite`, `compare`) and `pbi_state.py baseline --spec-plan FILE` / `check [--spec-root DIR]`:
+  on a resume, `/test-pbi` compares the rules each scenario of the plan cites with the specification now available
+  (an `export` source), by the full text of each rule. The same text in a new revision of the file keeps the scenario
+  reusable; a changed, removed or moved rule names the scenarios to review before the plan is reused (short rules
+  shown word for word, long ones by reference); what could not be verified leaves its scenarios pending review and
+  the check "not concluded". A project without `specs:` and a plan without `spec_refs` keep the current flow.
+  Tests: `tests/test_spec_refs.py`.
+
+### Added (functional specification source, 2026-11-11)
+- An optional `specs:` section in project.yaml (template in `docs/project.yaml`, commented out) and
+  `docs/technique-specs.md`: a workspace can name its functional specification (`artifact`, `git` or `export`). A
+  private location stays in the workspace's `.env`, named by `specs.location_var`; only the variable's name is ever
+  shown. `/analyze-ticket` (`procedures/tickets.md` step 6), `/plan-tests` (`planning.md` step A.2, skill step 3) and
+  `/test-pbi` (step 3: a changed revision lists the rules and the cases that cite them before the plan is reused)
+  read it, cite each rule with its revision (`spec_refs`) and keep a divergence with the tracker a question.
+  `rules.md` §17 is unchanged and applies to the specification's text too.
+- `validate_project.py` checks the section only when it is there (kind, exactly one of location/location_var, the
+  divergence prefixes, the rule id pattern) and adds a `spec source` environment line; the preflight of the three
+  skills shows that line (`requires-tools: "spec"`) without asking any other tool. A project without `specs:`
+  validates and preflights exactly as before. `scripts/spec_source.py` is left for a later phase.
+
 ### Changed (Windows status wording, 2026-11-11)
 - The summary banner of the Windows suite, the header of `windows-suite.yml`, comments and the `ci-status` note in `ci.yml`, the header of
   `.github/known-failures-windows.txt` and the README no longer say that the Windows suite is red or has known failures: since the six

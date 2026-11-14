@@ -24,8 +24,9 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEMO = os.path.join(ROOT, "examples", "demo")
-sys.path[:0] = [ROOT, os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [os.path.join(ROOT, "tests"), ROOT, os.path.join(ROOT, "tests", "golden")]
 
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel.apply import main as apply
@@ -63,7 +64,7 @@ class Now(unittest.TestCase):
     def apply(self, tmp: str) -> dict:
         path = self.workspace(tmp)
         with contextlib.redirect_stdout(io.StringIO()):
-            rc = apply([tmp, BATCH, "--no-recalc", "--now", NOW])
+            rc = apply(kit.approved(apply, [tmp, BATCH, "--no-recalc", "--now", NOW], dry_extra=("--detail",)))
         self.assertEqual(rc, 0)
         return cells(path)
 

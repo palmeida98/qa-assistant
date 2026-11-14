@@ -25,6 +25,7 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests"), os.path.join(ROOT, "tests", "golden")]
 
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel import ExcelAdapter, InvalidBatch, recalc
@@ -153,10 +154,14 @@ class AddCasesToken(Workspace):
         self.assertIn("goes with the real add", out)
         self.assertEqual(self.sha(self.xlsx), before)
 
-    def test_without_a_token_the_add_works_as_before(self):
+    def test_without_a_token_the_add_is_refused_and_writes_nothing(self):
+        # 13.11.2026 (technique-excel.md section 1.2): from the command line a write needs the approved preview's token
+        before = self.sha(self.xlsx)
         code, out = self.run_cli(ac, "cases/cases_01.json", "--no-recalc")
-        self.assertEqual(code, 0, out)
-        self.assertIn("TC-ADMIN-005", self.ids("Admin"))
+        self.assertEqual(code, 4, out)
+        self.assertIn("needs --expect", out)
+        self.assertNotIn("TC-ADMIN-005", self.ids("Admin"))
+        self.assertEqual(self.sha(self.xlsx), before)
 
     def test_a_token_does_not_authorise_cases_that_are_invalid_now(self):
         token, _ = self.dry()
@@ -247,7 +252,8 @@ class KeepPrevious(Workspace):
         return {"tc": case, "status": status, "actual_result": text, "ts": ts}
 
     def apply(self, path, *extra):
-        return self.run_cli(ap, path, "--no-recalc", "--now", NOW.isoformat(), *extra)
+        return kit.run_approved(ap.main, [self.ws, path, "--no-recalc", "--now", NOW.isoformat(), *extra],
+                                dry_extra=("--detail",))
 
     def cells(self, case="TC-SHOP-001"):
         ad = ExcelAdapter.from_project(self.ws)
@@ -286,9 +292,12 @@ class KeepPrevious(Workspace):
         self.save_project()
         path = self.batch("batch_a_01", [self.result("Pass", "x")])
         before = self.sha(self.xlsx)
-        code, out = self.apply(path, "--keep-previous")
+        code, out = self.run_cli(ap, path, "--no-recalc", "--now", NOW.isoformat(), "--keep-previous", "--dry-run",
+                                 "--detail")
         self.assertEqual(code, 4)
         self.assertIn("needs the notes column", out)
+        code, out = self.apply(path, "--keep-previous")            # the preview refused: no token, nothing written
+        self.assertEqual(code, 4)
         self.assertEqual(self.sha(self.xlsx), before)
         res = ap.dry_run(self.ws, path, recalc=False, now=NOW, keep_previous=True)
         self.assertTrue(any("notes column" in p for p in res["problems"]))

@@ -28,9 +28,10 @@ from unittest import mock
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden"), os.path.join(ROOT, "tests")]
 
 import run_log as rl
+import workspace_kit as kit
 from build_fixture import build
 from common import workspace_lock
 
@@ -92,7 +93,7 @@ class Routing(unittest.TestCase):
     def apply(self, path):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            rc = ap.main([self.ws, path, "--no-recalc"])
+            rc = ap.main(kit.approved(ap.main, [self.ws, path, "--no-recalc"]))
         return rc, out.getvalue() + err.getvalue()
 
     def status(self, file, case="TC-SHOP-001"):

@@ -254,7 +254,8 @@ def record_check(workspace: str, request: dict, entries: list[dict], omitted: li
         return any(v["status"] != COMPLETE for k, v in t["coverage"].items() if k in COMPONENTS)
 
     budget = [o for o in omitted if o["reason"] in ("max-items", "not-provided")]
-    any_read = any(t["coverage"]["fields"]["status"] == COMPLETE for t in tickets)
+    # a source can answer the fields in part (Linear: data with errors): something was read, the check is partial
+    any_read = any(t["coverage"]["fields"]["status"] in (COMPLETE, PARTIAL) for t in tickets)
     if not any_read:
         outcome = "failed"
     elif any(incomplete(t) for t in tickets) or budget or errors or (scope and scope["status"] != COMPLETE):

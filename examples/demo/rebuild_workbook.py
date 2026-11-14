@@ -25,6 +25,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.dirname(os.path.dirname(HERE))]
@@ -32,7 +33,7 @@ sys.path[:0] = [HERE, os.path.dirname(os.path.dirname(HERE))]
 import build_workbook
 import yaml
 
-from adapters.excel.apply import main as apply
+from adapters.excel.apply import apply as apply_batch
 
 
 def label(name: str) -> str:
@@ -57,11 +58,11 @@ def rebuild(workspace: str = HERE) -> int:
     for batch in sorted(glob.glob(os.path.join(HERE, "runs", "batch_*.json")), key=order):
         name = os.path.splitext(os.path.basename(batch))[0]
         print(f"\n== {name}")
-        args = [workspace, batch, "--label", label(name)]
         first_ts = order(batch)[0]
-        if first_ts != "9999":  # batch without ts: the clock is used
-            args += ["--now", first_ts]
-        rc = apply(args)
+        # the rebuild of the fictional demo applies its historical batches through the adapter's API (as the golden
+        # check does): the command line needs the token of an approved dry run (technique-excel.md section 1.2)
+        now = datetime.fromisoformat(first_ts) if first_ts != "9999" else None   # batch without ts: the clock
+        rc = apply_batch(workspace, batch, label=label(name), now=now)
         if rc != 0:
             return rc
     return 0

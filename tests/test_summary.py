@@ -18,8 +18,9 @@ import unittest
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [os.path.join(ROOT, "tests"), ROOT, os.path.join(ROOT, "tests", "golden")]
 
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel import ConfigError, ExcelAdapter, load_batch
@@ -216,7 +217,7 @@ class WithLibreOffice(Base):
         with open(batch, "w", encoding="utf-8") as f:
             json.dump({"results": [{"tc": "TC-SHOP-003", "status": "Pass", "actual_result": "ok"}]}, f)
         with contextlib.redirect_stdout(io.StringIO()) as out:
-            rc = apply_mod.main([ws_dir, batch])
+            rc = apply_mod.main(kit.approved(apply_mod.main, [ws_dir, batch], dry_extra=("--detail",)))
         self.assertEqual(rc, 5, out.getvalue())
         self.assertIn("fix the summary's FORMULAS", out.getvalue())
 

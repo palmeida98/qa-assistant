@@ -94,6 +94,26 @@ Adding evidence or a bug to a result already recorded keeps its status, its obse
 the run block (`run_log.py attach`); replacing a result (`add --replace`) is only for a new execution of that case.
 An approval still valid (§5) is not asked again on resuming.
 
+**Saving progress is not closing the flow** (`/test-pbi`, `scripts/pbi_state.py`; skills-spec.md §5.1):
+
+- A checkpoint saves the progress at any time, with work still open: an intermediate checkpoint
+  (`pbi_state.py saved`) records the point reached and changes no step. Closing the flow is a separate act: the step
+  `checkpoint` is marked `done` only when no other step is pending or blocked and no open item is left. Otherwise the
+  closing is refused, unless the QA decides explicitly to close with open items: the record keeps who decided and
+  what stayed open.
+- What waits on someone is recorded as it appears, as an **open item** with a stable id (an approval, a publication,
+  an application of results, a dependency, a question): what is missing and who can unblock it. On resuming, the same
+  item is updated, never opened again under another id; it is closed only with a verifiable confirmation (the read
+  back of the tracker, the dry run and apply of the workbook, the QA's answer with who gave it).
+- **An approval exists only when the QA gives it explicitly**, for the concrete set shown (§5). A checkpoint, a
+  resume, an open item or its closing never replace the confirmation of a plan, of a run or of a write, nor turn an
+  earlier approval into one for another set; the checks of the adapters (the dry run's token) and of the write guard
+  (the approved hash) stay as they are.
+- An operation that is blocked (a tracker out of reach, a device not connected) does not stop the independent work
+  already authorised: it goes on, and the blocked operation stays visible as a blocked step or an open item.
+- "Nothing pending" is said only when no step is pending or blocked and no item is open. When the only work left
+  waits on the QA or the team, the resume says that no work is available in this session and shows what is missing.
+
 ## 8. Defaults and the project's own rules
 
 The workspace's `CLAUDE.md`, and what it imports (for example its `context.md`), holds the project's own rules. Where
@@ -199,3 +219,39 @@ checkout; nothing is installed for the user and the system Python is never used 
 - **Bugs in the tracker (phase C).** Real bug creation stays disabled until the user decides (`ADO_GUARD_ALLOW_BUG_CREATE` unset).
   A bug is prepared with the preview tool (no write), shown whole for approval, and one bug is created per approval, under a
   parent assigned to the verified identity.
+
+## 17. Specs, acceptance criteria and business rules from the tracker: never rewritten (user, 11.11.2026)
+Applies whenever a spec, an acceptance criterion or a business rule is taken from Azure DevOps Boards, Jira or Linear.
+- **The tracker's text is the source.** Whenever you present a spec, an acceptance criterion or a business rule, copy the
+  original text whole and word for word. Keep its language, numbering, conditions, exceptions, examples and any errors it
+  contains. Never summarise, rephrase, translate, correct, combine or complete that text.
+- **Name the origin of each rule:** the work item's ID and link, the field or section it comes from and the criterion's
+  original identifier, when there is one. When the PBI, the tasks and the comments give contradictory versions, show the texts
+  as they are and point out the divergence. When the original cannot be read, say that the rule is not confirmed. A criterion
+  that was inferred (for example in an `analysis/ac_map_*.json`) is never presented as the tracker's text until it has been
+  checked and transcribed directly from the tracker.
+- **Decide case by case whether the text goes in the table:**
+  - A short rule that fits the cell without hurting the reading goes in the table whole.
+  - A long rule, or one with several conditions, exceptions, lists or tables, gets in the cell only a precise reference to
+    the original, for example «See PBI 42426 · AC 3». When the request or the report needs the rule in the document itself,
+    transcribe it whole in its own section below the table and point the cell to that section.
+  - When the whole spec is long, judge each relevant rule on its own: a short rule may go in the table even if the spec is long.
+  - When the original is a table in the tracker, keep its headers and the relation between rows and columns. If that structure
+    does not fit the QA table, put the original table in its own section or reference it in the tracker.
+- **QA text stays apart.** Test scenarios, observations and questions go in their own fields. A scenario may be written from a
+  rule, as long as the reference to the original rule is explicit and the scenario is marked as QA text.
+- **Before delivering,** compare each transcription with the source. If the whole text hurts the table, move it or use a
+  reference; never shorten or change the rule to make it fit.
+
+## 18. Bugs in quarantine (13.11.2026; procedures/quarantine.md)
+
+- A quarantine is the QA's decision, recorded in the workspace's register (`memory/quarantine.json`, through
+  `scripts/quarantine.py`): a bug, the cases it affects and the platforms, builds and environments where it holds. It is
+  never automatic: a bug in Blocked, an intermittent failure or a known bug does not enter quarantine by itself. The
+  assistant may propose one, or its end; activating, lifting or rejecting it is the QA's explicit decision, recorded with
+  who and where.
+- It never hides: a case left out is shown as not executed with its reason and the bug's link, never counted as Pass; a
+  known failure keeps its Fail and links the existing bug; a different failure goes through the normal review; a retest
+  that passes is shown to the QA, and the quarantine stays until the QA decides.
+- It never reduces what it does not cover (another platform, build or environment, another case), and it writes nothing
+  to the tracker or the workbook by itself.

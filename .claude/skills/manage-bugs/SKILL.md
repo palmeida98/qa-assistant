@@ -14,7 +14,7 @@ metadata:
   resume: "The review file and the run log; an item already approved or published (memory/pbi/ record, tracker key) is never proposed or published again."
   requires-modules: "adapters.excel, adapters.tracker"
   requires-scripts: "scripts/run_log.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/bugs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/bugs.md, procedures/quarantine.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -35,7 +35,10 @@ metadata:
    search, the format and the run log fields.
 2. Investigate each: the steps that reproduce it, the requirement or decision it breaks (with its source), whether a
    more recent decision changed the expectation, and whether it is a copy change, a new request or a defect already
-   open on the other platform (the workspace's CLAUDE.md says what is not a bug there).
+   open on the other platform (the workspace's CLAUDE.md says what is not a bug there). In a case a quarantine covers
+   (procedures/quarantine.md): a Fail linked to its bug is an occurrence of that bug (listed in the review, no new
+   proposal); a Fail without that link is investigated by these same criteria and shown to the QA: a quarantine never
+   explains a behaviour it does not describe.
 3. Search before proposing: the defects of the workbook or bug-search in the tracker (open and closed, --include-closed
    when it may be a regression), and the related bugs /analyze-ticket recorded. Say how many were found and how many
    were read. Similar symptoms do not prove the same defect: the same defect needs the same steps, screen or flow and
@@ -50,7 +53,9 @@ metadata:
    more (rules.md section 8).
 5. Write the batch review in runs/<batch>_bugs_review.md: per item the proposal in the project's bug format
    (CLAUDE.md order of fields, steps, expected -> observed, environment, device, build, evidence path with the bug id
-   once it has one). Present all items together at the end of the batch and wait. Priority: run
+   once it has one), mapped to the tracker's real fields after reading its form (procedures/bugs.md, "Mapping a bug
+   to the tracker's fields": what goes in each field and what stays pending). Present all items together at the end
+   of the batch and wait. Priority: run
    python <qa>/scripts/run_log.py <workspace> defect-rule. When the project's schema REQUIRES a priority (Excel with
    excel.defects.priorities), each bug in the review shows the accepted values and a line "priority: waiting for your
    decision"; the bug is not ready to apply until the user gives one of them (a suggestion with its reason only if the
@@ -63,4 +68,13 @@ metadata:
    /checkpoint, after the confirmation of that batch's dry run.
 7. Publishing to a tracker outside /checkpoint (a bug the user creates, a comment): only when the user asks for that
    item; show the exact text first; under /test-pbi record the key with pbi_state.py published, which refuses a second
-   publication of the same draft.
+   publication of the same draft. After publishing or correcting a bug, reopen it and verify each field and the rendered form
+   (same section of procedures/bugs.md); a save or equal text alone does not validate it.
+   Creating a bug through the write guard (technique-ado-write-guard.md, «Final preview of a bug's fields»): build the
+   fields from the project's mapping (write_guard.bugs of project.yaml: extra_fields only for its keys), run
+   ado_guard_preview_bug with the evidence to attach and the creation comment, and show the QA its preview_text as it
+   is: each field by its label in the Board with its exact value, the Parent, Assigned To empty, the checks and notices
+   (a QA account «to confirm»), the evidence (a reviewed video only when the captures cannot show the occurrence) and
+   the comment as separate operations, and payload_sha256 and patch_sha256. A preview with ready false is not
+   proposed for approval. Create only with the hashes the QA approved; a field, its mapping or the parent that changed
+   since gives other hashes: preview again and ask again. Attachments and the comment follow with their own approvals.

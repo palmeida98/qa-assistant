@@ -20,8 +20,9 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [os.path.join(ROOT, "tests"), ROOT, os.path.join(ROOT, "tests", "golden")]
 
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel import ExcelAdapter, InvalidBatch
@@ -252,15 +253,22 @@ class CommandLine(unittest.TestCase):
         ws = openpyxl.load_workbook(os.path.join(self.ws, CFG["file"]))["Shop"]
         return [ws.cell(r, 1).value for r in range(2, ws.max_row + 1)]
 
+    def run_approved(self, *args):
+        return kit.run_approved(cli.main, [self.ws, *args, "--no-recalc", "--now", "2026-10-04T10:00:00"])
+
     def test_add_then_again(self):
         f = self.write("cases_20261004_01.json", [case()])
-        code, out = self.run_cli(f)
+        code, out = self.run_cli(f)                                          # without the approved token: nothing
+        self.assertEqual(code, 4, out)
+        self.assertIn("needs --expect", out)
+        code, out = self.run_approved(f)
         self.assertEqual(code, 0, out)
         self.assertIn("TC-SHOP-005 -> 'Shop' row 6", out)
         self.assertEqual(self.shop_ids()[-1], "TC-SHOP-005")
-        code, out = self.run_cli(f)
-        self.assertEqual(code, 0)
-        self.assertIn("Nothing added", out)
+        ids = self.shop_ids()
+        code, out = self.run_approved(f)                                     # again: refused, never a second row
+        self.assertEqual(code, 4)
+        self.assertEqual(self.shop_ids(), ids)
         ad = ExcelAdapter.from_project(self.ws)
         ad.load()
         self.assertEqual(ad.applied_batches()[0]["label"], "[2026-10-04, cases_20261004_01]")

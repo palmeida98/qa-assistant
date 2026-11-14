@@ -26,6 +26,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")
 
 import qa_report as qr
 import run_log as rl
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel import apply as ap
@@ -80,7 +81,8 @@ class Base(unittest.TestCase):
         path = os.path.join(self.ws, "runs", NAME + ".json")
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            rc = ap.main([self.ws, path, "--no-recalc", "--now", NOW.isoformat()])
+            rc = ap.main(kit.approved(ap.main, [self.ws, path, "--no-recalc", "--now", NOW.isoformat()],
+                                      dry_extra=("--detail",)))
         self.assertEqual(rc, 0, out.getvalue())
 
 

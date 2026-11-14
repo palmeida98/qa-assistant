@@ -1,10 +1,15 @@
 """
-Command line of the ticket analysis (docs/technique-tickets.md). Reads trackers; writes only the workspace's memory.
+Command line of the ticket analysis (docs/technique-tickets.md). Reads trackers (Azure DevOps, Jira, Linear); writes
+only the workspace's memory.
+
+`sources` checks the configuration and which credentials are set, without contacting anything; `sources --online`
+also asks each API source who the key belongs to (Linear: the workspace and the teams it reaches) -- the only
+confirmation of real access.
 
     python -m adapters.tickets <workspace> sources [--online]
     python -m adapters.tickets <workspace> collect <ref> [<ref> ...] [--no-expand]
     python -m adapters.tickets <workspace> collect --scope <name> [--expand]
-    python -m adapters.tickets <workspace> collect --query "<WIQL|JQL>" --source <id> [--expand]
+    python -m adapters.tickets <workspace> collect --query "<WIQL|JQL|Linear IssueFilter as JSON>" --source <id> [--expand]
     python -m adapters.tickets <workspace> ingest <bundle.json> [--dry-run]
     python -m adapters.tickets <workspace> analysis <check id> <analysis.json> [--now YYYY-MM-DDTHH:MM:SS]
 
@@ -32,7 +37,7 @@ from adapters.tracker.config import TrackerConfig
 from adapters.tracker.errors import Conflict, InvalidInput, TrackerError
 from adapters.tracker.http import SecretRedactor, urllib_transport
 
-from . import azure_devops, jira, memory
+from . import azure_devops, jira, linear, memory
 from . import config as tconfig
 from .collect import BundleSource, expand, resolve_ref
 from .model import COMPLETE, FAILED, Sanitizer, read_only_transport, validate_snapshot
@@ -40,7 +45,8 @@ from .render import one_line
 
 WRITE_FAILED = 5
 SOURCES = {"azure-devops": (azure_devops.AdoSource, azure_devops.normalize, azure_devops.bundle_from_raw),
-           "jira": (jira.JiraSource, jira.normalize, jira.bundle_from_raw)}
+           "jira": (jira.JiraSource, jira.normalize, jira.bundle_from_raw),
+           "linear": (linear.LinearSource, linear.normalize, linear.bundle_from_raw)}
 
 
 def api_source(config, source, redactor: SecretRedactor, transport, sleep=None):
@@ -223,7 +229,15 @@ def run_sources(a, config, transport, sleep, printer, redactor) -> int:
         creds = ", ".join(f"{k}: {'set' if v else 'MISSING'}" for k, v in state.items()) or "none (the browser session)"
         printer(f"{source.id}: {source.service}, access {source.access}, {source.org}; credentials: {creds}")
         if a.online and source.access == "api":
-            printer(f"  identity of @Me / currentUser(): {api_source(config, source, redactor, transport, sleep).identity()}")
+            reader = api_source(config, source, redactor, transport, sleep)
+            check = getattr(reader, "online_check", None)
+            if check:
+                for line in check():
+                    printer(f"  {redactor.text(line)}")
+            else:
+                printer(f"  identity of @Me / currentUser(): {reader.identity()}")
+        elif source.access == "api":
+            printer("  configuration only: access not confirmed (sources --online asks the tracker)")
     printer("Scopes: " + (", ".join(f"{k} ({v.get('source')})" for k, v in config.scopes.items()) or "none configured"))
     printer("Limits: " + ", ".join(f"{k}={v}" for k, v in config.limits.items()))
     return 0
@@ -231,7 +245,7 @@ def run_sources(a, config, transport, sleep, printer, redactor) -> int:
 
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python -m adapters.tickets", description="Read-only ticket analysis: reads "
-                                 "Azure DevOps or Jira, writes only the workspace's memory")
+                                 "Azure DevOps, Jira or Linear, writes only the workspace's memory")
     ap.add_argument("workspace")
     now = argparse.ArgumentParser(add_help=False)
     now.add_argument("--now", type=datetime.fromisoformat, metavar="YYYY-MM-DDTHH:MM:SS",
@@ -242,7 +256,7 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("collect", parents=[now], help="read through the API, compare, update the memory")
     p.add_argument("refs", nargs="*", help="links, ids, keys or <source>:<id>")
     p.add_argument("--scope", help="a name of tickets.scopes")
-    p.add_argument("--query", help="WIQL or JQL, with --source")
+    p.add_argument("--query", help="WIQL, JQL or a Linear IssueFilter as JSON, with --source")
     p.add_argument("--source", help="the source of --query")
     p.add_argument("--expand", action="store_true", help="expand the members of a scope or query")
     p.add_argument("--no-expand", action="store_true", help="only the tickets given")

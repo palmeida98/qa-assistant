@@ -32,6 +32,7 @@ import check_approval_files as caf
 import qa_report as qr
 import run_log as rl
 import test_qa_report as base
+import workspace_kit as kit
 
 from adapters.excel import add_cases as addc
 from adapters.excel import annotate as an
@@ -245,7 +246,7 @@ class Gaps(Fixture):
         cases_file = os.path.join(self.ws, "cases", "cases_20261110_01.json")
         with open(cases_file, "w", encoding="utf-8") as f:
             json.dump({"cases": [{"id": "TC-SHOP-050", "title": "A brand new case"}]}, f)
-        self.assertEqual(quiet(addc.main, [self.ws, "cases/cases_20261110_01.json", "--no-recalc"]), 0)
+        self.assertEqual(kit.run_approved(addc.main, [self.ws, "cases/cases_20261110_01.json", "--no-recalc"])[0], 0)
         rows = self.control()
         self.assertEqual(rows[-1][6], "[]")                         # a row of cases: no results, said explicitly
         self.blank_keys("cases_20261110_01")                        # an old row (no keys): recognised by its file
@@ -596,7 +597,7 @@ class Coverage(Fixture):
         self.memory(123, "Given a cart\nWhen I pay\nThen it is saved\n\nGiven a paid order\nWhen I open it\nThen I see it")
         amap = ac.init(self.ws, 123)
         self.assertEqual([c["id"] for c in amap["criteria"]], ["AC1", "AC2"])
-        self.assertTrue(amap["criteria"][0]["text"].startswith("Given a cart When I pay"))
+        self.assertEqual(amap["criteria"][0]["text"], "Given a cart\nWhen I pay\nThen it is saved")   # word for word
         self.assertEqual((amap["criteria_source"]["kind"], [c["cases"] for c in amap["criteria"]]), ("ticket-memory", [[], []]))
         out = os.path.join("analysis", "ac_map_123.json")
         self.assertEqual(quiet(ac.main, [self.ws, "init", "123"]), 0)

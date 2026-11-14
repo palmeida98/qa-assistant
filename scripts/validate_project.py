@@ -33,7 +33,10 @@ mobile.build.source. Nothing is started nor installed. A missing tool is a
 warning (exit 0) unless --strict.
 
 With a tickets: section, also how /analyze-ticket can read each source (a token
-set in .env, or a logged-in browser). Read only; never changes anything. Problems
+set in .env, or a logged-in browser). With the optional specs: section
+(technique-specs.md), its keys are checked and one line says where the
+specification is (a private location only by the NAME of its .env variable);
+without it nothing of this is checked or shown. Read only; never changes anything. Problems
 prevent calling the onboarding done; warnings are shown to the user.
 
 Exit codes: 0 no problems (there may be warnings) · 1 problems (or, with
@@ -370,6 +373,72 @@ def rebuild_rule_warnings(workspace: str) -> list[str]:
              "cases go in with `python -m adapters.excel.add_cases` (technique-excel.md section 4.1); update the rule")]
 
 
+# the optional source of the functional specification (technique-specs.md): absent, nothing is checked or shown
+SPEC_KINDS = ("artifact", "git", "export")
+SPEC_KEYS = ("kind", "location", "location_var", "ref", "index", "global_rules", "divergences", "divergence_prefixes",
+             "changelog", "rule_id")
+
+
+def specs_section(proj: dict) -> tuple[list[str], list[str]]:
+    """The specs: section, when there is one: its kind, exactly one location (a place, or the NAME of the .env
+    variable that holds a private one), the divergence prefixes and the rule id pattern. No other file is opened."""
+    specs = proj.get("specs")
+    if specs is None:
+        return [], []
+    if not isinstance(specs, dict):
+        return ["specs: expected a map (technique-specs.md section 1)"], []
+    from common import VARIABLE_NAME
+    problems, warnings = [], []
+    unknown = sorted(str(k) for k in specs if k not in SPEC_KEYS)
+    if unknown:
+        warnings.append(f"specs: unknown key(s) {unknown} (known: {list(SPEC_KEYS)})")
+    if specs.get("kind") not in SPEC_KINDS:
+        problems.append(f"specs.kind must be one of {list(SPEC_KINDS)}")
+    location = str(specs.get("location") or "").strip()
+    variable = str(specs.get("location_var") or "").strip()
+    if bool(location) == bool(variable):
+        problems.append("specs: give exactly one of location (a place that can be committed) and location_var (the "
+                        "NAME of the .env variable that holds a private location)")
+    elif variable and not VARIABLE_NAME.fullmatch(variable):
+        problems.append(f"specs.location_var must be the NAME of a .env variable (e.g. SHOP_SPEC_URL), not {variable!r}")
+    elif location and specs.get("kind") == "artifact":
+        warnings.append("specs.location: a link written in project.yaml is committed with the workspace; a private "
+                        "one belongs in .env, named by specs.location_var")
+    if not str(specs.get("index") or "").strip():
+        warnings.append("specs.index is empty: the specification of a ticket is found from its index "
+                        "(technique-specs.md section 2)")
+    prefixes = specs.get("divergence_prefixes")
+    if prefixes is not None and not (isinstance(prefixes, list) and all(isinstance(x, str) and x for x in prefixes)):
+        problems.append("specs.divergence_prefixes must be a list of texts, e.g. [DIV-M-, DIV-S-]")
+    if specs.get("rule_id"):
+        try:
+            re.compile(str(specs["rule_id"]))
+        except re.error as e:
+            problems.append(f"specs.rule_id is not a valid regular expression: {e}")
+    return problems, warnings
+
+
+def spec_source(workspace: str, proj: dict) -> tuple[bool, str, str]:
+    """(found, "spec source", detail): where the skills find the specification. A private location is shown only by
+    its variable's NAME, never its value; the source itself is not read here (whether it opens is seen when reading)."""
+    specs = proj.get("specs") if isinstance(proj.get("specs"), dict) else {}
+    kind, index = specs.get("kind") or "?", specs.get("index") or "no index"
+    variable = str(specs.get("location_var") or "").strip()
+    if variable:
+        from common import read_env
+        if not read_env(os.path.join(workspace, ".env")).get(variable):
+            return False, "spec source", (f"{kind}: .env misses {variable}, the private location of the specification "
+                                          f"(fill it {VALUES_FROM}); the rules cannot be read from the source until then")
+        return True, "spec source", (f"{kind}, location in .env {variable} (value not shown), index {index}; whether it "
+                                     "opens is seen when reading")
+    location = str(specs.get("location") or "").strip()
+    if kind == "export":
+        found = os.path.isdir(os.path.join(workspace, location))
+        return found, "spec source", (f"export {location}, index {index}: a dated copy, its currency against the source "
+                                      "is not confirmed" if found else f"export {location} does not exist in the workspace")
+    return bool(location), "spec source", f"{kind} {location}, index {index}; whether it opens is seen when reading"
+
+
 def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     """What project.yaml alone says: the fields, environments, tracker, tickets and modules. No other file is opened
     and no tool or service is asked, so a list of projects can use it (technique-workspaces.md section 4)."""
@@ -399,6 +468,27 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     p, w = tickets_config.validate_section(proj)
     problems += p
     warnings += w
+    p, w = specs_section(proj)
+    problems += p
+    warnings += w
+    if proj.get("quarantine") is not None:
+        # procedures/quarantine.md: only the words of the report; the register itself is memory/quarantine.json
+        qs = proj.get("quarantine")
+        if not isinstance(qs, dict) or set(qs) - {"excluded_label"} or not isinstance(qs.get("excluded_label", ""), str):
+            problems.append("quarantine: expected {excluded_label: \"<words after the pending status>\"} "
+                            "(procedures/quarantine.md)")
+    if proj.get("write_guard") is not None:
+        # bugs created through scripts/ado_write_guard.py: the same validation the guard runs at startup
+        import ado_write_guard
+        wg = proj.get("write_guard")
+        if not isinstance(wg, dict) or set(wg) - {"bugs"}:
+            problems.append("write_guard: expected {bugs: {...}} (technique-ado-write-guard.md, «Final preview of a "
+                            "bug's fields»)")
+        else:
+            try:
+                ado_write_guard.load_bug_config(wg.get("bugs"))
+            except ado_write_guard.ConfigError as e:
+                problems.append(f"write_guard.bugs: {e}")
     if proj.get("resolved_bugs") not in (None, "remove", "archive"):
         problems.append("resolved_bugs must be 'remove' or 'archive'")
     if proj.get("evidence") not in (None, "text", "text+screenshot"):
@@ -738,6 +828,8 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
                                          "comes from (the build is never committed)")))
     if proj.get("tickets"):
         out += ticket_sources(workspace)
+    if isinstance(proj.get("specs"), dict):
+        out.append(spec_source(workspace, proj))
     return out
 
 
@@ -755,7 +847,9 @@ def ticket_sources(workspace: str) -> list[tuple[bool, str, str]]:
                                     "whether a session is open is seen when reading")))
             continue
         missing = [n for n, ok in tickets_config.credentials_state(config, source).items() if not ok]
-        out.append((not missing, tool, f"{source.service} through its API, credentials set (values not shown)"
+        out.append((not missing, tool, f"{source.service} through its API, credentials set (values not shown); "
+                                       "configuration only, access not confirmed: python -m adapters.tickets "
+                                       "<workspace> sources --online"
                      if not missing else f"{source.service}: .env misses {', '.join(missing)}: {VALUES_FROM}"))
     return out
 

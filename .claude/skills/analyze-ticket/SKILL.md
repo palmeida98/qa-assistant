@@ -1,10 +1,10 @@
 ---
 name: analyze-ticket
-description: "Reads a PBI, story, task or bug in Azure DevOps or Jira (comments, relations, history, accessible attachments), compares it with the last check and gives a QA analysis: acceptance criteria, decisions, FE/BE/QA dependencies, related bugs. Read only on the tracker. Use for 'what changed in this PBI?', 'analyse ticket 1234', a ticket link, a sprint or 'my tickets'."
+description: "Reads a PBI, story, task, issue or bug in Azure DevOps, Jira or Linear (comments, relations, history, accessible attachments), compares it with the last check and gives a QA analysis: acceptance criteria, decisions, FE/BE/QA dependencies, related bugs. Read only on the tracker. Use for 'what changed in this PBI?', 'analyse ticket 1234', a ticket link, a sprint or 'my tickets'."
 argument-hint: "<ticket id|URL ...> | <scope name>"
 metadata:
   intent: "Analyse tickets for QA and say what changed since the last check, keeping every source and date."
-  inputs: "A link, an id or key, a list, a scope of tickets.scopes (the current sprint, my tickets) or a WIQL/JQL query."
+  inputs: "A link, an id or key, a list, a scope of tickets.scopes (the current sprint, my tickets) or a WIQL/JQL query (a Linear IssueFilter as JSON)."
   config: "tickets: of project.yaml (sources, scopes, limits); the credentials only as names of .env variables."
   tools: "python -m adapters.tickets (a transport that cannot write); or a browser session or an MCP server of the workspace, through a bundle and ingest."
   outputs: "The analysis per ticket: official state, QA situation, acceptance criteria, decisions, dependencies, related bugs, what changed (before -> after, source, date), what was read, only listed, inaccessible or out of scope, and the verification prompt."
@@ -14,7 +14,8 @@ metadata:
   resume: "The newest check in memory/checks/ and the block of context.md; a check already analysed is not analysed again unless asked."
   requires-modules: "adapters.tickets"
   requires-config: "tickets"
-  requires-docs: "procedures/rules.md, procedures/tickets.md, technique-tickets.md, methodology.md"
+  requires-tools: "spec"
+  requires-docs: "procedures/rules.md, procedures/tickets.md, technique-tickets.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -43,6 +44,9 @@ metadata:
 4. For QA, identify and keep with their source and date: the acceptance criteria; decisions in comments (who, when;
    a more recent explicit decision overrides an older requirement, and the contradiction is shown, methodology.md
    section 1.3); the Frontend, Backend and QA tasks and their dependencies; related bugs, open and closed; blockers.
+   When the preflight printed a `spec source` line (project.yaml has `specs:`), also read the specification of the
+   ticket's flow and cross it with the ticket as technique-specs.md says, with the `spec_refs` and their revision;
+   without that line this step is as before.
 5. Coverage of the read, in four lists: content read; only listed (a link, a relation, an attachment name, a
    vstfs:/// id); inaccessible (with the reason); out of scope (deeper than the limits, or not asked).
 6. Record the analysis (procedures/tickets.md step 8) and report as its step 10 says, short summary first. Nothing

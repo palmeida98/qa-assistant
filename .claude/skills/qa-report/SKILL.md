@@ -12,8 +12,8 @@ metadata:
   approvals: "None to write the report or the dashboard. A change to a workbook (e.g. its summary's formulas) is not done here: it goes to /checkpoint, with its dry run and approval. Sending or posting the report anywhere is the user's."
   failures: "Results without platform or build are reported as unknown, never folded into another platform. Totals that do not reconcile: the report says so and stops short of percentages. A platform in scope with no result is reported as not tested, never as passed."
   resume: "The run logs are the source; the report is generated again from them, never edited by hand."
-  requires-scripts: "scripts/qa_report.py, scripts/build_dashboard.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/report.md, methodology.md"
+  requires-scripts: "scripts/qa_report.py, scripts/quarantine.py, scripts/build_dashboard.py, scripts/qa_python.py"
+  requires-docs: "procedures/rules.md, procedures/report.md, procedures/quarantine.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -35,7 +35,12 @@ metadata:
    python <qa>/scripts/qa_report.py <workspace> totals [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml]
    An audit problem (Question open, evidence missing, a case repeated, a result whose only evidence is marked invalid) is reported as an open inconsistency; evidence marked invalid is named apart (kept on file, not proof), never counted as valid. The audit prints a summary by default (`--detail` lists every batch and flag).
 2. Keep apart: historical results (older runs), recent results (the current result of each case), retests (before ->
-   after with builds) and coverage still missing (planned and not run). Every total names its scope and every
+   after with builds) and coverage still missing (planned and not run). With quarantines (procedures/quarantine.md),
+   the reports of step 4 carry their own "Quarantine" section, in the same scope: the cases left out by each batch's
+   plan (not run, with the reason and the bug's link: never Pass, never in the run counts), the known failures
+   observed and the retests run (counted as recorded; a pass waits for the QA's decision; a different failure goes to
+   the normal review). It is never written by hand; `quarantine.py <workspace> report [--batch <b> ...]` shows the
+   same rows in the terminal. Every total names its scope and every
    percentage its denominator; platforms and builds are never added into one figure, and nothing seen on one
    platform or build is said of another.
 3. The rest of the report comes from the records, with their sources: per feature or acceptance criterion, the cases
@@ -46,8 +51,10 @@ metadata:
    platform or build) and the residual risk.
 4. Write the reports: exports/<stem>.summary.md (short) and exports/<stem>.technical.md (complete), from the same run
    logs and audit; the project's `output.reports` chooses which (both by default):
-   python <qa>/scripts/qa_report.py <workspace> report [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml] [--name <stem>]
-   Add to the technical report what only the records of the session hold (features, bugs, risks). `totals --output`
+   python <qa>/scripts/qa_report.py <workspace> report [--batch <b> ...] [--since <date>] [--platform <p>] [--plan batches/<p>.yaml] [--name <stem>]
+   One step: both files include the quarantine section when the scope has quarantine data, and none otherwise;
+   running it again rewrites the same files (never a second section). Add to the technical report what only the
+   records of the session hold (features, bugs, risks), never the quarantine rows. `totals --output`
    still gives the totals part alone. For an Excel project the dashboard is procedures/report.md section B: it writes
    dashboard.html and reads the workbook without saving it; a summary whose formulas are wrong is reported, and fixed
    at /checkpoint.

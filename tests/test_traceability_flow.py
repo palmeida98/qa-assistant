@@ -149,7 +149,7 @@ class Flow:
         applied = sha(self.workbook)
         self.assertNotEqual(applied, before_book)
         r = self.apply("--no-recalc", "--now", NOW, "--label", "[flow]", "--reported-by", "QA (fictional)")
-        self.assertEqual(r.returncode, 0)                             # the same batch again: nothing changes
+        self.assertEqual(r.returncode, 4)                             # again without a token: refused, nothing written
         self.assertEqual(sha(self.workbook), applied)
 
         # 6. the report, and the "new session": only the files are left
