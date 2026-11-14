@@ -75,8 +75,10 @@
    qa-assistant, the dry run first:
    python -m adapters.excel.add_cases <workspace> cases/cases_<YYYYMMDD>_<nn>.json --dry-run
    0 = show the user the rows, the fields not written (no column) and the preview token, then, once the user approves
-   THAT preview, run it again without --dry-run and with --expect <token> (the same --label, --no-recalc and --now;
-   refused, nothing written, if the cases file, the workbook or project.yaml changed since);
+   THAT preview, run it again without --dry-run and with --expect <token> (the same --platform or --workbook, --label,
+   --no-recalc and --now; refused, nothing written, if the cases file, the workbook it resolved (shown as an absolute
+   path) or project.yaml changed since; a write without --expect is refused; an explicit --workbook or QA_WORKBOOK that
+   is outside the workspace or is not the --platform's workbook is refused, never ignored: technique-excel.md 1.2);
    4 = an ID that exists, a candidate duplicate (same title in the sheet) or an invalid file: the user decides
    (remove the case or give another ID, never force it). After the write: 2 = cross-check problems (original
    untouched); 3 = recalculation failed; 5 = the summary does not count the new rows: fix its formulas, never the

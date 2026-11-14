@@ -132,8 +132,8 @@ class PilotFlow(unittest.TestCase):
         again = ap.dry_run(self.ws, f"runs/{name}.json", recalc=False)
         self.assertTrue(again["problems"] or again.get("already_applied"), again)
         rc, out = self.quiet(ap.main, [self.ws, f"runs/{name}.json", "--no-recalc"])
-        self.assertEqual(rc, 0)
-        self.assertIn("Nothing applied", out)
+        self.assertEqual(rc, 4)                                       # again without a token: refused, nothing written
+        self.assertIn("needs --expect", out)
         self.assertEqual(self.cells(IOS), after)
         rc, out = self.quiet(rl.main, [self.ws, "add", BATCH, "TC-SHOP-002", "Pass", "x"])
         self.assertEqual(rc, 1)

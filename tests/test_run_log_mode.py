@@ -102,7 +102,8 @@ class Mode(unittest.TestCase):
     def test_an_applied_batch_is_never_touched(self):
         self.cli("add", "m1", "TC-SHOP-001", "Pass", "x", "--mode", "manual: by hand")
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(ap.main([self.ws, "runs/batch_m1.json", "--no-recalc"]), 0)
+            self.assertEqual(ap.main(kit.approved(ap.main, [self.ws, "runs/batch_m1.json", "--no-recalc"],
+                                                  dry_extra=("--detail",))), 0)
         before = self.doc()
         rc, out = self.cli("mode", "m1", "manual: by hand")
         self.assertEqual(rc, 1)

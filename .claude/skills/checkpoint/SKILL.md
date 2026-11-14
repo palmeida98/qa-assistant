@@ -59,8 +59,11 @@ metadata:
 5. Applying to the workbook or the tracker only after the user confirms that batch: procedures/apply.md steps 7 and
    7a. Excel: python -m adapters.excel.apply <workspace> <batch> --dry-run, show the cells, counts and problems it
    lists, then after the approval the apply with --expect <token>, repeating the SAME --label, --reported-by, --now and
-   --no-recalc the dry run was given (the token `v2-...` covers them: a different one, or a token from before it, is
-   refused before any write: preview again, and ask again; an approval of that same preview, still valid, is not asked a second time).
+   --no-recalc the dry run was given (the token `v2-...` covers them and the workbook it resolved, shown as an absolute
+   path: a different option, another workbook, or a token from before it, is refused before any write: preview again,
+   and ask again; an approval of that same preview, still valid, is not asked a second time). A write without --expect
+   is refused; an explicit --workbook or QA_WORKBOOK must be inside the workspace and agree with the batch's route
+   (technique-excel.md section 1.2); to simulate, copy the whole workspace and pass the copy as the workspace.
    Jira / Azure DevOps: dry run, approval, --yes. The exit codes as written there. The workspace's own rule on
    workbooks wins when stricter.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes

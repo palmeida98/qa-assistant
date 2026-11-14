@@ -28,8 +28,9 @@ import openpyxl
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [os.path.join(ROOT, "tests"), ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
 
+import workspace_kit as kit
 from build_fixture import build
 
 from adapters.excel import apply as ap
@@ -133,9 +134,12 @@ class DryRun(unittest.TestCase):
 
     # ------------------------------------------------------------------ applied, invalid
 
+    def approved(self, *args):
+        return kit.run_approved(ap.main, [self.ws, *args], dry_extra=("--detail",))    # --detail: no review file
+
     def test_a_batch_already_applied_says_so_and_changes_nothing(self):
         path = self.batch("batch_20261107_02")
-        rc, _ = self.cli(path, "--no-recalc")
+        rc, _ = self.approved(path, "--no-recalc")
         self.assertEqual(rc, 0)
         before = self.digests()
         res = self.dry(path)
@@ -185,7 +189,7 @@ class DryRun(unittest.TestCase):
         path = self.batch("batch_20261107_05")
         res = self.dry(path)
         before = self.cells(CFG["file"])
-        rc, _ = self.cli(path, "--no-recalc", "--now", NOW.isoformat())
+        rc, _ = self.cli(path, "--no-recalc", "--now", NOW.isoformat(), "--expect", res["token"])
         self.assertEqual(rc, 0)
         after = self.cells(CFG["file"])
         written = {k: v for k, v in after.items() if before.get(k) != v}
@@ -248,7 +252,7 @@ class DryRun(unittest.TestCase):
     def test_a_change_to_the_workbook_or_the_configuration_makes_the_preview_stale(self):
         path = self.batch("batch_ios_09")
         token = self.dry(path)["token"]
-        self.cli(self.batch("batch_20261107_10"), "--no-recalc")        # another batch changes the other workbook
+        self.approved(self.batch("batch_20261107_10"), "--no-recalc")   # another batch changes the other workbook
         self.assertNotEqual(ap.preview_token(self.ws, path, now=NOW, recalc=False), token)
         token = ap.preview_token(self.ws, path, now=NOW, recalc=False)
         self.proj["environments"]["test"] = "https://shop.demo/other"
@@ -300,10 +304,13 @@ class DryRun(unittest.TestCase):
                            NOW.isoformat(), "--expect", res["token"])
         self.assertEqual(rc, 0, out)
         self.assertIn("Reviewer", str(list(self.cells(CFG["file"]).values())))
-        # the same parameters again: the batch is already applied, nothing changes (idempotent)
+        # the same parameters again, without a token: refused, nothing changes; with the same token: already applied
         after = self.digests()
         rc, _ = self.cli(path, "--no-recalc", "--label", "[approved]", "--reported-by", "Reviewer", "--now",
                          NOW.isoformat())
+        self.assertEqual((rc, self.digests()), (4, after))
+        rc, _ = self.approved(path, "--no-recalc", "--label", "[approved]", "--reported-by", "Reviewer", "--now",
+                              NOW.isoformat())
         self.assertEqual((rc, self.digests()), (0, after))
 
     def test_a_token_from_before_the_rule_never_authorises_silently(self):

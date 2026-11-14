@@ -20,10 +20,11 @@ from datetime import datetime
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
+sys.path[:0] = [os.path.join(ROOT, "tests"), ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests", "golden")]
 
 import qa_report as qr
 import run_log as rl
+import workspace_kit as kit
 from build_fixture import build
 from common import parse_when, ts_key
 
@@ -211,8 +212,8 @@ class ResolveQuestion(Base):
                            "ts": "2026-11-05T16:21:00"}])
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-            self.assertEqual(ap.main([self.ws, os.path.join(self.ws, "runs", name + ".json"), "--no-recalc"]), 0,
-                             out.getvalue())
+            self.assertEqual(ap.main(kit.approved(ap.main, [self.ws, os.path.join(self.ws, "runs", name + ".json"),
+                                                            "--no-recalc"], dry_extra=("--detail",))), 0, out.getvalue())
         doc = self.log(name)
         doc["results"][0].update({"status": "Question", "actual_result": "is 2 the limit?",
                                   "recorded_at": "2026-11-05T16:30:00", "evidence": ["evidence/b/TC-SHOP-001_a.txt"]})

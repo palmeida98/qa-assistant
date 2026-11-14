@@ -49,9 +49,11 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from .base import (
     REPORTED_BY_DEFAULT,
+    WORKBOOK_ENV,
     ConfigError,
     ExcelAdapter,
     InvalidBatch,
+    explicit_workbook,
     read_batch,
     route_workbook,
     workbook_files,
@@ -90,6 +92,8 @@ def _sha(path: str) -> str:
 
 
 TOKEN_VERSION = "v2"
+NEEDS_TOKEN = ("a write needs --expect <token> of the dry run the user approved (technique-excel.md section 1.2; "
+               "destination resolved: {where}): run --dry-run, show it, and write with its token. Nothing was written.")
 
 
 def effective_reported_by(proj: dict, reported_by: str | None) -> str:
@@ -99,9 +103,26 @@ def effective_reported_by(proj: dict, reported_by: str | None) -> str:
     return str(reported_by or defects.get("reported_by") or REPORTED_BY_DEFAULT)
 
 
+def route_for(workspace: str, proj: dict, batch_id: str, doc: dict, workbook: str | None = None, environ=None):
+    """The destination of a batch (technique-excel.md section 1.2): an explicit path (`--workbook`, else $QA_WORKBOOK),
+    validated (inside the workspace, existing, a workbook) and never ignored, else the batch's route. Raises ConfigError
+    for an invalid explicit path; a contradiction with the project's rule comes back as the route's problem."""
+    explicit, _source = explicit_workbook(workspace, workbook, environ)
+    run = doc.get("run") if isinstance(doc.get("run"), dict) else None
+    route = route_workbook(proj, batch_id, run, environ={WORKBOOK_ENV: explicit} if explicit else {},
+                           workspace=workspace)
+    if explicit and route.source.startswith("$") and (workbook or "").strip():
+        problem = route.problem
+        if problem:         # the rule's text names the variable; say the option that was really given
+            problem = (problem.replace(f"${WORKBOOK_ENV}=", "--workbook ")
+                       .replace(f"unset {WORKBOOK_ENV}", "drop --workbook"))
+        route = type(route)(route.file, "--workbook", route.platform, problem)
+    return route
+
+
 def preview_token(workspace: str, batch_path: str, proj: dict | None = None, label: str | None = None,
                   reported_by: str | None = None, recalc: bool = True, now: datetime | None = None,
-                  keep_previous: bool = False) -> str:
+                  keep_previous: bool = False, target: str | None = None) -> str:
     """What a dry run saw, as `v2-<hash>`: the batch file, project.yaml and every declared workbook (the target and the
     ones checked for "applied elsewhere"), plus what the options change in the cells written: the label (as given; the
     default label is a marker, its date is the apply's own), the reporter actually written (option or configured
@@ -109,8 +130,18 @@ def preview_token(workspace: str, batch_path: str, proj: dict | None = None, lab
     seconds that pass never invalidate a preview; the cells that take the instant of the apply are the ones the dry run
     marks "at apply time". Any other change gives another token. A token without the `v2-` prefix is from before this
     rule and covered less: it is refused and the dry run is repeated. `--keep-previous` changes the notes written, so it
-    is part of the token when given (and only then: a token without it is the same as before)."""
+    is part of the token when given (and only then: a token without it is the same as before).
+    From 13.11.2026 the token also names the destination resolved (`target`: its workspace-relative path and its
+    content; technique-excel.md section 1.2), so a preview of one workbook never authorises another, even with the same
+    content. Without `target` it is the batch's route (no explicit path)."""
     proj = _project(workspace) if proj is None else proj
+    if target is None:
+        batch_id = os.path.splitext(os.path.basename(batch_path))[0]
+        try:
+            doc = read_batch(batch_path)
+        except (OSError, ValueError, InvalidBatch):
+            doc = {}
+        target = route_for(workspace, proj, batch_id, doc, environ={}).file
     parts = [("batch", os.path.splitext(os.path.basename(batch_path))[0]), ("batch content", _sha(batch_path)),
              ("project.yaml", _sha(os.path.join(workspace, "project.yaml")))]
     for file in sorted(set(workbook_files(proj))):
@@ -121,33 +152,41 @@ def preview_token(workspace: str, batch_path: str, proj: dict | None = None, lab
               ("now", now.isoformat() if now else "<clock of the apply>")]
     if keep_previous:
         parts.append(("keep_previous", True))
+    full = os.path.realpath(os.path.join(workspace, target)) if target else ""
+    parts += [("target", os.path.relpath(full, os.path.realpath(workspace)).replace(os.sep, "/") if target else ""),
+              ("target content", _sha(full) if target else "missing")]
     return f"{TOKEN_VERSION}-" + hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
 
 
 def apply(workspace: str, batch_path: str, label: str | None = None,
           reported_by: str | None = None, recalc: bool = True,
-          now: datetime | None = None, expect: str | None = None, keep_previous: bool = False) -> int:
+          now: datetime | None = None, expect: str | None = None, keep_previous: bool = False,
+          workbook: str | None = None, require_token: bool = False) -> int:
     batch_path = _resolve(workspace, batch_path)
     batch_id = os.path.splitext(os.path.basename(batch_path))[0]
     proj = _project(workspace)
     doc = read_batch(batch_path)
-    route = route_workbook(proj, batch_id, doc.get("run") if isinstance(doc.get("run"), dict) else None,
-                           workspace=workspace)
+    route = route_for(workspace, proj, batch_id, doc, workbook)
     if route.problem:
         raise ConfigError(f"{route.problem}. Nothing was written.")
     try:
         # one writer at a time: two applies at once corrupted the workbook (audit 06.11.2026)
         with workspace_lock(workspace):
+            if require_token and expect is None:
+                raise ConfigError(NEEDS_TOKEN.format(where=os.path.realpath(os.path.join(workspace, route.file))))
             if expect is not None:
                 if not str(expect).startswith(TOKEN_VERSION + "-"):
                     raise ConfigError(f"the preview {expect} is from before the token covered --label, --reported-by, "
                                       "--now and --no-recalc: it cannot authorise this apply. Run --dry-run again and "
                                       "review it. Nothing was written.")
-                current = preview_token(workspace, batch_path, proj, label, reported_by, recalc, now, keep_previous)
+                current = preview_token(workspace, batch_path, proj, label, reported_by, recalc, now, keep_previous,
+                                        target=route.file)
                 if current != expect:
-                    raise ConfigError(f"the preview {expect} is out of date (now {current}): the batch, project.yaml, "
-                                      "a workbook or an option (--label, --reported-by, --now, --no-recalc) changed "
-                                      "since the dry run. Run --dry-run again and review it. Nothing was written.")
+                    raise ConfigError(f"the preview {expect} is out of date or of another destination (now {current} "
+                                      f"for {os.path.realpath(os.path.join(workspace, route.file))}): the batch, "
+                                      "project.yaml, a workbook, the destination or an option (--label, --reported-by, "
+                                      "--now, --no-recalc) changed since the dry run. Run --dry-run again and review it. "
+                                      "Nothing was written.")
             elsewhere = _applied_elsewhere(workspace, proj, batch_id, route.file)
             if elsewhere:
                 raise ConfigError(f"{batch_id} was already applied to {elsewhere}, not to {route.file} where it "
@@ -319,7 +358,8 @@ def _cell_diff(original: str, simulated: str, row_case: dict, timed_cells: set) 
 
 
 def dry_run(workspace: str, batch_path: str, label: str | None = None, reported_by: str | None = None,
-            recalc: bool = True, now: datetime | None = None, keep_previous: bool = False) -> dict:
+            recalc: bool = True, now: datetime | None = None, keep_previous: bool = False,
+            workbook: str | None = None) -> dict:
     """The simulation: the result dict (`code` is the exit code the apply would give). Nothing in the workspace is
     written; the temporary folder goes away even on error."""
     batch_path = _resolve(workspace, batch_path)
@@ -333,9 +373,13 @@ def dry_run(workspace: str, batch_path: str, label: str | None = None, reported_
     except InvalidBatch as e:
         res["problems"] = list(e.problems)
         return res
-    route = route_workbook(proj, batch_id, doc.get("run") if isinstance(doc.get("run"), dict) else None,
-                           workspace=workspace)
-    res.update({"workbook": route.file, "platform": route.platform, "source": route.source})
+    try:
+        route = route_for(workspace, proj, batch_id, doc, workbook)
+    except ConfigError as e:
+        res["problems"].append(str(e).replace(" Nothing was written.", ""))
+        return res
+    res.update({"workbook": route.file, "platform": route.platform, "source": route.source,
+                "workbook_path": os.path.realpath(os.path.join(workspace, route.file)) if route.file else None})
     if route.problem:
         res["problems"].append(route.problem)
         return res
@@ -344,7 +388,7 @@ def dry_run(workspace: str, batch_path: str, label: str | None = None, reported_
         try:
             with workspace_lock(workspace):         # a consistent snapshot: no apply writes while we copy
                 res["token"] = preview_token(workspace, batch_path, proj, label, reported_by, recalc, fixed_now,
-                                               keep_previous)
+                                             keep_previous, target=route.file)
                 res["options"] = {"label": label or "<default: [date of the apply, batch]>",
                                   "reported_by": effective_reported_by(proj, reported_by), "recalc": bool(recalc),
                                   "now": fixed_now.isoformat() if fixed_now else "<clock of the apply>",
@@ -417,6 +461,8 @@ def print_dry_run(res: dict) -> None:
     print(f"DRY RUN of {res['batch']} -- nothing is written.")
     if res.get("workbook"):
         print(f"Target: {res['workbook']} (platform: {res.get('platform') or 'not declared'}; from {res.get('source')})")
+        if res.get("workbook_path"):
+            print(f"Target, absolute path: {res['workbook_path']}")
     if res.get("options"):
         o = res["options"]
         print(f"Options covered by the token: label {o['label']!r}, reported by {o['reported_by']!r}, recalculation "
@@ -480,6 +526,7 @@ def review_text(workspace: str, batch_path: str, res: dict, proj: dict, command:
             "below says which one it describes."), "", "## What the token covers", "",
            f"- **Token: `{res.get('token', '-')}`**: the apply with `--expect` is refused, writing nothing, if any of this changes",
            f"- Target: `{res.get('workbook')}` (platform: {res.get('platform') or 'not declared'}; from {res.get('source')})",
+           f"- Target, absolute path: `{res.get('workbook_path')}` (SHA-256 `{_sha(res['workbook_path']) if res.get('workbook_path') else '-'}`)",
            (f"- Options: label {o.get('label')!r}, reported by {o.get('reported_by')!r}, recalculation "
             f"{'on' if o.get('recalc') else 'off'}, date {o.get('now')}, previous result kept in the notes: "
             f"{'yes' if o.get('keep_previous') else 'no'}"),
@@ -532,6 +579,8 @@ def write_review(workspace: str, batch_path: str, res: dict, proj: dict, command
 def apply_command(workspace: str, a, token: str | None) -> str:
     """The exact command of the real apply, with the options the dry run had."""
     parts = ["python -m adapters.excel.apply", workspace, a.batch]
+    if getattr(a, "workbook", None):
+        parts += ["--workbook", a.workbook]
     if a.label:
         parts += ["--label", json.dumps(a.label)]
     if a.reported_by:
@@ -555,8 +604,9 @@ def print_dry_run_brief(res: dict, cfg: dict, review: str, command: str) -> None
     if res.get("already_applied"):
         lines.append((f"Already applied: {res['already_applied']}. Applying would change nothing.", True))
     if res.get("workbook"):
-        lines.append((f"Target: {res['workbook']} ({res.get('platform') or 'platform not declared'})"
-                      + (f" · token {res['token']}" if res.get("token") else ""), False))
+        # the destination in full and the token are never cut (technique-excel.md section 1.2)
+        lines.append((f"Target: {res.get('workbook_path') or res['workbook']} ({res.get('platform') or 'platform not declared'})"
+                      + (f" · token {res['token']}" if res.get("token") else ""), True))
     cells = res.get("cells") or []
     if cells:
         per: dict = {}
@@ -599,7 +649,11 @@ def main(argv=None) -> int:
                     help="keep the result a case already had (and its status) in the case's notes when this batch "
                          "replaces it: nothing is lost in the workbook (needs the notes column)")
     ap.add_argument("--expect", metavar="TOKEN",
-                    help="the preview token of a dry run: refuse when the batch, project.yaml or a workbook changed")
+                    help="the preview token of the dry run the user approved: needed to write; refused when the batch, "
+                         "project.yaml, a workbook, the destination or an option changed")
+    ap.add_argument("--workbook", metavar="PATH",
+                    help="an explicit destination inside the workspace (instead of $QA_WORKBOOK); never ignored: refused "
+                         "when invalid or when it contradicts the batch's route (technique-excel.md 1.2)")
     import output
     output.add_flags(ap)
     a = ap.parse_args(argv)
@@ -609,7 +663,8 @@ def main(argv=None) -> int:
         ap.error("--expect goes with the real apply")
     try:
         if a.dry_run:
-            res = dry_run(a.workspace, a.batch, a.label, a.reported_by, not a.no_recalc, a.now, a.keep_previous)
+            res = dry_run(a.workspace, a.batch, a.label, a.reported_by, not a.no_recalc, a.now, a.keep_previous,
+                          workbook=a.workbook)
             cfg = output.settings(_project(a.workspace), output.cli_choice(a))
             if a.json:
                 print(json.dumps(res, ensure_ascii=False, indent=1, default=str))
@@ -620,7 +675,8 @@ def main(argv=None) -> int:
             else:
                 print_dry_run(res)
             return 4 if res["problems"] else res["code"]
-        return apply(a.workspace, a.batch, a.label, a.reported_by, not a.no_recalc, a.now, a.expect, a.keep_previous)
+        return apply(a.workspace, a.batch, a.label, a.reported_by, not a.no_recalc, a.now, a.expect, a.keep_previous,
+                     workbook=a.workbook, require_token=True)
     except (InvalidBatch, ConfigError, FileNotFoundError) as e:
         print(f"\nNOTHING APPLIED -- {e}", file=sys.stderr)
         return 4

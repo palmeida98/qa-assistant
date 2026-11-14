@@ -27,7 +27,7 @@ import json
 import os
 import sys
 
-from .apply import _resolve, _sha
+from .apply import _project, _resolve, _sha, route_for
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
 from common import WorkspaceBusy, workspace_lock
@@ -82,24 +82,36 @@ def reconcile_token(workspace: str, ad: ExcelAdapter, path: str, batch_id: str, 
     return f"{TOKEN_VERSION}-" + hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:16]
 
 
-def reconcile(workspace: str, batch_id: str, path: str, dry_run: bool = False, expect: str | None = None) -> int:
+def reconcile(workspace: str, batch_id: str, path: str, dry_run: bool = False, expect: str | None = None,
+              workbook: str | None = None, require_token: bool = False) -> int:
     if dry_run and expect:
         raise ConfigError("--expect goes with the real write, not with --dry-run")
     path = _resolve(workspace, path, "run log")
     if dry_run:
-        return _reconcile(workspace, batch_id, path, True, None)
+        return _reconcile(workspace, batch_id, path, True, None, workbook)
     try:
         with workspace_lock(workspace):
-            return _reconcile(workspace, batch_id, path, False, expect)
+            return _reconcile(workspace, batch_id, path, False, expect, workbook, require_token)
     except WorkspaceBusy as e:
         raise ConfigError(f"{e} Nothing was written.") from None
 
 
-def _reconcile(workspace: str, batch_id: str, path: str, dry_run: bool, expect: str | None) -> int:
-    ad = ExcelAdapter.from_project(workspace)
+def _reconcile(workspace: str, batch_id: str, path: str, dry_run: bool, expect: str | None,
+               workbook: str | None = None, require_token: bool = False) -> int:
+    # the destination as the apply resolves it (technique-excel.md section 1.2): an explicit path validated and never
+    # ignored, else the batch's route; the token names that workbook
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        doc = {}
+    route = route_for(workspace, _project(workspace), batch_id, doc if isinstance(doc, dict) else {}, workbook)
+    if route.problem:
+        raise ConfigError(f"{route.problem}. Nothing was written.")
+    ad = ExcelAdapter.from_project(workspace, file=route.file)
     ad.load()
     p = plan(ad, batch_id, path)
-    print(f"Workbook: {ad.path}")
+    print(f"Workbook: {os.path.realpath(ad.path)} (from {route.source})")
     if p["proven"]:
         print(f"Nothing to reconcile: the origin of '{batch_id}' is already proven ({p['state']}). The workbook was not changed.")
         return 0
@@ -109,8 +121,12 @@ def _reconcile(workspace: str, batch_id: str, path: str, dry_run: bool, expect: 
     if dry_run:
         print(f"DRY RUN: nothing is written · token {token}")
         print("Write, after approving THIS: python -m adapters.excel.reconcile "
-              f"{workspace} {batch_id} --from {os.path.relpath(path, workspace)} --expect {token}")
+              f"{workspace} {batch_id} --from {os.path.relpath(path, workspace)}"
+              + (f" --workbook {route.file}" if workbook else "") + f" --expect {token}")
         return 0
+    if require_token and expect is None:
+        from .apply import NEEDS_TOKEN
+        raise ConfigError(NEEDS_TOKEN.format(where=os.path.realpath(ad.path)))
     if expect is not None:
         if not str(expect).startswith(TOKEN_VERSION + "-"):
             raise ConfigError(f"the preview {expect} is not a token of this command (v1-...): run --dry-run first. Nothing was written.")
@@ -143,10 +159,12 @@ def main(argv=None) -> int:
     ap.add_argument("batch_id")
     ap.add_argument("--from", dest="source", required=True, metavar="RUN_LOG", help="the run log (restored exact file)")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--expect", metavar="TOKEN")
+    ap.add_argument("--expect", metavar="TOKEN", help="the token of the dry run the user approved: needed to write")
+    ap.add_argument("--workbook", metavar="PATH", help="an explicit destination inside the workspace (instead of "
+                                                       "$QA_WORKBOOK): never ignored (technique-excel.md 1.2)")
     a = ap.parse_args(argv)
     try:
-        return reconcile(a.workspace, a.batch_id, a.source, a.dry_run, a.expect)
+        return reconcile(a.workspace, a.batch_id, a.source, a.dry_run, a.expect, a.workbook, require_token=True)
     except (InvalidBatch, ConfigError, FileNotFoundError, json.JSONDecodeError) as e:
         print(f"\nNOTHING WRITTEN -- {e}", file=sys.stderr)
         return 4

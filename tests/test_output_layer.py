@@ -27,6 +27,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts"), os.path.join(ROOT, "tests")
 import device as dv
 import output
 import run_log as rl
+import workspace_kit as kit
 import workspace_select as ws_select
 from build_fixture import build
 
@@ -235,7 +236,8 @@ class DryRunOfTheApply(Workspace):
     def test_problems_warnings_and_the_command_survive_a_tiny_limit(self):
         self.proj["output"] = {"max_lines": 3}
         self.save_project()
-        self.cli(ap, self.batch("batch_a_00", [self.result("TC-SHOP-004", "Fail", "first")]), "--no-recalc")
+        kit.run_approved(ap.main, [self.ws, self.batch("batch_a_00", [self.result("TC-SHOP-004", "Fail", "first")]),
+                                   "--no-recalc"])
         path = self.batch("batch_a_01", [self.result("TC-SHOP-004", "Pass", "second", ts="2026-11-08T20:30:00")])
         _, card = self.dry(path)
         self.assertIn("Warning: the batch replaces the earlier result text of 1 case(s) (TC-SHOP-004)", card)

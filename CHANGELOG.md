@@ -26,6 +26,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   QA or the team, blocked, published; "nothing pending" only when it is true). `rules.md` §7, `skills-spec.md` §5.1,
   `/test-pbi` and `/checkpoint`.
 
+### Changed (Excel: a preview reads, a write needs its approved token and an unambiguous destination, 2026-11-13)
+- Incident of 13.11.2026 (a workspace's run): an add «simulated on a copy» named the copy only in `$QA_WORKBOOK`, was
+  run with `--platform` (which chose the destination from project.yaml and ignored the variable without a word) and
+  without `--expect`, and wrote into the real workbook of the platform. `technique-excel.md` §1.2 now separates the two:
+- `adapters.excel.apply`, `add_cases` and `reconcile`: from the command line a write needs `--expect <token>` of the
+  approved dry run (exit 4, nothing written, otherwise). The Python API (`apply()`, `add()`) is unchanged for
+  programmatic callers (the golden check, the demo rebuild, which now uses it).
+- An explicit destination (`--workbook <path>`, new in the three commands, or `$QA_WORKBOOK`) is validated and never
+  ignored: outside the workspace, missing, not a workbook, two different values, or a contradiction with `--platform`
+  or the batch's route is refused (`adapters.excel.base.explicit_workbook`). `reconcile` follows the batch's route
+  like the apply (it used `excel.file` or the variable).
+- The apply's token keeps its `v2-` prefix and also hashes the destination (path and content): a token never
+  authorises another workbook, even with the same content. Previews made before this are refused as «out of date» and
+  are regenerated with the same `--dry-run`. The add's and the reconcile's tokens already named the destination.
+- The dry runs show the absolute path resolved on a line never cut, with the token.
+
 ### Added (Linear as a ticket source, read only, 2026-11-12)
 - `tickets.sources.<id>.service: linear` (`adapters/tickets/linear.py`): `/analyze-ticket` reads a Linear issue by key,
   `<source>:<key>` or link through the official GraphQL API, with a personal API key (`api_key_var`) and only the

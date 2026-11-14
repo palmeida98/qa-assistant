@@ -54,7 +54,7 @@ Ask the user for the final status, the reason and who decided it (and where the 
    <at apply time> take the instant of the real apply), counts, new defects, problems, "already applied". A problem
    or "already applied" means no apply. Once the user confirms THAT preview, apply with its token:
    python -m adapters.excel.apply <workspace> <run_log>/<batch>.json --expect <token>
-   (with the SAME --label, --reported-by, --now, --no-recalc and --keep-previous the dry run had: the `v2-` token covers them, and an
+   (with the SAME --label, --reported-by, --now, --no-recalc and --keep-previous the dry run had: the `v2-` token covers them and, from 13.11.2026, the destination, and an
    apply with others, or a token from before this rule, is refused before any write)
    An "out of date" refusal (exit 4, nothing written) means the batch, project.yaml or a workbook changed since the
    preview: run the dry run again and ask again. Never copy the workspace by hand to simulate.
@@ -73,7 +73,10 @@ Ask the user for the final status, the reason and who decided it (and where the 
    After exit 0, the workbook is part of what step 6 commits when a commit is asked for (a second local commit,
    "<batch>: applied", so a clone on another computer has the current workbook, methodology section 12.3); otherwise
    list it as not committed. The workbook of a batch is chosen by excel.workbooks (its patterns), never by guessing;
-   QA_WORKBOOK that contradicts it is refused.
+   QA_WORKBOOK that contradicts it is refused. The apply, the add of cases and the reconcile write only with the
+   --expect of the preview the user approved (technique-excel.md section 1.2): the preview shows the absolute path of
+   the workbook it resolved, and its token is valid only for that workbook. To simulate, copy the whole workspace and
+   pass the copy as the workspace; never point QA_WORKBOOK or --workbook at a file outside it.
 7a. With the jira or azure-devops tracker, the tracker adapter sends the batch (technique-jira-xray.md section 2,
    the common contract; methodology.md section 9.4). From the root of qa-assistant, first the DRY RUN (reads only):
    python -m adapters.tracker <workspace> apply <run_log>/<batch>.json

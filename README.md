@@ -55,7 +55,7 @@ python -m adapters.excel.apply "$WORK" runs/batch_20260924_ui01.json --dry-run -
 | `ingest` (first) | `Check 20261102-100000: outcome complete, conclusion first, 2 ticket(s), 0 change(s)` |
 | `ingest` (second) | `Check 20261105-160000: … conclusion changes, 2 ticket(s), 4 change(s)`: the comparison with the last check |
 | `totals` | `Cases with a current result: 26`, Pass 23, Fail 3, `Reconciled … yes` |
-| `adapters.excel.apply` | `DRY RUN … nothing is written to the workbook`, the target workbook and a preview token (`v2-…`); the workbook is byte for byte unchanged |
+| `adapters.excel.apply` | `DRY RUN … nothing is written to the workbook`, the target workbook (absolute path) and a preview token (`v2-…`, bound to that workbook); the workbook is byte for byte unchanged; the apply itself needs `--expect` |
 
 The walkthrough that adds a pass and a failure with a proposed bug, and the dry run that lists the cells it would change, is in
 [docs/demo-walkthrough.md](docs/demo-walkthrough.md); a test runs it as written. It shows the engine the skills call, not the

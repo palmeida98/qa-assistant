@@ -69,6 +69,33 @@ def held_by_another_writer(ws: str):
         thread.join()
 
 
+TOKEN_RE = __import__("re").compile(r"\b(v[12]-[0-9a-f]{16})\b")
+
+
+def approved(main, argv: list, dry_extra: tuple = ()) -> list:
+    """The argv of a write done as a person does it (technique-excel.md section 1.2): the dry run of the same command
+    first, then the write with `--expect` and the token that dry run printed. When the dry run prints no token (it was
+    refused), the argv is returned as it is, so the write shows the same refusal."""
+    import io
+    if "--expect" in argv or "--dry-run" in argv:      # the caller already chose: a given token, or a preview
+        return list(argv)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        main([*argv, "--dry-run", *dry_extra])
+    tokens = TOKEN_RE.findall(out.getvalue())
+    return [*argv, "--expect", tokens[-1]] if tokens else list(argv)
+
+
+def run_approved(main, argv: list, dry_extra: tuple = ()) -> tuple[int, str]:
+    """(exit code, output) of a write done with the token of its own dry run (`approved`)."""
+    import io
+    out = io.StringIO()
+    full = approved(main, argv, dry_extra)
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        code = main(full)
+    return code, out.getvalue()
+
+
 def write_project(ws: str, proj: dict) -> None:
     with open(os.path.join(ws, "project.yaml"), "w", encoding="utf-8") as f:
         yaml.safe_dump(proj, f, allow_unicode=True, sort_keys=False)

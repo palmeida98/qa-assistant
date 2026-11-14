@@ -12,6 +12,7 @@ python -m unittest tests.test_excel_recalc_flows   (from the root of qa-assistan
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -41,6 +42,9 @@ def sha(path: str) -> str:
         return hashlib.sha256(f.read()).hexdigest()
 
 
+TOKEN = re.compile(r"\b(v[12]-[0-9a-f]{16})\b")
+
+
 @unittest.skipUnless(soffice(), "needs LibreOffice (the workbook's recalculation)")
 class RecalculatedWrites(unittest.TestCase):
     def setUp(self):
@@ -61,13 +65,17 @@ class RecalculatedWrites(unittest.TestCase):
         dry = self.run_("-m", "adapters.excel.add_cases", self.ws, path, "--dry-run")
         self.assertEqual(dry.returncode, 0, dry.stdout + dry.stderr)
         self.assertEqual(sha(self.book), before)                                  # a dry run writes nothing
-        done = self.run_("-m", "adapters.excel.add_cases", self.ws, path)
+        refused = self.run_("-m", "adapters.excel.add_cases", self.ws, path)    # no token: nothing is written
+        self.assertEqual(refused.returncode, 4, refused.stdout + refused.stderr)
+        self.assertEqual(sha(self.book), before)
+        token = TOKEN.findall(dry.stdout)[-1]
+        done = self.run_("-m", "adapters.excel.add_cases", self.ws, path, "--expect", token)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         ad = ExcelAdapter.from_project(self.ws)
         ad.load()
         self.assertEqual(ad.case_rows()["Shop"][-1]["ID"], "TC-SHOP-005")
-        again = self.run_("-m", "adapters.excel.add_cases", self.ws, path)       # the same file again changes nothing
-        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+        again = self.run_("-m", "adapters.excel.add_cases", self.ws, path, "--expect", token)   # the same file again
+        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)                     # changes nothing
         ad = ExcelAdapter.from_project(self.ws)
         ad.load()
         self.assertEqual([r["ID"] for r in ad.case_rows()["Shop"]].count("TC-SHOP-005"), 1)
@@ -102,8 +110,13 @@ class RecalculatedWrites(unittest.TestCase):
         by_id = {r["ID"]: r[status] for r in ad.case_rows()["Shop"]}
         self.assertEqual((by_id["TC-SHOP-001"], by_id["TC-SHOP-002"], by_id["TC-SHOP-003"]), ("Pass", "Pass", "Fail"))
         written = sha(self.book)
-        again = self.run_("-m", "adapters.excel.apply", self.ws, batch)             # the same batch again: no effect
-        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+        again = self.run_("-m", "adapters.excel.apply", self.ws, batch)             # again without a token: refused
+        self.assertEqual(again.returncode, 4, again.stdout + again.stderr)
+        self.assertEqual(sha(self.book), written)
+        repeat = self.run_("-m", "adapters.excel.apply", self.ws, batch, "--dry-run", "--detail")
+        self.assertIn("already applied", repeat.stdout)
+        again = self.run_("-m", "adapters.excel.apply", self.ws, batch, "--expect", TOKEN.findall(repeat.stdout)[-1])
+        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)                 # the same batch: no effect
         self.assertEqual(sha(self.book), written)
 
 

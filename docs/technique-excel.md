@@ -56,7 +56,7 @@ text as before and writes nothing; with `output.detail_files: false` the complet
 the command are never dropped by a line limit. `--json` is unchanged.
 
 The dry run ends with a **preview token** `v2-<hash>`: the batch (its name, which routes it to a workbook, and its
-content), `project.yaml`, every declared workbook, and the options that change what is written: `--label` (as given; the
+content), `project.yaml`, every declared workbook, the destination resolved (its path and content), and the options that change what is written: `--label` (as given; the
 default label is a marker, because its date is the apply's own), the reporter actually written (`--reported-by`, else
 `excel.defects.reported_by`, else the default), `--no-recalc`, a fixed `--now` and, when given, `--keep-previous` (a token
 without it is the same as before). The dry run prints them
@@ -67,6 +67,34 @@ invalidate a preview, and the cells that take the instant of the apply (label da
 date) are exactly the ones the dry run marks `<at apply time>`; to fix them in the approval, give `--now` to both. A
 token without the `v2-` prefix is from before this rule (it did not cover the options): it is refused with a message and
 the dry run is repeated. Dry runs left pending when this change is adopted must be repeated.
+
+### 1.2 Preview and write: the destination and the approval (13.11.2026)
+
+**Why:** an add «simulated on a copy» wrote into a real workbook. The copy was named only in `$QA_WORKBOOK`, the add was
+run with `--platform` (which then chose the destination from `project.yaml` and ignored the variable without a word) and
+without `--expect`, so nothing tied the write to a preview. The rules below apply to `apply`, `add_cases` and `reconcile`.
+
+- **A preview reads, a write needs its approval.** `--dry-run` may read the destination and compute the change (the apply
+  on a copy in a temporary folder made for it; the add and the reconcile as a plan in memory); it never saves, replaces or
+  recalculates the destination (its SHA-256 and modification time stay). From the command line, a **write needs
+  `--expect <token>`**, the token of the preview the QA approved: without it the command refuses (exit 4) and writes nothing.
+  A repeat of something already done also goes through a preview, which says «already applied / already added».
+- **The destination is resolved once and shown in full.** In order: an explicit path (`--workbook <path>` or
+  `$QA_WORKBOOK`; both given must name the same file), else the project's rule (`--platform` for the add; the batch's
+  route, `route_workbook`, for the apply and the reconcile). The preview prints the **absolute path** effectively
+  resolved, where it came from, the platform, the batch or cases file, the changes and the token.
+- **An explicit path never falls back silently.** It is refused (exit 4, nothing read or written) when it is outside the
+  workspace (writes stay in the workspace: methodology §4.3), does not exist, is not a workbook (`.xlsx`, `.xlsm`), or
+  contradicts the project's rule: another workbook than the one `--platform` or the batch's route names in a project that
+  declares several workbooks, or `--platform both`. A copy to simulate on is a copy of the whole workspace, passed as the
+  workspace.
+- **The token is bound to the destination.** It covers the destination's workspace-relative path and its content, so the
+  approval of one workbook never authorises a write to another, even with identical content. The apply's token keeps
+  its `v2-` prefix (the workspace CI and the templates read it) and, from 13.11.2026, also hashes the destination: a
+  preview made before that is refused as «out of date» and is regenerated with the same `--dry-run` (and shown again for
+  approval); the add's `v1-…` and the reconcile's `v1-…` already named the destination. Before writing, under the workspace's lock,
+  the command resolves the destination again and recomputes the token: a destination or content that changed gives
+  another token, the write is refused and a new preview is shown for a new approval.
 
 **The result a case already had** is replaced by the batch's (the workbook shows the latest result of each case). With
 `apply --keep-previous` it is not lost in the workbook: when a case already had a result text and the batch replaces it
@@ -118,7 +146,7 @@ A case's status always uses the list of valid statuses **of that project** (defi
 
 The cases `/plan-tests` proposes only enter the workbook after the user approves them (methodology §5.3), and they enter through the adapter, never by hand: the same load → validate → save-if-clean → recalculate → summary check of a batch.
 
-    python -m adapters.excel.add_cases <workspace> <cases.json> [--dry-run] [--label …] [--no-recalc] [--now …] [--expect <token>]
+    python -m adapters.excel.add_cases <workspace> <cases.json> [--platform …] [--workbook <path>] [--dry-run] [--label …] [--no-recalc] [--now …] [--expect <token>]
 
 - **Input:** `<workspace>/cases/cases_<YYYYMMDD>_<nn>.json`, `{"cases": [case, …]}` with the fields of the case model (methodology §2), the same as the tracker adapters' cases file (`technique-jira-xray.md` §7): `id`, `title`, `area`, `feature`, `preconditions`, `steps` [{`action`, `data`, `expected`}], `expected`, `role`, `platform`, `priority`, `technique`, `origin`. The `id` is the **final** ID in the project's pattern (a workbook has no tracker to give one), and its prefix chooses the sheet (`cases.sheets`). A file already added is never edited: new cases go in a new file.
 - **Configuration:** `cases.fields` maps each model field to the header of its column (`{title: "Title", steps: "Steps", expected: "Expected Result", …}`); `title` is required for `add-cases` (it is how duplicates are found); the ID and the status always use `cases.columns`. A mapped column may be missing from some sheets (as `actual_result`): there the field is not written, and the command lists it. A field with no column is listed as not written, never refused. `cases.new_status` (optional) is the status of a new case; by default the first of `cases.statuses` (the pending status the dashboard assumes).
@@ -128,11 +156,11 @@ The cases `/plan-tests` proposes only enter the workbook after the user approves
 - **Once only:** the file is recorded in the control sheet (§5) like a batch — its identity is the file name, the fingerprint is that of its cases, `items` is the number of cases —; the same file again changes nothing (exit 0) and the same name with another content is refused (exit 4).
 - **Then the usual:** `save_if_clean()` (exit 2 with the cross-check's problems, original untouched), `recalc()` (exit 3) and `check_summary()` (exit 5: a summary with fixed ranges that no longer reach the new rows, or without the new area — fix the formulas).
 - `--dry-run` validates and prints, per case, the sheet, the row and the cells it would write, and the fields not written; it writes nothing (0 valid · 4 refused). It ends with a **preview token** `v1-<hash>`: the cases file, the workbook that would change (path and content), `project.yaml`, the plan (sheet, row and cells of every case) and the options that change what is written (`--label`, `--no-recalc`, a fixed `--now`).
-- **`--expect <token>` binds the add to the dry run the user saw**: if the cases file, the workbook, `project.yaml`, the plan or an option changed, exit 4 with "the preview … is out of date" and nothing written (checked after the lock is taken, before the write); a token of another command (`v2-…`, the apply's) or `--expect` with `--dry-run` is refused. Cases already added are not added again, with or without a token. The add **holds the workspace's lock** like the apply (one writer at a time: exit 4 and nothing written when another is writing), and the final recalculation puts the result in place in one step (a copy next to the workbook renamed over it), so a stop in the middle leaves the workbook as it was.
+- **`--expect <token>` binds the add to the dry run the user saw**: if the cases file, the workbook, `project.yaml`, the plan or an option changed, exit 4 with "the preview … is out of date" and nothing written (checked after the lock is taken, before the write); a token of another command (`v2-…`, the apply's) or `--expect` with `--dry-run` is refused. Cases already added are not added again. From the command line the add itself needs `--expect` (§1.2). The add **holds the workspace's lock** like the apply (one writer at a time: exit 4 and nothing written when another is writing), and the final recalculation puts the result in place in one step (a copy next to the workbook renamed over it), so a stop in the middle leaves the workbook as it was.
 
 In the adapter: `validate_cases()` (read only) → `add_cases()` → `save_if_clean()` → `recalc()` → `check_summary()`.
 
-- **`--platform android|ios|both|<platform>`** (plan Q4) chooses the destination from `project.yaml` without `QA_WORKBOOK` and without copying a file: the `excel.workbooks` entry of that platform (its `platform`, else its key), else `excel.file` (the workbook of the platforms without an entry). `both` is every workbook: all are validated before any is written and ONE combined token (`v1-…`) covers them; the dry run writes one review per destination. A case whose `platform` field names another platform is refused for that destination (a case for both must say so), and an ID that ANOTHER `cases/*.json` proposes with different content (the `platform` field aside) and that is not yet in the target workbook is refused. Without `--platform` the behaviour is the old one, with a notice when the project has several workbooks. The result of a case that is only proposed is recorded with `run_log.py add --proposed`.
+- **`--platform android|ios|both|<platform>`** (plan Q4) chooses the destination from `project.yaml` without `QA_WORKBOOK` and without copying a file: the `excel.workbooks` entry of that platform (its `platform`, else its key), else `excel.file` (the workbook of the platforms without an entry). `both` is every workbook: all are validated before any is written and ONE combined token (`v1-…`) covers them; the dry run writes one review per destination. A case whose `platform` field names another platform is refused for that destination (a case for both must say so), and an ID that ANOTHER `cases/*.json` proposes with different content (the `platform` field aside) and that is not yet in the target workbook is refused. Without `--platform` the behaviour is the old one, with a notice when the project has several workbooks. An explicit path (`--workbook`, `$QA_WORKBOOK`) that names another workbook than `--platform` is refused, never ignored (§1.2). The result of a case that is only proposed is recorded with `run_log.py add --proposed`.
 
 ### 4.2 Annotating cases (`annotate`)
 A result is never rewritten to improve a remark about it, and the workbook is never edited by hand. To record that a result
