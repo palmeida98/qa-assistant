@@ -471,6 +471,18 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     p, w = specs_section(proj)
     problems += p
     warnings += w
+    if proj.get("write_guard") is not None:
+        # bugs created through scripts/ado_write_guard.py: the same validation the guard runs at startup
+        import ado_write_guard
+        wg = proj.get("write_guard")
+        if not isinstance(wg, dict) or set(wg) - {"bugs"}:
+            problems.append("write_guard: expected {bugs: {...}} (technique-ado-write-guard.md, «Final preview of a "
+                            "bug's fields»)")
+        else:
+            try:
+                ado_write_guard.load_bug_config(wg.get("bugs"))
+            except ado_write_guard.ConfigError as e:
+                problems.append(f"write_guard.bugs: {e}")
     if proj.get("resolved_bugs") not in (None, "remove", "archive"):
         problems.append("resolved_bugs must be 'remove' or 'archive'")
     if proj.get("evidence") not in (None, "text", "text+screenshot"):

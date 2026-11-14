@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (bugs: final preview of the fields, write guard 1.2.0, 2026-11-13)
+- `ado_guard_preview_bug` shows every field with the label of the Board's form and its exact value, the Parent,
+  Assigned To empty, the project's checks and notices, the evidence and the creation comment as separate operations,
+  with `payload_sha256` and `patch_sha256`; `ado_guard_create_bug` creates only what was previewed (with
+  `write_guard.require_patch_hash`, the patch hash too). Optional mapping `write_guard.bugs` in project.yaml
+  (labels, extra fields by confirmed reference name, checks, notices), validated by `validate_project.py` and at the
+  guard's start. `procedures/bugs.md`: mapping a bug to the tracker's real fields; `/manage-bugs` shows the preview.
+
+### Changed (bugs: unassigned on creation, ledger, reviewed video; write guard 1.1.0, 2026-11-13)
+- Earlier than the preview: a bug is created without Assigned To and the read-back reports the real assignee; a
+  ledger of the bugs the guard created lets their attachments and creation comment follow without an assignee; a
+  video is attached only with its `<file>.review.json` (reviewed, no personal data or masked; up to 60 MB).
+
 ### Added (checkpoint and resume of /test-pbi: open items, intermediate checkpoints, closing, 2026-11-13)
 - `pbi_state.py open|update|close` record what waits on someone (approval, publish, apply, dependency, question)
   with a stable id and who unblocks it; `saved` records an intermediate checkpoint without changing a step;

@@ -50,7 +50,9 @@ metadata:
    more (rules.md section 8).
 5. Write the batch review in runs/<batch>_bugs_review.md: per item the proposal in the project's bug format
    (CLAUDE.md order of fields, steps, expected -> observed, environment, device, build, evidence path with the bug id
-   once it has one). Present all items together at the end of the batch and wait. Priority: run
+   once it has one), mapped to the tracker's real fields after reading its form (procedures/bugs.md, "Mapping a bug
+   to the tracker's fields": what goes in each field and what stays pending). Present all items together at the end
+   of the batch and wait. Priority: run
    python <qa>/scripts/run_log.py <workspace> defect-rule. When the project's schema REQUIRES a priority (Excel with
    excel.defects.priorities), each bug in the review shows the accepted values and a line "priority: waiting for your
    decision"; the bug is not ready to apply until the user gives one of them (a suggestion with its reason only if the
@@ -63,4 +65,13 @@ metadata:
    /checkpoint, after the confirmation of that batch's dry run.
 7. Publishing to a tracker outside /checkpoint (a bug the user creates, a comment): only when the user asks for that
    item; show the exact text first; under /test-pbi record the key with pbi_state.py published, which refuses a second
-   publication of the same draft.
+   publication of the same draft. After publishing or correcting a bug, reopen it and verify each field and the rendered form
+   (same section of procedures/bugs.md); a save or equal text alone does not validate it.
+   Creating a bug through the write guard (technique-ado-write-guard.md, «Final preview of a bug's fields»): build the
+   fields from the project's mapping (write_guard.bugs of project.yaml: extra_fields only for its keys), run
+   ado_guard_preview_bug with the evidence to attach and the creation comment, and show the QA its preview_text as it
+   is: each field by its label in the Board with its exact value, the Parent, Assigned To empty, the checks and notices
+   (a QA account «to confirm»), the evidence (a reviewed video only when the captures cannot show the occurrence) and
+   the comment as separate operations, and payload_sha256 and patch_sha256. A preview with ready false is not
+   proposed for approval. Create only with the hashes the QA approved; a field, its mapping or the parent that changed
+   since gives other hashes: preview again and ask again. Attachments and the comment follow with their own approvals.

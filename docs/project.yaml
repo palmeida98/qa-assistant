@@ -272,3 +272,13 @@ excel:
 #     closed_states: ["Closed", "Removed"]   # (opt.) not open in the duplicate search (Scrum: ["Done", "Removed"])
 #     states: []                 # (opt.) states a retest may move a bug to (resolved_bugs rule)
 #     priorities: []             # (opt.) priorities a new_defect may have (checked before any request)
+
+# Bugs created in Azure DevOps through the write guard (scripts/ado_write_guard.py --project-yaml), with any tracker:
+# technique-ado-write-guard.md, «Final preview of a bug's fields». Optional: without it, the four standard fields.
+# write_guard:
+#   bugs:
+#     labels: {}                 # (opt.) model key -> name shown in the Board's form
+#     fields: {}                 # (opt.) extra field: model key -> {reference: "<confirmed reference name>", label, required}
+#     checks: {}                 # (opt.) model key -> [{name, pattern}]: what the field must contain (regex)
+#     notices: {}                # (opt.) model key -> [{name, pattern}]: said in the preview when present
+#     require_patch_hash: false  # (opt.) the creation needs the patch_sha256 of the preview

@@ -755,3 +755,23 @@ class SpecsSection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WriteGuardSection(unittest.TestCase):
+    """write_guard.bugs (technique-ado-write-guard.md, «Final preview of a bug's fields»): the guard's own validation."""
+
+    def problems(self, section):
+        return [p for p in vp.base_problems({**BASE, "write_guard": section})[0] if "write_guard" in p]
+
+    def test_a_valid_mapping_has_no_problem_and_none_is_optional(self):
+        ok = {"bugs": {"labels": {"system_info": "System Info"},
+                       "fields": {"actual_result": {"reference": "Custom.ActualResult", "label": "Actual", "required": True}},
+                       "checks": {"repro_steps": [{"name": "steps", "pattern": "<ol>"}]}}}
+        self.assertEqual(self.problems(ok), [])
+        self.assertFalse([p for p in vp.base_problems(dict(BASE))[0] if "write_guard" in p])
+
+    def test_a_management_field_or_an_unknown_key_is_a_problem(self):
+        for section in ({"bugs": {"fields": {"x": "System.AssignedTo"}}},
+                        {"bugs": {"fields": {"x": "Microsoft.VSTS.Common.Severity"}}}, {"bugs": {"colour": 1}}, {"other": {}}, "x"):
+            with self.subTest(section=section):
+                self.assertTrue(self.problems(section))
