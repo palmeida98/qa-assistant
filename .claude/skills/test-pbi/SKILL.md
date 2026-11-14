@@ -14,7 +14,8 @@ metadata:
   failures: "A blocked step is marked blocked with the reason; the independent steps go on and the missing ones are listed. A changed requirement, build or environment since the plan is reported before going on."
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan and the bugs published."
   requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, skills-guide.md, methodology.md"
+  requires-tools: "spec"
+  requires-docs: "procedures/rules.md, skills-guide.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -31,7 +32,8 @@ metadata:
    configuration it asks for. `Route:` lines name the procedure of each module; `Next:` is the one command to run
    before the work. The current workspace is the one it selected. Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
-1. Parameters: the PBI (an id, or a link of the tracker configured in tickets:; any other host is refused), the QA
+1. Parameters: the PBI (an id or key, or a link of a source configured in tickets:, Linear's .../issue/<KEY>/<slug>
+   included; any other host is refused), the QA
    task if any, and the platforms (android, ios, web, api; by default those of the project's modules, said aloud).
    An invalid one: refuse with the expected form `/test-pbi <PBI> [QA task] [android|ios|web|api]` and stop.
 2. Open or resume the record, from <qa>:
@@ -48,7 +50,11 @@ metadata:
    user agrees, the same command with --reopen puts those steps back to pending. Exit 3 is "not concluded": say what
    could not be compared, never "nothing changed". Results of an old build stay valid for that build; a new run on
    another build is a new batch. A build is required to contain the change being tested (a build confirmed with it),
-   not a number higher than some other build.
+   not a number higher than some other build. When the plan cites `spec_refs` (technique-specs.md), the same command
+   compares them (`--spec-root <export folder>` reads another export than the project's): a scenario whose rule
+   changed or was removed is named and reviewed before the plan is reused, a rule with the same text in a new
+   revision of its file changes nothing, and what could not be verified leaves its scenarios pending review and
+   the check "not concluded" (section 5). A source of another kind than `export` is compared by hand, rule by rule.
 4. Run the steps through their skills, never copying their procedures, and after each one mark it with what proves it:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> <step> done --ref <file, check id or batch>
    - context: /project-context.
@@ -57,7 +63,7 @@ metadata:
      on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, and say
      which rule). Once the plan stands:
      python <qa>/scripts/pbi_state.py <workspace> baseline <pbi> --ticket <id>=<revision> --build <p>=<observed>
-     [--environment <key>]
+     [--environment <key>] [--spec-plan <the plan file, when it has spec_refs>]
    - run:<platform>: /run-tests, one platform at a time, on the platforms the request named; a separate approval per
      platform only when the workspace's rules ask for it. An approval still valid is not asked again on resuming.
    - bugs: /manage-bugs, one review for all failures of the PBI (its approval before anything reaches the tracker).

@@ -189,11 +189,23 @@ def ticket_markdown(doc: dict) -> str:
             lines.append(f"| {name} | {cover.get('status')} | {(comps.get(name) or {}).get('read_at') or '-'} |")
     if fields:
         lines += ["", "## Official state", ""]
+        unavailable = fields.get("unavailable") if isinstance(fields.get("unavailable"), dict) else {}
+        partial = fields.get("partial") if isinstance(fields.get("partial"), dict) else {}
         for name in ("type", "state", "reason", "assignee", "priority", "sprint"):
-            lines.append(f"- {name}: {one_line(fields.get(name)) or '-'}")
+            if name in unavailable:
+                lines.append(f"- {name}: unavailable ({one_line(unavailable[name], 200)})")
+            else:
+                lines.append(f"- {name}: {one_line(fields.get(name)) or '-'}"
+                             + (f" (partial: {one_line(partial[name], 160)})" if name in partial else ""))
+    origin = fields.get("origin") if isinstance(fields.get("origin"), dict) else {}
     for name, label in (("description", "Description"), ("acceptance_criteria", "Acceptance criteria")):
         if fields.get(name):
-            lines += ["", f"## {label}", "", quoted(fields[name])]
+            source = f"Source: {doc.get('url')} — {one_line(origin[name], 300)}" if name in origin else ""
+            lines += ["", f"## {label}", ""] + ([source, ""] if source else []) + [quoted(fields[name])]
+        elif name in ((fields.get("unavailable") or {}) if isinstance(fields.get("unavailable"), dict) else {}):
+            lines += ["", f"## {label}", "", f"Unavailable: {one_line(fields['unavailable'][name], 300)}"]
+        elif name in origin:
+            lines += ["", f"## {label}", "", f"Not found: {one_line(origin[name], 300)}"]
     analysis = doc.get("analysis") or {}
     lines += _analysis_lines(analysis)
     log = analysis.get("analysis_log") or []

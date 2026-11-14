@@ -917,5 +917,43 @@ class TwoProjects(Base):
         self.assertEqual(report["sources"][0]["credentials"], {"DS_PAT": True})
 
 
+class SpecSourceInThePreflight(Base):
+    """docs/technique-specs.md: the three skills that read a specification show where it is, only with specs:."""
+    PRIVATE = "https://private.example/spec/k3y-NOT-TO-BE-SHOWN"
+    SKILLS = ("analyze-ticket", "plan-tests", "test-pbi")
+
+    def test_without_specs_the_preflight_is_as_before(self):
+        make_project(self.root, "demo/shop", tickets={"sources": {"boards": BOARDS}})
+        for skill in self.SKILLS:
+            with self.subTest(skill=skill), \
+                    mock.patch("validate_project.environment", side_effect=AssertionError("a tool was asked")):
+                code, report = self.preflight(skill, "demo/shop")
+                self.assertEqual((code, report["tools"]), (ws.OK, []))
+
+    def test_with_specs_one_line_names_the_variable_and_asks_no_other_tool(self):
+        specs = {"kind": "artifact", "location_var": "SHOP_SPEC_URL", "index": "_index.md"}
+        make_project(self.root, "demo/shop", env=f"SHOP_SPEC_URL={self.PRIVATE}\nDS_PAT=x\n",
+                     tickets={"sources": {"boards": BOARDS}}, specs=specs)
+        for skill in self.SKILLS:
+            with self.subTest(skill=skill), \
+                    mock.patch("validate_project.environment", side_effect=AssertionError("a tool was asked")):
+                code, report = self.preflight(skill, "demo/shop")
+                self.assertEqual(code, ws.OK)
+                self.assertEqual([(t["tool"], t["ok"]) for t in report["tools"]], [("spec source", True)])
+                self.assertIn("SHOP_SPEC_URL", report["tools"][0]["detail"])
+                self.assertNotIn(self.PRIVATE, json.dumps(report))
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    ws._print_preflight_full(code, report)
+                self.assertNotIn(self.PRIVATE, out.getvalue())
+
+    def test_another_skill_does_not_get_the_line(self):
+        specs = {"kind": "artifact", "location_var": "SHOP_SPEC_URL", "index": "_index.md"}
+        make_project(self.root, "demo/shop", env=f"SHOP_SPEC_URL={self.PRIVATE}\n", specs=specs)
+        with mock.patch("validate_project.environment", return_value=[(True, "spec source", "x"), (True, "git", "g")]):
+            _code, report = self.preflight("checkpoint", "demo/shop")
+        self.assertEqual([t["tool"] for t in report["tools"]], ["git"])
+
+
 if __name__ == "__main__":
     unittest.main()

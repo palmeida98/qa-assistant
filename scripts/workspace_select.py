@@ -542,9 +542,14 @@ def _tool_lines(tokens: list[str], workspace: str, proj: dict) -> list[dict]:
     lines = []
     import validate_project
     wanted = set(tokens)
-    for ok, tool, detail in validate_project.environment(workspace, proj):
-        if tool in wanted or tool.split(" ")[0] in wanted:
-            lines.append({"ok": ok, "tool": tool, "detail": detail})
+    if wanted - {"spec"}:       # `spec` alone asks no other tool (a skill that reads tickets checks no device)
+        for ok, tool, detail in validate_project.environment(workspace, proj):
+            if tool.split(" ")[0] != "spec" and (tool in wanted or tool.split(" ")[0] in wanted):
+                lines.append({"ok": ok, "tool": tool, "detail": detail})
+    if "spec" in wanted and isinstance(proj.get("specs"), dict):
+        # only a project with a specs: section gets this line (technique-specs.md); without one nothing changes
+        ok, tool, detail = validate_project.spec_source(workspace, proj)
+        lines.append({"ok": ok, "tool": tool, "detail": detail})
     if "mcp" in wanted:
         ok, tool, detail = _mcp_line(workspace)
         lines.append({"ok": ok, "tool": tool, "detail": detail})

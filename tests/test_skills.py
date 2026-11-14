@@ -107,7 +107,7 @@ class Skills(unittest.TestCase):
     def test_each_requirement_can_be_checked(self):
         import validate_project
         known_tools = {"git", "python", ".env", "skills", "libreoffice", "node", "qa-audit", "browser", "maestro", "adb",
-                       "emulator", "android-driver", "mobile", "xcrun", "ios-wda", "build", "mcp"}
+                       "emulator", "android-driver", "mobile", "xcrun", "ios-wda", "build", "mcp", "spec"}
         for name in names():
             doc = sync_skills.skill_doc(os.path.join(SKILLS, name, "SKILL.md"))
             with self.subTest(skill=name):

@@ -9,6 +9,9 @@
 1a. A feature that starts as a ticket: /analyze-ticket gives its state, changes and relations first.
 2. Identify the feature's source of truth (requirements, specification, Figma, existing cases)
    and respect the hierarchy of section 1.3. If two sources contradict each other, stop and ask.
+   With a `specs:` section in project.yaml, the specification is found, read and cited as technique-specs.md says:
+   each confirmed requirement carries its `spec_refs` (source, path or work item, rule id, revision); a point where
+   the specification and the tracker diverge is a question with both texts, while the confirmed points are planned.
 3. For each role/profile of the project, say whether it reaches the feature and what it can and cannot do.
 4. List the inputs, the states (life cycle), the business rules and the integrations.
 5. Assess the risk: probability of failure x impact for the user or for the business, with the recent changes and
@@ -95,7 +98,12 @@
    start a session), not ready or to confirm, and why; the user does the login and the consents. A case whose account is not
    ready goes in the plan as Blocked (environment) with that reason, never as a case to run; the rest of the batch goes on.
 1c. Acceptance criteria (rules.md §15): `python scripts/ac_coverage.py <workspace> init <pbi>` writes a map of the PBI's criteria
-   (from the ticket memory; `none` when there are none, and the report says so); map the existing and new cases to each criterion,
+   (from the ticket memory; `none` when there are none, and the report says so). Each criterion's `text` is a transcription:
+   the original lines, breaks, indentation, lists, tables and fenced blocks as the tracker has them (rules.md §17), with its
+   `origin` (ticket, link, section, lines) and `presentation`: `inline` (one short line, it may go in a table cell whole) or
+   `reference` (the cell gets `reference`, e.g. «DS-12 · AC2 · description, lines 12-15», and the text goes whole in its
+   own block below). The split into criteria is a reading aid; `criteria_source.text` keeps the whole field. Never retype,
+   join or shorten a criterion to fit a table; map the existing and new cases to each criterion,
    `report` it and say the uncovered ones in the plan.
 1d. New cases (rules.md §16): write the proposals to `cases/<file>.json` before running anything (one file per platform, or one
    file for both with the `platform` field saying so); each proposal keeps its PBI ID, QA task and origin so the traceability

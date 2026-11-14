@@ -682,5 +682,76 @@ class Demo(unittest.TestCase):
         self.assertIn("migrate_workspace.py", err.getvalue())
 
 
+class SpecsSection(unittest.TestCase):
+    """The optional specs: section (docs/technique-specs.md): absent changes nothing; a private location is only ever
+    named by its .env variable."""
+    PRIVATE = "https://private.example/spec/k3y-NOT-TO-BE-SHOWN"
+    SPECS: typing.ClassVar[dict] = {"kind": "artifact", "location_var": "SHOP_SPEC_URL", "index": "_index.md",
+             "divergence_prefixes": ["DIV-M-"], "rule_id": "r-[0-9a-f]{8}"}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def env(self, text):
+        with open(os.path.join(self.tmp.name, ".env"), "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def environment(self, proj):
+        with mock.patch.object(vp, "which", return_value="/bin/tool"):
+            return vp.environment(self.tmp.name, proj)
+
+    def test_without_specs_nothing_is_checked_or_shown(self):
+        self.assertEqual(vp.specs_section(dict(BASE)), ([], []))
+        self.assertEqual(vp.base_problems(dict(BASE)), vp.base_problems({**BASE}))
+        self.assertNotIn("spec source", [tool for _, tool, _ in self.environment(dict(BASE))])
+
+    def test_a_valid_section_has_no_problem_and_names_its_variable(self):
+        proj = {**BASE, "specs": dict(self.SPECS)}
+        self.assertEqual(vp.specs_section(proj), ([], []))
+        from common import variable_names
+        self.assertIn("SHOP_SPEC_URL", variable_names(proj))           # .env and .env.example must name it
+
+    def test_the_private_location_is_never_shown(self):
+        proj = {**BASE, "specs": dict(self.SPECS)}
+        ok, tool, detail = vp.spec_source(self.tmp.name, proj)
+        self.assertEqual((ok, tool), (False, "spec source"))
+        self.assertIn("SHOP_SPEC_URL", detail)
+        self.env(f"SHOP_SPEC_URL={self.PRIVATE}\n")
+        lines = [x for x in self.environment(proj) if x[1] == "spec source"]
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0][0])
+        self.assertNotIn(self.PRIVATE, repr(self.environment(proj)))
+        self.assertIn("value not shown", lines[0][2])
+
+    def test_wrong_sections_are_problems(self):
+        cases = {"kind": {**self.SPECS, "kind": "wiki"},
+                 "exactly one": {**self.SPECS, "location": "org/spec"},
+                 "exactly one ": {"kind": "git", "index": "_index.md"},
+                 "NAME of a .env variable": {**self.SPECS, "location_var": "https://x"},
+                 "divergence_prefixes": {**self.SPECS, "divergence_prefixes": "DIV-M-"},
+                 "regular expression": {**self.SPECS, "rule_id": "r-[0-9"}}
+        for expected, specs in cases.items():
+            with self.subTest(expected=expected):
+                problems, _ = vp.specs_section({**BASE, "specs": specs})
+                self.assertTrue(any(expected.strip() in p for p in problems), problems)
+        self.assertEqual(vp.specs_section({**BASE, "specs": "x"})[0], [("specs: expected a map (technique-specs.md "
+                                                                        "section 1)")])
+
+    def test_a_link_written_in_project_yaml_is_warned(self):
+        specs = {"kind": "artifact", "location": "https://claude.example/artifact/x", "index": "_index.md"}
+        problems, warnings = vp.specs_section({**BASE, "specs": specs})
+        self.assertEqual(problems, [])
+        self.assertTrue(any("location_var" in w for w in warnings))
+
+    def test_an_export_is_a_dated_copy_of_unconfirmed_currency(self):
+        specs = {"kind": "export", "location": "docs/spec_export", "index": "_index.md"}
+        self.assertFalse(vp.spec_source(self.tmp.name, {"specs": specs})[0])
+        os.makedirs(os.path.join(self.tmp.name, "docs", "spec_export"))
+        ok, _, detail = vp.spec_source(self.tmp.name, {"specs": specs})
+        self.assertTrue(ok)
+        self.assertIn("not confirmed", detail)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -199,3 +199,26 @@ checkout; nothing is installed for the user and the system Python is never used 
 - **Bugs in the tracker (phase C).** Real bug creation stays disabled until the user decides (`ADO_GUARD_ALLOW_BUG_CREATE` unset).
   A bug is prepared with the preview tool (no write), shown whole for approval, and one bug is created per approval, under a
   parent assigned to the verified identity.
+
+## 17. Specs, acceptance criteria and business rules from the tracker: never rewritten (user, 11.11.2026)
+Applies whenever a spec, an acceptance criterion or a business rule is taken from Azure DevOps Boards, Jira or Linear.
+- **The tracker's text is the source.** Whenever you present a spec, an acceptance criterion or a business rule, copy the
+  original text whole and word for word. Keep its language, numbering, conditions, exceptions, examples and any errors it
+  contains. Never summarise, rephrase, translate, correct, combine or complete that text.
+- **Name the origin of each rule:** the work item's ID and link, the field or section it comes from and the criterion's
+  original identifier, when there is one. When the PBI, the tasks and the comments give contradictory versions, show the texts
+  as they are and point out the divergence. When the original cannot be read, say that the rule is not confirmed. A criterion
+  that was inferred (for example in an `analysis/ac_map_*.json`) is never presented as the tracker's text until it has been
+  checked and transcribed directly from the tracker.
+- **Decide case by case whether the text goes in the table:**
+  - A short rule that fits the cell without hurting the reading goes in the table whole.
+  - A long rule, or one with several conditions, exceptions, lists or tables, gets in the cell only a precise reference to
+    the original, for example «See PBI 42426 · AC 3». When the request or the report needs the rule in the document itself,
+    transcribe it whole in its own section below the table and point the cell to that section.
+  - When the whole spec is long, judge each relevant rule on its own: a short rule may go in the table even if the spec is long.
+  - When the original is a table in the tracker, keep its headers and the relation between rows and columns. If that structure
+    does not fit the QA table, put the original table in its own section or reference it in the tracker.
+- **QA text stays apart.** Test scenarios, observations and questions go in their own fields. A scenario may be written from a
+  rule, as long as the reference to the original rule is explicit and the scenario is marked as QA text.
+- **Before delivering,** compare each transcription with the source. If the whole text hurts the table, move it or use a
+  reference; never shorten or change the rule to make it fit.

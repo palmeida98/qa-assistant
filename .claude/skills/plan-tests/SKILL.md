@@ -14,7 +14,8 @@ metadata:
   resume: "The newest analysis/ file and batches/; a batch already saved is not rewritten, a new version gets a new name; a confirmation still valid for the same plan is not asked again."
   requires-modules: "adapters.excel, adapters.tracker"
   requires-scripts: "scripts/workspace_select.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/planning.md, heuristics.md, methodology.md"
+  requires-tools: "spec"
+  requires-docs: "procedures/rules.md, procedures/planning.md, heuristics.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -40,7 +41,12 @@ metadata:
    obsolete. A match that is not certain is asked, never guessed.
 3. Keep three lists apart: confirmed requirements (each with its source and date), assumptions (what the plan relies
    on without a source), and coverage suggestions (risks, heuristics.md, negative and edge cases). An ambiguity that
-   changes an expected result is a question to the user; the case waits for the answer.
+   changes an expected result is a question to the user; the case waits for the answer. With a `spec source` line
+   in the preflight, each confirmed requirement carries its `spec_refs` (technique-specs.md section 4; the plan keeps
+   them in a ```json spec_refs block written with `python <qa>/scripts/spec_refs.py <workspace> cite <path>#<rule id>`) and the
+   matrix of step 4 a column with the rule and its revision; a point where the specification and the tracker
+   diverge stays a question with both texts (section 3), and a case that depends on a background job names the
+   evidence that the job ran (section 6).
 4. Coverage matrix by risk: each requirement, decision or acceptance criterion -> the cases (existing or new) -> the
    platforms in scope (Android, iOS, web, API, by the project's modules), with a priority from impact, probability,
    recent changes and the dependencies affected. Include the negative and boundary cases and the regression of the

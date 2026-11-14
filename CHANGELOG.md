@@ -5,6 +5,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (Linear as a ticket source, read only, 2026-11-12)
+- `tickets.sources.<id>.service: linear` (`adapters/tickets/linear.py`): `/analyze-ticket` reads a Linear issue by key,
+  `<source>:<key>` or link through the official GraphQL API, with a personal API key (`api_key_var`) and only the
+  named queries of `linear.ALLOWED` (no mutation; the read-only transport still guards every request). Fields,
+  comments (paged), relations, children, attachments and the history Linear keeps; acceptance criteria from the
+  description's sections under `acceptance_criteria.headings`, word for word with their lines (`origin`). Same
+  memory, comparison and resume as Azure DevOps and Jira; the browser or MCP route takes the same shapes.
+- `sources` says "configuration only: access not confirmed" without `--online` (and `validate_project.py
+  --environment` too); `sources --online` with Linear checks the key's workspace and teams.
+- A key that a Jira and a Linear source may both hold is ambiguous (exit 2): `<source>:<key>` decides.
+- `fields.unavailable` / `fields.partial` / `fields.origin` in a snapshot: a field a source cannot give or gave in
+  part is never compared as a value; a check whose fields came back in part is partial (exit 1), not failed.
+- `pbi_state.py` recognises Linear links (and a Jira `site` link, which it refused before); `ac_coverage.py init`
+  finds a key's ticket memory on a case-sensitive disk and records the ticket, link and section of the criteria.
+
+### Changed (acceptance criteria transcribed word for word, 2026-11-12)
+- `ac_coverage.py init`: each criterion's `text` keeps the original lines, breaks, indentation, lists, tables and
+  fenced blocks (before, its lines were stripped and joined with spaces); a table or a fenced block is never split;
+  `criteria_source.text` keeps the whole field; each criterion has `origin` (ticket, link, section, lines),
+  `presentation` (`inline` or `reference`) and `reference`. `report` shows a criterion by reference with its full
+  transcription below, every line as written (rules.md section 17). Maps written before keep their text as it is.
+- Not in this change: `tracker: linear` (cases, results, bugs), publishing bugs to Linear, a real pilot.
+
+### Added (comparison of `spec_refs` on a resume, 2026-11-11)
+- `scripts/spec_refs.py` (`cite`, `compare`) and `pbi_state.py baseline --spec-plan FILE` / `check [--spec-root DIR]`:
+  on a resume, `/test-pbi` compares the rules each scenario of the plan cites with the specification now available
+  (an `export` source), by the full text of each rule. The same text in a new revision of the file keeps the scenario
+  reusable; a changed, removed or moved rule names the scenarios to review before the plan is reused (short rules
+  shown word for word, long ones by reference); what could not be verified leaves its scenarios pending review and
+  the check "not concluded". A project without `specs:` and a plan without `spec_refs` keep the current flow.
+  Tests: `tests/test_spec_refs.py`.
+
+### Added (functional specification source, 2026-11-11)
+- An optional `specs:` section in project.yaml (template in `docs/project.yaml`, commented out) and
+  `docs/technique-specs.md`: a workspace can name its functional specification (`artifact`, `git` or `export`). A
+  private location stays in the workspace's `.env`, named by `specs.location_var`; only the variable's name is ever
+  shown. `/analyze-ticket` (`procedures/tickets.md` step 6), `/plan-tests` (`planning.md` step A.2, skill step 3) and
+  `/test-pbi` (step 3: a changed revision lists the rules and the cases that cite them before the plan is reused)
+  read it, cite each rule with its revision (`spec_refs`) and keep a divergence with the tracker a question.
+  `rules.md` §17 is unchanged and applies to the specification's text too.
+- `validate_project.py` checks the section only when it is there (kind, exactly one of location/location_var, the
+  divergence prefixes, the rule id pattern) and adds a `spec source` environment line; the preflight of the three
+  skills shows that line (`requires-tools: "spec"`) without asking any other tool. A project without `specs:`
+  validates and preflights exactly as before. `scripts/spec_source.py` is left for a later phase.
+
 ### Changed (Windows status wording, 2026-11-11)
 - The summary banner of the Windows suite, the header of `windows-suite.yml`, comments and the `ci-status` note in `ci.yml`, the header of
   `.github/known-failures-windows.txt` and the README no longer say that the Windows suite is red or has known failures: since the six

@@ -596,7 +596,7 @@ class Coverage(Fixture):
         self.memory(123, "Given a cart\nWhen I pay\nThen it is saved\n\nGiven a paid order\nWhen I open it\nThen I see it")
         amap = ac.init(self.ws, 123)
         self.assertEqual([c["id"] for c in amap["criteria"]], ["AC1", "AC2"])
-        self.assertTrue(amap["criteria"][0]["text"].startswith("Given a cart When I pay"))
+        self.assertEqual(amap["criteria"][0]["text"], "Given a cart\nWhen I pay\nThen it is saved")   # word for word
         self.assertEqual((amap["criteria_source"]["kind"], [c["cases"] for c in amap["criteria"]]), ("ticket-memory", [[], []]))
         out = os.path.join("analysis", "ac_map_123.json")
         self.assertEqual(quiet(ac.main, [self.ws, "init", "123"]), 0)

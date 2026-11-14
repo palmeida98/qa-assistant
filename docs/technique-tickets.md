@@ -1,7 +1,7 @@
 # Ticket analysis technique
 
 > **Layer 2 — Technique for `/analyze-ticket`**
-> Version 1.1 · 2026-11-01 · Plan, phases 14 and 15. Reads Azure DevOps and Jira, works out what changed since the last check, and keeps the result in the workspace. 1.1 (15.1 to 15.3): an explicit order of the checks, so an old analysis never rewinds the current state; one row per scope in `context.md`; a structured verification prompt, shown in Markdown; honest coverage of what was only listed; the impact on existing cases.
+> Version 1.2 · 2026-11-12 · Plan, phases 14 and 15; Linear (read only) in 1.2. Reads Azure DevOps, Jira and Linear, works out what changed since the last check, and keeps the result in the workspace. 1.1 (15.1 to 15.3): an explicit order of the checks, so an old analysis never rewinds the current state; one row per scope in `context.md`; a structured verification prompt, shown in Markdown; honest coverage of what was only listed; the impact on existing cases. 1.2: Linear as a source (section 4.4), fields a source says it cannot give or gave only in part (`unavailable`, `partial`) never compared as values, and a check whose fields came back in part is partial, not failed.
 >
 > Project agnostic: the examples use the fictional **Demo Shop**. Subordinate to `methodology.md`. The engine is `adapters/tickets/`, driven by `python -m adapters.tickets <workspace> …`.
 
@@ -14,7 +14,7 @@ It **reads** trackers, compares, writes **local** memory and prepares plans, pro
 It is independent of `tracker:`: a project whose results live in Excel can have its backlog in Azure DevOps. It uses no Xray credential and no test plan: `adapters/tracker/config.py` still requires those for the results adapter, so this technique has its own section.
 
 Two guards make "read only" structural rather than a promise:
-- every API request goes through `read_only_transport`, which refuses (and never sends) anything that is not a `GET` or a request marked as a read (WIQL, JQL);
+- every API request goes through `read_only_transport`, which refuses (and never sends) anything that is not a `GET` or a request marked as a read (WIQL, JQL, a Linear GraphQL query); Linear's queries are moreover a closed list checked before sending (section 4.4);
 - credentials go only to the hosts of the configured sources: a link to any other host is an input error and is never opened with a token.
 
 ## 2. Configuration
@@ -23,7 +23,7 @@ Two guards make "read only" structural rather than a promise:
 tickets:
   sources:
     boards:                                 # the source's id, free text
-      service: "azure-devops"               # azure-devops | jira
+      service: "azure-devops"               # azure-devops | jira | linear (section 4.4)
       access: "api"                         # api | browser (no token: the session of a logged-in browser, section 4)
       organization_url: "https://dev.azure.com/demo-shop"
       project: "Demo Shop"
@@ -40,10 +40,19 @@ tickets:
       user_var: "DS_JIRA_USER"
       token_var: "DS_JIRA_TOKEN"
       fields: {acceptance_criteria: "customfield_10070"}
+    linear:
+      service: "linear"
+      access: "api"
+      workspace_url: "https://linear.app/demo-shop"   # the workspace's URL key, nothing after it
+      team_keys: ["DS"]                       # (recommended) the prefixes of its issue keys: DS-12
+      api_key_var: DS_LINEAR_API_KEY          # a personal API key with the Read permission, limited to these teams
+      acceptance_criteria: {headings: ["Acceptance criteria", "Critérios de aceitação"]}   # (opt.) section 4.4
+      type_labels: {"Bug": "Bug", "Feature": "Story"}  # (opt.) label -> type: Linear issues have no type
   scopes:                                   # what "the current sprint" and "my tickets" mean here: never guessed
     current-sprint: {source: "boards", current_iteration: true}
     mine: {source: "boards", query: "SELECT [System.Id] FROM WorkItems WHERE [System.AssignedTo] = @Me AND [System.State] <> 'Done'"}
     open-bugs: {source: "issues", query: "project = DS AND type = Bug AND statusCategory != Done", expand: false}
+    coupons: {source: "linear", query: '{"project": {"slugId": {"eq": "demo-coupons"}}}'}   # Linear: an IssueFilter as JSON
   limits: {max_depth: 2, max_items: 30, max_comments: 200, max_history: 500}   # (opt.) these are the defaults
   cases:
     link_fields: ["Ticket"]                 # (opt.) columns (Excel) or keys (tracker/cases.json) that name a case's ticket (section 6.1)
@@ -51,9 +60,9 @@ tickets:
 
 Without `tickets:`, and with `tracker: jira` or `azure-devops`, the tracker's section is used as one API source with the service's name as its id, and no scopes. With neither, the command stops and names what is missing. `scripts/validate_project.py` validates the section when present.
 
-`python -m adapters.tickets <workspace> sources [--online]` lists sources, scopes and which credentials are set (names only); `--online` also asks the tracker who the token belongs to, because `@Me` and `currentUser()` mean **that** identity.
+`python -m adapters.tickets <workspace> sources [--online]` lists sources, scopes and which credentials are set (names only); `--online` also asks the tracker who the token belongs to, because `@Me` and `currentUser()` mean **that** identity. Without `--online` nothing is contacted and every API source says "configuration only: access not confirmed": a valid configuration is never presented as access (the same line in `validate_project.py --environment`). With Linear, `--online` also says whether the key belongs to the workspace of `workspace_url` and reaches every team of `team_keys`.
 
-**Ambiguity stops.** A bare `123` with two Azure DevOps sources, a `current_iteration` that finds zero or two iterations, a "my tickets" with no configured scope: exit 2 or 4 with the candidates. The skill asks; it proposes a scope for the user to confirm and never adds one by itself.
+**Ambiguity stops.** A key such as `DS-12` with a Jira source and a Linear source that may both hold it (the same prefix, or a source of the other service that declares no prefix), a bare `123` with two Azure DevOps sources, a `current_iteration` that finds zero or two iterations, a "my tickets" with no configured scope: exit 2 or 4 with the candidates. The skill asks; it proposes a scope for the user to confirm and never adds one by itself.
 
 ## 3. Common flow
 
@@ -63,7 +72,7 @@ input → resolve (source, id) → read (API or browser) → normalise → expan
 
 The deterministic parts are in the engine and the judgement is in the skill. The engine never interprets a ticket's text; the agent never decides by itself whether something changed.
 
-Inputs: a link, an id or key, `<source>:<id>`, several of them, `--scope <name>` or `--query "<WIQL|JQL>" --source <id>`.
+Inputs: a link, an id or key, `<source>:<id>`, several of them, `--scope <name>` or `--query "<WIQL|JQL|Linear IssueFilter as JSON>" --source <id>`.
 
 ### 3.1 Expansion
 
@@ -87,6 +96,8 @@ Each ticket has one status per component (`fields`, `comments`, `history`, `rela
 | `listed_only` | (`development` only) PRs, commits or builds are listed from the ticket's links; nothing behind them was read |
 
 Reading a link is not reading its content: every attachment and link has `content_read: false` until the analysis records otherwise (section 7), and `content_not_read` in the check lists them, each with its `kind`. A `vstfs:///` link of Azure DevOps is an **identifier**, never analysed content: the analysis refuses it in `content_read`, and resolving what it points to is a later extension. A check is `complete` only when every component of every ticket is complete and nothing was omitted for lack of budget or access. An item left out by `max-depth`, `not-followed` or `not-expanded` is declared and does not make it partial.
+
+A source may also say, inside `fields`, what it cannot give (`unavailable`: field -> why, e.g. a Linear issue has no type) or gave only in part (`partial`: field -> why, e.g. labels past the first page), and where a text came from (`origin`: field -> the section and lines). Such a field is never compared as a value on either side, so an empty value there never becomes a change, and the reports show it as unavailable, not as `-`. When the fields themselves come back in part (a GraphQL answer with data and errors) the fields are `partial`: the check is partial (exit 1), not failed, and no field is compared.
 
 `complete` is about the **collection** in the scope read: it never says that what a ticket points to was opened. A record keeps three things apart: the collection, the content opened and analysed (only what an analysis records), and the links, attachments and relations not consulted, counted and listed.
 
@@ -135,6 +146,33 @@ await get(`${wit}/updates?$skip=0&$top=200&api-version=7.1`);    // updates, wit
 ```
 
 Keep each person's `displayName` only, not their e-mail. Return the bundle with `JSON.stringify`: when it is too large, the browser tool saves its answer in a file, and `ingest` takes that file as it is.
+
+### 4.4 Linear
+
+Linear's official GraphQL API (`https://api.linear.app/graphql`, fixed in `adapters/tickets/linear.py`: a key is never sent to another host). Authentication by a personal API key in `Authorization: <key>` (no `Bearer`); the key is created by its owner with the **Read** permission and limited to the project's teams, and only its variable's name is in `project.yaml`. Every request is one of the named queries of `linear.ALLOWED` (`Issue`, `IssueComments`, `IssueHistory`, `IssueRelations`, `IssueInverseRelations`, `IssueChildren`, `IssueAttachments`, `Issues`, `Viewer`), sent as a POST marked as a read; a name outside the list or a document that is not a `query` is refused before the transport, and the module has no mutation. Connections are read with `first`/`after` to the end, within the limits (section 2), and a failure in the middle keeps the pages read (`partial`).
+
+Inputs: a key (`DS-12`, any case), `<source>:DS-12`, or a link `https://linear.app/<workspace>/issue/DS-12/<slug>` of the configured workspace. A scope is an `IssueFilter` written as JSON (Linear has no query language; `current_iteration` is refused: write `{"cycle": {"isActive": {"eq": true}}}` with the team). A project's link is not resolved by itself: its `slugId` goes in a scope.
+
+| Model | Linear | What is said when it is missing |
+|---|---|---|
+| `ref` | `service: linear`, the workspace's URL key, the key's prefix (team), the identifier | an issue that moved team keeps its UUID and `custom.previous_identifiers`; the reference is per identifier |
+| `title`, `description` | `title`, `description` (Markdown, kept as written) | a null description is an empty one |
+| `acceptance_criteria` | the sections of the description under `acceptance_criteria.headings` (a Markdown heading, or a line that is only bold text), word for word, with `origin` naming the section and its lines | without headings configured: `unavailable`; headings configured but absent: empty, with `origin` saying no section was found |
+| `type` | the first label of `type_labels` | without `type_labels`: `unavailable` |
+| `state`, `state_category` | `state.name`; `done` for the types `completed` and `canceled` (the type in `custom.state_type`) | |
+| `reason` | — | always `unavailable`: Linear has no resolution |
+| `assignee`, `priority`, `sprint`, `area` | `assignee.displayName` (never an e-mail), `priorityLabel`, the cycle, the team | |
+| `custom` | project, labels, team key, estimate, due date, previous identifiers, archived, UUID | labels past the first 100: `partial` |
+| comments | `body` as written, `user`, `createdAt`, `editedAt` (the version: a resolution or a reaction is not an edit), thread parent, `resolvedAt` | an edited comment's earlier text: Linear does not keep it |
+| history | `IssueHistory`: state, assignee, priority, title, project, cycle, team, parent, labels added and removed; `updatedDescription` | the text of an edited description is not in Linear's history, and changes made in the first minutes after creation are not recorded: said in the coverage's detail. A description change between two checks is seen by comparing the texts read |
+| relations | `parent`, `children`, `relations` and `inverseRelations`: `blocks` / blocked-by, `duplicate`, `related` and `similar` (as related, the label kept) | |
+| attachments, links | `attachments` (links: PRs, designs), URLs in the description and the comments; files of `uploads.linear.app` as `upload` | never opened (`content_read: false`); `development` is `unsupported` |
+
+Errors: Linear answers a refused query with HTTP 400 or 200 and `errors`, so every answer's `errors` is read. Only `RATELIMITED` (429, `Retry-After`) is documented; the rest is matched conservatively: authentication or permission -> `denied`, "not found" -> `not_found` ("or not visible to this key": a key limited to some teams cannot tell the two apart), anything else -> `failed`, never an empty ticket. A page answered with errors is `failed` or `denied` for that component, with the pages already read kept. The codes and shapes of a real answer are confirmed by the pilot and fixed here first.
+
+Builds: when a project's builds live elsewhere (Azure DevOps Pipelines, for instance), that place is not a ticket source: a build link in an issue is `kind: build`, listed and never read, and never proof that a change is in a build.
+
+The browser or MCP route (section 4.3) takes the same shapes: `issue` (the GraphQL `Issue` object) and the parts `comments`, `history`, `relations`, `inverse_relations`, `children`, `attachments`, each `{"items": [...], "complete": true|false}` with the nodes of its connection. Linear's own MCP server has a read-only endpoint (`https://mcp.linear.app/mcp/readonly`); whatever reads, the bundle goes through the same normaliser, and a tool whose answers are not these shapes uses `{"normalized": …}`.
 
 ## 5. Memory
 
@@ -294,12 +332,14 @@ Required, even when the honest answer is an empty list: `tickets`, `objective`, 
 
 ## 9. Validation
 
-`tests/test_tickets.py` and `tests/test_tickets_memory.py` run against fictional fakes of both services (`tests/tickets_fake.py`), with no network. A real service is validated only by a real read, each service on its own: until then a source's status is "implemented and tested with fixtures; real pilot pending". What differs in a real read is fixed here first (methodology §15).
+`tests/test_tickets.py` and `tests/test_tickets_memory.py` run against fictional fakes of Azure DevOps and Jira (`tests/tickets_fake.py`), `tests/test_tickets_linear.py` against one of Linear (`tests/linear_fake.py`), with no network. A real service is validated only by a real read, each service on its own: until then a source's status is "implemented and tested with fixtures; real pilot pending". What differs in a real read is fixed here first (methodology §15).
 
 | Service and route | Status |
 |---|---|
 | Azure DevOps, browser route | Real read pilot done on 01.11.2026: 8 work items, compared by hand with the page; a repeat without changes; a historical change compared with the API's revisions; a resume in a new process. Details stay in that workspace |
 | Azure DevOps, API route | Fixtures only: it shares the normaliser with the browser route, but no token was used against the real service |
 | Jira | Fixtures only: real pilot pending |
+| Linear, API route | Fixtures only (`tests/test_tickets_linear.py`, `tests/linear_fake.py`, fictional, shaped on the public schema): real pilot pending. The error codes other than `RATELIMITED`, whether a key limited to some teams answers "not found" or "forbidden", and the order of the history are confirmed only by that pilot |
+| Linear, browser or MCP route | Fixtures only: no bundle from a real session yet |
 
 The real read found what no fixture had: links only in `href`, comments in Markdown with `@<GUID>`, a state named `Blocked`, references written as `DevOps 123` or `(123: ...)`, and a path over Windows' limit (a rehearsal). Each is now a fictional test. A resume in a new Claude session, and the content behind links and attachments, were not exercised.

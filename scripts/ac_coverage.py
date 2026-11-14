@@ -5,7 +5,12 @@
 
 `init` reads the PBI's acceptance criteria from the ticket memory the tickets technique keeps
 (`memory/tickets/*__<pbi>.json`, `components.fields.data.acceptance_criteria`) and writes a map with one criterion per
-block (a block ends at a blank line or where a new «Dado que»/«Given» starts) and NO cases: the mapping is a decision of
+block (a block ends at a blank line or where a new «Dado que»/«Given» starts, never inside a table or a fenced block) and
+NO cases. Each criterion's `text` is a TRANSCRIPTION (rules.md section 17): the original lines, their breaks, indentation,
+list markers and table rows as the tracker has them; `criteria_source.text` keeps the whole field. Each criterion names
+its origin (ticket, link, field or section, lines) and how it may be shown: `inline` when it is one short line, else
+`reference` (a precise reference in a table cell, and the full text in its own block). The splitting is a reading aid,
+not a statement of the tracker. The mapping of cases is a decision of the mapping is a decision of
 the person who plans (a case covers a criterion because of what it checks, not because of its title). When the ticket
 has no criteria, or no ticket memory exists, the map says so: `criteria_source.kind` is `none` and the report says that
 the SOURCE OF THE CRITERIA IS NOT AVAILABLE (coverage cannot be judged); criteria written from the tasks or from a spec
@@ -36,49 +41,121 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 GIVEN = re.compile(r"^\s*(?:Dado|Given)\b", re.IGNORECASE)
+INLINE_MAX = 200        # characters: a longer criterion, or one with several lines, is shown by reference (rules.md 17)
+STRUCTURE = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|\||```|~~~)")
+LINES = re.compile(r"lines (\d+)-(\d+)")
 UNDER_REVIEW = re.compile(r"sob revis[ãa]o|under review", re.IGNORECASE)
 
 
-def split_criteria(text: str) -> list[str]:
-    """One criterion per block: a blank line ends it, and a line that starts with Dado/Given starts a new one."""
-    blocks, cur = [], []
-    for line in (text or "").replace("\r", "").split("\n"):
-        if not line.strip():
-            if cur:
-                blocks.append(cur)
+def split_blocks(text: str) -> list[dict]:
+    """The criteria of a field, word for word: {text, first, last} with the 1-based lines of the field. A blank line ends
+    a block and a line that starts with Dado/Given starts one, except inside a fenced block (``` or ~~~) or a table (rows
+    that start with |). Nothing is trimmed, joined or re-indented: only the blank lines between blocks are not in one."""
+    blocks, cur, start, fence = [], [], 0, False
+    lines = (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    for n, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            fence = not fence
+        in_table = bool(cur) and stripped.startswith("|") and cur[-1].strip().startswith("|")
+        if not fence and not stripped.startswith(("```", "~~~")) and not in_table:
+            if not stripped:
+                if cur:
+                    blocks.append({"text": "\n".join(cur), "first": start, "last": n - 1})
+                    cur = []
+                continue
+            if cur and GIVEN.match(line):
+                blocks.append({"text": "\n".join(cur), "first": start, "last": n - 1})
                 cur = []
-            continue
-        if cur and GIVEN.match(line):
-            blocks.append(cur)
-            cur = []
-        cur.append(line.strip())
+        if not cur:
+            start = n
+        cur.append(line)
     if cur:
-        blocks.append(cur)
-    return [" ".join(b) for b in blocks]
+        while cur and not cur[-1].strip():
+            cur.pop()
+        blocks.append({"text": "\n".join(cur), "first": start, "last": start + len(cur) - 1})
+    return blocks
+
+
+def split_criteria(text: str) -> list[str]:
+    """The text of each criterion, word for word (split_blocks)."""
+    return [b["text"] for b in split_blocks(text)]
+
+
+def _line_map(origin: str | None, field_text: str) -> list[int | None] | None:
+    """Line of the field -> line of the ticket's description, from an origin such as "description, section 'X', lines
+    5-7; description, section 'Y', lines 12-13" (sections joined by one blank line). None when it does not add up."""
+    spans = [(int(a), int(b)) for a, b in LINES.findall(str(origin or ""))]
+    if not spans:
+        return None
+    out: list[int | None] = []
+    for i, (a, b) in enumerate(spans):
+        if i:
+            out.append(None)
+        out += list(range(a, b + 1))
+    return out if len(out) == len(field_text.split("\n")) else None
+
+
+def presentation(text: str) -> str:
+    """inline: one short line without list, table or code; reference: anything else (rules.md section 17)."""
+    lines = text.split("\n")
+    if len(lines) == 1 and len(text) <= INLINE_MAX and not STRUCTURE.match(text):
+        return "inline"
+    return "reference"
+
+
+def _criteria(field_text: str, ticket: str | None, url: str | None, origin: str | None) -> list[dict]:
+    mapping = _line_map(origin, field_text)
+    out = []
+    for i, b in enumerate(split_blocks(field_text), 1):
+        cid = f"AC{i}"
+        if mapping and mapping[b["first"] - 1] and mapping[b["last"] - 1]:
+            where = f"description, lines {mapping[b['first'] - 1]}-{mapping[b['last'] - 1]}"
+        else:
+            where = f"acceptance criteria field, lines {b['first']}-{b['last']}"
+        ref = " · ".join(x for x in (str(ticket) if ticket else "", cid, where) if x)
+        out.append({"id": cid, "text": b["text"], "cases": [], "presentation": presentation(b["text"]),
+                    "origin": {"ticket": ticket, "url": url, "where": where, "split": "blank line or Dado/Given"},
+                    "reference": ref + (f" ({url})" if url else "")})
+    return out
 
 
 def ticket_memory(workspace: str, pbi: int | str) -> str | None:
-    found = sorted(glob.glob(os.path.join(workspace, "memory", "tickets", f"*__{pbi}.json")))
+    """The memory file of the PBI: its name ends with the id as the tickets technique writes it (lower case, ticket_slug),
+    so a key such as DS-12 is found on a case-sensitive disk too."""
+    from adapters.tickets.model import slug
+    names = dict.fromkeys((str(pbi), slug(str(pbi))))
+    found = sorted({p for name in names
+                    for p in glob.glob(os.path.join(workspace, "memory", "tickets", f"*__{glob.escape(name)}.json"))})
     return found[0] if found else None
 
 
 def init(workspace: str, pbi: int | str) -> dict:
     ref = ticket_memory(workspace, pbi)
-    criteria, title, note = [], "", ""
+    criteria, title, note, extra, field_text = [], "", "", {}, ""
     if ref:
         with open(ref, encoding="utf-8") as f:
             data = json.load(f)
         fields = ((data.get("components") or {}).get("fields") or {}).get("data") or {}
         title = str(fields.get("title") or "")
-        criteria = split_criteria(str(fields.get("acceptance_criteria") or ""))
+        field_text = str(fields.get("acceptance_criteria") or "")
+        unavailable = fields.get("unavailable") if isinstance(fields.get("unavailable"), dict) else {}
+        origin = fields.get("origin") if isinstance(fields.get("origin"), dict) else {}
+        criteria = _criteria(field_text, (data.get("ref") or {}).get("id"), data.get("url"),
+                             origin.get("acceptance_criteria"))
+        # where the criteria come from in the tracker, for the plan to cite (rules.md section 17)
+        extra = {k: v for k, v in (("url", data.get("url")), ("ticket", (data.get("ref") or {}).get("id")),
+                                   ("origin", origin.get("acceptance_criteria"))) if v}
         if not criteria:
-            note = "the ticket has no acceptance criteria"
+            note = ("the ticket's acceptance criteria are unavailable: " + str(unavailable["acceptance_criteria"])
+                    if "acceptance_criteria" in unavailable else "the ticket has no acceptance criteria")
     else:
         note = "no ticket memory for this PBI"
     kind = "ticket-memory" if criteria else "none"
     return {"pbi": int(pbi) if str(pbi).isdigit() else str(pbi), "title": title,
-            "criteria_source": {"kind": kind, "ref": os.path.relpath(ref, workspace) if ref else None, "note": note},
-            "criteria": [{"id": f"AC{i}", "text": t, "cases": []} for i, t in enumerate(criteria, 1)]}
+            "criteria_source": {"kind": kind, "ref": os.path.relpath(ref, workspace) if ref else None, "note": note,
+                                **extra, **({"text": field_text} if criteria else {})},
+            "criteria": criteria}
 
 
 def _workbook_of(workspace: str, platform: str | None) -> str | None:
@@ -223,7 +300,8 @@ def report(workspace: str, amap: dict, run_logs: bool = True, platform: str | No
         required_open += [f"{tc} (criterion {c.get('id')})" for tc in open_required]
         if open_required and v in ("passed", "passed, not confirmed"):
             v = "passed, required check open"
-        rows.append({"id": c.get("id"), "text": c.get("text"), "source": c.get("source") or
+        rows.append({"id": c.get("id"), "text": c.get("text"), "presentation": c.get("presentation"),
+                     "reference": c.get("reference"), "source": c.get("source") or
                      ("ticket" if kind == "ticket-memory" else kind), "cases": cases, "related": related, "verdict": v})
     problems = []
     if kind == "none":
@@ -344,7 +422,14 @@ def render(rep: dict) -> str:
            f"criteria source: {rep['source'].get('kind')}" + (f" ({rep['source'].get('ref')})" if rep["source"].get("ref") else ""),
            f"complete coverage: {'yes' if rep['complete'] else 'NO'}"]
     for r in rep["criteria"]:
-        out.append(f"{r['id']}  {r['verdict'].upper()}  (source: {r['source']})\n      {r['text']}")
+        text = str(r["text"] or "")
+        if r.get("presentation") == "reference" or "\n" in text:
+            # the cell gets the reference; the transcription follows whole, every line as written
+            out.append(f"{r['id']}  {r['verdict'].upper()}  (source: {r['source']})\n      see: "
+                       f"{r.get('reference') or r['id']}\n      transcription:")
+            out += ["        " + line for line in text.split("\n")]
+        else:
+            out.append(f"{r['id']}  {r['verdict'].upper()}  (source: {r['source']})\n      {text}")
         out += [f"      covers: {_case_text(c)}" for c in r["cases"]] or ["      covers: —"]
         out += [f"      related{' (REQUIRED)' if c['required'] else ''}: {_case_text(c)}" for c in r["related"]]
     if not rep["criteria"]:

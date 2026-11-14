@@ -21,7 +21,7 @@ Each step is a skill of its own; `/test-pbi` runs the flow for one PBI or requir
 | Skill | Owns | Main outputs | Writes (without asking) |
 |---|---|---|---|
 | `/project-context` | Selecting or setting up a workspace; the current state, decisions, blockers, tools really available and next actions | A resume summary | Nothing (setting up a new workspace asks for each value) |
-| `/analyze-ticket` | Reading a PBI, story, task or bug (Azure DevOps or Jira), its comments, relations, history and accessible attachments; the difference from the last check | An analysis with sources and dates; what changed | `memory/` and the tickets block of `context.md` |
+| `/analyze-ticket` | Reading a PBI, story, task, issue or bug (Azure DevOps, Jira or Linear), its comments, relations, history and accessible attachments; the difference from the last check | An analysis with sources and dates; what changed | `memory/` and the tickets block of `context.md` |
 | `/plan-tests` | Coverage, priorities, preconditions, data, expected results, traceability to requirements and existing cases | An analysis file, proposed cases, a batch plan by risk | `analysis/`; `batches/` at once under a request to test, after the confirmation under a request to plan or when the project's rules ask for one |
 | `/run-tests` | Running cases or a plan on mobile (Android, iOS), web or API with the tools available; results and evidence | Results in the run log, evidence | `runs/`, `evidence/` |
 | `/manage-bugs` | Investigating failures, duplicates, bug proposals for a batch review | Bug proposals, one per problem | The run log item of the case (`new_defect` / `bug`, with `run_log.py attach`) after approval |

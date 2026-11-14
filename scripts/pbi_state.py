@@ -5,9 +5,10 @@ The progress of one PBI through /test-pbi, so the flow can stop and resume in an
     python scripts/pbi_state.py <workspace> show <pbi> [--json]
     python scripts/pbi_state.py <workspace> mark <pbi> <step> done|blocked|pending|skipped [--ref REF] [--note TEXT]
     python scripts/pbi_state.py <workspace> baseline <pbi> [--ticket ID=REV ...] [--build PLATFORM=BUILD ...]
-                                                         [--environment KEY]
+                                                         [--environment KEY] [--spec-plan FILE]
     python scripts/pbi_state.py <workspace> check <pbi> [--ticket ID=REV ...] [--build PLATFORM=BUILD ...]
-                                                      [--environment KEY] [--check CHECK_ID] [--reopen]
+                                                      [--environment KEY] [--check CHECK_ID] [--spec-root DIR]
+                                                      [--reopen]
     python scripts/pbi_state.py <workspace> published <pbi> <draft> <tracker-key> --confirmed-by REF
 
 The record is <workspace>/memory/pbi/<pbi>.json, written whole and atomically under the workspace's lock. It holds the
@@ -23,6 +24,11 @@ ticket revisions, the build per platform, the environment), the bugs published a
   baseline): "nothing changed" only when everything of the baseline was compared. A ticket revision is not the whole
   story (children, comments): --check names the /analyze-ticket check whose conclusion is part of the answer. With
   --reopen, the steps to review that were done go back to pending (the history keeps what they were).
+  With a plan recorded by `baseline --spec-plan FILE` (its `spec_refs`, scripts/spec_refs.py), check also compares the
+  specification's rules: a scenario whose rule changed or was removed is named and its plan step is to review; a
+  rule that could not be verified leaves its scenarios pending review (exit 3). The same text in a new revision of
+  the file changes nothing. Without `specs:` (and no --spec-root) nothing is compared; a plan without `spec_refs`
+  says so. --spec-root reads the rules from another export folder than the project's.
 - published: records that a bug draft (`<batch>/<case>`) was published with a tracker key, with --confirmed-by: what
   shows the tracker has it (a check id that read it back, or the record in tracker/sent/). The same draft with another
   key is refused (a bug is never published twice), and so is a key already recorded for another draft.
@@ -70,7 +76,7 @@ def now() -> str:
 
 
 def _hosts(workspace: str | None) -> set[str]:
-    """The hosts of the ticket sources of project.yaml (organization_url, base_url, url)."""
+    """The hosts of the ticket sources of project.yaml (organization_url, site, workspace_url, base_url, url)."""
     from urllib.parse import urlsplit
     if not workspace:
         return set()
@@ -81,7 +87,7 @@ def _hosts(workspace: str | None) -> set[str]:
         return set()
     out = set()
     for s in sources.values() if isinstance(sources, dict) else []:
-        for key in ("organization_url", "base_url", "url"):
+        for key in ("organization_url", "site", "workspace_url", "base_url", "url"):
             host = urlsplit(str((s or {}).get(key) or "")).hostname
             if host:
                 out.add(host.lower())
@@ -89,7 +95,8 @@ def _hosts(workspace: str | None) -> set[str]:
 
 
 def pbi_id(text: str, workspace: str | None = None) -> str:
-    """The id of a PBI given as an id or as a link (`.../_workitems/edit/<id>`, `.../browse/<KEY>`). A link must be on a
+    """The id of a PBI given as an id or as a link (`.../_workitems/edit/<id>`, `.../browse/<KEY>`, Linear's
+    `.../issue/<KEY>/<slug>`, whose key is upper case like the memory of /analyze-ticket). A link must be on a
     host of the project's ticket sources (audit 06.11.2026: any host was accepted)."""
     from urllib.parse import urlsplit
     text = str(text).strip().rstrip("/")
@@ -101,9 +108,10 @@ def pbi_id(text: str, workspace: str | None = None) -> str:
                              f"({', '.join(sorted(allowed)) or 'tickets.sources has none'}): give the id, or the link "
                              "of the configured tracker")
     m = re.search(r"/(?:_workitems/edit|browse)/([A-Za-z0-9._-]+)", text)
-    value = m.group(1) if m else text
+    linear = re.search(r"/issue/([A-Za-z][A-Za-z0-9_]*-[1-9][0-9]*)(?:/|$)", text) if not m else None
+    value = m.group(1) if m else linear.group(1).upper() if linear else text
     if not ID.fullmatch(value):
-        raise UsageError(f"not a PBI id or link: {text!r} (expected e.g. 1234, DS-12 or .../_workitems/edit/1234)")
+        raise UsageError(f"not a PBI id or link: {text!r} (expected e.g. 1234, DS-12, .../_workitems/edit/1234 or .../issue/DS-12/<slug>)")
     return value
 
 
@@ -227,7 +235,8 @@ def mark(workspace: str, pbi: str, step: str, status: str, ref: str | None, note
     return doc, f"{step}: {status}"
 
 
-def set_baseline(workspace: str, pbi: str, tickets: dict, builds: dict, environment: str | None) -> dict:
+def set_baseline(workspace: str, pbi: str, tickets: dict, builds: dict, environment: str | None,
+                 spec_plan: str | None = None) -> dict:
     with workspace_lock(workspace):
         doc = load(workspace, pbi)
         if doc is None:
@@ -237,8 +246,11 @@ def set_baseline(workspace: str, pbi: str, tickets: dict, builds: dict, environm
         base.setdefault("builds", {}).update(builds)
         if environment:
             base["environment"] = environment
+        if spec_plan:
+            base["spec_plan"] = spec_plan
         base["at"] = now()
-        _event(doc, f"baseline: tickets {tickets or '-'}, builds {builds or '-'}, environment {environment or '-'}")
+        _event(doc, f"baseline: tickets {tickets or '-'}, builds {builds or '-'}, environment {environment or '-'}"
+                    + (f", spec plan {spec_plan}" if spec_plan else ""))
         save(workspace, doc)
     return doc
 
@@ -301,6 +313,53 @@ def compare(doc: dict, tickets: dict, builds: dict, environment: str | None) -> 
     return changes
 
 
+def spec_check(workspace: str, doc: dict, root: str | None) -> dict:
+    """The plan's `spec_refs` against the specification available now (scripts/spec_refs.py). Read only.
+    {"changes": [...], "missing": [...], "notes": [...], "lines": [...], "result": {...}|None}: nothing is compared
+    (and nothing printed) when the project has no `specs:`, no --spec-root and no plan with references."""
+    import spec_refs
+    out = {"changes": [], "missing": [], "notes": [], "lines": [], "result": None}
+    plan_rel = (doc.get("baseline") or {}).get("spec_plan")
+    source = spec_refs.source_from(workspace, root)
+    if not plan_rel:
+        if source is not None:
+            out["notes"].append("spec: the baseline records no plan with spec_refs (baseline --spec-plan FILE): "
+                                "nothing to compare")
+        return out
+    try:
+        plan = spec_refs.plan_refs(workspace_path(workspace, plan_rel))
+    except (spec_refs.SpecError, OutsideWorkspace) as e:
+        out["missing"].append(f"spec: the plan {plan_rel} cannot be read for its spec_refs ({e})")
+        return out
+    if plan is None:
+        out["notes"].append(f"spec: the plan {plan_rel} has no spec_refs: no references to compare")
+        return out
+    if source is None:
+        out["missing"].append(f"spec: the plan {plan_rel} cites the specification but the project has no specs: "
+                              "section (and no --spec-root): its rules were not compared")
+        return out
+    result = spec_refs.compare(plan, source)
+    out["result"], out["lines"] = result, spec_refs.render(result)
+    runs = [f"run:{p}" for p in doc["platforms"]]
+    unverified = []
+    for r in result["rules"]:
+        who = ", ".join(r["scenarios"])
+        if r["status"] in ("changed", "removed", "moved"):
+            out["changes"].append({"what": f"spec rule {r['rule_id']} ({r['path']})",
+                                   "before": r["old_revision"] or "?", "now": r["new_revision"] or r["status"],
+                                   "review": ["plan"] + runs + ["report"],
+                                   "why": f"{r['reason']}; scenarios to review before the plan is reused: {who}"})
+        elif r["status"] == "unverified":
+            unverified.append(r)
+    if unverified:
+        pending = sorted({s for r in unverified for s in r["scenarios"]})
+        why = (result["source"]["reason"] if not result["source"]["available"]
+               else "; ".join(sorted({f"{r['rule_id']}: {r['reason']}" for r in unverified})))
+        out["missing"].append(f"spec: {len(unverified)} referenced rule(s) could not be verified ({why}); scenarios "
+                              f"pending review: {', '.join(pending)}")
+    return out
+
+
 def publish(workspace: str, pbi: str, draft: str, key: str, confirmed_by: str | None = None) -> tuple[dict, str, bool]:
     draft, key, confirmed_by = str(draft or "").strip(), str(key or "").strip(), str(confirmed_by or "").strip()
     if not draft or not key:
@@ -353,7 +412,8 @@ def render(doc: dict) -> str:
     base = doc.get("baseline") or {}
     if base:
         lines.append(f"Baseline ({base.get('at', '?')}): tickets {base.get('tickets') or {}}, builds "
-                     f"{base.get('builds') or {}}, environment {base.get('environment') or '-'}")
+                     f"{base.get('builds') or {}}, environment {base.get('environment') or '-'}"
+                     + (f", spec plan {base['spec_plan']}" if base.get("spec_plan") else ""))
     for draft, p in (doc.get("published") or {}).items():
         lines.append(f"Published: {draft} -> {p['key']} ({p['at']})")
     nxt = next_step(doc)
@@ -387,7 +447,11 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument("--build", action="append", help="PLATFORM=BUILD (observed)")
         p.add_argument("--environment")
         p.add_argument("--json", action="store_true")
+        if name == "baseline":
+            p.add_argument("--spec-plan", help="the plan (a file of the workspace) whose spec_refs a resume compares")
         if name == "check":
+            p.add_argument("--spec-root", help="read the specification's rules from this folder instead of the "
+                                               "project's specs.location (a local export)")
             p.add_argument("--check", help="the /analyze-ticket check id read for this check (its conclusion counts)")
             p.add_argument("--reopen", action="store_true", help="put the steps to review back to pending")
     p = sub.add_parser("published")
@@ -429,7 +493,13 @@ def main(argv=None) -> int:
         tickets, builds = _pairs(a.ticket, "--ticket"), _pairs(a.build, "--build")
         builds = {k.lower(): v for k, v in builds.items()}
         if a.command == "baseline":
-            doc = set_baseline(ws, pbi, tickets, builds, a.environment)
+            spec_plan = None
+            if a.spec_plan:
+                full = workspace_path(ws, a.spec_plan)
+                if not os.path.isfile(full):
+                    raise UsageError(f"--spec-plan {a.spec_plan}: not a file of the workspace")
+                spec_plan = os.path.relpath(full, ws).replace(os.sep, "/")
+            doc = set_baseline(ws, pbi, tickets, builds, a.environment, spec_plan)
             print(render(doc))
             return 0
         doc = load(ws, pbi)
@@ -437,6 +507,9 @@ def main(argv=None) -> int:
             raise UsageError(f"no record of PBI {pbi}: run start first")
         changes = compare(doc, tickets, builds, a.environment)
         missing = not_compared(doc, tickets, builds, a.environment)
+        spec = spec_check(ws, doc, a.spec_root)
+        changes += spec["changes"]
+        missing += spec["missing"]
         engine = _engine_conclusion(ws, a.check) if a.check else None
         if engine and engine not in ("no-changes", "first-and-no-changes"):
             missing.append(f"the ticket check {a.check} concluded {engine!r}: read its changes (children, comments and "
@@ -446,11 +519,15 @@ def main(argv=None) -> int:
             reopened = reopen(ws, pbi, sorted({s for c in changes for s in c["review"]}),
                               "; ".join(f"{c['what']} {c['before']} -> {c['now']}" for c in changes))
         if a.json:
-            print(json.dumps({"changes": changes, "not_compared": missing, "reopened": reopened},
-                             ensure_ascii=False, indent=1))
+            print(json.dumps({"changes": changes, "not_compared": missing, "reopened": reopened,
+                              "spec": spec["result"], "spec_notes": spec["notes"]}, ensure_ascii=False, indent=1))
         else:
             for c in changes:
                 print(f"CHANGED {c['what']}: {c['before']} -> {c['now']}; review {', '.join(c['review'])} ({c['why']})")
+            for line in spec["lines"]:
+                print(f"SPEC {line}")
+            for n in spec["notes"]:
+                print(f"NOTE: {n}")
             for m in missing:
                 print(f"NOT COMPARED: {m}")
             if reopened:

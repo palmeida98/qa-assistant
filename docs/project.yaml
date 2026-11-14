@@ -100,6 +100,22 @@ dashboard:
 #   reports: [summary, technical]
 
 # ---------------------------------------------------------------------------
+# (opt.) specs: the functional specification the skills read (docs/technique-specs.md). Without this section
+# nothing changes. A private location (a shared link, a key) is never written here: keep it in .env and name the
+# variable in location_var.
+# ---------------------------------------------------------------------------
+# specs:
+#   kind: artifact             # artifact | git | export
+#   location_var: ""           # name of the .env variable with a private location; or location: "<repository or folder>"
+#   ref: ""                    # (git) branch or commit
+#   index: "_index.md"
+#   global_rules: ""           # (opt.)
+#   divergences: ""            # (opt.)
+#   divergence_prefixes: []    # (opt.) e.g. [DIV-M-, DIV-S-]
+#   changelog: ""              # (opt.)
+#   rule_id: ""                # (opt.) regular expression of the stable rule id
+
+# ---------------------------------------------------------------------------
 # excel: layout of the workbook, read by the adapter (adapters/excel/base.py).
 # Fill in ONLY when tracker: "excel". Never guess: /project-context (onboarding)
 # runs `python -m adapters.excel.inspect <workbook>` and confirms each value

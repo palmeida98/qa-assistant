@@ -74,12 +74,14 @@
    f. bugs: the fields from the project's bug format (bug_format), defaults, the statuses/states a retest may
       move a bug to (resolved_bugs rule), priorities; open_jql (jira) or closed_states (azure-devops).
    Validate with step 8a; check and import-cases come after .env has the values (step 8d).
-4k. Tickets (technique-tickets.md section 2): ASK whether the team's tickets live in Azure DevOps or Jira, whatever
+4k. Tickets (technique-tickets.md section 2): ASK whether the team's tickets live in Azure DevOps, Jira or Linear, whatever
    the tracker of the results is. If they do, fill in tickets: of project.yaml with the user: each source (service,
    organisation or site, project, access: api with only the NAMES of the .env variables, or access: browser for a
    logged-in session), the scopes the user means by "the current sprint" and "my tickets" (never guessed), and
    tickets.cases.link_fields when the cases have a column for their ticket. With a jira or azure-devops tracker this
-   section is optional. Check with python -m adapters.tickets <workspace> sources (from the root of qa-assistant).
+   section is optional. A Linear source is only a ticket source (section 4.4): tracker: stays what the results use.
+   Check with python -m adapters.tickets <workspace> sources (configuration only, nothing contacted) and, once the
+   key is in .env, sources --online (the only confirmation of access) (from the root of qa-assistant).
 5. If a browser module is active (e.g. functional-web), register the Playwright MCP IN THE WORKSPACE
    (technique-browser.md section 1, level N1). The command runs from the workspace's folder, because
    --scope project writes .mcp.json in the current folder:

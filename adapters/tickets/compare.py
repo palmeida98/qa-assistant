@@ -49,14 +49,30 @@ def _who_changed(history: list, field: str, after) -> tuple:
     return None, None
 
 
+def _not_comparable(old: dict, new: dict) -> set:
+    """Fields a source says it could not give (`unavailable`) or gave only in part (`partial`), on either side: an
+    empty value there is not a value, so comparing it would invent a change."""
+    out = set()
+    for doc in (old, new):
+        for key in ("unavailable", "partial"):
+            if isinstance(doc.get(key), dict):
+                out |= set(doc[key])
+    return out
+
+
 def _fields(old: dict, new: dict, history: list, at: str, url: str) -> list[dict]:
     out = []
+    skip = _not_comparable(old, new)
     for name in COMPARED_FIELDS:
+        if name in skip:
+            continue
         if not _same(old.get(name), new.get(name)):
             author, when = _who_changed(history, name, new.get(name))
             out.append(_change("fields", "changed", name, old.get(name), new.get(name), name, at, url, author, when))
     old_custom, new_custom = old.get("custom") or {}, new.get("custom") or {}
     for name in sorted(set(old_custom) | set(new_custom)):
+        if f"custom.{name}" in skip:
+            continue
         if not _same(old_custom.get(name), new_custom.get(name)):
             out.append(_change("fields", "changed", f"custom.{name}", old_custom.get(name), new_custom.get(name), "custom",
                                at, url))

@@ -28,7 +28,7 @@ a preview, and the user's approval of that exact set.
 | Azure DevOps, guarded server: read-only previews (`ado_guard_preview_comment`, `ado_guard_preview_bug`) | yes | yes: `tests/test_ado_write_guard.py`, `test_ado_guard_bugs.py` | a real **read** only (it exposed the `$expand=relations` response shape, fixed in the changelog) |
 | Azure DevOps, guarded server: **bug creation** (`ado_guard_create_bug`) | implemented, **disabled by default** | yes: `tests/test_ado_guard_bugs.py` | **no**: never enabled; atomicity of the create-with-parent request is not proven |
 | Jira + Xray | yes | yes: `tests/test_jira_adapter.py`, `test_jira_golden.py`, `test_tracker_*` | **no** |
-| Ticket reading (`/analyze-ticket`) | Azure DevOps and Jira, read only | yes: `tests/test_tickets*.py` and the demo's bundles | Azure DevOps through a logged-in browser: a real read was done; Azure DevOps by token and Jira: no |
+| Ticket reading (`/analyze-ticket`) | Azure DevOps, Jira and Linear, read only | yes: `tests/test_tickets*.py` (Linear: `tests/test_tickets_linear.py`) and the demo's bundles | Azure DevOps through a logged-in browser: a real read was done; Azure DevOps by token, Jira and Linear: no. Linear is a ticket source only: `tracker: linear` (cases, results, bugs) does not exist |
 
 ### Real use of the guarded writes (Azure DevOps)
 
