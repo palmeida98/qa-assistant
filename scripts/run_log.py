@@ -377,6 +377,36 @@ def library_cases(workspace: str, proj: dict) -> tuple[set[str], str]:
     return {str(r["case"]).strip() for r in lib.rows}, lib.detail
 
 
+def batch_library(workspace: str, proj: dict, name: str, doc: dict | None = None) -> tuple[set[str], str]:
+    """The library a result of batch `name` is checked against: the project's library and, in an Excel project with a
+    workbook per platform, the cases of the batch's OWN workbook (route_workbook): a case added only to the iOS
+    workbook is in the library of an iOS batch, never of an Android one (13.11.2026: such a case was refused). The
+    default workbook's cases stay accepted in every batch, as before."""
+    known, source = library_cases(workspace, proj)
+    if proj.get("tracker") != "excel":
+        return known, source
+    from adapters.excel import ExcelAdapter
+    from adapters.excel.base import route_workbook, workbook_patterns
+    excel = proj.get("excel") if isinstance(proj.get("excel"), dict) else {}
+    if not workbook_patterns(excel):
+        return known, source
+    run = (doc or {}).get("run")
+    route = route_workbook(proj, name, run if isinstance(run, dict) else None, environ={}, workspace=workspace)
+    if route.problem or not route.file or route.file == excel.get("file"):
+        return known, source
+    try:
+        ad = ExcelAdapter.from_project(workspace, file=route.file)
+        ad.load()
+        id_col = ad.cfg["cases"]["columns"]["id"]
+        own = {str(r.get(id_col)).strip() for rows in ad.case_rows().values() for r in rows}
+    except Exception as e:      # noqa: BLE001 - the batch's workbook cannot be read: said, never an empty answer
+        raise UsageError(f"the workbook of {name} ({route.file}) cannot be read ({type(e).__name__}: {e}): nothing "
+                         "was written") from None
+    # the union keeps every result accepted before (a case of the default workbook); the stricter rule, only the
+    # batch's own workbook, is a decision left for later
+    return known | own, f"{source}; {len(own)} case(s) in {os.path.basename(route.file)} (the workbook of {name})"
+
+
 def next_name(workspace: str, proj: dict, name: str) -> str:
     """A free batch name for a correction: <name>_02, _03... (or the next number when it already ends in one)."""
     m = re.fullmatch(r"(.*?)(?:_(\d{2}))?", name)
@@ -439,7 +469,7 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
     if new_defect is not None and not isinstance(new_defect, dict):
         raise UsageError("--new-defect must hold a JSON object")
     check_defect(proj, new_defect)
-    known, source = library_cases(workspace, proj)
+    known, source = batch_library(workspace, proj, name, read_log(run_log_path(workspace, name)))
     pending = None
     if case.strip() not in known:
         found = proposed_case_files(workspace, case.strip())
@@ -453,6 +483,10 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
                                 "pending until the case is added to the workbook)" if found else "")
                              + ": nothing was written. A new case is added first (/plan-tests)")
     path = run_log_path(workspace, name)
+    import quarantine  # the QA's decision on a quarantined case is never bypassed (procedures/quarantine.md)
+    gate = quarantine.case_gate(workspace, proj, name, read_log(path), case.strip(), build, environment)
+    if gate:
+        raise Refused(f"{gate}: nothing was written")
     try:
         with workspace_lock(workspace):         # read, change and write the file as one step (audit finding D-02)
             where = applied(workspace, proj, name)      # under the lock: an apply cannot start in between
@@ -1013,6 +1047,22 @@ def _plan_cases(workspace: str, plan: str | None) -> list[str] | None:
     return [str(c).strip() for c in cases] if isinstance(cases, list) else None
 
 
+def _plan_excluded(workspace: str, plan: str | None) -> dict[str, str]:
+    """{case: quarantine id} of a batch plan's `excluded:` list (procedures/quarantine.md): cases the QA left out of the
+    batch because of a quarantine. They are not run and get no result here; {} without a plan or without the list."""
+    if not plan:
+        return {}
+    try:
+        import yaml
+        with open(workspace_path(workspace, *str(plan).replace("\\", "/").split("/")), encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, ValueError, ImportError, OutsideWorkspace):
+        return {}
+    rows = data.get("excluded") if isinstance(data, dict) else None
+    return {str(r.get("case")).strip(): str(r.get("quarantine") or "").strip()
+            for r in rows or [] if isinstance(r, dict) and r.get("case")}
+
+
 def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bool]:
     """Records which batch plan (`batches/<name>.yaml`) the run log follows, so a result can say what comes next:
     (path, previous plan, changed). Every case of the plan must be in the library; refused when the batch was applied."""
@@ -1024,11 +1074,11 @@ def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bo
     cases = _plan_cases(workspace, rel)
     if not cases:
         raise UsageError(f"{plan}: not found inside the workspace, or it has no `cases:` list (a batches/<name>.yaml)")
-    known, source = library_cases(workspace, proj)
+    name = batch_id(batch)
+    known, source = batch_library(workspace, proj, name, read_log(run_log_path(workspace, name)))
     unknown = [c for c in cases if c not in known]
     if unknown:
         raise UsageError(f"{plan}: {', '.join(unknown)} not in the project's library ({source}): nothing was written")
-    name = batch_id(batch)
     path = run_log_path(workspace, name)
     try:
         with workspace_lock(workspace):
@@ -1059,13 +1109,32 @@ def progress(workspace: str, batch: str, plan: str | None = None) -> dict:
         raise UsageError(f"{name} has no run log (runs/{os.path.basename(path)})")
     doc = read_log(path)
     planned = _plan_cases(workspace, plan or doc.get("plan"))
+    excluded = _plan_excluded(workspace, plan or doc.get("plan"))
+    if planned is not None:
+        planned = [c for c in planned if c not in excluded]
     done = {str(x.get("tc")).strip(): x for x in doc["results"] if isinstance(x, dict)}
     order = planned if planned is not None else list(done)
     todo = [c for c in order if c not in done]
     return {"batch": name, "platform": _platform_of(proj, name, doc), "build": (doc.get("run") or {}).get("build"),
             "plan": plan or doc.get("plan"), "order": order, "results": done, "next": todo[0] if todo else None,
             "pending": todo, "outside_plan": [c for c in done if planned is not None and c not in planned],
-            "mode": doc.get("mode")}
+            "excluded": excluded, "mode": doc.get("mode"),
+            "quarantine_problems": _quarantine_problems(workspace, proj, name, doc, plan or doc.get("plan"))}
+
+
+def _quarantine_problems(workspace: str, proj: dict, name: str, doc: dict, plan: str | None) -> list[str]:
+    """The checks of `quarantine.py scope --plan` for this batch's context, when the batch's build is known (a plan
+    approved for another build, platform, environment or quarantine is said before the next case)."""
+    import quarantine
+    if not plan or not os.path.isfile(quarantine.path_of(workspace)):
+        return []
+    platform, build, environment = quarantine.batch_context(proj, name, doc)
+    if not platform:
+        return []
+    try:
+        return quarantine.scope(workspace, platform, build, environment, plan)["problems"]
+    except quarantine.UsageError as e:
+        return [str(e)]
 
 
 def _pass_word(proj: dict) -> str | None:
@@ -1093,12 +1162,18 @@ def print_progress(info: dict, proj: dict, cfg: dict) -> None:
         else:
             lines.append((f"  · {case}", False))
     lines += [(f"  + {c}  {info['results'][c].get('status')} (not in the plan)", True) for c in info["outside_plan"]]
+    lines += [(f"  ⊘ {c}  not run: left out by quarantine {q or '?'} (procedures/quarantine.md)", True)
+              for c, q in (info.get("excluded") or {}).items()]
     counts: dict = {}
     for got in info["results"].values():
         counts[str(got.get("status"))] = counts.get(str(got.get("status")), 0) + 1
     lines.append(("Results: " + (" · ".join(f"{n} {s}" for s, n in counts.items()) or "none yet")
                   + (f" · {len(info['pending'])} to run" if info["plan"] else ""), True))
-    if info["next"]:
+    for problem in info.get("quarantine_problems") or []:
+        lines.append((f"PLAN TO REVALIDATE (quarantine): {problem}", True))
+    if info.get("quarantine_problems"):
+        lines.append(("Next: revalidate the plan with /plan-tests (quarantine.py scope --plan) and ask the QA again", True))
+    elif info["next"]:
         lines.append((f"Next: {info['next']}" + (f" (plan {info['plan']})" if info["plan"] else ""), True))
     elif info["plan"]:
         lines.append(("Next: every planned case has a result: /manage-bugs for the Fails, then /checkpoint", True))

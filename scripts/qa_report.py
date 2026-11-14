@@ -4,6 +4,8 @@ Reconciled totals and an audit of a workspace's run logs, for /qa-report and /ch
     python scripts/qa_report.py <workspace> totals [--batch NAME ...] [--since YYYY-MM-DD] [--platform P]
                                                    [--plan batches/<name>.yaml ...] [--json] [--output FILE]
     python scripts/qa_report.py <workspace> audit [--batch NAME ...] [--since YYYY-MM-DD] [--json]
+    python scripts/qa_report.py <workspace> report [--batch NAME ...] [--since YYYY-MM-DD] [--platform P]
+                                                   [--plan batches/<name>.yaml ...] [--name STEM]
 
 Where a result belongs:
 - its PLATFORM: the run block's "platform"; otherwise the first pattern of `report.platforms` in project.yaml that
@@ -23,6 +25,14 @@ totals
   up to the number of cases of that platform (the denominator), and the output says so ("reconciled").
 - Platforms are never added into one percentage: each one has its own denominator.
 - With --plan, the cases planned with no result on that platform are listed as NOT RUN (coverage still missing).
+
+report
+- Writes exports/<stem>.summary.md and exports/<stem>.technical.md from the same run logs, totals and audit. With
+  quarantines in the workspace (memory/quarantine.json), both end with a "Quarantine" section in the same scope (the
+  batches, --since and --platform): the cases left out by each run log's plan (outside the run counts), the known
+  failures and the retests (counted in the totals as recorded) and the QA's decisions pending (scripts/quarantine.py
+  report_logs). A scope with no quarantine data has no such section. Each file is rewritten whole: running the same
+  report again gives the same files, never a second section.
 
 audit
 - Per batch: Question still open, a case repeated, evidence named that does not exist, results without evidence,
@@ -98,6 +108,7 @@ def load_batches(workspace: str, proj: dict, names: list[str] | None = None, sin
                     "run": doc.get("run") if isinstance(doc.get("run"), dict) else {},
                     "mode": doc.get("mode") if isinstance(doc.get("mode"), str) else None,
                     "derived_from": doc.get("derived_from") if isinstance(doc.get("derived_from"), dict) else None,
+                    "plan": doc.get("plan") if isinstance(doc.get("plan"), str) else None,
                     "results": results})
     if names:
         found = {b["name"] for b in out} | {b["name"].removeprefix("batch_") for b in out}
@@ -726,6 +737,18 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
+def quarantine_section(ws: str, proj: dict, batches: list[dict], platform: str | None = None) -> dict | None:
+    """The quarantine section of the reports (scripts/quarantine.py report_logs), in the report's own scope: the batches
+    loaded (names and --since already applied) and --platform. None when that scope has no quarantine data: a project
+    without quarantines, or a scope they do not touch, keeps its reports exactly as before."""
+    import quarantine
+    logs = [(b["name"], {"run": b["run"], "plan": b.get("plan"), "results": b["results"]}) for b in batches]
+    r = quarantine.report_logs(ws, proj, logs, platform=(platform or "").lower() or None, proposed_in_scope=True)
+    if not quarantine.has_data(r):
+        return None
+    return {"report": r, "technical": quarantine.render_markdown(r), "summary": quarantine.render_markdown(r, brief=True)}
+
+
 def _report(ws: str, proj: dict, batches: list[dict], a, plan) -> int:
     """Writes the two reports under exports/: `<name>.summary.md` (short) and `<name>.technical.md` (complete), from the same
     run logs and audit; which of them is in `output.reports` of project.yaml (both by default). Nothing else is written."""
@@ -737,6 +760,7 @@ def _report(ws: str, proj: dict, batches: list[dict], a, plan) -> int:
                                     f"plan {', '.join(a.plan)}" if a.plan else ""]))
     tot = totals(ws, proj, batches, (a.platform or "").lower() or None, plan)
     aud = audit(ws, proj, batches)
+    quar = quarantine_section(ws, proj, batches, a.platform)
     wanted = cfg["reports"]
     tech_rel = f"exports/{stem}.technical.md"
     written = []
@@ -746,12 +770,17 @@ def _report(ws: str, proj: dict, batches: list[dict], a, plan) -> int:
             if os.path.isdir(os.path.join(ws, "runs")) else []
         if reviews:
             text += "\n## Dry-run review files present\n\n" + "\n".join(f"- runs/{f}" for f in reviews) + "\n"
+        if quar:
+            text += "\n" + quar["technical"]
         path = workspace_path(ws, tech_rel)
         atomic_write(path, text)
         written.append(os.path.relpath(path, ws))
     if "summary" in wanted:
         path = workspace_path(ws, f"exports/{stem}.summary.md")
-        atomic_write(path, render_summary(tot, aud, scope, tech_rel if "technical" in wanted else None))
+        summary = render_summary(tot, aud, scope, tech_rel if "technical" in wanted else None)
+        if quar:
+            summary += "\n" + quar["summary"]
+        atomic_write(path, summary)
         written.append(os.path.relpath(path, ws))
     for w in written:
         print(f"written: {w}")

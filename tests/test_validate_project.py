@@ -775,3 +775,14 @@ class WriteGuardSection(unittest.TestCase):
                         {"bugs": {"fields": {"x": "Microsoft.VSTS.Common.Severity"}}}, {"bugs": {"colour": 1}}, {"other": {}}, "x"):
             with self.subTest(section=section):
                 self.assertTrue(self.problems(section))
+
+
+class QuarantineSection(unittest.TestCase):
+    """quarantine.excluded_label (procedures/quarantine.md): the only words of the project the report needs."""
+
+    def test_the_label_is_accepted_and_anything_else_is_a_problem(self):
+        self.assertFalse([p for p in vp.base_problems({**BASE, "quarantine": {"excluded_label": "excluído por quarentena"}})[0]
+                          if "quarantine" in p])
+        for section in ({"excluded_label": 3}, {"label": "x"}, "x"):
+            with self.subTest(section=section):
+                self.assertTrue([p for p in vp.base_problems({**BASE, "quarantine": section})[0] if "quarantine" in p])

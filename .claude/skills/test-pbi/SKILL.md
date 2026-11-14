@@ -15,7 +15,7 @@ metadata:
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan, the bugs published, the open items (what waits on whom) and the intermediate checkpoints."
   requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py, scripts/qa_python.py"
   requires-tools: "spec"
-  requires-docs: "procedures/rules.md, skills-guide.md, technique-specs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/quarantine.md, skills-guide.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -63,10 +63,13 @@ metadata:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> <step> done --ref <file, check id or batch>
    - context: /project-context.
    - analyze: /analyze-ticket on the PBI and its tasks (FE, BE, QA), decisions and related bugs.
-   - plan: /plan-tests for the PBI and the platforms. The request to test the PBI covers the plan: present it and go
+   - plan: /plan-tests for the PBI and the platforms; its review shows the cases a quarantine covers (bug, reason,
+     scope, exit condition) and the QA's choice per case (left out or directed retest; procedures/quarantine.md). On
+     resuming, `quarantine.py scope --plan` says whether that choice still holds for the build observed now. The request to test the PBI covers the plan: present it and go
      on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, and say
      which rule). A choice or a confirmation the plan waits on is an open item on the step plan (`open ... --kind
-     approval --step plan --by qa`), and plan is marked done only after the QA gave it. Once the plan stands:
+     approval --step plan --by qa`), and plan is marked done only after the QA gave it and the plan file passes its
+     checks (`scope --plan` exit 0). Once the plan stands:
      python <qa>/scripts/pbi_state.py <workspace> baseline <pbi> --ticket <id>=<revision> --build <p>=<observed>
      [--environment <key>] [--spec-plan <the plan file, when it has spec_refs>]
    - run:<platform>: /run-tests, one platform at a time, on the platforms the request named, and only when the state

@@ -13,8 +13,8 @@ metadata:
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/apply.md, methodology.md, technique-excel.md"
+  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/quarantine.py, scripts/qa_python.py"
+  requires-docs: "procedures/rules.md, procedures/apply.md, procedures/quarantine.md, methodology.md, technique-excel.md"
   requires-tools: "git"
 ---
 
@@ -79,4 +79,6 @@ metadata:
    The record refuses it (exit 4) while work is open; never mark the step done to save progress. Closing with work
    open is the QA's explicit decision only: add --close-with-open --decided-by "<the QA>" (what stayed open is kept).
    Saving or resuming never replaces an approval: the dry run and its token, and the write guard's approved content,
-   are asked and checked as in step 5.
+   are asked and checked as in step 5. A quarantine waiting on the QA (proposed, a retest that passed, a proposed end;
+   python <qa>/scripts/quarantine.py <workspace> report) is an open item of approval for the QA, closed only after
+   quarantine.py decide with the QA's confirmation (procedures/quarantine.md).

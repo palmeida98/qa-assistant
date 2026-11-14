@@ -242,3 +242,16 @@ Applies whenever a spec, an acceptance criterion or a business rule is taken fro
   rule, as long as the reference to the original rule is explicit and the scenario is marked as QA text.
 - **Before delivering,** compare each transcription with the source. If the whole text hurts the table, move it or use a
   reference; never shorten or change the rule to make it fit.
+
+## 18. Bugs in quarantine (13.11.2026; procedures/quarantine.md)
+
+- A quarantine is the QA's decision, recorded in the workspace's register (`memory/quarantine.json`, through
+  `scripts/quarantine.py`): a bug, the cases it affects and the platforms, builds and environments where it holds. It is
+  never automatic: a bug in Blocked, an intermittent failure or a known bug does not enter quarantine by itself. The
+  assistant may propose one, or its end; activating, lifting or rejecting it is the QA's explicit decision, recorded with
+  who and where.
+- It never hides: a case left out is shown as not executed with its reason and the bug's link, never counted as Pass; a
+  known failure keeps its Fail and links the existing bug; a different failure goes through the normal review; a retest
+  that passes is shown to the QA, and the quarantine stays until the QA decides.
+- It never reduces what it does not cover (another platform, build or environment, another case), and it writes nothing
+  to the tracker or the workbook by itself.

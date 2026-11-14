@@ -471,6 +471,12 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     p, w = specs_section(proj)
     problems += p
     warnings += w
+    if proj.get("quarantine") is not None:
+        # procedures/quarantine.md: only the words of the report; the register itself is memory/quarantine.json
+        qs = proj.get("quarantine")
+        if not isinstance(qs, dict) or set(qs) - {"excluded_label"} or not isinstance(qs.get("excluded_label", ""), str):
+            problems.append("quarantine: expected {excluded_label: \"<words after the pending status>\"} "
+                            "(procedures/quarantine.md)")
     if proj.get("write_guard") is not None:
         # bugs created through scripts/ado_write_guard.py: the same validation the guard runs at startup
         import ado_write_guard

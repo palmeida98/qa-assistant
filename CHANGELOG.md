@@ -26,6 +26,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   QA or the team, blocked, published; "nothing pending" only when it is true). `rules.md` §7, `skills-spec.md` §5.1,
   `/test-pbi` and `/checkpoint`.
 
+### Added (bugs in quarantine, proposal; 2026-11-13)
+- `docs/procedures/quarantine.md`, `rules.md` §18 and `scripts/quarantine.py` (`show`, `propose`, `decide`, `scope`,
+  `report`): a quarantine is the QA's decision, recorded in `memory/quarantine.json` of the workspace (a bug as the run
+  logs link it and, when different, its tracker id; the cases; the platforms, builds and environments; the reason; the
+  exit condition). The assistant proposes; `decide` needs who decided and where. Plans say the QA's choice per covered
+  case (`excluded:` or `retest:`); `report` shows apart the cases left out («<pending status> — <label>», label from
+  `quarantine.excluded_label`), the known failures observed and the retests run.
+- Enforced at the entry point: `run_log.py add` refuses a result for a case left out while its quarantine holds, for a
+  covered case without the QA's decision in the plan, and for an `excluded:` whose quarantine no longer holds (the plan
+  is out of date); `run_log.py progress` names a plan to revalidate. Skills: `/plan-tests`, `/test-pbi`, `/run-tests`
+  (the check before the first case and on resuming), `/manage-bugs`, `/qa-report`, `/checkpoint`.
+- `run_log.py add` and `plan`: in an Excel project with a workbook per platform, a case of the batch's own workbook is
+  in its library (an iOS-only case was refused); the default workbook's cases stay accepted as before.
+
 ### Changed (Excel: a preview reads, a write needs its approved token and an unambiguous destination, 2026-11-13)
 - Incident of 13.11.2026 (a workspace's run): an add «simulated on a copy» named the copy only in `$QA_WORKBOOK`, was
   run with `--platform` (which chose the destination from project.yaml and ignored the variable without a word) and

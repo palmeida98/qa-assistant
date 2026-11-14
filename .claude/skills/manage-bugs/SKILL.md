@@ -14,7 +14,7 @@ metadata:
   resume: "The review file and the run log; an item already approved or published (memory/pbi/ record, tracker key) is never proposed or published again."
   requires-modules: "adapters.excel, adapters.tracker"
   requires-scripts: "scripts/run_log.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/bugs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/bugs.md, procedures/quarantine.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -35,7 +35,10 @@ metadata:
    search, the format and the run log fields.
 2. Investigate each: the steps that reproduce it, the requirement or decision it breaks (with its source), whether a
    more recent decision changed the expectation, and whether it is a copy change, a new request or a defect already
-   open on the other platform (the workspace's CLAUDE.md says what is not a bug there).
+   open on the other platform (the workspace's CLAUDE.md says what is not a bug there). In a case a quarantine covers
+   (procedures/quarantine.md): a Fail linked to its bug is an occurrence of that bug (listed in the review, no new
+   proposal); a Fail without that link is investigated by these same criteria and shown to the QA: a quarantine never
+   explains a behaviour it does not describe.
 3. Search before proposing: the defects of the workbook or bug-search in the tracker (open and closed, --include-closed
    when it may be a regression), and the related bugs /analyze-ticket recorded. Say how many were found and how many
    were read. Similar symptoms do not prove the same defect: the same defect needs the same steps, screen or flow and
