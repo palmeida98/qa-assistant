@@ -8,12 +8,12 @@ metadata:
   config: "run_log; the tracker's section (excel:, jira:, azure_devops:); the workspace's CLAUDE.md rules on commits and approvals."
   tools: "run_log.py, qa_report.py audit, compact_context.py, workspace_git.py status; the adapters for applying."
   outputs: "context.md updated; the consistency check; the pending list (batches to apply, bugs to review or publish, comments, uncommitted files, commits not pushed)."
-  writes: "runs/ (results not yet saved), context.md, archive/context/ (compaction); the workbook or the tracker only after confirmation; a commit only when the user or the workspace's CLAUDE.md asks for it."
+  writes: "runs/ (results not yet saved), context.md, archive/context/ (compaction), under /test-pbi memory/pbi/<pbi>.json (open items, intermediate checkpoints); the workbook or the tracker only after confirmation; a commit only when the user or the workspace's CLAUDE.md asks for it."
   approvals: "Saving and validating the local state (run log, context.md, the audit): none. Applying: the user confirms the batch after the dry run; a confirmation of the same preview whose token is still valid is not asked again. Commit: the user or the workspace's rules. Push: only when the user says so."
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/qa_python.py"
+  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/apply.md, methodology.md, technique-excel.md"
   requires-tools: "git"
 ---
@@ -65,5 +65,15 @@ metadata:
    workbooks wins when stricter.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes
    it part of the checkpoint (procedures/apply.md step 6); push only when the user says so (step 6a).
-7. Under /test-pbi, only for the checkpoint that closes the PBI's flow (after its report; the intermediate ones of a
-   long run do not count): python <qa>/scripts/pbi_state.py <workspace> mark <pbi> checkpoint done --ref context.md.
+7. Under /test-pbi, saving the progress is not closing the flow (procedures/rules.md section 7). Each item of step 4
+   that waits on someone (a dry run to approve, a bug to publish, a dependency, a question) is an open item of the
+   PBI's record: update the one already there, or open it with a stable id, never a second one for the same work;
+   close it only with a verifiable confirmation (`pbi_state.py close`, with who decided for an approval or a question).
+   An intermediate checkpoint, with work still open:
+   python <qa>/scripts/pbi_state.py <workspace> saved <pbi> --ref context.md [--note "<what is left>"]
+   Only the checkpoint that closes the PBI's flow (after its report, with nothing pending, blocked or open) marks:
+   python <qa>/scripts/pbi_state.py <workspace> mark <pbi> checkpoint done --ref context.md
+   The record refuses it (exit 4) while work is open; never mark the step done to save progress. Closing with work
+   open is the QA's explicit decision only: add --close-with-open --decided-by "<the QA>" (what stayed open is kept).
+   Saving or resuming never replaces an approval: the dry run and its token, and the write guard's approved content,
+   are asked and checked as in step 5.

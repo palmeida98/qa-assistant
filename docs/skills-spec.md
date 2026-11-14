@@ -69,10 +69,41 @@ preflight, and the skill's own steps check what it did not (the target, the buil
 | `python -m adapters.tickets` | `/analyze-ticket`: collect, compare, record (first check, no change, change, partial read) | `memory/`, a block of `context.md` |
 | `scripts/run_log.py` | `/run-tests`, `/manage-bugs`: one result per case, the run block immutable; `attach` adds evidence or a bug and keeps the rest of the result; `add --executed-at` records an earlier observation (`ts` = the start of the execution, `recorded_at` = record, `--ended-at` = the end of its window); `retime` corrects only the time of a result; `attach --invalid` marks an evidence without deleting it; `--evidence` keeps every path given; `resolve` records a Question's decision keeping the observation; `defect-rule` says if a new bug needs a priority | `runs/` |
 | `scripts/qa_report.py` | `/qa-report`, `/checkpoint`: reconciled totals per platform and build, the audit of results, evidence and application; `report` writes a short summary and a technical report | Nothing, the report with `--output`, or `exports/<stem>.summary.md` and `.technical.md` with `report` |
-| `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published | `memory/pbi/<id>.json` |
+| `scripts/pbi_state.py` | `/test-pbi`: the progress of one PBI, the baseline the plan was made on, what was published, the open items, the intermediate checkpoints and the closing (§5.1) | `memory/pbi/<id>.json` |
 | `scripts/sync_skills.py` | Installing the skills in `~/.claude/skills/` with the record of their origin | `~/.claude/skills/` |
 
 Writes go through `common.workspace_path` and, for shared files, `common.workspace_lock` (technique-workspaces.md §7).
+
+### 5.1 The resume record of `/test-pbi`: progress, open items and closing
+
+`memory/pbi/<id>.json` holds the steps (`context`, `analyze`, `plan`, `run:<platform>`, `bugs`, `report`,
+`checkpoint`), the baseline, the bugs published and an append-only history. Two optional fields hold what is not a
+step (procedures/rules.md §7):
+
+- `open`: the items that wait on someone, by stable id: `kind` (`approval`, `publish`, `apply`, `dependency`,
+  `question`), the `step` they belong to when there is one, what is `missing`, who `unblocks` it and who acts next
+  (`by`: `assistant`, `qa` or `team`). `pbi_state.py open|update|close` manage them; `close` needs a `--ref` that can
+  be verified, and an approval or a question also the `--decided-by` of the person who gave it. A closed item moves
+  to `closed` with its proof; its id is not reused. `published` closes only the item whose id is that draft.
+- `checkpoints` (intermediate checkpoints saved with `pbi_state.py saved`) and `closure` (the QA's explicit decision
+  to close the flow with open items: who, when, the proof and what stayed open).
+
+A record without these fields (written before them) is read as it is and never rewritten by reading it.
+
+`start`, `show` and `mark` print the same state block:
+
+| Situation | `Next:` | Also shown |
+|---|---|---|
+| A step is pending and nothing it belongs to waits on the QA or the team | the first such step | open items, blocked steps, published bugs |
+| No step to run, but an open item the assistant can do now | that item | the rest |
+| Only work that waits on the QA or the team | "no work available in this session" | what is missing, grouped by who unblocks it |
+| No step pending or blocked, no open item | "nothing pending" (and only then) | published bugs |
+| Closed by the QA's decision with open items | "flow closed by the QA's decision" | the items left open |
+
+The step `checkpoint` is left out of its own check: it is the next step only when it can close the flow. Marking it
+`done` with anything else pending, blocked or open is refused (exit 4); `--close-with-open --decided-by <who>`
+records the QA's decision instead. A record whose `checkpoint` was marked `done` before this rule, with steps still
+blocked, is shown as not closed; nothing is changed by showing it.
 
 ## 6. Behaviour that must hold (and its test)
 
@@ -93,6 +124,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | Results are written once per case; approvals are kept | `test_run_log.py`, `test_skill_flows.py` |
 | Every evidence path given is kept (a repeated option too); the end of an execution's window is recorded; a time is corrected without rewriting the result and the previous time is kept; an evidence that shows nothing useful is marked, never deleted; an applied batch is never touched | `test_run_log_traceability.py` |
 | `/test-pbi` resumes without repeating done steps or publishing twice (a publication needs a confirmation, a key is not reused); a changed build or requirement is reported and `--reopen` returns the steps to review; what was not compared is never "nothing changed" | `test_pbi_state.py` |
+| `/test-pbi` saves progress with open items and closes the flow only with nothing left, or by the QA's explicit decision; blocked work and what waits on the QA or the team stay visible; "nothing pending" only when it is true; a publication closes only its own item | `test_pbi_state.py` (`OpenItems`) |
 | The report's totals reconcile and Android and iOS stay apart; a current result says whether it is applied; the file time never decides | `test_qa_report.py` |
 | A batch goes to its own workbook (`excel.workbooks`); an apply holds the lock and never leaves a broken workbook | `test_workbook_routing.py` |
 | Writes never follow a planted link; `history/` in any case is refused; the lock is never seen empty | `test_write_integrity.py` |

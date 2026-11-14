@@ -94,6 +94,26 @@ Adding evidence or a bug to a result already recorded keeps its status, its obse
 the run block (`run_log.py attach`); replacing a result (`add --replace`) is only for a new execution of that case.
 An approval still valid (§5) is not asked again on resuming.
 
+**Saving progress is not closing the flow** (`/test-pbi`, `scripts/pbi_state.py`; skills-spec.md §5.1):
+
+- A checkpoint saves the progress at any time, with work still open: an intermediate checkpoint
+  (`pbi_state.py saved`) records the point reached and changes no step. Closing the flow is a separate act: the step
+  `checkpoint` is marked `done` only when no other step is pending or blocked and no open item is left. Otherwise the
+  closing is refused, unless the QA decides explicitly to close with open items: the record keeps who decided and
+  what stayed open.
+- What waits on someone is recorded as it appears, as an **open item** with a stable id (an approval, a publication,
+  an application of results, a dependency, a question): what is missing and who can unblock it. On resuming, the same
+  item is updated, never opened again under another id; it is closed only with a verifiable confirmation (the read
+  back of the tracker, the dry run and apply of the workbook, the QA's answer with who gave it).
+- **An approval exists only when the QA gives it explicitly**, for the concrete set shown (§5). A checkpoint, a
+  resume, an open item or its closing never replace the confirmation of a plan, of a run or of a write, nor turn an
+  earlier approval into one for another set; the checks of the adapters (the dry run's token) and of the write guard
+  (the approved hash) stay as they are.
+- An operation that is blocked (a tracker out of reach, a device not connected) does not stop the independent work
+  already authorised: it goes on, and the blocked operation stays visible as a blocked step or an open item.
+- "Nothing pending" is said only when no step is pending or blocked and no item is open. When the only work left
+  waits on the QA or the team, the resume says that no work is available in this session and shows what is missing.
+
 ## 8. Defaults and the project's own rules
 
 The workspace's `CLAUDE.md`, and what it imports (for example its `context.md`), holds the project's own rules. Where

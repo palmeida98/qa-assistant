@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (checkpoint and resume of /test-pbi: open items, intermediate checkpoints, closing, 2026-11-13)
+- `pbi_state.py open|update|close` record what waits on someone (approval, publish, apply, dependency, question)
+  with a stable id and who unblocks it; `saved` records an intermediate checkpoint without changing a step;
+  `mark checkpoint done` is refused (exit 4) while a step is pending or blocked or an item is open, unless the QA
+  decides `--close-with-open --decided-by`. `start`, `show` and `mark` print one state block (`Next:`, waiting on the
+  QA or the team, blocked, published; "nothing pending" only when it is true). `rules.md` §7, `skills-spec.md` §5.1,
+  `/test-pbi` and `/checkpoint`.
+
 ### Added (Linear as a ticket source, read only, 2026-11-12)
 - `tickets.sources.<id>.service: linear` (`adapters/tickets/linear.py`): `/analyze-ticket` reads a Linear issue by key,
   `<source>:<key>` or link through the official GraphQL API, with a personal API key (`api_key_var`) and only the
