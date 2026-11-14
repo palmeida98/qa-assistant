@@ -49,7 +49,15 @@ metadata:
    accessibility -> procedures/run-accessibility.md. A route whose tools are `missing`: say what is missing and how to
    get it; those cases are Blocked (environment) and the rest of the batch goes on. One platform per batch.
 3. Before the first case, record how the batch runs: python <qa>/scripts/run_log.py <workspace> mode <batch>
-   "<conversational|flows|assisted|manual>: <why>" (never by editing the JSON). Then confirm and record: the
+   "<conversational|flows|assisted|manual>: <why>" (never by editing the JSON). A batch with its plan in
+   batches/<name>.yaml records it next, before any action on the target or any result:
+   python <qa>/scripts/run_log.py <workspace> plan <batch> batches/<name>.yaml
+   then python <qa>/scripts/run_log.py <workspace> progress <batch> shows the order, the cases left out and the
+   next case. This check is the skill's, before the first action on the target: device.py and run_mobile.py do not
+   look at the plan; run_log.py add refuses a result written too early (a plan with `approval:`, `excluded:` or
+   `retest:` not recorded, two own plans with decisions, or a run log following another plan), writing nothing. On
+   resuming, progress reuses the plan already recorded; a `PLAN TO REVALIDATE` or `PLAN TO RESOLVE` line goes back to
+   /plan-tests and the QA before the next case (the results already recorded are kept). Then confirm and record: the
    environment (a test one, never production); the target (device and OS, browser, or base URL; an iPhone not ready:
    show the `blocked by:` and `next:` of device.py check / doctor, never guess "the cable"); the build OBSERVED now
    (mobile: the `Next:` line, device.py check), next to the

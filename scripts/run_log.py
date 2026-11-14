@@ -85,6 +85,10 @@ Writes the session's run log (methodology 7.1; plan 11.2), instead of a helper i
 - remove: takes one mistaken result out of a batch not yet applied. It shows the result, keeps the others, never
   deletes evidence (it lists the files), and refuses a batch already applied (exit 1) or a result that is not there (2).
 
+- Plan first (14.11.2026): a batch whose own plan batches/<batch>.yaml (with or without the `batch_` prefix) carries a decision of the QA (`approval:`,
+  `excluded:` or `retest:`) records it with `plan` before its first result; `add` refuses (exit 1, nothing written)
+  until then, and `plan` refuses another file for that batch. A batch without that file, or whose plan has none of
+  those keys, is recorded as before.
 - add: appends the result of <case> to runs/batch_<batch>.json; a case already there is refused unless --replace is
   given, and then the previous result is printed (one item per case, the adapter refuses a case repeated); "ts" is now. <batch> may be given with or without the
   "batch_" prefix. --new-defect reads a JSON object (the bug approved by the user, or on a runner a proposal with
@@ -483,6 +487,9 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
                                 "pending until the case is added to the workbook)" if found else "")
                              + ": nothing was written. A new case is added first (/plan-tests)")
     path = run_log_path(workspace, name)
+    gate = plan_gate(workspace, name, read_log(path))
+    if gate:
+        raise Refused(f"{gate}: nothing was written")
     import quarantine  # the QA's decision on a quarantined case is never bypassed (procedures/quarantine.md)
     gate = quarantine.case_gate(workspace, proj, name, read_log(path), case.strip(), build, environment)
     if gate:
@@ -1047,6 +1054,20 @@ def _plan_cases(workspace: str, plan: str | None) -> list[str] | None:
     return [str(c).strip() for c in cases] if isinstance(cases, list) else None
 
 
+def _plan_run(workspace: str, plan: str | None) -> dict:
+    """The `run:` block of a batch plan (platform, build, environment it was approved for), as text; {} without one."""
+    if not plan:
+        return {}
+    try:
+        import yaml
+        with open(workspace_path(workspace, *str(plan).replace("\\", "/").split("/")), encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, ValueError, ImportError, OutsideWorkspace):
+        return {}
+    run = data.get("run") if isinstance(data, dict) else None
+    return {k: str(run[k]) for k in ("platform", "build", "environment") if isinstance(run, dict) and run.get(k)}
+
+
 def _plan_excluded(workspace: str, plan: str | None) -> dict[str, str]:
     """{case: quarantine id} of a batch plan's `excluded:` list (procedures/quarantine.md): cases the QA left out of the
     batch because of a quarantine. They are not run and get no result here; {} without a plan or without the list."""
@@ -1063,6 +1084,87 @@ def _plan_excluded(workspace: str, plan: str | None) -> dict[str, str]:
             for r in rows or [] if isinstance(r, dict) and r.get("case")}
 
 
+# Keys of a batch plan that carry a decision of the QA (procedures/planning.md section C; procedures/quarantine.md):
+# a plan with any of them was approved for this batch and must be recorded before its first result.
+PLAN_DECISION_KEYS = ("approval", "excluded", "retest")
+
+
+def plan_variants(workspace: str, name: str) -> list[str]:
+    """The files that can be the batch's own plan by the naming of procedures/planning.md section C, those that exist
+    inside the workspace: batches/<name>.yaml for the name /run-tests receives, with and without the `batch_` prefix
+    that the run log adds (batches/20261017_mobile_01.yaml is the plan of runs/batch_20261017_mobile_01.json)."""
+    found = []
+    full = batch_id(name)
+    for stem in dict.fromkeys([full, full.removeprefix("batch_")]):
+        try:
+            if stem and os.path.isfile(workspace_path(workspace, "batches", stem + ".yaml")):
+                found.append(f"batches/{stem}.yaml")
+        except OutsideWorkspace:
+            continue
+    return found
+
+
+def own_plan(workspace: str, name: str) -> str | None:
+    """The batch's own plan (`plan_variants`): the one that carries a decision of the QA, else the only one; None when
+    there is none. Two variants that both carry decisions are ambiguous (`plan_ambiguity`): never chosen here."""
+    found = plan_variants(workspace, name)
+    return next((f for f in found if plan_decisions(workspace, f)), found[0] if found else None)
+
+
+def plan_ambiguity(workspace: str, name: str) -> str | None:
+    """Why the batch's own plan cannot be chosen, or None: batches/<name>.yaml and batches/batch_<name>.yaml both exist
+    and both carry the QA's decisions. Nothing is chosen silently: `add`, `plan` and the CI's `batch` refuse until the
+    QA keeps one of them (the other removed, or renamed as a new batch)."""
+    decided = [(f, plan_decisions(workspace, f)) for f in plan_variants(workspace, name)]
+    decided = [(f, keys) for f, keys in decided if keys]
+    if len(decided) < 2:
+        return None
+    both = " and ".join(f"{f} ({', '.join(keys)})" for f, keys in decided)
+    return (f"{batch_id(name)} has two plans with the QA's decisions, {both}: it is ambiguous which one the QA "
+            "approved, and none is chosen. The QA keeps one (the other is removed, or renamed as a new batch) before "
+            "the run goes on")
+
+
+def plan_decisions(workspace: str, plan: str | None) -> list[str]:
+    """The PLAN_DECISION_KEYS a plan file fills (approval, excluded, retest); [] when it has none or cannot be read."""
+    if not plan:
+        return []
+    try:
+        import yaml
+        with open(workspace_path(workspace, *str(plan).replace("\\", "/").split("/")), encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (OSError, ValueError, ImportError, OutsideWorkspace):
+        return []
+    return [k for k in PLAN_DECISION_KEYS if isinstance(data, dict) and data.get(k)]
+
+
+def plan_gate(workspace: str, name: str, doc: dict) -> str | None:
+    """Why a result must not be written yet in batch `name`, or None (enforced by `add`; `progress` says it too). A batch
+    whose own plan (batches/<name>.yaml, with or without `batch_`) carries a decision of the QA (`approval:`, `excluded:`
+    or `retest:`) records that plan in its run log first (`run_log.py plan`), so the cases left out and the order hold
+    from the first result and a resume reuses the same plan. Refused too: two own plans with decisions
+    (`plan_ambiguity`), and a run log that follows another plan than the batch's own plan with decisions (the two may
+    disagree; recording the own plan keeps the results already written). Never stopped: a batch without its own plan
+    file, and a plan without decisions (runs without a plan, ad hoc retests, older batches)."""
+    ambiguous = plan_ambiguity(workspace, name)
+    if ambiguous:
+        return ambiguous
+    rel = own_plan(workspace, name)
+    keys = plan_decisions(workspace, rel)
+    if not keys:
+        return None
+    recorded = doc.get("plan")
+    if not recorded:
+        return (f"{batch_id(name)} has an approved plan {rel} ({', '.join(keys)}) that its run log does not record yet: "
+                f"record it first with run_log.py <workspace> plan {batch_id(name)} {rel}, then run_log.py progress "
+                "(the cases left out and the next case), and only then run and record the first case")
+    if str(recorded).replace("\\", "/") != rel:
+        return (f"{batch_id(name)} follows the plan {recorded}, but its own plan {rel} carries the QA's decision "
+                f"({', '.join(keys)}): the two may disagree. Record {rel} with run_log.py <workspace> plan "
+                f"{batch_id(name)} {rel} (the results already recorded are kept), or the QA removes it")
+    return None
+
+
 def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bool]:
     """Records which batch plan (`batches/<name>.yaml`) the run log follows, so a result can say what comes next:
     (path, previous plan, changed). Every case of the plan must be in the library; refused when the batch was applied."""
@@ -1075,6 +1177,14 @@ def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bo
     if not cases:
         raise UsageError(f"{plan}: not found inside the workspace, or it has no `cases:` list (a batches/<name>.yaml)")
     name = batch_id(batch)
+    ambiguous = plan_ambiguity(workspace, name)
+    if ambiguous:
+        raise Refused(f"{ambiguous}: nothing was written")
+    approved = own_plan(workspace, name)
+    if approved and approved != rel and plan_decisions(workspace, approved):
+        raise Refused(f"{name} has its own approved plan {approved} ({', '.join(plan_decisions(workspace, approved))}): "
+                      f"record that one; another plan ({rel}) would set the QA's decision aside. A new version of the "
+                      "plan is a new batch with its own name (procedures/planning.md section C): nothing was written")
     known, source = batch_library(workspace, proj, name, read_log(run_log_path(workspace, name)))
     unknown = [c for c in cases if c not in known]
     if unknown:
@@ -1119,16 +1229,34 @@ def progress(workspace: str, batch: str, plan: str | None = None) -> dict:
             "plan": plan or doc.get("plan"), "order": order, "results": done, "next": todo[0] if todo else None,
             "pending": todo, "outside_plan": [c for c in done if planned is not None and c not in planned],
             "excluded": excluded, "mode": doc.get("mode"),
+            "own_plan": None if (plan or doc.get("plan")) else own_plan(workspace, name),
+            "plan_problem": _plan_problem(workspace, name, doc),
             "quarantine_problems": _quarantine_problems(workspace, proj, name, doc, plan or doc.get("plan"))}
+
+
+def _plan_problem(workspace: str, name: str, doc: dict) -> str | None:
+    """What `plan_gate` refuses once a plan is recorded, or the ambiguity of two own plans: shown by `progress` before
+    the next case (a plan not recorded yet is said by the `Next:` line instead)."""
+    if not doc.get("plan") and not plan_ambiguity(workspace, name):
+        return None
+    return plan_gate(workspace, name, doc)
 
 
 def _quarantine_problems(workspace: str, proj: dict, name: str, doc: dict, plan: str | None) -> list[str]:
     """The checks of `quarantine.py scope --plan` for this batch's context, when the batch's build is known (a plan
-    approved for another build, platform, environment or quarantine is said before the next case)."""
+    approved for another build, platform, environment or quarantine is said before the next case). Before the first
+    result the run log has no run block yet: the context is the one the plan was approved for (its `run:` block), so a
+    plan recorded before the first case is checked in the same context as `quarantine.py scope --plan`."""
     import quarantine
     if not plan or not os.path.isfile(quarantine.path_of(workspace)):
         return []
     platform, build, environment = quarantine.batch_context(proj, name, doc)
+    if not isinstance(doc.get("run"), dict):
+        planned = _plan_run(workspace, plan)
+        if not planned:
+            return []       # context not known yet: `add` checks each case with the build and environment it records
+        platform = planned.get("platform") or platform
+        build, environment = planned.get("build") or build, planned.get("environment") or environment
     if not platform:
         return []
     try:
@@ -1169,14 +1297,22 @@ def print_progress(info: dict, proj: dict, cfg: dict) -> None:
         counts[str(got.get("status"))] = counts.get(str(got.get("status")), 0) + 1
     lines.append(("Results: " + (" · ".join(f"{n} {s}" for s, n in counts.items()) or "none yet")
                   + (f" · {len(info['pending'])} to run" if info["plan"] else ""), True))
-    for problem in info.get("quarantine_problems") or []:
+    if info.get("plan_problem"):
+        lines.append((f"PLAN TO RESOLVE: {info['plan_problem']}", True))
+        lines.append(("Next: the QA resolves the plan before the next case (the results already recorded are kept)", True))
+    for problem in ([] if info.get("plan_problem") else info.get("quarantine_problems") or []):
         lines.append((f"PLAN TO REVALIDATE (quarantine): {problem}", True))
-    if info.get("quarantine_problems"):
+    if info.get("plan_problem"):
+        pass
+    elif info.get("quarantine_problems"):
         lines.append(("Next: revalidate the plan with /plan-tests (quarantine.py scope --plan) and ask the QA again", True))
     elif info["next"]:
         lines.append((f"Next: {info['next']}" + (f" (plan {info['plan']})" if info["plan"] else ""), True))
     elif info["plan"]:
         lines.append(("Next: every planned case has a result: /manage-bugs for the Fails, then /checkpoint", True))
+    elif info.get("own_plan"):
+        lines.append(((f"Next: record the batch's plan before the first case: run_log.py <workspace> plan {info['batch']} "
+                       f"{info['own_plan']}"), True))
     else:
         lines.append(("Next: no plan recorded: run_log.py <workspace> plan <batch> batches/<name>.yaml", True))
     cols = cfg["max_cols"] if output.is_brief(cfg) else None

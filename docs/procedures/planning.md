@@ -128,3 +128,6 @@
 10. Once the plan stands (step 9), save each batch as <workspace>/batches/<name>.yaml -- cases: [<case ID>, ...] in the planned
     order (a name of letters, digits, '.', '_', '-') -- so it can also run remotely: the workspace's CI takes the
     batch's name (python scripts/workspace_ci.py <workspace> check --batch <name>; technique-mobile.md section 11).
+    A plan the QA approved keeps that decision in the file: `approval:` (decided_by, at, ref) and, with quarantines,
+    `excluded:` / `retest:` (procedures/quarantine.md). Such a plan is recorded in the run log
+    (run_log.py plan <batch> batches/<name>.yaml) before the first result: run_log.py add refuses until then.

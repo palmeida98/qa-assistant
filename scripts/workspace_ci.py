@@ -236,6 +236,32 @@ def has_flow(folder: str, case: str) -> bool:
                 or os.path.isfile(os.path.join(folder, case + ".yaml")))
 
 
+# The workflow (docs/workspace/ci/mobile.yml) runs every batch on an Android emulator: the platform of the run.
+PLATFORM = "android"
+
+
+def plan_problem(workspace: str, name: str, platform: str, build: str, environment: str) -> str | None:
+    """Why a planned batch must not run here, or None (step «Resolve the batch», before the run log and any case):
+    two own plans with the QA's decisions (run_log.plan_ambiguity), or the plan checked as `quarantine.py scope --plan`
+    with the run's own platform, build and environment (a decision missing for a covered case, or one that no longer
+    holds: the plan is out of date). A list of case IDs ("adhoc") has no plan and runs as before."""
+    if name == "adhoc":
+        return None
+    ambiguous = run_log.plan_ambiguity(workspace, name)
+    if ambiguous:
+        return ambiguous
+    import quarantine
+    try:
+        problems = quarantine.scope(workspace, platform, build or None, environment or None,
+                                    f"batches/{name}.yaml")["problems"]
+    except quarantine.UsageError as e:
+        return str(e)
+    if problems:
+        return ("the QA's decision is missing or out of date for this run: " + "; ".join(problems)
+                + " -> revalidate with /plan-tests (quarantine.py scope --plan) and ask the QA again")
+    return None
+
+
 def cmd_batch(workspace: str, a) -> int:
     proj = project(workspace)
     ci = ci_of(proj)
@@ -244,6 +270,15 @@ def cmd_batch(workspace: str, a) -> int:
     if not NAME.fullmatch(a.run_id or ""):
         raise UsageError(f"--run-id {a.run_id!r}")
     name, cases = resolve_batch(workspace, a.input)
+    envs = list(proj.get("environments") or {})
+    environment = "test" if "test" in envs else (envs[0] if envs else "")
+    build = (proj.get("mobile") or {}).get("build") or {}
+    build_text = str(build.get("version") or build.get("source") or "")
+    problem = plan_problem(workspace, name, PLATFORM, build_text, environment)
+    if problem:          # before the run log and the step's outputs: the emulator, the flows and the agent never start
+        print(f"REFUSED: batch {name} (platform {PLATFORM}, build {build_text or '?'}, environment "
+              f"{environment or '?'}): {problem}. Nothing was written and no case runs.", file=sys.stderr)
+        return 1
     folder = flows_folder(proj, workspace)
     with_flow = [c for c in cases if has_flow(folder, c)]
     if a.mode == "flows":
@@ -256,15 +291,13 @@ def cmd_batch(workspace: str, a) -> int:
     else:
         flow_cases, agent_cases = [], cases
     log = run_log.batch_id(f"{name}_r{a.run_id}")
-    envs = list(proj.get("environments") or {})
-    environment = "test" if "test" in envs else (envs[0] if envs else "")
-    build = (proj.get("mobile") or {}).get("build") or {}
     path = os.path.join(workspace, "runs", f"{log}.json")
     if not os.path.exists(path):
         run_log.write_log(path, {"mode": f"{a.mode}: remote run {a.run_id} (technique-mobile.md §11)",
                                  "run": {"environment": environment,
-                                         "build": str(build.get("version") or build.get("source") or "")},
+                                         "build": build_text},
                                  "remote": {"run_id": a.run_id, "batch": name, "cases": cases},
+                                 **({"plan": f"batches/{name}.yaml"} if name != "adhoc" else {}),
                                  "results": []})
     login = ((ci.get("login") or {}).get("mode")) or "none"
     output(name=name, run_log=log, branch=f"run/{name}-{a.run_id}", cases=" ".join(cases),

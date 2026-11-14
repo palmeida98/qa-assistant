@@ -312,11 +312,14 @@ class WorkflowSteps(Base):
             log = json.load(f)
         self.assertEqual(log["run"], {"environment": "test", "build": "1.4.0 (140)"})
         self.assertEqual(log["results"], [])
+        self.assertEqual(log["plan"], "batches/chat-smoke.yaml")        # the plan recorded before any result
         for mode, flows, agent in [("flows", "TC-MOB-001", ""), ("conversational", "", "TC-MOB-001 TC-MOB-002")]:
             os.remove(os.environ["GITHUB_OUTPUT"])
             self.run_(FakeGh(), "batch", "--input", "TC-MOB-001, TC-MOB-002", "--mode", mode, "--run-id", "7")
             o = self.outputs()
             self.assertEqual((o["name"], o["flow_cases"], o["agent_cases"]), ("adhoc", flows, agent), mode)
+        with open(os.path.join(self.ws, "runs", "batch_adhoc_r7.json"), encoding="utf-8") as f:
+            self.assertNotIn("plan", json.load(f))                      # case IDs: no plan, as before
         self.assertEqual(self.run_(FakeGh(), "batch", "--input", "rm -rf", "--run-id", "7")[0], 2)
         self.assertEqual(self.run_(FakeGh(), "batch", "--input", "TC-MOB-001", "--mode", "x", "--run-id", "7")[0], 2)
 
@@ -658,3 +661,95 @@ class FilesToCommit(unittest.TestCase):
                 with open(os.path.join(ws, rel), "w", encoding="utf-8") as f:
                     f.write("new")
             self.assertEqual(wc.files_to_commit(ws), ["context.md", "evidence/new/b.png", "runs/new.json"])
+
+
+class PlanCheckedBeforeTheRun(Base):
+    """Step «Resolve the batch» (workspace_ci.py batch) checks a planned batch before the run log, the step's outputs
+    and any case: a decision of the QA missing or out of date for the run's platform, build and environment, or two own
+    plans with decisions, stop the workflow there (14.11.2026). A list of case IDs runs as before."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["GITHUB_OUTPUT"] = os.path.join(self.tmp.name, "out")
+        os.makedirs(os.path.join(self.ws, "batches"))
+        os.makedirs(os.path.join(self.ws, "memory"))
+        entry = {"id": "Q-1", "bug": "BUG-9", "cases": ["TC-MOB-002"], "platforms": ["android"], "builds": [],
+                 "environments": ["test"], "reason": "known failure", "exit": "a build with the fix",
+                 "status": "active", "history": [], "decided_by": "QA", "decided_at": "2026-11-14", "decision_ref": "x"}
+        with open(os.path.join(self.ws, "memory", "quarantine.json"), "w", encoding="utf-8") as f:
+            json.dump({"entries": {"Q-1": entry}}, f)
+
+    def outputs(self):
+        with open(os.environ["GITHUB_OUTPUT"], encoding="utf-8") as f:
+            return dict(line.split("=", 1) for line in f.read().splitlines())
+
+    def plan(self, name, data):
+        with open(os.path.join(self.ws, "batches", f"{name}.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f)
+
+    def batch(self, text):
+        return self.run_(FakeGh(), "batch", "--input", text, "--mode", "both", "--run-id", "4242")
+
+    def nothing_started(self, name):
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs", f"batch_{name}_r4242.json")))
+        self.assertFalse(os.path.exists(os.environ["GITHUB_OUTPUT"]))           # no flow_cases / agent_cases
+
+    def test_a_covered_case_without_the_qas_decision_stops_before_the_run_log_and_the_outputs(self):
+        self.plan("chat-q", {"cases": ["TC-MOB-001", "TC-MOB-002"]})
+        code, out = self.batch("chat-q")
+        self.assertEqual(code, 1, out)
+        self.assertIn("REFUSED: batch chat-q (platform android, build 1.4.0 (140), environment test)", out)
+        self.assertIn("TC-MOB-002: covered by quarantine Q-1", out)
+        self.nothing_started("chat-q")
+
+    def test_a_decision_that_no_longer_holds_for_the_run_stops_too(self):
+        self.plan("chat-old", {"cases": ["TC-MOB-001"], "excluded": [{"case": "TC-MOB-002", "quarantine": "Q-1"}],
+                               "run": {"platform": "android", "build": "1.3.0 (130)", "environment": "test"}})
+        with open(os.path.join(self.ws, "memory", "quarantine.json"), encoding="utf-8") as f:
+            reg = json.load(f)
+        reg["entries"]["Q-1"]["builds"] = ["1.3.0 (130)"]                       # the run's build is 1.4.0 (140)
+        with open(os.path.join(self.ws, "memory", "quarantine.json"), "w", encoding="utf-8") as f:
+            json.dump(reg, f)
+        code, out = self.batch("chat-old")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no active quarantine covers it in this context", out)
+        self.nothing_started("chat-old")
+
+    def test_a_plan_with_the_qas_decision_runs_and_records_its_plan(self):
+        self.plan("chat-ok", {"cases": ["TC-MOB-001"], "excluded": [{"case": "TC-MOB-002", "quarantine": "Q-1"}]})
+        code, out = self.batch("chat-ok")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.outputs()["cases"], "TC-MOB-001")
+        with open(os.path.join(self.ws, "runs", "batch_chat-ok_r4242.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["plan"], "batches/chat-ok.yaml")
+
+    def test_two_own_plans_with_decisions_are_never_chosen_silently(self):
+        self.plan("batch_chat-dup", {"cases": ["TC-MOB-001"], "excluded": [{"case": "TC-MOB-002", "quarantine": "Q-1"}]})
+        self.plan("chat-dup", {"cases": ["TC-MOB-001", "TC-MOB-002"], "retest": [{"case": "TC-MOB-002",
+                                                                                 "quarantine": "Q-1"}]})
+        for text in ("chat-dup", "batch_chat-dup"):
+            code, out = self.batch(text)
+            self.assertEqual(code, 1, out)
+            self.assertIn("batches/batch_chat-dup.yaml (excluded) and batches/chat-dup.yaml (retest)", out)
+            self.nothing_started(text.removeprefix("batch_"))
+            self.assertFalse(os.path.exists(os.path.join(self.ws, "runs", f"batch_{text}_r4242.json")))
+
+    def test_a_list_of_case_ids_runs_as_before(self):
+        code, out = self.batch("TC-MOB-001, TC-MOB-002")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.outputs()["name"], "adhoc")
+
+    def test_the_workflow_runs_no_execution_step_after_a_failed_resolve(self):
+        with open(os.path.join(CI_DIR, "mobile.yml"), encoding="utf-8") as f:
+            steps = yaml.safe_load(f)["jobs"]["run"]["steps"]
+        names = [s.get("name") or s.get("uses") for s in steps]
+        resolve = names.index("Resolve the batch")
+        for s in steps[resolve + 1:]:
+            cond = str(s.get("if") or "")
+            if "always()" in cond:          # after a failure only the checks guarded by the batch's success, and logs
+                self.assertTrue("steps.batch.outcome == 'success'" in cond or "steps.post.outputs.safe" in cond
+                                or s.get("name") == "Diagnostics", s.get("name"))
+            else:                           # without always(), GitHub runs a step only when every earlier one passed
+                self.assertNotIn("failure()", cond, s.get("name"))
+        execution = [n for n in names[resolve + 1:] if n in ("Maestro flows", "Claude Code headless (conversational mode)")]
+        self.assertEqual(len(execution), 2)

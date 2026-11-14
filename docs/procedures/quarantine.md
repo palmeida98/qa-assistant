@@ -67,7 +67,12 @@ quarantine never reduces the coverage of what it does not cover.
   while its quarantine holds, for a case an active quarantine of the batch's context covers without the QA's decision
   in the plan (`retest:`), and for a case of an `excluded:` list whose quarantine no longer holds there (the plan is out
   of date: another build, platform, environment, or the quarantine was lifted). `run_log.py progress` names a plan to
-  revalidate before the next case.
+  revalidate before the next case. It also refuses the first result of a batch whose own plan (`batches/<name>.yaml`) has
+  `excluded:`, `retest:` or `approval:` while the run log does not record that plan (`run_log.py plan` first), so the
+  cases left out show from the first `progress`; `batches/<name>.yaml` and `batches/batch_<name>.yaml` that both carry
+  decisions are refused as ambiguous (by `add`, `plan` and the CI) until the QA keeps one. In the CI, the step
+  «Resolve the batch» (`workspace_ci.py batch`) checks the plan with the run's platform, build and environment before
+  the run log and any case: a missing or out-of-date decision stops the workflow there.
 - **On resuming,** the decision of the plan is reused as long as the same quarantine is active and holds for the
   batch's platform, build and environment (`scope --plan` passes); otherwise the plan is revalidated and shown again to
   the QA when the coverage changes. A new build is a new batch, planned and checked again.

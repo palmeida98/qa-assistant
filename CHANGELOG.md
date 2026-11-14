@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Changed (an approved batch plan is recorded before the run, 2026-11-14)
+- `run_log.py add` refuses (exit 1, nothing written) the first result of a batch whose own plan
+  `batches/<name>.yaml` (with or without the `batch_` prefix) carries the QA's decision (`approval:`, `excluded:`,
+  `retest:`) until `run_log.py plan` records it; `plan` refuses another file for that batch; `progress` names the
+  command and, before the first result, checks the quarantine in the plan's `run:` context (no false «revalidate»).
+  `workspace_ci.py batch` records the plan of a planned remote batch. Batches without such a plan (ad hoc retests,
+  older batches) are recorded as before. `/run-tests` step 3: mode, plan, progress, then the first case.
+- Two own plans with the QA's decisions (`batches/<name>.yaml` and `batches/batch_<name>.yaml`) are ambiguous: `add`,
+  `plan` and the CI refuse and name both until the QA keeps one; a run log that follows another plan than its own plan
+  with decisions is refused too (recording the own plan keeps the results). `progress` says `PLAN TO RESOLVE`.
+- CI: the step «Resolve the batch» checks a planned batch as `quarantine.py scope --plan` with the run's platform
+  (android), build and environment, before the run log and the step's outputs: a missing or out-of-date decision
+  stops the workflow before the emulator, the flows and the agent. A list of case IDs runs as before.
+
 ### Added (bugs: final preview of the fields, write guard 1.2.0, 2026-11-13)
 - `ado_guard_preview_bug` shows every field with the label of the Board's form and its exact value, the Parent,
   Assigned To empty, the project's checks and notices, the evidence and the creation comment as separate operations,
