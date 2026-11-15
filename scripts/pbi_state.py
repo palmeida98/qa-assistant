@@ -15,6 +15,15 @@ The progress of one PBI through /test-pbi, so the flow can stop and resume in an
     python scripts/pbi_state.py <workspace> update <pbi> <item> [--missing TEXT] [--unblocks WHO] [--by ...] [--step S]
     python scripts/pbi_state.py <workspace> close <pbi> <item> --ref PROOF [--decided-by WHO]
     python scripts/pbi_state.py <workspace> saved <pbi> --ref REF [--note TEXT]
+    python scripts/pbi_state.py <workspace> bind <pbi> --as WORKSPACE_ID --decided-by WHO
+
+Workspace (technique-workspaces.md 4.1): every command refuses (exit 6, nothing read or written) when it runs from a
+session open inside another workspace than <workspace>. A record created in a workspace that declares an identity
+(project.yaml `workspace: {id, kind}`) keeps it (`"workspace"` in the record); any later command in a workspace with
+another identity, or with none, refuses it (exit 6) and leaves the file as it is. A record without `"workspace"` (made
+before 15.11.2026, or in a workspace without identity) stays unbound and is read and changed as before: it is never
+bound by guessing, since a copied file says nothing about where it belongs. Only `bind`, with the QA's decision, binds
+it to the current workspace, and only when --as names the current workspace's id.
 
 The record is <workspace>/memory/pbi/<pbi>.json, written whole and atomically under the workspace's lock. It holds the
 steps (context, analyze, plan, run:<platform>, bugs, report, checkpoint), what the plan was based on (the baseline:
@@ -62,7 +71,8 @@ them is read as it is: reading never rewrites it.
 Exit codes: 0 done (check: nothing changed) · 1 check: something changed / published, open, update, close: refused · 2
 usage or a record that cannot be read · 3 check: not concluded (something could not be compared; nothing is said to be
 unchanged) · 4 mark checkpoint done: the flow cannot close yet (nothing was written) · 5 another process is writing the
-workspace (nothing was written)
+workspace (nothing was written) · 6 another workspace: the session is open in another one, or the record belongs to
+another workspace (nothing was written)
 """
 
 from __future__ import annotations
@@ -77,6 +87,7 @@ from datetime import datetime
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
+import workspace_identity
 from common import (
     OutsideWorkspace,
     WorkspaceBusy,
@@ -108,6 +119,10 @@ class Refused(Exception):
 
 class CannotClose(Exception):
     """The flow cannot close yet (code 4): nothing was written."""
+
+
+class WrongWorkspace(Exception):
+    """The session or the record belongs to another workspace (code 6): nothing was written."""
 
 
 def now() -> str:
@@ -176,6 +191,9 @@ def load(workspace: str, pbi: str) -> dict | None:
         raise UsageError(f"{path} cannot be read ({e}): fix it by hand or move it away; nothing was changed") from e
     if not isinstance(doc, dict) or doc.get("pbi") != pbi:
         raise UsageError(f"{path} is not the record of PBI {pbi}")
+    why = workspace_identity.record_conflict(doc.get("workspace"), workspace_identity.read(workspace))
+    if why:
+        raise WrongWorkspace(f"{path}: {why}")
     return doc
 
 
@@ -362,6 +380,10 @@ def start(workspace: str, pbi: str, task: str | None, platforms: list[str]) -> t
             doc = {"pbi": pbi, "task": task, "platforms": [], "created": now(), "steps": {}, "baseline": {},
                    "published": {}, "history": []}
             _event(doc, "started")
+            ident = workspace_identity.read(workspace)
+            if ident:
+                doc["workspace"] = ident
+                _event(doc, f"bound to the workspace {workspace_identity.label(ident)}")
         if task and doc.get("task") and doc["task"] != task:
             raise UsageError(f"PBI {pbi} is recorded with the QA task {doc['task']}, not {task}")
         doc["task"] = doc.get("task") or task
@@ -746,9 +768,38 @@ def _engine_conclusion(workspace: str, check: str) -> str:
         raise UsageError(f"--check {check}: {path} cannot be read ({e})") from None
 
 
+def bind(workspace: str, pbi: str, as_id: str | None, decided_by: str | None) -> tuple[dict, str]:
+    """Binds a record that has no workspace identity to the current workspace's, on the QA's decision. Never by
+    guessing: --as must name the current workspace's id (typed by the person who checked that the record was made here)."""
+    if not as_id or not decided_by:
+        raise UsageError("bind needs --as <the current workspace's id> and --decided-by <the QA>")
+    current = workspace_identity.read(workspace)
+    if not current:
+        raise Refused(f"{workspace} declares no identity (project.yaml workspace: {{id, kind}}): nothing to bind to")
+    if as_id != current["id"]:
+        raise Refused(f"--as {as_id!r} is not this workspace's id {current['id']!r}: nothing was written")
+    with workspace_lock(workspace):
+        doc = load(workspace, pbi)
+        if doc is None:
+            raise UsageError(f"no record of PBI {pbi}: nothing to bind")
+        if doc.get("workspace"):
+            return doc, f"already bound to {workspace_identity.label(doc['workspace'])}: nothing changed"
+        doc["workspace"] = current
+        _event(doc, f"bound to the workspace {workspace_identity.label(current)} (decided by {decided_by})")
+        save(workspace, doc)
+    return doc, f"bound to {workspace_identity.label(current)}"
+
+
+def _binding_line(doc: dict) -> str:
+    if doc.get("workspace"):
+        return f"Workspace: {workspace_identity.label(doc['workspace'])}"
+    return ("Workspace: this record is not bound to a workspace identity (made before 15.11.2026 or in a workspace "
+            "without one); it is read as before, and bound only with `bind --as <id> --decided-by <QA>`")
+
+
 def render(doc: dict) -> str:
     lines = [f"PBI {doc['pbi']}" + (f" · QA task {doc['task']}" if doc.get("task") else "")
-             + f" · platforms: {', '.join(doc['platforms']) or 'none yet'}"]
+             + f" · platforms: {', '.join(doc['platforms']) or 'none yet'}", _binding_line(doc)]
     for name in step_names(doc["platforms"]):
         s = doc["steps"].get(name, {"status": "pending"})
         extra = "".join(f" · {k}: {s[k]}" for k in ("ref", "note", "at") if s.get(k))
@@ -813,6 +864,10 @@ def parser() -> argparse.ArgumentParser:
                                                "project's specs.location (a local export)")
             p.add_argument("--check", help="the /analyze-ticket check id read for this check (its conclusion counts)")
             p.add_argument("--reopen", action="store_true", help="put the steps to review back to pending")
+    p = sub.add_parser("bind", help="bind a record without identity to this workspace (the QA's decision)")
+    p.add_argument("pbi")
+    p.add_argument("--as", dest="as_id", help="the current workspace's id (project.yaml workspace.id)")
+    p.add_argument("--decided-by", help="the QA who checked that the record belongs here")
     p = sub.add_parser("published")
     p.add_argument("pbi")
     p.add_argument("draft", help="<batch>/<case> of the bug proposal")
@@ -825,6 +880,9 @@ def main(argv=None) -> int:
     a = parser().parse_args(argv)
     ws = os.path.abspath(a.workspace)
     try:
+        conflict = workspace_identity.session_conflict(ws, os.getcwd(), ROOT)
+        if conflict:
+            raise WrongWorkspace(workspace_identity.conflict_text(conflict))
         if not os.path.isfile(os.path.join(ws, "project.yaml")):
             raise UsageError(f"{ws} has no project.yaml: not a workspace")
         pbi = pbi_id(a.pbi, ws)
@@ -855,6 +913,11 @@ def main(argv=None) -> int:
                 doc, text = save_checkpoint(ws, pbi, a.ref, a.note)
             print(text)
             print("\n".join(state_lines(doc)))
+            return 0
+        if a.command == "bind":
+            doc, text = bind(ws, pbi, a.as_id, a.decided_by)
+            print(text)
+            print(render(doc))
             return 0
         if a.command == "published":
             doc, text, ok = publish(ws, pbi, a.draft, a.key, a.confirmed_by)
@@ -926,6 +989,9 @@ def main(argv=None) -> int:
     except WorkspaceBusy as e:
         print(f"BUSY: {e}: nothing was written; run the same command again", file=sys.stderr)
         return 5
+    except WrongWorkspace as e:
+        print(f"STOP: {e}", file=sys.stderr)
+        return 6
 
 
 if __name__ == "__main__":

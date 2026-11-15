@@ -78,6 +78,48 @@ Any folder name is accepted, spaces and accents included; a folder starting with
 
 **Listing reads only each `project.yaml`.** It never opens tickets, evidence, workbooks, `.env` or memory, and it shows the name, the id, the status and the path relative to the root. Listing does not authorise reading more.
 
+### 4.1 Identity of a workspace and the session's workspace
+
+A workspace may declare who it is, in `project.yaml` (optional, since 15.11.2026):
+
+```yaml
+workspace:
+  id: "lia"          # stable; lower-case letters, digits, '.', '_' or '-'; unique among one person's workspaces
+  kind: "real"       # real | simulation
+```
+
+- **The name is only informative.** `project:` can be the same in the real workspace and in a copy made to simulate
+  (both «LIA»). The identity tells them apart; the real path tells apart two folders even when a copy kept the real
+  identity (the list marks two folders with the same `id`: give the copy its own `id` and `kind: simulation`).
+- **New simulations** are copies made under `~/qa-simulations/<name>/`, outside the root of workspaces, with their own
+  `workspace.id` and `kind: simulation`. A copy already inside the root (e.g. `qa-workspaces/lia-sim-q1`) is not moved;
+  give it its identity when it is next used.
+- **Making a simulation** (the procedure): copy the workspace under `~/qa-simulations/<name>/`, and **before resuming
+  any PBI there** change its `project.yaml` to its own `workspace.id` and `kind: simulation`. Its records copied from the
+  real workspace are then refused (exit 6); its own new records keep the simulation's identity.
+- **Limit: a copy that kept the real identity.** The identity is a declaration, not a fingerprint: a full copy with the
+  same `id` and `kind` (and the real workspace's records) is, from inside itself, indistinguishable from the original.
+  A session opened in the copy passes its preflight and can resume and change the copy's records (never the original's:
+  the original is another real path, refused with exit 5/6). Selecting by that `id` from outside is refused as
+  ambiguous and names both paths, and the list marks both folders. That is why the procedure above gives the copy its
+  own identity first.
+- **Without the block** (every workspace made before it): the workspace has no identity and works as before; both
+  layouts of section 4 (`<project>/` and `<company>/<project>/`) are supported with or without it.
+- **The session's workspace.** The folder a session was opened in, or its nearest parent with a `project.yaml`, is the
+  session's workspace (`workspace_identity.session_workspace`). The preflight (section 6) compares it with the target,
+  real paths normalised: the same workspace or any subfolder of it passes; another workspace stops with exit 5, even
+  when both are called «LIA» and even when the target was given by path. A session outside every workspace (a CLI or
+  CI started elsewhere with an explicit target, or the framework's checkout) is not stopped. `pbi_state.py` applies the
+  same rule in code (exit 6), so a record is never created or changed from the wrong session even if a skill skipped
+  its preflight; the other scripts take the workspace as their first argument and do not check the session.
+- **PBI records** (`memory/pbi/<pbi>.json`, skills-spec.md §5) created in a workspace with an identity keep it; a later
+  command in a workspace with another identity, or with none, refuses the record and leaves it untouched. A record
+  without it (made before, or in a workspace without identity) stays unbound: it is never bound by guessing, because a
+  copied file does not say where it was made. `pbi_state.py <ws> bind <pbi> --as <id> --decided-by <QA>` binds it on
+  the QA's decision, only to the current workspace's own id.
+- `policy.approvals` (the approvals as configuration) is the next increment: the manual confirmations of each project
+  (its CLAUDE.md and context.md) apply as before.
+
 ## 5. Selection
 
 `python scripts/workspace_select.py resolve [<project>] [--workspace PATH] [--root PATH]`, in this order:

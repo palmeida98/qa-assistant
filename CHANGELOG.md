@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (identity of a workspace and the session's workspace, 2026-11-15)
+- `project.yaml` takes an optional `workspace: {id, kind}` (kind `real` or `simulation`; `scripts/workspace_identity.py`,
+  validated by `validate_project.py`). The project's name stays informative; the list shows the identity and marks two
+  folders with the same id. A name given to a skill matches the identity's id first. New simulations go under
+  `~/qa-simulations/` (technique-workspaces.md 4.1); existing copies are not moved.
+- Preflight exit 5: a session open inside one workspace (its folder or any subfolder) stops when the target is
+  another workspace, compared by real paths, whatever the names and whether the target came by name or by path; it
+  prints both workspaces and the command to open the right session. An explicit path is checked before the skill's
+  own checks. A session outside every workspace (CLI, CI with an explicit target, the framework's checkout) is not
+  stopped. The search for the session's workspace goes up any number of folders.
+- `pbi_state.py`: exit 6 for the same session rule, before reading or writing. A record created in a workspace with
+  an identity keeps it (`"workspace"`); a later command in a workspace with another identity, or none, refuses it and
+  leaves it untouched. Records without identity are read and changed as before and never bound by guessing;
+  `pbi_state.py <ws> bind <pbi> --as <id> --decided-by <QA>` binds one on the QA's decision. Skills: exit 5 in step 0 of
+  every skill; `/test-pbi` step 2 stops on exit 6. `policy.approvals` is left for the next increment.
+- An identity id declared by two folders is never chosen: selecting it is ambiguous and names both paths. Documented
+  limit: a full copy that kept the real identity can resume its own copied records from inside itself (never the
+  original's); the procedure for a simulation gives it its own identity before any PBI is resumed.
+
 ### Changed (an approved batch plan is recorded before the run, 2026-11-14)
 - `run_log.py add` refuses (exit 1, nothing written) the first result of a batch whose own plan
   `batches/<name>.yaml` (with or without the `batch_` prefix) carries the QA's decision (`approval:`, `excluded:`,

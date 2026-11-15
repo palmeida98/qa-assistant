@@ -77,6 +77,10 @@ Writes go through `common.workspace_path` and, for shared files, `common.workspa
 
 ### 5.1 The resume record of `/test-pbi`: progress, open items and closing
 
+The record keeps the identity of the workspace it was created in, when that workspace declares one, and is refused
+by any other workspace; a record without it stays readable and is bound only on the QA's decision
+(technique-workspaces.md 4.1, `pbi_state.py bind`).
+
 `memory/pbi/<id>.json` holds the steps (`context`, `analyze`, `plan`, `run:<platform>`, `bugs`, `report`,
 `checkpoint`), the baseline, the bugs published and an append-only history. Two optional fields hold what is not a
 step (procedures/rules.md §7):
