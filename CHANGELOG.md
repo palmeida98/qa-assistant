@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (the QA's run decisions and their check, increment 2 first part, 2026-11-15)
+- `scripts/approvals.py`: `memory/approvals.jsonl`, append-only under the workspace's lock: `record-run`, `check`,
+  `list`, `revoke`. A run decision holds the workspace identity, PBI, batch, platform, environment, build, the plan and
+  its SHA-256, `declared_by`, the reference to the QA's message and the date; it is marked `declared-in-chat` with the
+  reference not verified (never a signature, never written from a successful command). `check` reads only and answers
+  valid, missing, stale (naming the field) or revoked; an unreadable register is an error.
+- Opt-in `policy.approvals.run: per-platform` (needs `workspace:`; validated by `validate_project.py`): `run_log.py add`
+  refuses every result without a valid decision for the batch's platform, environment, build and recorded plan, writing
+  nothing; the CI's «Resolve the batch» checks the same before the run log, the emulator and the flows (an ad hoc list
+  is refused); `workspace_ci.py build-check` (new workflow step after the APK is fetched, before the emulator) compares
+  the APK's own version with the validated build and checks the decision for it; `pbi_state.py show` lists each
+  platform's decision. Only the observed build counts (the plan's is the intended one); a remote run log carries only
+  its base batch's decision (`<batch>_r<digits>`); `record-run` takes only the batch's own plan and refuses a PBI,
+  platform or environment the plan declares otherwise; the same decision twice is one line. `/run-tests` step 3 checks before the first action
+  and on every resume. Without the option nothing changes. docs/procedures/approvals.md.
+
 ### Added (identity of a workspace and the session's workspace, 2026-11-15)
 - `project.yaml` takes an optional `workspace: {id, kind}` (kind `real` or `simulation`; `scripts/workspace_identity.py`,
   validated by `validate_project.py`). The project's name stays informative; the list shows the identity and marks two

@@ -245,11 +245,24 @@ def plan_problem(workspace: str, name: str, platform: str, build: str, environme
     two own plans with the QA's decisions (run_log.plan_ambiguity), or the plan checked as `quarantine.py scope --plan`
     with the run's own platform, build and environment (a decision missing for a covered case, or one that no longer
     holds: the plan is out of date). A list of case IDs ("adhoc") has no plan and runs as before."""
+    import approvals
+    proj = project(workspace)
     if name == "adhoc":
+        if approvals.run_per_platform(proj):
+            return ("policy.approvals.run: per-platform: a list of case IDs has no approved plan to check; run a "
+                    "planned batch the QA authorised for this platform, environment and build")
         return None
     ambiguous = run_log.plan_ambiguity(workspace, name)
     if ambiguous:
         return ambiguous
+    if approvals.run_per_platform(proj):
+        # procedures/approvals.md: the same check as run_log.py add, before the run log, the emulator, the flows and
+        # the agent; the remote run log is named <batch>_r<id> and its decision is the batch's own
+        doc = {"plan": f"batches/{name}.yaml", "run": {"platform": platform, "environment": environment, "build": build},
+               "remote": {"batch": name}}
+        why = approvals.gate_for_add(workspace, proj, name, doc, environment, build)
+        if why:
+            return why
     import quarantine
     try:
         problems = quarantine.scope(workspace, platform, build or None, environment or None,
@@ -303,6 +316,42 @@ def cmd_batch(workspace: str, a) -> int:
     output(name=name, run_log=log, branch=f"run/{name}-{a.run_id}", cases=" ".join(cases),
            flow_cases=" ".join(flow_cases), agent_cases=" ".join(agent_cases), login=login,
            max_turns=int(ci.get("max_turns") or 150))
+    return 0
+
+
+def cmd_build_check(workspace: str, a) -> int:
+    """(workflow, step «The build is the one authorised», after the APK is fetched and before the emulator and the
+    flows) The build that will really run is the APK's own manifest (versionName and versionCode), not the declared
+    mobile.build.version that «Resolve the batch» used. Under policy.approvals.run: per-platform (procedures/approvals.md)
+    a different build, or no valid decision for the effective build, stops the job here: nothing reaches the device.
+    Without the option a difference is only a warning, as before."""
+    import approvals
+    from apk_manifest import ManifestError, read_manifest
+    from common import same_build
+    proj = project(workspace)
+    if not os.path.isfile(a.apk):
+        raise UsageError(f"{a.apk}: no APK (the step «The build» did not write one)")
+    try:
+        m = read_manifest(a.apk)
+    except ManifestError as e:
+        raise UsageError(f"{a.apk}: {e}") from None
+    effective = f"{m.get('version_name') or '?'} ({m.get('version_code') if m.get('version_code') is not None else '?'})"
+    name = run_log.batch_id(a.run_log)
+    doc = run_log.read_log(run_log.run_log_path(workspace, name))
+    validated = str((doc.get("run") or {}).get("build") or "")
+    strict = approvals.run_per_platform(proj)
+    if not same_build(validated, effective):
+        text = (f"the APK to install is {m.get('package')} {effective}, but «Resolve the batch» validated the build "
+                f"{validated or '?'} (mobile.build.version)")
+        if strict:
+            raise Refused(f"{text}: the run is not authorised for this build. Nothing reaches the device")
+        print(f"warning: {text}", file=sys.stderr)
+        return 0
+    if strict:
+        why = approvals.gate_for_add(workspace, proj, name, doc, None, effective)
+        if why:
+            raise Refused(f"{why}. Nothing reaches the device")
+    print(f"build {effective}: the one validated for {name}")
     return 0
 
 
@@ -837,6 +886,9 @@ def main(argv=None) -> int:
     p.add_argument("--mode", default="conversational")
     p.add_argument("--run-id", required=True)
     sub.add_parser("write-env", help="(workflow) .env from $QA_SECRETS_JSON, only ci.secrets")
+    p = sub.add_parser("build-check", help="(workflow) the fetched APK is the build validated for the batch")
+    p.add_argument("--run-log", required=True)
+    p.add_argument("--apk", required=True)
     p = sub.add_parser("blocked", help="(workflow) every case Blocked, with the reason")
     p.add_argument("--run-log", required=True)
     p.add_argument("--cases", nargs="+", required=True)
@@ -864,7 +916,7 @@ def main(argv=None) -> int:
     p.add_argument("--after", required=True)
     a = ap.parse_args(argv)
     workspace = os.path.abspath(a.workspace)
-    commands = {"install": cmd_install, "check": cmd_check, "batch": cmd_batch, "write-env": cmd_write_env,
+    commands = {"install": cmd_install, "check": cmd_check, "batch": cmd_batch, "build-check": cmd_build_check, "write-env": cmd_write_env,
                 "blocked": cmd_blocked, "import-flows": cmd_import_flows, "prompt": cmd_prompt,
                 "post-check": cmd_post_check, "pr-body": cmd_pr_body, "apply-merged": cmd_apply_merged}
     try:

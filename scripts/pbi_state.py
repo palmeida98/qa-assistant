@@ -797,7 +797,29 @@ def _binding_line(doc: dict) -> str:
             "without one); it is read as before, and bound only with `bind --as <id> --decided-by <QA>`")
 
 
-def render(doc: dict) -> str:
+def _approval_lines(workspace: str | None, doc: dict) -> list[str]:
+    """procedures/approvals.md: with policy.approvals.run per-platform, the run decision of each platform, checked
+    against its batch's current context. Information only: the steps and the other platforms are not changed."""
+    if not workspace:
+        return []
+    try:
+        import approvals
+        from common import read_project
+        if not approvals.run_per_platform(read_project(workspace)):
+            return []
+        states = approvals.run_status_by_platform(workspace, doc["pbi"], list(doc.get("platforms") or []))
+    except (OSError, ValueError, ImportError):
+        return []
+    out = []
+    for platform, st in states.items():
+        ap = st.get("approval") or {}
+        what = (f" {ap['id']} · {ap.get('environment')} · {ap.get('build')} · declared by {ap.get('declared_by')} "
+                f"(declared in the chat, reference not verified)") if ap else ""
+        out.append(f"Run approval ({platform}): {st['status']}{what}" + (f" — {st['reason']}" if st.get("reason") else ""))
+    return out
+
+
+def render(doc: dict, workspace: str | None = None) -> str:
     lines = [f"PBI {doc['pbi']}" + (f" · QA task {doc['task']}" if doc.get("task") else "")
              + f" · platforms: {', '.join(doc['platforms']) or 'none yet'}", _binding_line(doc)]
     for name in step_names(doc["platforms"]):
@@ -809,7 +831,7 @@ def render(doc: dict) -> str:
         lines.append(f"Baseline ({base.get('at', '?')}): tickets {base.get('tickets') or {}}, builds "
                      f"{base.get('builds') or {}}, environment {base.get('environment') or '-'}"
                      + (f", spec plan {base['spec_plan']}" if base.get("spec_plan") else ""))
-    return "\n".join(lines + state_lines(doc))
+    return "\n".join(lines + _approval_lines(workspace, doc) + state_lines(doc))
 
 
 def parser() -> argparse.ArgumentParser:
@@ -889,13 +911,13 @@ def main(argv=None) -> int:
         if a.command == "start":
             doc, created = start(ws, pbi, a.task, _platforms(a.platform))
             print(("created" if created else "resumed") + f": {path_of(ws, pbi)}")
-            print(render(doc))
+            print(render(doc, ws))
             return 0
         if a.command == "show":
             doc = load(ws, pbi)
             if doc is None:
                 raise UsageError(f"no record of PBI {pbi} (memory/pbi/{pbi}.json): run start first")
-            print(json.dumps(doc, ensure_ascii=False, indent=1) if a.json else render(doc))
+            print(json.dumps(doc, ensure_ascii=False, indent=1) if a.json else render(doc, ws))
             return 0
         if a.command == "mark":
             doc, text = mark(ws, pbi, a.step, a.status, a.ref, a.note, a.close_with_open, a.decided_by)
@@ -917,7 +939,7 @@ def main(argv=None) -> int:
         if a.command == "bind":
             doc, text = bind(ws, pbi, a.as_id, a.decided_by)
             print(text)
-            print(render(doc))
+            print(render(doc, ws))
             return 0
         if a.command == "published":
             doc, text, ok = publish(ws, pbi, a.draft, a.key, a.confirmed_by)
@@ -935,7 +957,7 @@ def main(argv=None) -> int:
                     raise UsageError(f"--spec-plan {a.spec_plan}: not a file of the workspace")
                 spec_plan = os.path.relpath(full, ws).replace(os.sep, "/")
             doc = set_baseline(ws, pbi, tickets, builds, a.environment, spec_plan)
-            print(render(doc))
+            print(render(doc, ws))
             return 0
         doc = load(ws, pbi)
         if doc is None:

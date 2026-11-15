@@ -64,6 +64,9 @@ The defaults below hold in every workspace whose own rules do not ask for more (
 - An approval covers the concrete set of changes it was given for, never the next one. It is reused, in this skill or
   the next, while that same set and its preview are still valid (the same dry run, its token not stale); a changed set
   or a stale preview is asked again.
+- `policy.approvals.run: per-platform` in project.yaml (procedures/approvals.md) makes the run's authorisation per
+  platform a checked decision: recorded in `memory/approvals.jsonl` (declared in the chat, not signed) and verified by
+  `run_log.py add` and the CI before every result. Without the option the table above applies as it is.
 - A run started by a launcher with nobody to approve (the workspace's CI) applies nothing: its
   bugs are `"proposed": true` and its doubts `Question`, for the review after it (methodology §9.4).
 
