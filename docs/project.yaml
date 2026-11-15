@@ -9,6 +9,9 @@ resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"
 modules: [functional-web]     # closed list (methodology 4.1): functional-web | exploratory | api | accessibility | mobile
 run_log: "runs/"             # folder of the session's run log (never history/, which is immutable)
+# workspace:                  # (opt.) identity (docs/technique-workspaces.md 4.1); the name in project: is informative only
+#   id: ""                     # stable id, lower-case letters, digits, '.', '_' or '-'; unique among your workspaces
+#   kind: "real"               # real | simulation (copies for simulating live under ~/qa-simulations/)
 # report:                      # (opt.) /qa-report: which batches belong to which platform, when the run block has no
 #   platforms:                 # "platform" (scripts/qa_report.py); a batch that matches none is reported as unknown
 #     android: ["batch_android_*"]

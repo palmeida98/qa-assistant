@@ -29,7 +29,9 @@ metadata:
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
    propose /project-context. 2: ask only which project, with its list. 3, or <qa> or the script missing: stop and
    show what it says (the skill and the code do not match; nothing is installed or changed). 4: show the
-   configuration it asks for. `Route:` lines name the procedure of each module; `Next:` is the one command to run
+   configuration it asks for. 5: the session is open in another workspace than the target: STOP, show
+   the two workspaces and the command it prints to open the right session; nothing else runs here.
+   `Route:` lines name the procedure of each module; `Next:` is the one command to run
    before the work. The current workspace is the one it selected. Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Parameters: the PBI (an id or key, or a link of a source configured in tickets:, Linear's .../issue/<KEY>/<slug>
@@ -45,6 +47,10 @@ metadata:
    the tracker. A step `done` is not done again and a publication listed is never repeated. "no work available in this
    session" means that everything left waits on someone: say what, never "nothing pending" (that is said only when
    the record says it).
+   A record made in a workspace with an identity (technique-workspaces.md 4.1) keeps it; exit 6 means the session or
+   the record belongs to another workspace: STOP, show what it printed (the recorded origin and the current workspace)
+   and never rewrite, copy or bind the record to go on. A record without identity is read as before; binding it
+   (`bind --as <id> --decided-by <QA>`) is the QA's decision.
 3. Resuming a record with a plan: run /analyze-ticket again (it shows only the differences) and, for mobile, the
    device check; then
    python <qa>/scripts/pbi_state.py <workspace> check <pbi> --ticket <id>=<revision> [--ticket <task>=<rev> ...]

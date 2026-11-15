@@ -28,7 +28,9 @@ metadata:
    `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
    propose /project-context. 2: ask only which project, with its list. 3, or <qa> or the script missing: stop and
    show what it says (the skill and the code do not match; nothing is installed or changed). 4: show the
-   configuration it asks for. `Route:` lines name the procedure of each module; `Next:` is the one command to run
+   configuration it asks for. 5: the session is open in another workspace than the target: STOP, show
+   the two workspaces and the command it prints to open the right session; nothing else runs here.
+   `Route:` lines name the procedure of each module; `Next:` is the one command to run
    before the work. The current workspace is the one it selected. Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Collect the failures of the batch (its run log) and their evidence. Follow <qa>/docs/procedures/bugs.md for the

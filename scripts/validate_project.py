@@ -61,6 +61,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import workspace_git as wg
+import workspace_identity
 
 from adapters.tickets import config as tickets_config
 from adapters.tracker import config as tracker_config
@@ -471,6 +472,7 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     p, w = specs_section(proj)
     problems += p
     warnings += w
+    problems += workspace_identity.problems(proj)     # technique-workspaces.md 4.1: optional block
     if proj.get("quarantine") is not None:
         # procedures/quarantine.md: only the words of the report; the register itself is memory/quarantine.json
         qs = proj.get("quarantine")

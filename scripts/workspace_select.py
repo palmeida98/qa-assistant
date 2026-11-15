@@ -21,6 +21,8 @@ Exit codes:
   2  ambiguous: several candidates, listed; nothing is chosen
   3  the skill and the code do not match: stop, and do what the message says; nothing was installed or changed
   4  nothing to select: the root or the path does not exist, or a usage error
+  5  preflight: the session is open inside another workspace than the target (technique-workspaces.md 4.1): stop, and
+     open a session in the target with the command it prints; nothing else was read or written
 """
 
 from __future__ import annotations
@@ -45,7 +47,7 @@ CONFIG_ENV = "QA_ASSISTANT_CONFIG"
 VALID, INCOMPLETE, NOT_CONFIGURED, INACCESSIBLE = "valid", "incomplete", "not-configured", "inaccessible"
 ONBOARDING = "/project-context"
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
-OK, NOT_USABLE, AMBIGUOUS, MISMATCH, NOTHING = 0, 1, 2, 3, 4
+OK, NOT_USABLE, AMBIGUOUS, MISMATCH, NOTHING, WRONG_SESSION = 0, 1, 2, 3, 4, 5
 WALK_UP = 4
 PINNED = ("openpyxl", "et-xmlfile", "pyyaml", "playwright", "pillow")
 
@@ -280,6 +282,8 @@ class Candidate:
     tracker: str | None = None
     modules: tuple = ()
     configured: bool = True     # it has its own project.yaml, a file and not a link
+    identity: str = ""          # workspace.id of project.yaml (technique-workspaces.md 4.1); "" without one
+    kind: str = ""              # workspace.kind: real | simulation; "" without an identity
 
     def public(self, root: str | None = None) -> dict:
         """What a list shows: the minimum needed to choose. The path relative to the root, when there is one."""
@@ -332,8 +336,11 @@ def _candidate(pid: str, company: str, folder: str, path: str, read: bool) -> Ca
         return Candidate(pid, company, folder, path, name=folder, configured=configured)
     status, reason, proj = classify(path)
     modules = tuple(str(m) for m in proj.get("modules") or [] if isinstance(m, str))
+    import workspace_identity
+    ident = workspace_identity.identity(proj) or {}
     return Candidate(pid, company, folder, path, status, reason, str(proj.get("project") or folder),
-                     proj.get("tracker") if isinstance(proj.get("tracker"), str) else None, modules, configured)
+                     proj.get("tracker") if isinstance(proj.get("tracker"), str) else None, modules, configured,
+                     ident.get("id", ""), ident.get("kind", ""))
 
 
 def _entries(path: str) -> tuple[list[os.DirEntry], str | None]:
@@ -398,7 +405,7 @@ def _matches(hint: str, candidates: list[Candidate]) -> list[Candidate]:
     wanted = hint.strip().replace("\\", "/").strip("/").casefold()
     if not wanted:
         return []
-    for key in (lambda c: c.id, lambda c: c.folder, lambda c: c.name):
+    for key in (lambda c: c.identity, lambda c: c.id, lambda c: c.folder, lambda c: c.name):
         exact = [c for c in candidates if key(c).casefold() == wanted]
         if exact:
             return exact
@@ -415,16 +422,11 @@ def _at(path: str, root: str) -> Candidate:
 
 def _from_directory(cwd: str, root: str, framework: str) -> Candidate | None:
     """The current directory or the nearest parent with a project.yaml; a new folder inside the root too."""
-    current = os.path.abspath(cwd)
-    for _ in range(WALK_UP):
-        if inside_framework(current, framework) or os.path.normcase(current) == os.path.normcase(os.path.abspath(root)):
-            break
-        if os.path.isfile(os.path.join(current, "project.yaml")):
-            return _at(current, root)
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
+    import workspace_identity
+    # the same walk as the session check (technique-workspaces.md 4.1): any depth, never into the framework
+    session = workspace_identity.session_workspace(cwd, framework)
+    if session and not _same_path(session, root):
+        return _at(session, root)
     start = os.path.abspath(cwd)
     if _inside(start, root) and not _same_path(start, root):
         for candidate in discover(root):
@@ -467,6 +469,13 @@ def resolve(hint: str | None = None, workspace: str | None = None, root: str | N
         elif found:
             base.outcome, base.candidates = "ambiguous", found
             base.message = f"{hint!r} matches {len(found)} projects: which one?"
+            same = {c.identity for c in found}
+            if len(same) == 1 and "" not in same:
+                # technique-workspaces.md 4.1: an id must name one folder; a copy that kept it is never chosen
+                base.message = (f"the identity {hint!r} is declared by {len(found)} folders: "
+                                + "; ".join(c.path for c in found)
+                                + ". Nothing is chosen: give the copy its own workspace.id and kind: simulation, or "
+                                "name the workspace by its path")
         else:
             base.candidates = everything
             base.message = f"no project matches {hint!r} in {the_root}"
@@ -492,9 +501,16 @@ def resolve(hint: str | None = None, workspace: str | None = None, root: str | N
 
 def _print_candidates(candidates: list[Candidate]) -> None:
     width = max([len(c.id) for c in candidates] + [10])
+    seen: dict[str, int] = {}
+    for c in candidates:
+        if c.identity:
+            seen[c.identity] = seen.get(c.identity, 0) + 1
     for c in candidates:
         tail = f"{c.reason} -> {ONBOARDING}" if c.needs_onboarding else c.reason
-        print(f"  {c.status:15} {c.id:{width}}  {c.name if c.name != c.folder else ''}{'  ' if tail else ''}{tail}")
+        ident = f"  [{c.identity}, {c.kind}]" if c.identity else ""
+        if c.identity and seen[c.identity] > 1:
+            ident += " SAME IDENTITY AS ANOTHER FOLDER: give the copy its own id"
+        print(f"  {c.status:15} {c.id:{width}}  {c.name if c.name != c.folder else ''}{ident}{'  ' if tail else ''}{tail}")
 
 
 # --- preflight -------------------------------------------------------------------------------------------------------
@@ -680,6 +696,27 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
     target = target or sync.TARGET
     report: dict = {"skill": {"name": skill}, "framework": {"root": framework}, "problems": [], "warnings": [],
                     "tools": [], "imports": [], "project": None, "candidates": [], "instruction": None, "next": []}
+    import workspace_identity
+
+    def wrong_session(path: str, candidate=None, how: str = "the path given"):
+        # technique-workspaces.md 4.1: a session opened in one workspace never works on another, whatever the names
+        # and whether the target came by name or by path. Nothing of the target is read beyond its project.yaml, so a
+        # PBI record is never created or changed from the wrong session.
+        conflict = workspace_identity.session_conflict(path, cwd, framework)
+        if not conflict:
+            return None
+        report["project"] = candidate.public() if candidate else {"path": conflict["target"], "id": None, "name": None}
+        report["how"] = how
+        report["session"] = conflict
+        report["problems"].append(workspace_identity.conflict_text(conflict))
+        return WRONG_SESSION, report
+
+    if workspace and os.path.isdir(os.path.join(cwd, workspace)):
+        # an explicit path is checked first, before the skill's own checks (they may need modules an old checkout
+        # lacks): the refusal never depends on them
+        stop = wrong_session(os.path.join(cwd, workspace))
+        if stop:
+            return stop
     doc, instruction, imports, warnings = check_skill(skill, framework, target, cwd)
     report["imports"], report["warnings"] = imports, warnings
     metadata = doc.get("metadata") or {}
@@ -694,6 +731,10 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
         report["candidates"] = [c.public(selection.root) for c in selection.candidates]
         return (AMBIGUOUS if selection.outcome == "ambiguous" else NOTHING), report
     project = selection.candidate
+    stop = wrong_session(project.path, project, selection.how)
+    if stop:
+        report["root"], report["root_source"] = selection.root, selection.root_source
+        return stop
     report["project"] = project.public()
     accepted = (VALID, INCOMPLETE, NOT_CONFIGURED) if metadata.get("requires-project") == "any" else (VALID,)
     status, reason, proj = classify(project.path)
@@ -835,6 +876,13 @@ def _print_preflight_full(code: int, r: dict) -> None:
 
 def _print_preflight(code: int, r: dict, cfg: dict | None = None) -> None:
     """The complete text (`_print_preflight_full`) or, by default, a short card (phase 17.4)."""
+    if code == WRONG_SESSION:
+        # the same text in every output mode: the person needs both workspaces and the command, nothing else
+        p = r.get("project") or {}
+        print(f"STOP: {r['problems'][0]}")
+        if p.get("name"):
+            print(f"Requested project: {p['name']} [{p['id']}], by {r.get('how')}")
+        return None
     try:
         import output
     except ImportError:         # an old checkout without scripts/output.py: the complete text, as always
