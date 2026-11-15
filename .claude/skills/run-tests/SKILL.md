@@ -12,7 +12,7 @@ metadata:
   approvals: "The user's request to test covers the run on the platforms, environment and targets it names, with no second approval of a plan made for it (rules.md section 5); another platform, environment or target is asked. A workspace whose CLAUDE.md asks for more (an approval of each platform's run) keeps it (rules.md section 8). Steps the project assigns to the user (logins, links, permissions, airplane mode) stay theirs."
   failures: "No target or a missing tool: those cases Blocked (environment), never Pass, the others go on. A tool failure (capture, driver, timeout): one retry, then Blocked (tool), never a defect on its own. A doubt: Question."
   resume: "The run log of the batch: a case with a result and enough evidence is not run again; a build that changed means a new batch."
-  requires-scripts: "scripts/run_log.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
+  requires-scripts: "scripts/run_log.py, scripts/approvals.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/approvals.md, procedures/quarantine.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
   requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, qa-audit, browser, mcp, .env"
   routes: "functional-web: procedures/run-web.md; exploratory: procedures/run-web.md; api: procedures/run-api.md; accessibility: procedures/run-accessibility.md; mobile: procedures/run-mobile.md"
@@ -66,7 +66,14 @@ metadata:
    environment, build and plan, then record their explicit message with approvals.py record-run (declared in the
    chat, never as a signature). On resuming, a build observed now or a plan that changed since the decision is
    `stale`: back to the QA before the next case. device.py and run_mobile.py do not read the register: this check is
-   the skill's, and run_log.py add refuses any result without a valid decision.
+   the skill's, and run_log.py add refuses any result without a valid decision. With `policy.approvals.plan:
+   required` (procedures/approvals.md section 5), before that and before the first action on the target (and on every
+   resume): python <qa>/scripts/approvals.py <workspace> check-plan --batch <batch> --build <observed>; anything but
+   `valid` STOPS and goes back to /plan-tests and the QA with what it shows (a difference, a quarantine decision or a
+   build assumption that no longer holds); run_log.py plan and add refuse a plan without a valid decision. An
+   approved plan never authorises the run: the run decision stays separate (with `policy.approvals.run:
+   per-platform`, the check above; without it, the run confirmation the project's own rules ask for, rules.md §8, is
+   still asked). The target is acted on only when both are valid.
    Then confirm and record: the
    environment (a test one, never production); the target (device and OS, browser, or base URL; an iPhone not ready:
    show the `blocked by:` and `next:` of device.py check / doctor, never guess "the cable"); the build OBSERVED now

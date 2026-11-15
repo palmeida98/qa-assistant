@@ -13,9 +13,9 @@ metadata:
   approvals: "The request to test the PBI covers analysing, planning and running it on the platforms named, with no approval of the same plan or run twice (rules.md section 5); the bug review, each application to a workbook or tracker and each publication keep their own. A workspace whose CLAUDE.md asks for more (the plan confirmed, each platform's run approved) keeps it (rules.md section 8)."
   failures: "A blocked step is marked blocked with the reason; the independent steps go on and the missing ones are listed. A changed requirement, build or environment since the plan is reported before going on."
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan, the bugs published, the open items (what waits on whom) and the intermediate checkpoints."
-  requires-scripts: "scripts/pbi_state.py, scripts/workspace_select.py, scripts/qa_python.py"
+  requires-scripts: "scripts/pbi_state.py, scripts/approvals.py, scripts/workspace_select.py, scripts/qa_python.py"
   requires-tools: "spec"
-  requires-docs: "procedures/rules.md, procedures/quarantine.md, skills-guide.md, technique-specs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/approvals.md, procedures/quarantine.md, skills-guide.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -75,14 +75,21 @@ metadata:
      on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, and say
      which rule). A choice or a confirmation the plan waits on is an open item on the step plan (`open ... --kind
      approval --step plan --by qa`), and plan is marked done only after the QA gave it and the plan file passes its
-     checks (`scope --plan` exit 0). Once the plan stands:
+     checks (`scope --plan` exit 0). With `policy.approvals.plan: required` (procedures/approvals.md section 5) the
+     plan is approved per batch with approvals.py review-plan / approve-plan (STOP for the QA's explicit message),
+     and `mark <pbi> plan done` is refused until every platform in scope has a valid plan decision for its batch or
+     its run step was formally skipped (`mark <pbi> run:<p> skipped --note "<why, who decided>"`). Once the plan stands:
      python <qa>/scripts/pbi_state.py <workspace> baseline <pbi> --ticket <id>=<revision> --build <p>=<observed>
      [--environment <key>] [--spec-plan <the plan file, when it has spec_refs>]
    - run:<platform>: /run-tests, one platform at a time, on the platforms the request named, and only when the state
      block's `Next:` names run:<platform>. While it is listed under `Pending, waiting on an earlier step` (the plan not
      done, or waiting on the QA), /run-tests is not called: say what it waits on and go on only with the independent
      work. A separate approval per platform only when the workspace's rules ask for it. An approval still valid is not
-     asked again on resuming.
+     asked again on resuming. With `policy.approvals.plan: required`, before the first action on the device:
+     python <qa>/scripts/approvals.py <workspace> check-plan --batch <batch> --build <observed>; anything but `valid`
+     STOPS (back to the plan step with what it shows). The plan decision is not a run authorisation: with
+     `policy.approvals.run: per-platform` that one is asked and checked separately, and without it the run
+     confirmation the workspace's rules ask for is still asked; run:<platform> goes on only when both are valid.
    - bugs: /manage-bugs, one review for all failures of the PBI (its approval before anything reaches the tracker).
    - report: /qa-report scoped to the PBI's batches and plan.
    - checkpoint: /checkpoint, the one that closes the flow (the intermediate checkpoints of a long run do not mark it).

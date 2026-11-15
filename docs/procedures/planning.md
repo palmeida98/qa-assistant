@@ -129,5 +129,9 @@
     order (a name of letters, digits, '.', '_', '-') -- so it can also run remotely: the workspace's CI takes the
     batch's name (python scripts/workspace_ci.py <workspace> check --batch <name>; technique-mobile.md section 11).
     A plan the QA approved keeps that decision in the file: `approval:` (decided_by, at, ref) and, with quarantines,
-    `excluded:` / `retest:` (procedures/quarantine.md). Such a plan is recorded in the run log
+    `excluded:` / `retest:` (procedures/quarantine.md). With `policy.approvals.plan: required`
+    (procedures/approvals.md section 5) the decision is not written in the file: the draft is analysis/<name>.yaml,
+    reviewed with approvals.py review-plan, and approve-plan saves it here after the QA's explicit message and records
+    the decision in memory/approvals.jsonl; an instruction that changes how a case is tested goes in `notes:` and a
+    build the coverage depends on in `assumptions:` (comments and run.build are not part of the approval). Such a plan is recorded in the run log
     (run_log.py plan <batch> batches/<name>.yaml) before the first result: run_log.py add refuses until then.
