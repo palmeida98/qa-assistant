@@ -490,6 +490,10 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
     gate = plan_gate(workspace, name, read_log(path))
     if gate:
         raise Refused(f"{gate}: nothing was written")
+    import approvals  # procedures/approvals.md: policy.approvals.run per-platform, checked before every result
+    gate = approvals.gate_for_add(workspace, proj, name, read_log(path), environment, build)
+    if gate:
+        raise Refused(f"{gate}: nothing was written")
     import quarantine  # the QA's decision on a quarantined case is never bypassed (procedures/quarantine.md)
     gate = quarantine.case_gate(workspace, proj, name, read_log(path), case.strip(), build, environment)
     if gate:

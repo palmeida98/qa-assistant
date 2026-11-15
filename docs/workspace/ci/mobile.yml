@@ -183,6 +183,11 @@ jobs:
           BUILD_TAG: ${{ inputs.build }}
         run: python "$QA/scripts/workspace_build.py" "$WS" fetch ${BUILD_TAG:+--tag "$BUILD_TAG"}
 
+      - name: The build is the one authorised (before the emulator and the flows)
+        env:
+          RUN_LOG: ${{ steps.batch.outputs.run_log }}
+        run: python "$QA/scripts/workspace_ci.py" "$WS" build-check --run-log "$RUN_LOG" --apk "${{ steps.build.outputs.apk }}"
+
       - name: The emulator (cold boot, no GPU)
         run: |
           python "$QA/scripts/setup_emulator.py" "$WS" --apk "${{ steps.build.outputs.apk }}" \

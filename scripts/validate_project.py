@@ -60,6 +60,7 @@ from urllib.parse import urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
+import approvals
 import workspace_git as wg
 import workspace_identity
 
@@ -473,6 +474,7 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     problems += p
     warnings += w
     problems += workspace_identity.problems(proj)     # technique-workspaces.md 4.1: optional block
+    problems += approvals.policy_problems(proj)        # procedures/approvals.md: optional policy
     if proj.get("quarantine") is not None:
         # procedures/quarantine.md: only the words of the report; the register itself is memory/quarantine.json
         qs = proj.get("quarantine")

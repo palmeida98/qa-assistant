@@ -13,7 +13,7 @@ metadata:
   failures: "No target or a missing tool: those cases Blocked (environment), never Pass, the others go on. A tool failure (capture, driver, timeout): one retry, then Blocked (tool), never a defect on its own. A doubt: Question."
   resume: "The run log of the batch: a case with a result and enough evidence is not run again; a build that changed means a new batch."
   requires-scripts: "scripts/run_log.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/quarantine.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/approvals.md, procedures/quarantine.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, methodology.md"
   requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, qa-audit, browser, mcp, .env"
   routes: "functional-web: procedures/run-web.md; exploratory: procedures/run-web.md; api: procedures/run-api.md; accessibility: procedures/run-accessibility.md; mobile: procedures/run-mobile.md"
   next-check: "yes"
@@ -59,7 +59,15 @@ metadata:
    look at the plan; run_log.py add refuses a result written too early (a plan with `approval:`, `excluded:` or
    `retest:` not recorded, two own plans with decisions, or a run log following another plan), writing nothing. On
    resuming, progress reuses the plan already recorded; a `PLAN TO REVALIDATE` or `PLAN TO RESOLVE` line goes back to
-   /plan-tests and the QA before the next case (the results already recorded are kept). Then confirm and record: the
+   /plan-tests and the QA before the next case (the results already recorded are kept). With `policy.approvals.run:
+   per-platform` in project.yaml (procedures/approvals.md), once the context below is confirmed and before the first
+   action on the target (and again on every resume): python <qa>/scripts/approvals.py <workspace> check --batch
+   <batch> --build <observed>; `valid` is reused, anything else stops: ask the QA to authorise that platform,
+   environment, build and plan, then record their explicit message with approvals.py record-run (declared in the
+   chat, never as a signature). On resuming, a build observed now or a plan that changed since the decision is
+   `stale`: back to the QA before the next case. device.py and run_mobile.py do not read the register: this check is
+   the skill's, and run_log.py add refuses any result without a valid decision.
+   Then confirm and record: the
    environment (a test one, never production); the target (device and OS, browser, or base URL; an iPhone not ready:
    show the `blocked by:` and `next:` of device.py check / doctor, never guess "the cable"); the build OBSERVED now
    (mobile: the `Next:` line, device.py check), next to the
