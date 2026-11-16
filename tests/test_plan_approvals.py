@@ -350,6 +350,25 @@ class Gate(Base):
         self.assertEqual(self.check()[1]["status"], "valid")
 
 
+class EditedDuringTheRun(Base):
+    def test_a_plan_edited_in_place_after_results_stops_the_next_result_and_the_ci(self):
+        self.approved()
+        self.assertEqual(self.plan_cli().returncode, 0)
+        self.assertEqual(self.add_cli().returncode, 0)
+        log = self.log()
+        before = sha(log)
+        self.write("batches/batch_and_01.yaml", DRAFT.replace("TC-SHOP-004]", "TC-SHOP-004, TC-SHOP-003]"))
+        code, res = self.check()
+        self.assertEqual((code, res["status"]), (1, "stale"), res)
+        self.assertTrue(any("TC-SHOP-003" in d for d in res["diff"]), res["diff"])
+        r = self.add_cli("TC-SHOP-002")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(sha(log), before)                                     # the result already there stays
+        code, out = self.ci_batch()
+        self.assertEqual(code, 1, out)
+        self.assertFalse(os.path.exists(self.log("batch_and_01_r9")))
+
+
 class Copied(Base):
     def test_a_register_and_plan_copied_from_another_workspace_are_not_valid(self):
         self.approved()
