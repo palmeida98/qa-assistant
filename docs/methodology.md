@@ -159,16 +159,17 @@ Other variants mentioned in the techniques (smoke, role matrix, visual, cross-br
 
 ### 4.2 Trackers
 
-`tracker:` in `project.yaml` accepts `excel`, `jira` (with Xray) and `azure-devops` (Test Plans + Boards). Each has an adapter with the same four directions — results, bugs, importing cases, exporting new cases — and the same rules: everything validated and resolved before the first write, nothing sent without the user's approval (§9.4), a batch never sent twice without being detected:
+`tracker:` in `project.yaml` accepts `excel`, `jira` (with Xray), `azure-devops` (Test Plans + Boards) and `linear`. The first three each have an adapter with the same four directions — results, bugs, importing cases, exporting new cases — and the same rules: everything validated and resolved before the first write, nothing sent without the user's approval (§9.4), a batch never sent twice without being detected:
 
 | Tracker | Results | Bugs | Cases | Dashboard |
 |---|---|---|---|---|
 | `excel` | applied by the adapter at `/checkpoint` (`python -m adapters.excel.apply`) | `new_defect` / `bug` in the run log, applied with the results | the workbook itself; the new cases approved in `/plan-tests` added by `python -m adapters.excel.add_cases` | `/qa-report` |
 | `jira`, `azure-devops` | sent by the adapter at `/checkpoint` (`python -m adapters.tracker <workspace> apply`): a dry run first, `--yes` only after the user approves what it showed; one Test Execution (Xray) / test run (Azure DevOps) per batch | the same `new_defect` / `bug` in the run log, created or updated with the results; duplicates searched with `bug-search` (§9.1) | `import-cases` (read only) and `export-cases` (the new cases approved in `/plan-tests`) | none (the tracker's own reports) |
+| `linear` | no write adapter yet: the run log in `runs/` stays the source and each result is passed to Linear by hand, after the user approves its exact content | the same: proposed in the run log, published by hand after the user's approval | none in the framework: the project says where its cases live | none |
 
 The configuration is the tracker's section of `project.yaml` (`excel:`, `jira:`, `azure_devops:`), with credentials only as names of `.env` variables; the technique of each adapter (`technique-excel.md`, `technique-jira-xray.md`, `technique-azure-devops.md`) has the details. Version 1 of the Jira and Azure DevOps adapters targets the **cloud** services (Jira Cloud + Xray Cloud, Azure DevOps Services); Server / Data Center stays out until a real project needs it.
 
-The Jira and Azure DevOps adapters were built in phase 10 of the plan (10.2 and 10.3); `scripts/validate_project.py` requires the tracker's section. When the adapter cannot be used (e.g. the tracker's API is out of reach), the run log in `runs/` stays the source and the user (or the assistant, with approval) passes the results and bugs to the tracker by hand. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
+The Jira and Azure DevOps adapters were built in phase 10 of the plan (10.2 and 10.3); `scripts/validate_project.py` requires the tracker's section. When the adapter cannot be used (e.g. the tracker's API is out of reach), the run log in `runs/` stays the source and the user (or the assistant, with approval) passes the results and bugs to the tracker by hand. `tracker: linear` (since 16.11.2026) names Linear as the team's tracker for a project whose issues are read through a Linear source of `tickets:` (`technique-tickets.md` §4.4), which it requires; it adds no write path: nothing is ever written to Linear by the framework, and a write adapter follows the rule of the next sentence. An adapter for any other tracker is only written when a real project needs it, with the golden and the tests of the existing adapters as a model (§15).
 
 ### 4.3 Selecting a project
 

@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (`tracker: linear`, read only, 2026-11-16)
+- `tracker: linear` is accepted by `scripts/validate_project.py` when `tickets.sources` has a Linear source
+  (`service: linear`); without one it is a problem that names the section. It adds no write path: there is no Linear
+  adapter, so the run logs stay the source and results, cases and bugs are passed to Linear by hand, each after the
+  user's approval (methodology 4.2); a warning says so. `excel`, `jira` and `azure-devops` are unchanged.
+
 ### Added (the QA's plan decision and its check, increment 2B, 2026-11-15)
 - Opt-in `policy.approvals.plan: required | with-request` (needs `workspace:`), independent of `run`; with both, both
   must pass. `scripts/approvals.py` `review-plan` (the readable review of a draft `analysis/<name>.yaml`: the whole

@@ -3,7 +3,8 @@ company: ""
 environments:
   test: ""
 roles: []
-tracker: ""          # excel | jira (with Xray) | azure-devops (Test Plans + Boards); each has its adapter (methodology 4.2)
+tracker: ""          # excel | jira (with Xray) | azure-devops (Test Plans + Boards): each has its adapter; linear: needs a
+                     #   linear source in tickets:, read only, results and bugs passed by hand (methodology 4.2)
 bug_format: ""
 resolved_bugs: "remove"      # or "archive"
 evidence: "text"             # or "text+screenshot"

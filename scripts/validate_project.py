@@ -75,8 +75,9 @@ MODULES = {
     "accessibility": ("accessibility", ("pages",)),
     "mobile": ("mobile", ("platform", "flows")),
 }
-TRACKERS = ("excel", "azure-devops", "jira")
-# excel is checked here; jira (plan 10.2) and azure-devops (plan 10.3) through adapters/tracker/config.py
+TRACKERS = ("excel", "azure-devops", "jira", "linear")
+# excel is checked here; jira (plan 10.2) and azure-devops (plan 10.3) through adapters/tracker/config.py; linear
+# (16.11.2026) needs a Linear source in tickets: and has no write adapter (methodology 4.2)
 
 
 def environment_of(url: str, environments: dict) -> str | None:
@@ -441,6 +442,19 @@ def spec_source(workspace: str, proj: dict) -> tuple[bool, str, str]:
     return bool(location), "spec source", f"{kind} {location}, index {index}; whether it opens is seen when reading"
 
 
+def linear_tracker_problems(proj: dict) -> tuple[list[str], list[str]]:
+    """tracker: linear (methodology 4.2): Linear is where the team keeps its issues, read through a Linear source of
+    tickets: (technique-tickets.md 4.4), which it needs. There is no write adapter: nothing is written to Linear by the
+    framework; results, cases and bugs are passed by hand, each after the user's approval."""
+    tickets = proj.get("tickets") if isinstance(proj.get("tickets"), dict) else {}
+    sources = tickets.get("sources") if isinstance(tickets.get("sources"), dict) else {}
+    if not any(isinstance(s, dict) and s.get("service") == "linear" for s in sources.values()):
+        return [("tracker: linear needs a Linear source in tickets.sources (service: linear; "
+                 "docs/technique-tickets.md section 4.4)")], []
+    return [], [("tracker: linear has no write adapter: the run logs stay the source and results, cases and bugs are "
+                 "passed to Linear by hand, each after the user's approval (methodology 4.2)")]
+
+
 def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     """What project.yaml alone says: the fields, environments, tracker, tickets and modules. No other file is opened
     and no tool or service is asked, so a list of projects can use it (technique-workspaces.md section 4)."""
@@ -465,6 +479,10 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
         problems.append(f"tracker {proj['tracker']!r} outside {list(TRACKERS)}")
     elif proj.get("tracker") in tracker_config.SECTIONS:
         p, w = tracker_config.validate_section(proj)
+        problems += p
+        warnings += w
+    elif proj.get("tracker") == "linear":
+        p, w = linear_tracker_problems(proj)
         problems += p
         warnings += w
     p, w = tickets_config.validate_section(proj)
