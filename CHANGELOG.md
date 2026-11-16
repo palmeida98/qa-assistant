@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## [Unreleased]
 
+### Added (the QA's plan decision and its check, increment 2B, 2026-11-15)
+- Opt-in `policy.approvals.plan: required | with-request` (needs `workspace:`), independent of `run`; with both, both
+  must pass. `scripts/approvals.py` `review-plan` (the readable review of a draft `analysis/<name>.yaml`: the whole
+  operational coverage, its hash and the difference from the coverage approved before), `approve-plan` (after the QA's
+  explicit message: the draft must still have the hash presented and the review must be this version's; its bytes
+  become `batches/<batch>.yaml` and a `gate: plan` decision is appended, idempotent after an interruption) and
+  `check-plan` (valid, missing, legacy, stale with the difference, revoked). The canonical hash `plan-canonical-v1`
+  covers the cases' order, excluded, retest, assumptions, notes, platform, environment and PBI, and leaves out
+  formatting, comments, the old `approval:` block and run.build; a build the coverage depends on is an assumption
+  checked against the observed build, and the quarantine decisions are checked in the effective context even when the
+  hash is the same. The decision approves coverage only (`authorises_run: false`), declared in the chat with the
+  message reference not verified, with the approved coverage, the presented draft and review and the tickets'
+  revisions. Enforced by `run_log.py plan` / `add`, the CI's «Resolve the batch» (before the remote run log and the
+  flows) and `build-check`, and `pbi_state.py mark plan done` (every platform in scope approved or formally skipped
+  with a note); `pbi_state.py show` lists it. Decided under the workspace's lock from one reading of the draft; a plan
+  already followed by results is never replaced (a new batch). Run decisions keep the 2A format. Skills plan-tests,
+  test-pbi and run-tests stop before the first action without a valid plan decision. docs/procedures/approvals.md §5.
+
 ### Added (the QA's run decisions and their check, increment 2 first part, 2026-11-15)
 - `scripts/approvals.py`: `memory/approvals.jsonl`, append-only under the workspace's lock: `record-run`, `check`,
   `list`, `revoke`. A run decision holds the workspace identity, PBI, batch, platform, environment, build, the plan and

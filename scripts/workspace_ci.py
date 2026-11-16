@@ -248,6 +248,9 @@ def plan_problem(workspace: str, name: str, platform: str, build: str, environme
     import approvals
     proj = project(workspace)
     if name == "adhoc":
+        if approvals.plan_required(proj):
+            return ("policy.approvals.plan: required: a list of case IDs has no approved plan; run a planned batch "
+                    "whose plan the QA approved")
         if approvals.run_per_platform(proj):
             return ("policy.approvals.run: per-platform: a list of case IDs has no approved plan to check; run a "
                     "planned batch the QA authorised for this platform, environment and build")
@@ -255,6 +258,13 @@ def plan_problem(workspace: str, name: str, platform: str, build: str, environme
     ambiguous = run_log.plan_ambiguity(workspace, name)
     if ambiguous:
         return ambiguous
+    if approvals.plan_required(proj):
+        # procedures/approvals.md: the plan's decision (coverage), before the run decision; both must pass
+        doc = {"plan": f"batches/{name}.yaml", "run": {"platform": platform, "environment": environment, "build": build},
+               "remote": {"batch": name}}
+        why = approvals.gate_for_plan(workspace, proj, name, doc, environment, build)
+        if why:
+            return why
     if approvals.run_per_platform(proj):
         # procedures/approvals.md: the same check as run_log.py add, before the run log, the emulator, the flows and
         # the agent; the remote run log is named <batch>_r<id> and its decision is the batch's own
@@ -339,6 +349,11 @@ def cmd_build_check(workspace: str, a) -> int:
     name = run_log.batch_id(a.run_log)
     doc = run_log.read_log(run_log.run_log_path(workspace, name))
     validated = str((doc.get("run") or {}).get("build") or "")
+    # the plan's quarantine decisions and build assumptions, in the context of the APK that will really run
+    why = approvals.gate_for_plan(workspace, proj, name, {**doc, "run": {**(doc.get("run") or {}), "build": effective}},
+                                  None, effective)
+    if why:
+        raise Refused(f"{why}. Nothing reaches the device")
     strict = approvals.run_per_platform(proj)
     if not same_build(validated, effective):
         text = (f"the APK to install is {m.get('package')} {effective}, but «Resolve the batch» validated the build "

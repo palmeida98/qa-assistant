@@ -67,6 +67,10 @@ The defaults below hold in every workspace whose own rules do not ask for more (
 - `policy.approvals.run: per-platform` in project.yaml (procedures/approvals.md) makes the run's authorisation per
   platform a checked decision: recorded in `memory/approvals.jsonl` (declared in the chat, not signed) and verified by
   `run_log.py add` and the CI before every result. Without the option the table above applies as it is.
+- `policy.approvals.plan: required` (procedures/approvals.md section 5) makes the plan's approval a checked decision:
+  the coverage of each batch's plan, by its canonical hash, recorded in the same register after the QA's explicit
+  message and verified by `run_log.py plan` / `add`, the CI and `pbi_state.py`. It never authorises a run: the run
+  confirmation above (or `run: per-platform`) is still asked. Without the option the plan's confirmation stays as above.
 - A run started by a launcher with nobody to approve (the workspace's CI) applies nothing: its
   bugs are `"proposed": true` and its doubts `Question`, for the review after it (methodology §9.4).
 

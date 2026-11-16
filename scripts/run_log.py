@@ -490,7 +490,10 @@ def add(workspace: str, batch: str, case: str, status: str, actual: str, bug: st
     gate = plan_gate(workspace, name, read_log(path))
     if gate:
         raise Refused(f"{gate}: nothing was written")
-    import approvals  # procedures/approvals.md: policy.approvals.run per-platform, checked before every result
+    import approvals  # procedures/approvals.md: policy.approvals.plan and .run, both checked before every result
+    gate = approvals.gate_for_plan(workspace, proj, name, read_log(path), environment, build)
+    if gate:
+        raise Refused(f"{gate}: nothing was written")
     gate = approvals.gate_for_add(workspace, proj, name, read_log(path), environment, build)
     if gate:
         raise Refused(f"{gate}: nothing was written")
@@ -1194,6 +1197,10 @@ def set_plan(workspace: str, batch: str, plan: str) -> tuple[str, str | None, bo
     if unknown:
         raise UsageError(f"{plan}: {', '.join(unknown)} not in the project's library ({source}): nothing was written")
     path = run_log_path(workspace, name)
+    import approvals  # procedures/approvals.md: under policy.approvals.plan required, only an approved plan is recorded
+    gate = approvals.gate_for_plan(workspace, proj, name, read_log(path), plan=rel)
+    if gate:
+        raise Refused(f"{gate}: nothing was written")
     try:
         with workspace_lock(workspace):
             where = applied(workspace, proj, name)

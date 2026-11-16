@@ -11,11 +11,12 @@ policy:
     run: per-platform     # per-platform | with-request (default: a request to test covers the run, rules.md §5)
 ```
 
-Opt-in per project. Without it nothing changes (rules.md §5 and §8, the project's own CLAUDE.md and context.md apply as
+Opt-in per project; `plan: required | with-request` (increment 2B, section 5) is independent of `run`. Without them
+nothing changes (rules.md §5 and §8, the project's own CLAUDE.md and context.md apply as
 before). With `run: per-platform` the workspace must declare its identity (`workspace: {id, kind}`, technique-workspaces.md
-§4.1); `validate_project.py` reports the option without it. Only `run` exists in this version: the plan, the bug review,
-the workbook writes and the publication of reports keep their current controls (the plan's `approval:` block, the
-write guard's hashes, the Excel token, the explicit request).
+§4.1); `validate_project.py` reports the option without it. `run` and `plan` exist in this version: the bug review, the workbook
+writes and the publication of reports keep their current controls (the write guard's hashes, the Excel token, the
+explicit request).
 
 ## 2. The register
 
@@ -79,3 +80,81 @@ and the line is named; nothing is repaired automatically.
 - **Not enforced:** `device.py` and `run_mobile.py` act on the device without looking at the register. Started by hand,
   they are not stopped: the protection is that /run-tests checks before the first action and that no result can be
   recorded. In the CI, the flows start only after «Resolve the batch».
+
+## 5. The plan decision (increment 2B)
+
+```yaml
+policy:
+  approvals:
+    plan: required        # required | with-request (default: as before; a plan's `approval:` block is information)
+```
+
+Independent of `run`: with both, both must pass (the plan first, then the run). `plan: required` needs the workspace's
+identity. Without the option nothing changes: old batches, plans with an `approval:` block and ad hoc lists work as
+before, and `check-plan` answers as information only.
+
+**What it approves.** The COVERAGE of one batch's plan: the cases in their order, `excluded:`, `retest:`,
+`assumptions:`, `notes:`, `run.platform`, `run.environment`, `pbi` and any other operational key. It never authorises a
+run on a device or a build: that is the run decision (sections 1 to 4), asked separately, and the record says so
+(`authorises_run: false`).
+
+**The canonical hash (`plan-canonical-v1`).** The YAML's data without the old `approval:` block and without `run.build`
+(the intended build), `run.platform` in lower case, `excluded` and `retest` in a stable order, `cases` in its order,
+serialised as sorted JSON and hashed with SHA-256. Formatting and comments are not part of it, so:
+- an instruction that changes how a case is tested goes in `notes:` (or another key), never only in a comment;
+- a build the coverage depends on is an assumption, in the approved content:
+  `assumptions: [{build: "1.0.0 (39)", why: "the build with the FE change"}]`; it is checked against the build
+  OBSERVED (`check-plan --build`, the run log's run block, the CI's APK) and a different build makes the plan `stale`;
+- the decision is never written into the plan: recording it changes nothing that was hashed.
+
+**The flow.**
+1. /plan-tests writes the draft `analysis/<name>.yaml` and runs
+   `approvals.py <ws> review-plan --batch <batch> --draft analysis/<name>.yaml --pbi <pbi> [--build <observed>]`: it
+   writes the readable review `analysis/<name>.review.md` (the content, the hash, the difference from the coverage
+   approved before for the batch, the problems). Exit 1: a problem keeps it from being approved (cases repeated or not
+   in the library nor proposed in cases/, no platform or environment, another PBI, a quarantine choice missing).
+2. The skill presents the draft and its review and STOPS: an approval exists only in the QA's explicit message.
+3. `approvals.py <ws> approve-plan --pbi <pbi> --batch <batch> --draft analysis/<name>.yaml --sha <the hash shown>
+   --declared-by <QA> --message-ref <session · time> [--quote <words>] [--review analysis/<name>.review.md]
+   [--ticket <id>=<rev> ...]`: refused when the draft no longer has the hash shown (it changed after the review), when
+   the review given is not this version's, when a problem is left, or when the batch already has results with another
+   plan (a new version is a new batch). Then the draft's bytes become the batch's plan (`batches/<batch>.yaml`, or its
+   own plan's existing path) and the decision is appended. Run again after an interruption, it finishes what is
+   missing and never records the same decision twice (`already recorded`). Everything is decided under the
+   workspace's lock from one reading of the draft: the bytes whose hash was checked are the bytes written, the plan is
+   read back with that hash before the decision is appended, and two approvals at once are serialised (the plan on
+   disk is always the one of the last decision). A plan already followed by results (the batch's run log, or a run
+   log such as a remote `<batch>_r<id>` that follows the same file) is never replaced by another version: the results
+   stay, and the new version is a new batch (the refusal names one).
+4. A plan saved before 2B with an `approval:` block is `legacy`: `review-plan --draft batches/<batch>.yaml`, the QA's
+   confirmation, `approve-plan --draft batches/<batch>.yaml` (the file is not changed).
+
+**The record** (`gate: plan`): `id`, `workspace`, `pbi`, `batch`, `platform`, `environment`, `plan`, `plan_sha256`,
+`hash_method`, `coverage` (the approved content, to show the difference later), `intended_build` (information only),
+`presented` (`draft` and its bytes' SHA-256, `review` and its SHA-256: the Markdown is kept as a reference; the approval
+applies to the YAML's operational content), `basis.tickets` (the revisions given, for traceability: a change in them is
+handled by `pbi_state.py check`, which reopens the steps), `authorises_run: false`, and the same declared fields as a
+run decision (`declared_by`, `confirmation: declared-in-chat`, `message_ref`, `message_ref_verified: false`, `quote`,
+`limitation`, `recorded_by`, `recorded_at`). `revoke <id>` works for both gates. Run decisions keep the 2A format.
+
+**`check-plan --batch <b> [--build <observed>]`** (reads only):
+
+| Answer | Meaning | What the skill does |
+|---|---|---|
+| `valid` | a decision of this workspace for this batch, plan path and coverage hash, not revoked, whose quarantine decisions and build assumptions hold in the effective context | reuse it: ask nothing again about the plan |
+| `missing` | no decision; when a draft in analysis/ has the same hash, `next` names it and the `approve-plan` that finishes an interrupted approval | present the review and ask |
+| `legacy` | an old `approval:` block, no decision | present it, ask for the explicit confirmation |
+| `stale` | the coverage changed (each difference listed), another workspace's decision, or the same coverage whose quarantine decision or build assumption no longer holds here | back to the QA's review of the plan with the difference; a new version is approved again |
+| `revoked` | the decision was revoked | ask again |
+
+The effective context is the run log's run block, else the values given, else the plan's `run:` (the intended build
+only for the quarantine check when nothing was observed). A build observed that is not an assumption of the coverage
+does not reopen the plan: it is the run decision's business.
+
+**Where it is enforced** (each refuses writing nothing, exit 1): `run_log.py plan` (only an approved plan is recorded),
+`run_log.py add` (before the run decision), the CI's «Resolve the batch» (`workspace_ci.py batch`: before the run log,
+the emulator, the flows and the agent; an ad hoc list is refused) and «The build is the one authorised» (the fetched
+APK's build against the build assumptions and the quarantine decisions), and `pbi_state.py mark <pbi> plan done` (each
+platform in scope with a valid plan decision for the PBI's batch, or its `run:<p>` formally `skipped` with a note
+saying why and who decided). `pbi_state.py show`
+lists the plan decision per platform. A register that cannot be read refuses (exit 2 for `check-plan`).

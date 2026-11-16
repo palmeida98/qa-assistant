@@ -418,6 +418,12 @@ def mark(workspace: str, pbi: str, step: str, status: str, ref: str | None, note
         if step not in step_names(doc["platforms"]):
             raise UsageError(f"unknown step {step!r} for this PBI: one of {', '.join(step_names(doc['platforms']))}"
                              " (a run of another platform: start with --platform first)")
+        if step == "plan" and status == "done":
+            missing = plan_gate(workspace, doc)
+            if missing:
+                raise Refused("policy.approvals.plan: required: the plan is done only when each platform in scope has "
+                              "a valid plan approval, or its run step was formally skipped (mark <pbi> run:<p> "
+                              "skipped --note ...): " + "; ".join(missing) + ": nothing changed")
         old = doc["steps"].get(step, {"status": "pending"})
         if old.get("status") == status and old.get("ref") == ref and (note is None or old.get("note") == note):
             return doc, f"{step} already {status}" + (f" ({ref})" if ref else "") + ": nothing changed"
@@ -797,6 +803,27 @@ def _binding_line(doc: dict) -> str:
             "without one); it is read as before, and bound only with `bind --as <id> --decided-by <QA>`")
 
 
+def plan_gate(workspace: str, doc: dict) -> list[str]:
+    """Under policy.approvals.plan: required, what keeps the step plan from being done: per platform in scope whose run
+    step is not skipped, a plan decision of this workspace for the PBI that is valid now. [] without the policy."""
+    try:
+        import approvals
+        from common import read_project
+        if not approvals.plan_required(read_project(workspace)):
+            return []
+        steps = doc.get("steps") or {}
+        dispensed = [p for p in doc.get("platforms") or [] if _status(doc, f"run:{p}") == "skipped"
+                     and str((steps.get(f"run:{p}") or {}).get("note") or "").strip()]
+        platforms = [p for p in doc.get("platforms") or [] if p not in dispensed]
+        states = approvals.plan_status_by_platform(workspace, doc["pbi"], platforms)
+    except (OSError, ValueError, ImportError) as e:
+        return [f"the plan decisions cannot be read ({e})"]
+    return [f"{p}: plan approval {st['status']}" + (f" ({st['reason']})" if st.get("reason") else "")
+            + (" — run:" + p + " is skipped without a note: a formal dispensation says why and who decided"
+               if _status(doc, f"run:{p}") == "skipped" else "")
+            for p, st in states.items() if st.get("status") != "valid"]
+
+
 def _approval_lines(workspace: str | None, doc: dict) -> list[str]:
     """procedures/approvals.md: with policy.approvals.run per-platform, the run decision of each platform, checked
     against its batch's current context. Information only: the steps and the other platforms are not changed."""
@@ -805,12 +832,22 @@ def _approval_lines(workspace: str | None, doc: dict) -> list[str]:
     try:
         import approvals
         from common import read_project
-        if not approvals.run_per_platform(read_project(workspace)):
-            return []
+        proj = read_project(workspace)
+        out = []
+        if approvals.plan_required(proj):
+            for platform, st in approvals.plan_status_by_platform(workspace, doc["pbi"],
+                                                                  list(doc.get("platforms") or [])).items():
+                ap = st.get("approval") or {}
+                what = (f" {ap['id']} · {ap.get('batch')} · coverage {str(ap.get('plan_sha256'))[:12]} · declared by "
+                        f"{ap.get('declared_by')} (declared in the chat, reference not verified; authorises no run)"
+                        if ap else "")
+                out.append(f"Plan approval ({platform}): {st['status']}{what}"
+                           + (f" — {st['reason']}" if st.get("reason") else ""))
+        if not approvals.run_per_platform(proj):
+            return out
         states = approvals.run_status_by_platform(workspace, doc["pbi"], list(doc.get("platforms") or []))
     except (OSError, ValueError, ImportError):
         return []
-    out = []
     for platform, st in states.items():
         ap = st.get("approval") or {}
         what = (f" {ap['id']} · {ap.get('environment')} · {ap.get('build')} · declared by {ap.get('declared_by')} "

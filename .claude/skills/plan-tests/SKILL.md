@@ -8,14 +8,14 @@ metadata:
   config: "The tracker (excel:, jira:, azure_devops:) and its case fields; modules and environments of project.yaml; the workspace's case pattern."
   tools: "The Excel adapter (read; add_cases with a dry run) or python -m adapters.tracker import-cases / export-cases."
   outputs: "An analysis with confirmed requirements, assumptions and coverage suggestions kept apart; a coverage matrix (requirement -> cases -> platform) by risk, with what is covered, what is missing and the residual risk; new case proposals; a batch plan with order, preconditions and data."
-  writes: "analysis/ (a new file per version); batches/<name>.yaml once the plan stands (at once under a request to test, after the user confirms it under a request to plan or when the project's rules ask for a confirmation); cases/ or tracker/export/ only for cases the user approved."
+  writes: "analysis/ (a new file per version); batches/<name>.yaml once the plan stands (at once under a request to test, after the user confirms it under a request to plan or when the project's rules ask for a confirmation); cases/ or tracker/export/ only for cases the user approved; under policy.approvals.plan required, the draft analysis/<name>.yaml and its review, then (after the QA's explicit message) batches/<name>.yaml and the decision in memory/approvals.jsonl."
   approvals: "New cases enter the library only after the user approves them (dry run first). The plan itself: none under a request to test within its scope (rules.md section 5); a confirmation when the request was only to plan, when it widens the scope, or when the workspace's CLAUDE.md asks for one (rules.md section 8)."
   failures: "An ambiguity that changes an expected result: a question, never an assumption; the case waits. A library that cannot be read: stop, never propose duplicates blind."
   resume: "The newest analysis/ file and batches/; a batch already saved is not rewritten, a new version gets a new name; a confirmation still valid for the same plan is not asked again."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/workspace_select.py, scripts/quarantine.py, scripts/qa_python.py"
+  requires-scripts: "scripts/workspace_select.py, scripts/quarantine.py, scripts/approvals.py, scripts/qa_python.py"
   requires-tools: "spec"
-  requires-docs: "procedures/rules.md, procedures/planning.md, procedures/quarantine.md, heuristics.md, technique-specs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/planning.md, procedures/approvals.md, procedures/quarantine.md, heuristics.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
@@ -78,3 +78,12 @@ metadata:
    - a request to plan only, a plan that widens the scope, or a workspace whose rules ask for a confirmation (for
      example an approval of each platform's run): STOP. batches/<name>.yaml is written after the user confirms, and
      /run-tests starts with the approval those rules name. Say which rule applied and where it is written.
+   - with `policy.approvals.plan: required` in project.yaml (procedures/approvals.md section 5), whatever the request:
+     write the draft analysis/<name>.yaml (operational instructions in `notes:`, a build the coverage depends on in
+     `assumptions:`), run python <qa>/scripts/approvals.py <workspace> review-plan --batch <batch> --draft
+     analysis/<name>.yaml --pbi <pbi>, present the draft, its review and the hash (on a later version, the difference
+     it shows) and STOP. Only after the QA's explicit message: approvals.py approve-plan with the hash shown, the
+     review and the message reference (declared in the chat, never a signature). It approves the coverage only, never
+     a run. A resume runs approvals.py check-plan first: `valid` is reused without asking; `missing` with a draft named
+     finishes an interrupted approval only if the QA's message exists; `legacy`, `stale` and `revoked` go back to the
+     QA with what it shows.

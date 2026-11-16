@@ -15,6 +15,7 @@ run_log: "runs/"             # folder of the session's run log (never history/, 
 # policy:                      # (opt.) decisions the code checks (docs/procedures/approvals.md); needs workspace:
 #   approvals:
 #     run: per-platform        # per-platform | with-request (default): the run authorised per platform, env, build, plan
+#     plan: required           # required | with-request (default): the plan's coverage approved per batch (no run)
 # report:                      # (opt.) /qa-report: which batches belong to which platform, when the run block has no
 #   platforms:                 # "platform" (scripts/qa_report.py); a batch that matches none is reported as unknown
 #     android: ["batch_android_*"]
