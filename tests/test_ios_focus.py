@@ -1,4 +1,4 @@
-"""The focus before typing on an iPhone and what a stopped send says (docs/pilot-improvements-2026-11-07.md D), with a
+"""The focus before typing on an iPhone and what a stopped send says (docs/history/pilot-improvements-2026-11-07.md D), with a
 fictional WebDriverAgent: one field is chosen and tapped from the screen just read, several or none are refused with
 the list, a disabled field is not a candidate, a late field is waited for, the focus is confirmed by the keyboard;
 the outcome of an interruption (nothing typed, partly typed, typed not sent, sent, uncertain), and never a second send.

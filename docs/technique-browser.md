@@ -208,7 +208,7 @@ In the conversion:
 
 **Auditing states in the middle of a spec.** A state that only exists after interacting (step 2 of a checkout, an error message, an open dialog) can be audited by the `qa-audit` engine without it touching the page (`docs/qa-audit.md` §22):
 
-- copy `integrations/playwright/qa-audit.ts` from `qa-assistant` into the workspace's specs folder;
+- copy `tools/playwright/qa-audit.ts` from `qa-assistant` into the workspace's specs folder;
 - in `playwright.config.ts`, with `QA_AUDIT_CDP_PORT` defined: `launchOptions.args` with `--remote-debugging-port=<port>` and `workers: 1` (see `examples/demo/e2e/playwright.config.ts`);
 - in the spec, after reaching the state: `await auditState(page, testInfo, "<state-name>", { failOn: "none", redact: [<credential variables>] })`. The report is attached to the test's result;
 - Chromium or Chrome only (connection over CDP). By default only axe runs, which does not touch the page. The keyboard and reflow (`checks: "axe,keyboard,reflow"`) move the focus and change the window's width, so they are left for the end of the flow (the keyboard walk puts the focus and the scroll back afterwards);

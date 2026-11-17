@@ -1,5 +1,5 @@
 """
-Why an iPhone target is not ready (technique-mobile.md §1.5; docs/pilot-improvements-2026-11-07.md C): what
+Why an iPhone target is not ready (technique-mobile.md §1.5; docs/history/pilot-improvements-2026-11-07.md C): what
 `device.py --platform ios check` shows when WebDriverAgent (WDA) does not answer, and `device.py --platform ios
 doctor` always.
 

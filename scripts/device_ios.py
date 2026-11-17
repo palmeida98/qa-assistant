@@ -201,7 +201,7 @@ CONTROL_KINDS = ("Button", "Keyboard", "Key", "Image", "Icon", "Switch", "Slider
 def content_texts(root, field_labels=()) -> list[str]:
     """The visible texts that can be content (a message, an answer): never a control (button, keyboard, image...),
     a text field or a declared field (mobile.field_label), nor a scroll bar's description. What the sampler reads as
-    the answer (docs/pilot-improvements-2026-11-07.md E): buttons appearing after a send are not the answer."""
+    the answer (docs/history/pilot-improvements-2026-11-07.md E): buttons appearing after a send are not the answer."""
     return [t for t, shown in content_items(root, field_labels) if shown]
 
 

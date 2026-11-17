@@ -1,4 +1,4 @@
-# The WHOLE unit-test suite on Windows. It is a separate workflow and Windows stays UNCONFIRMED (README, "Validation and CI"): the
+# The WHOLE unit-test suite on Windows. It is a separate workflow and Windows stays UNCONFIRMED (docs/ci.md): the
 # framework is developed and used on macOS.
 # - It is NOT part of ci.yml's `ci-status`, so it does not block a merge. Its result is shown as it is: since 11.11.2026 it passes (no
 #   known failure is left), but with skips, and a skipped test proves nothing on Windows. The summary lists every skip by reason: the
