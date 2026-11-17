@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (methodology migration notes, 2026-11-17)
+- The version notes of `docs/methodology.md` (v1 → v2 up to v2.14 → v2.15) moved word for word to
+  `docs/history/methodology-migration-notes.md`; the methodology keeps a one-line pointer, so the notes are no longer
+  loaded with the current rules. No rule changed.
+
 ### Changed (README and layout, 2026-11-17)
 - `README.md` is now a short start page: what it is, a quick start, one fictional example from a ticket to an approved
   write (every command checked on `examples/demo`), the eight skills, what you approve and what is verified. The CI details
