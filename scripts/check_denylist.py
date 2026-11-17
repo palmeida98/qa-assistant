@@ -7,6 +7,15 @@ Checks the path of each file and its text. Office files (.xlsx, .docx, .pptx,
 ...) are compressed ZIPs: the text is read from inside the ZIP, otherwise a
 client workbook would pass unseen.
 
+Two kinds of entry, both case-insensitive; lines starting with # are comments:
+- `acme corp`       a plain entry matches anywhere, also inside a longer word (the original behaviour, unchanged).
+- `word:shopx`      a whole-word entry matches only where the term is not touched by a letter or a digit on either
+                    side. Hyphen, underscore, dot, slash, spaces and other punctuation are separators, so it
+                    matches `shopx`, `SHOPX.`, `(shopx)`, `shopx-sim-q1`, `qa_shopx_id`, `shopx/shopx`, but not
+                    `shopxes`, `bigshopx` or `KEY_SHOPXY`. Use it for a short name that is also part of common words.
+                    A term with spaces (`word:shopx ledger`) is matched as written, single spaces included.
+                    `word:` with nothing after it is a broken list (exit 4).
+
 What it never does: report as clean what it did not inspect, or print the terms of the list. A match names the
 term's line in the list ("term at line 3 of the list"), so the log of a hook or of a CI step never carries them.
 
@@ -41,15 +50,53 @@ class DenylistUnreadable(Exception):
     """The list exists and could not be read or decoded."""
 
 
+WORD_PREFIX = "word:"
+
+
+class Term:
+    """One entry of the list: a plain substring, or a whole word (`word:` prefix). Never printed."""
+
+    def __init__(self, text: str, whole_word: bool = False):
+        self.text = text
+        self.whole_word = whole_word
+        # a letter or a digit next to the term makes it part of a longer word; anything else is a separator
+        self.pattern = re.compile(rf"(?<![^\W_]){re.escape(text)}(?![^\W_])", re.IGNORECASE) if whole_word else None
+
+    def found_in(self, lower_text: str) -> bool:
+        return bool(self.pattern.search(lower_text)) if self.pattern else self.text in lower_text
+
+    def mask(self, value: str, replacement: str) -> str:
+        if self.pattern:
+            return self.pattern.sub(replacement, value)
+        return re.sub(re.escape(self.text), replacement, value, flags=re.IGNORECASE)
+
+
+def parse_entry(line: str) -> Term:
+    entry = line.strip().lower()
+    if entry.startswith(WORD_PREFIX):
+        word = entry[len(WORD_PREFIX):].strip()
+        if not word:
+            raise ValueError("a whole-word entry without a term")
+        return Term(word, whole_word=True)
+    return Term(entry)
+
+
 def load_denylist():
-    """(terms, why): terms is [(line number, lower-case term)]; why says what was wrong with a list with no terms."""
+    """(terms, why): terms is [(line number, Term)]; why says what was wrong with a list with no terms."""
     if not DENYLIST_PATH.exists():
         return [], "missing"
     try:
         lines = DENYLIST_PATH.read_text(encoding="utf-8-sig").splitlines()
     except (OSError, UnicodeDecodeError) as exc:
         raise DenylistUnreadable(type(exc).__name__) from exc
-    terms = [(n, l.strip().lower()) for n, l in enumerate(lines, 1) if l.strip() and not l.strip().startswith("#")]
+    terms = []
+    for n, line in enumerate(lines, 1):
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        try:
+            terms.append((n, parse_entry(line)))
+        except ValueError as exc:
+            raise DenylistUnreadable(f"line {n}: {exc}") from exc
     return terms, ("" if terms else "empty")
 
 
@@ -78,7 +125,7 @@ def file_text(path: Path) -> str:
 def masked(filename: str, denylist) -> str:
     """The path as it may be shown: a term inside a file name is replaced, so the log never carries it."""
     for lineno, term in denylist:
-        filename = re.sub(re.escape(term), f"<term {lineno}>", filename, flags=re.IGNORECASE)
+        filename = term.mask(filename, f"<term {lineno}>")
     return filename
 
 
@@ -106,7 +153,7 @@ def main(argv=None):
             continue
         name = filename.replace("\\", "/").lower()
         for lineno, term in denylist:
-            if term in name:
+            if term.found_in(name):
                 print(f"BLOCKED: a term (line {lineno} of the list) is in the name/path {masked(filename, denylist)}")
                 found = True
         if path.suffix.lower() in NOT_READABLE_FORMATS:
@@ -120,7 +167,7 @@ def main(argv=None):
             continue
         checked += 1
         for lineno, term in denylist:
-            if term in text:
+            if term.found_in(text):
                 print(f"BLOCKED: a term (line {lineno} of the list) found in {masked(filename, denylist)}")
                 found = True
 

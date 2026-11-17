@@ -41,7 +41,10 @@ usable the hook stops with the commands that create one (exit 3): a stop, never 
 answer. Hooks installed before this change keep working: the hook scripts call `pre-commit` through the interpreter that
 installed them, and the configuration is read at each commit.
 
-The denylist is the owner's private list (`~/.qa-denylist.txt`). Without one the guard says `NOT CONFIGURED` and checks
+The denylist is the owner's private list (`~/.qa-denylist.txt`), one entry per line, case-insensitive. A plain entry
+(`acme corp`) matches anywhere, also inside a longer word; an entry written `word:<term>` (`word:shopx`) matches only as a
+whole word: a letter or a digit next to it makes it part of another word, while hyphen, underscore, dot, slash and other
+punctuation separate, so it blocks `shopx-sim-q1` and `qa_shopx_id` but not `shopxes` or `KEY_SHOPXY`. Without one the guard says `NOT CONFIGURED` and checks
 nothing; to make that a failure on your computer: `git config --global qa-assistant.denylistRequired true` (or
 `QA_DENYLIST_REQUIRE=1`). An unreadable list, or a file it cannot read, is a failure; a PDF or a legacy `.doc/.xls/.ppt` has its
 name checked and is listed as not inspected. The guard never prints a term of the list: a match names its line in the list.
