@@ -11,6 +11,50 @@ person approves the exact preview**.
 > viewable but not open source ([LICENSE](LICENSE)). Real projects, credentials, evidence and results live in private
 > workspaces, never in this repository.
 
+## Why it exists
+
+An AI agent can click through an app and say "it works". For QA that is not enough: a result has to point to an approved
+case, the build it ran on and the evidence that shows it; a failure has to be checked against existing bugs before a new
+one is opened; and the team's workbook or tracker must never be changed by a guess. I built QA Assistant to keep those
+rules while the agent does the repetitive work:
+
+- **Traceability.** Every result is recorded against a case of the project's library, with its build, environment,
+  execution time and evidence. An unknown case ID is refused; a result without a build is never counted as the current
+  build.
+- **Honest statuses.** Pass, Fail, N/A, Blocked and Not run follow written decision rules; a doubt is a `Question` that
+  must be answered before any report, and a missing tool makes a case Blocked, never skipped or passed.
+- **Human approval at every write.** The agent prepares; a person approves the exact preview of every cell, result and
+  bug before it reaches Excel, Jira (Xray) or Azure DevOps.
+- **Privacy by design.** The framework holds only method and code. Each client project lives in its own private
+  workspace, and commit hooks block secrets and client names.
+
+## How it works
+
+```mermaid
+flowchart LR
+    T["Ticket<br/>Azure DevOps · Jira · Linear"] -->|read only| A["/analyze-ticket<br/>criteria, changes, risks"]
+    A --> P["/plan-tests<br/>reuse cases, propose new ones,<br/>batches by risk"]
+    P --> R["/run-tests<br/>web · mobile · API · a11y"]
+    R --> L[("Run log<br/>result + build + evidence")]
+    L --> B["/manage-bugs<br/>duplicate search,<br/>bug proposals"]
+    B --> D{"Dry run<br/>you review the exact preview"}
+    L --> D
+    D -->|approved| W["Workbook or tracker"]
+    L --> Q["/qa-report<br/>reconciled totals per build"]
+```
+
+1. **Analyse.** A ticket is read without writing to the tracker; the second read says what changed since the last one.
+2. **Plan.** Existing cases are reused first; new ones are proposals until approved; batches are ordered to reuse logins
+   and state without losing coverage.
+3. **Run.** The agent drives the browser, a mobile device, an API or an accessibility audit and writes each result to a
+   run log (JSON) in the workspace, with its evidence.
+4. **Approve.** Failures become bug proposals. A dry run lists every change it would make, with a token; only that
+   reviewed token (Excel) or `--yes` after the dry run (Jira, Azure DevOps) writes, and a stale preview is refused.
+5. **Report.** Totals are reconciled per platform and build from the run logs, not from memory.
+
+**Built with:** Python 3.12, Claude Code skills (Markdown contracts), openpyxl, Playwright, axe-core, Maestro (mobile),
+the Jira/Xray and Azure DevOps REST APIs, GitHub Actions.
+
 ## Quick start
 
 You need `git` and Python 3.12 or later. Nothing below touches a real system: it works on a temporary copy of the fictional
