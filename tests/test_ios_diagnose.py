@@ -1,4 +1,4 @@
-"""The read-only diagnosis of an iPhone target (scripts/ios_diagnose.py; docs/pilot-improvements-2026-11-07.md C),
+"""The read-only diagnosis of an iPhone target (scripts/ios_diagnose.py; docs/history/pilot-improvements-2026-11-07.md C),
 with fictional probes: the causes seen in the pilot (an expired profile, no Xcode account, a locked iPhone, usbmux not
 listing a device devicectl sees), each finding confirmed / probable / unknown with its source, the main block and the
 next action first, nothing of the keychain beyond counts, and `device.py doctor`.

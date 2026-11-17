@@ -180,7 +180,7 @@ class SeveralDevices(UsageError):
         self.action = action
 
 
-# what happened to a text when typing or sending stopped (docs/pilot-improvements-2026-11-07.md D)
+# what happened to a text when typing or sending stopped (docs/history/pilot-improvements-2026-11-07.md D)
 NOTHING_TYPED, PARTLY_TYPED, NOT_SENT, SENT, UNCERTAIN = (
     "nothing typed", "partly typed", "typed, not sent", "sent", "uncertain")
 FOCUS_WAIT_S = 3.0              # the keyboard after tapping a field
@@ -1382,7 +1382,7 @@ class Sampler:
         return sampled
 
     def summary(self) -> dict:
-        """What the readings could show (docs/pilot-improvements-2026-11-07.md E). `evidence` is about the tool's
+        """What the readings could show (docs/history/pilot-improvements-2026-11-07.md E). `evidence` is about the tool's
         reading, never a verdict on the app: an answer the accessibility tree does not expose is "not readable", never
         "no streaming"."""
         reads = [s for s in self.samples if s["kind"] == "read"]
@@ -1422,7 +1422,7 @@ class Sampler:
 
 
 class Burst:
-    """Timed screenshots of the app while an answer arrives (docs/pilot-improvements-2026-11-07.md E), for when the
+    """Timed screenshots of the app while an answer arrives (docs/history/pilot-improvements-2026-11-07.md E), for when the
     accessibility tree does not expose the answer's text. Limited in files, seconds and megabytes; each file written
     whole (a temporary name, then renamed); a manifest <name>_burst.json ties them to one attempt with their times,
     the gaps and which limit stopped it. It never sends anything. Sizes or pixels never prove streaming: the content

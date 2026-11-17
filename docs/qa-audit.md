@@ -768,7 +768,7 @@ qa-audit check --cdp http://127.0.0.1:9222 --page-url REGEX --label NAME
 6. **Exit codes.** `0` ok · `1` problems at or above `--fail-on` (default `none`: a check records, the test decides)
    · `2` usage error (e.g. `--cdp` not on loopback) · `3` CDP unreachable or no tab matching.
 
-The workspace side is a TypeScript helper, `integrations/playwright/qa-audit.ts`: `await auditState(page,
+The workspace side is a TypeScript helper, `tools/playwright/qa-audit.ts`: `await auditState(page,
 "checkout-error", { failOn: "high" })` runs `qa-audit check` for the page's current URL, attaches the report to the
 test's result and fails the test only when `failOn` asks for it. The Playwright configuration adds
 `--remote-debugging-port=<QA_AUDIT_CDP_PORT>` to Chromium's launch arguments.

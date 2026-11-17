@@ -1,5 +1,5 @@
 """The daily path the five pilot improvements serve, end to end on a fictional workspace and a fictional iPhone
-(docs/pilot-improvements-2026-11-07.md F): a batch with its mode; the diagnosis of a device that is not available; a
+(docs/history/pilot-improvements-2026-11-07.md F): a batch with its mode; the diagnosis of a device that is not available; a
 send that finds the field itself, with burst evidence; the result recorded; the dry run of the apply to the right
 workbook; the apply equal to the preview; and a checkpoint resumed without a duplicate.
 

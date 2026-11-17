@@ -68,4 +68,4 @@ repos:
         entry: python scripts/qa_python.py run -m unittest discover -s tests
         language: python
         pass_filenames: false
-        files: ^(adapters/|scripts/|src/|tests/|examples/|integrations/|docs/|\.claude/skills/|CLAUDE\.md$|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|\.github/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)
+        files: ^(adapters/|scripts/|src/|tests/|examples/|tools/|docs/|\.claude/skills/|CLAUDE\.md$|README\.md$|CONTRIBUTING\.md$|CHANGELOG\.md$|\.github/|\.pre-commit-config\.yaml$|pyproject\.toml$|\.gitignore$|LICENSE$)

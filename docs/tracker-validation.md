@@ -26,7 +26,7 @@ a preview, and the user's approval of that exact set.
 | Azure DevOps, adapter (`adapters.tracker`): import and export of cases, results (one test run per batch), bugs, duplicate search | yes | yes: `tests/test_azure_devops_adapter.py`, `test_azure_devops_golden.py`, `test_tracker_*` | **no** |
 | Azure DevOps, guarded MCP server (`scripts/ado_write_guard.py`): **one comment** or **one attachment** per call | yes | yes: `tests/test_ado_write_guard.py` (fake transport) | **yes**, on one real project: see "Real use of the guarded writes" below |
 | Azure DevOps, guarded server: read-only previews (`ado_guard_preview_comment`, `ado_guard_preview_bug`) | yes | yes: `tests/test_ado_write_guard.py`, `test_ado_guard_bugs.py` | a real **read** only (it exposed the `$expand=relations` response shape, fixed in the changelog) |
-| Azure DevOps, guarded server: **bug creation** (`ado_guard_create_bug`) | implemented, **disabled by default** | yes: `tests/test_ado_guard_bugs.py` | **no**: never enabled; atomicity of the create-with-parent request is not proven |
+| Azure DevOps, guarded server: **bug creation** (`ado_guard_create_bug`) | implemented, **disabled by default** | yes: `tests/test_ado_guard_bugs.py` | **yes**, on one real project since 13.11.2026, where the owner enabled it in the project's launcher (author's statement, see below); atomicity of the create-with-parent request is still not proven |
 | Jira + Xray | yes | yes: `tests/test_jira_adapter.py`, `test_jira_golden.py`, `test_tracker_*` | **no** |
 | Ticket reading (`/analyze-ticket`) | Azure DevOps, Jira and Linear, read only | yes: `tests/test_tickets*.py` (Linear: `tests/test_tickets_linear.py`) and the demo's bundles | Azure DevOps through a logged-in browser: a real read was done; Azure DevOps by token, Jira and Linear: no. `tracker: linear` is accepted (it needs a Linear ticket source) but has no write adapter: cases, results and bugs are passed to Linear by hand |
 
@@ -42,8 +42,10 @@ What the code enforces is in [technique-ado-write-guard.md](technique-ado-write-
   guard on one real project, each after a preview, a hash of the exact text or file, and a confirmation per call. The records of
   those uses (item ids, texts, evidence, the read-backs) stay in that project's private workspace, so this page does not
   reproduce them and nobody can check them from here.
-- **What that real use does not cover:** results, case import/export and bug creation (the first two belong to the adapter, the
-  third is disabled); any second project or organisation; another credential type; permission failures against the real service.
+- **Bug creation (author's statement, 13.11.2026 onwards):** enabled by the owner in one real project's launcher and used there to
+  create bugs, each after a preview and a confirmation; the bugs are created unassigned and read back. It stays disabled by default.
+- **What that real use does not cover:** results and case import/export (they belong to the adapter); any second project or
+  organisation; another credential type; permission failures against the real service; the atomicity of a bug created with its parent.
 - **Not a permission model.** The guard is a local safeguard: Azure DevOps does not limit writes per assignee, and the write token
   would write elsewhere outside this server.
 

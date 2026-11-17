@@ -1,4 +1,4 @@
-"""The dry run of the Excel apply (docs/pilot-improvements-2026-11-07.md A; technique-excel.md section 1.1), on a
+"""The dry run of the Excel apply (docs/history/pilot-improvements-2026-11-07.md A; technique-excel.md section 1.1), on a
 fictional workspace with two workbooks (Android by default, iOS by name):
 
 - it routes, validates and transforms with the apply's own pipeline, on a temporary copy, and lists the cells;

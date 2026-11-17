@@ -38,7 +38,7 @@ class Guards(unittest.TestCase):
         for path in ("adapters/excel/base.py", "scripts/build_dashboard.py", "tests/test_skills.py",
                      ".claude/skills/checkpoint/SKILL.md", "CLAUDE.md", "examples/demo/project.yaml",
                      "docs/project.yaml", "docs/workspace/settings.json", ".pre-commit-config.yaml",
-                     "integrations/playwright/qa-audit.ts", "docs/methodology.md", "README.md",
+                     "tools/playwright/qa-audit.ts", "docs/methodology.md", "README.md",
                      "src/qa_audit/cli.py", "pyproject.toml", ".gitignore"):
             with self.subTest(path=path):
                 self.assertTrue(pattern.search(path))

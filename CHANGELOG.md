@@ -3,6 +3,21 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of the `qa-audit` engine
 (`pyproject.toml`). The workspace layer is tracked in [`docs/development-plan.md`](docs/development-plan.md).
 
+## Unreleased
+
+### Changed (README and layout, 2026-11-17)
+- `README.md` is now a short start page: what it is, a quick start, one fictional example from a ticket to an approved
+  write (every command checked on `examples/demo`), the eight skills, what you approve and what is verified. The CI details
+  moved word for word to `docs/ci.md`; the tracker state stays in `docs/tracker-validation.md` and the workspace apply
+  workflow in `docs/workspace/ci/README.md`.
+- The Playwright helper moved from `integrations/playwright/qa-audit.ts` to `tools/playwright/qa-audit.ts` (one folder for
+  the non-Python tools, next to `tools/android-driver/`); the demo spec, the pre-commit test trigger and the docs follow. A
+  workspace that copied the helper keeps its copy.
+- The dated reports `docs/audit-2026-11-06.md` and `docs/pilot-improvements-2026-11-07.md` moved to `docs/history/`; the
+  scripts and tests that cite them follow. Earlier entries of this changelog keep the old paths as history.
+- `docs/tracker-validation.md`: the guarded Azure DevOps bug creation has been used on one real project since 13.11.2026
+  (enabled there by the owner; still disabled by default; atomicity with the parent still not proven).
+
 ## [Unreleased]
 
 ### Added (`tracker: linear`, read only, 2026-11-16)

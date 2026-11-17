@@ -5,7 +5,7 @@
 #   main run and leave "cancelled" instead of a result).
 # - The three browser jobs are 80% of the runner minutes: on a pull request they run when it touches what they test
 #   (see the `changes` job). main and a manual run always run everything.
-# - `ci-status` is the single check to require when protecting main (see docs in README, "Validation and CI").
+# - `ci-status` is the single check to require when protecting main (see docs/ci.md).
 # - The personal denylist does not run here on purpose -- it lives only in the local pre-commit.
 # - The end-to-end specs against a public practice site are a separate workflow (demo-e2e.yml): they need secrets
 #   and a third-party site, so they are not part of the required checks.
@@ -356,7 +356,7 @@ jobs:
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
       # plan F20: the eight skills installed from the clean clone into a temporary folder (never ~/.claude), and the
       # preflight of each on the fictional demo workspace; nothing outside $RUNNER_TEMP is read or written
-      # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Install)
+      # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Quick start)
       - name: Skills sync and preflight (isolated)
         run: |
           .venv/bin/python -m pip install --quiet -r requirements.txt

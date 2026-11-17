@@ -4,7 +4,7 @@
 // attached to the test's result, without failing because of it (failOn: "none").
 // Runs only with QA_AUDIT_CDP_PORT defined and the qa-audit engine installed; otherwise it is skipped.
 import { expect, test } from "@playwright/test";
-import { auditState } from "../../../../integrations/playwright/qa-audit";
+import { auditState } from "../../../../tools/playwright/qa-audit";
 
 const env = (name: string): string => {
   const v = process.env[name];
