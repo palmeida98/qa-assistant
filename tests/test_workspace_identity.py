@@ -1,6 +1,6 @@
 """Identity of a workspace, the session's workspace and PBI records bound to a workspace (technique-workspaces.md 4.1).
 Every case runs in temporary folders with fictional projects that copy the two real layouts (<company>/<project>, as
-LIA, and <project>, as Contas em Dia); no test reads a real workspace, ~/.claude or ~/.qa-assistant.
+ACME/SHOP, and <project>, as LEDGER); no test reads a real workspace, ~/.claude or ~/.qa-assistant.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
 """
@@ -22,8 +22,8 @@ import workspace_identity as wi
 import workspace_select as ws
 from test_workspace_select import Base, make_project
 
-REAL = {"project": "LIA", "workspace": {"id": "lia", "kind": "real"}}
-SIM = {"project": "LIA", "workspace": {"id": "lia-sim-q1", "kind": "simulation"}}
+REAL = {"project": "SHOP", "workspace": {"id": "shop", "kind": "real"}}
+SIM = {"project": "SHOP", "workspace": {"id": "shop-sim-q1", "kind": "simulation"}}
 
 
 def digest(path: str) -> str:
@@ -43,8 +43,8 @@ def tree(path: str) -> dict:
 class Identity(Base):
     def setUp(self):
         super().setUp()
-        self.real = make_project(self.root, "lia/lia", **REAL)          # <company>/<project>, as the real LIA
-        self.sim = make_project(self.root, "lia-sim-q1", **SIM)         # <project>, a copy with the same name
+        self.real = make_project(self.root, "acme/shop", **REAL)          # <company>/<project>
+        self.sim = make_project(self.root, "shop-sim-q1", **SIM)         # <project>, a copy with the same name
 
     def pbi(self, workspace, *args, cwd):
         """pbi_state.py through its command line, from the session folder `cwd`."""
@@ -58,9 +58,9 @@ class Identity(Base):
         base = {"project": "X", "tracker": "excel", "bug_format": "B", "environments": {"test": "https://x.example/"}}
         self.assertEqual(wi.problems(base), [])
         self.assertIsNone(wi.identity(base))
-        self.assertEqual(wi.identity({**base, **REAL}), {"id": "lia", "kind": "real"})
-        for wrong in ({"id": "LIA", "kind": "real"}, {"id": "lia", "kind": "copy"}, {"id": "lia"}, "lia",
-                      {"id": "lia", "kind": "real", "name": "x"}):
+        self.assertEqual(wi.identity({**base, **REAL}), {"id": "shop", "kind": "real"})
+        for wrong in ({"id": "SHOP", "kind": "real"}, {"id": "shop", "kind": "copy"}, {"id": "shop"}, "shop",
+                      {"id": "shop", "kind": "real", "name": "x"}):
             problems, _ = validate_project.base_problems({**base, "workspace": wrong})
             self.assertTrue(any(p.startswith("workspace") for p in problems), (wrong, problems))
         # `kind` keeps its own meaning under specs: (the export of the specification)
@@ -68,12 +68,12 @@ class Identity(Base):
 
     # --- selection ---------------------------------------------------------------------------------------------------
     def test_two_workspaces_with_the_same_name_resolve_by_identity_and_by_path(self):
-        self.assertEqual(self.resolve("lia").candidate.path, self.real)
-        self.assertEqual(self.resolve("lia-sim-q1").candidate.path, self.sim)
+        self.assertEqual(self.resolve("shop").candidate.path, self.real)
+        self.assertEqual(self.resolve("shop-sim-q1").candidate.path, self.sim)
         self.assertEqual(self.resolve(workspace=self.real).candidate.path, self.real)
         self.assertEqual(self.resolve(workspace=self.sim).candidate.path, self.sim)
         # the identity's id is matched first (exactly, ignoring case); the shared name alone never chooses
-        self.assertEqual(self.resolve("LIA").candidate.path, self.real)
+        self.assertEqual(self.resolve("SHOP").candidate.path, self.real)
         make_project(self.root, "other", project="Loja", workspace={"id": "loja-a", "kind": "real"})
         make_project(self.root, "copy", project="Loja", workspace={"id": "loja-b", "kind": "simulation"})
         both = self.resolve("Loja")
@@ -89,7 +89,7 @@ class Identity(Base):
         self.assertEqual(report["session"]["target"], self.real)
         self.assertIn(f"cd {self.real} && claude", report["problems"][0])
         # by name too, and whatever the names are
-        code, _ = self.preflight("test-pbi", "lia", cwd=self.sim)
+        code, _ = self.preflight("test-pbi", "shop", cwd=self.sim)
         self.assertEqual(code, ws.WRONG_SESSION)
         # the code behind the skill refuses as well: no record is created from the wrong session
         r = self.pbi(self.real, "start", "42434", "--platform", "ios", cwd=self.sim)
@@ -98,31 +98,31 @@ class Identity(Base):
         self.assertEqual(tree(self.tmp), before)
 
     def test_a_copy_that_kept_the_real_identity_is_still_another_folder(self):
-        clone = make_project(self.root, "lia-copy", **REAL)
+        clone = make_project(self.root, "shop-copy", **REAL)
         code, report = self.preflight("test-pbi", workspace=self.real, cwd=clone)
         self.assertEqual(code, ws.WRONG_SESSION)
         self.assertIn("same identity", report["problems"][0])
 
     def test_an_identity_declared_by_two_folders_is_never_chosen_and_both_paths_are_named(self):
-        clone = make_project(self.root, "lia-copy", **REAL)
-        for selection in (self.resolve("lia"), self.resolve("LIA")):
+        clone = make_project(self.root, "shop-copy", **REAL)
+        for selection in (self.resolve("shop"), self.resolve("SHOP")):
             self.assertEqual(selection.outcome, "ambiguous")
             self.assertIn(self.real, selection.message)
             self.assertIn(clone, selection.message)
-        code, report = self.preflight("test-pbi", "lia")
+        code, report = self.preflight("test-pbi", "shop")
         self.assertEqual(code, ws.AMBIGUOUS)
         self.assertIn("declared by 2 folders", report["message"])
         self.assertEqual(self.resolve(workspace=clone).candidate.path, clone)      # a path still chooses
 
     def test_a_simulation_outside_the_root_is_the_session_and_cannot_reach_the_real_workspace(self):
         sims = os.path.join(self.tmp, "qa-simulations")
-        sim = make_project(sims, "lia-42434", project="LIA", workspace={"id": "lia-sim-42434", "kind": "simulation"})
+        sim = make_project(sims, "shop-42434", project="SHOP", workspace={"id": "shop-sim-42434", "kind": "simulation"})
         self.assertNotIn(sim, [c.path for c in ws.discover(self.root)])
         inside = os.path.join(sim, "runs")
         os.makedirs(inside)
         self.assertEqual(self.resolve(cwd=inside).candidate.path, sim)
         before = tree(self.root)
-        for kw in ({"hint": "lia"}, {"workspace": self.real}):
+        for kw in ({"hint": "shop"}, {"workspace": self.real}):
             hint = kw.pop("hint", None)
             code, report = self.preflight("test-pbi", hint, cwd=inside, **kw)
             self.assertEqual(code, ws.WRONG_SESSION, report["problems"])
@@ -133,7 +133,7 @@ class Identity(Base):
         """The documented limit (technique-workspaces.md 4.1): inside such a copy its own records go on; the
         original is another real path and stays out of reach."""
         self.assertEqual(self.pbi(self.real, "start", "5", cwd=self.real).returncode, 0)
-        clone = os.path.join(self.root, "lia-full-copy")
+        clone = os.path.join(self.root, "shop-full-copy")
         shutil.copytree(self.real, clone)
         original = digest(os.path.join(self.real, "memory", "pbi", "5.json"))
         self.assertEqual(self.pbi(clone, "saved", "5", "--ref", "context.md", cwd=clone).returncode, 0)
@@ -151,7 +151,7 @@ class Identity(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_cli_and_ci_started_outside_a_workspace_with_an_explicit_target_go_on(self):
-        for cwd in (self.neutral, self.root, os.path.join(self.root, "lia"), ROOT):
+        for cwd in (self.neutral, self.root, os.path.join(self.root, "acme"), ROOT):
             code, report = self.preflight("plan-tests", workspace=self.real, cwd=cwd)
             self.assertEqual(code, ws.OK, (cwd, report["problems"]))
             r = self.pbi(self.real, "show", "1", cwd=cwd)
@@ -168,8 +168,8 @@ class Identity(Base):
                            text=True, encoding="utf-8", check=False)
         self.assertEqual(r.returncode, ws.WRONG_SESSION, r.stdout + r.stderr)
         for text in ("STOP: the session is open in another workspace",
-                     f"session workspace: {self.sim} (lia-sim-q1 (simulation))",
-                     f"requested target:  {self.real} (lia (real))", f"cd {self.real} && claude"):
+                     f"session workspace: {self.sim} (shop-sim-q1 (simulation))",
+                     f"requested target:  {self.real} (shop (real))", f"cd {self.real} && claude"):
             self.assertIn(text, r.stdout)
 
     # --- PBI records -------------------------------------------------------------------------------------------------
@@ -178,18 +178,18 @@ class Identity(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
         record = os.path.join(self.real, "memory", "pbi", "42434.json")
         with open(record, encoding="utf-8") as f:
-            self.assertEqual(json.load(f)["workspace"], {"id": "lia", "kind": "real"})
+            self.assertEqual(json.load(f)["workspace"], {"id": "shop", "kind": "real"})
         copied = os.path.join(self.sim, "memory", "pbi", "42434.json")
         os.makedirs(os.path.dirname(copied))
         shutil.copy2(record, copied)
         before = digest(copied)
         for args in (("start", "42434"), ("show", "42434"), ("mark", "42434", "context", "done", "--ref", "x"),
-                     ("saved", "42434", "--ref", "context.md"), ("bind", "42434", "--as", "lia-sim-q1",
+                     ("saved", "42434", "--ref", "context.md"), ("bind", "42434", "--as", "shop-sim-q1",
                                                                   "--decided-by", "QA")):
             r = self.pbi(self.sim, *args, cwd=self.sim)
             self.assertEqual(r.returncode, 6, (args, r.stdout, r.stderr))
-            self.assertIn("belongs to the workspace lia (real)", r.stderr)
-            self.assertIn("lia-sim-q1 (simulation)", r.stderr)
+            self.assertIn("belongs to the workspace shop (real)", r.stderr)
+            self.assertIn("shop-sim-q1 (simulation)", r.stderr)
         self.assertEqual(digest(copied), before)
         # a copy without identity cannot vouch for it either
         bare = make_project(self.root, "bare")
@@ -216,17 +216,17 @@ class Identity(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(path, encoding="utf-8") as f:
             self.assertNotIn("workspace", json.load(f))     # changed as before, still unbound
-        r = self.pbi(self.sim, "bind", "42434", "--as", "lia", "--decided-by", "QA", cwd=self.sim)
+        r = self.pbi(self.sim, "bind", "42434", "--as", "shop", "--decided-by", "QA", cwd=self.sim)
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)      # not this workspace's id
-        r = self.pbi(self.real, "bind", "42434", "--as", "lia", "--decided-by", "Pedro (QA)", cwd=self.real)
+        r = self.pbi(self.real, "bind", "42434", "--as", "shop", "--decided-by", "Pedro (QA)", cwd=self.real)
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(os.path.join(self.real, "memory", "pbi", "42434.json"), encoding="utf-8") as f:
             doc = json.load(f)
-        self.assertEqual(doc["workspace"], {"id": "lia", "kind": "real"})
+        self.assertEqual(doc["workspace"], {"id": "shop", "kind": "real"})
         self.assertIn("decided by Pedro (QA)", doc["history"][-1]["event"])
 
     def test_an_old_workspace_without_identity_in_both_layouts_works_as_before(self):
-        for pid in ("acme/app", "contas"):
+        for pid in ("acme/app", "ledger"):
             path = make_project(self.root, pid)
             self.assertEqual(self.resolve(pid).candidate.identity, "")
             code, report = self.preflight("plan-tests", pid)
