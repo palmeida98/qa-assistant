@@ -18,7 +18,9 @@ SCRIPT = os.path.join(ROOT, "scripts", "check_denylist.py")
 TERM = "fictionalcompanyxyz"
 
 
-class Denylist(unittest.TestCase):
+class ListCase(unittest.TestCase):
+    """A fictional list in a temporary folder and the helpers to run the guard on it; no tests of its own."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.list = os.path.join(self.tmp.name, "denylist.txt")
@@ -54,6 +56,8 @@ class Denylist(unittest.TestCase):
         wb.save(path)
         return path
 
+
+class Denylist(ListCase):
     def test_clean_text_passes(self):
         self.assertEqual(self.run_it(self.file("a.md", "nothing here")).returncode, 0)
 
@@ -188,6 +192,79 @@ class Denylist(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stderr.count("skipped:"), 2)
         self.assertIn("2 skipped", r.stdout)
+
+
+WORD = "shopx"          # fictional short name that is also the start of longer words
+
+
+class WholeWord(ListCase):
+    """`word:` entries: a match only where no letter or digit touches the term; hyphen and underscore separate."""
+
+    def setUp(self):
+        super().setUp()
+        with open(self.list, "w", encoding="utf-8") as f:
+            f.write(f"# comment\n{TERM}\nword:{WORD.upper()}\n")
+
+    def blocked(self, text, name="a.md"):
+        return self.run_it(self.file(name, text)).returncode == 1
+
+    def test_case_and_punctuation_around_the_term(self):
+        for text in (WORD, WORD.upper(), "Shopx", f"project {WORD}.", f"({WORD})", f"«{WORD}»", f'"{WORD}"',
+                     f"{WORD}, next", f"{WORD}:", f"id: {WORD}\n", f"<t>{WORD}</t>", f"x\t{WORD}\ty"):
+            self.assertTrue(self.blocked(text), text)
+
+    def test_hyphen_underscore_slash_and_dot_are_separators(self):
+        for text in (f"{WORD}-sim-q1", f"qa-{WORD}", f"{WORD}_sim", f"KEY_{WORD.upper()}", f"qa_{WORD}_id",
+                     f"acme/{WORD}/runs", f"{WORD}.yaml", f"__{WORD}__"):
+            self.assertTrue(self.blocked(text), text)
+
+    def test_inside_a_longer_word_or_identifier_it_does_not_match(self):
+        for text in (f"{WORD}es", f"big{WORD}", f"{WORD}2", f"v2{WORD}", f"KEY_{WORD.upper()}Y", f"my_{WORD}ing_id",
+                     f"pre-{WORD}ed", "shop x", "shop-x", "shop_x"):
+            self.assertFalse(self.blocked(text), text)
+
+    def test_letters_with_accents_are_letters(self):
+        self.assertFalse(self.blocked(f"{WORD}é"))
+        self.assertFalse(self.blocked(f"ã{WORD}"))
+
+    def test_file_names_office_files_and_commit_messages(self):
+        self.assertEqual(self.run_it(self.file(f"plan-{WORD}.md", "clean")).returncode, 1)
+        self.assertEqual(self.run_it(self.file(f"plan-{WORD}s.md", "clean")).returncode, 0)
+        self.assertEqual(self.run_it(self.xlsx(f"Portal {WORD.upper()} - login")).returncode, 1)
+        self.assertEqual(self.run_it(self.xlsx(f"Portal {WORD}ing")).returncode, 0)
+        msg = self.file("COMMIT_EDITMSG", f"9.1: example\n\nvalidated in {WORD.upper()}\n")
+        self.assertEqual(self.run_it(msg).returncode, 1)
+
+    def test_plain_entries_keep_matching_inside_words(self):
+        self.assertTrue(self.blocked(f"x{TERM}y"))
+        self.assertTrue(self.blocked(f"KEY_{TERM.upper()}_2"))
+
+    def test_the_log_never_carries_the_term_and_names_its_line(self):
+        r = self.run_it(self.file("a.md", f"client {WORD}"), self.file(f"b-{WORD}-c.md", "clean"))
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn(WORD, r.stdout.lower() + r.stderr.lower())
+        self.assertIn("line 3 of the list", r.stdout)
+        self.assertIn("b-<term 3>-c.md", r.stdout)
+
+    def test_a_term_with_spaces_and_extra_spaces_after_the_prefix(self):
+        with open(self.list, "w", encoding="utf-8") as f:
+            f.write(f"word:   {WORD} ledger  \n")
+        self.assertTrue(self.blocked(f"The {WORD.title()} Ledger."))
+        self.assertFalse(self.blocked(f"{WORD} ledgers"))
+        self.assertFalse(self.blocked(f"{WORD}\nledger"))
+
+    def test_a_whole_word_entry_without_a_term_is_a_broken_list(self):
+        with open(self.list, "w", encoding="utf-8") as f:
+            f.write(f"{TERM}\nword:   \n")
+        r = self.run_it(self.file("n.txt", "x"))
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("UNREADABLE", r.stderr)
+        self.assertIn("line 2", r.stderr)
+
+    def test_a_clean_run_counts_both_kinds(self):
+        r = self.run_it("--require", self.file("ok.txt", f"{WORD}s and big{WORD}"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("2 term(s) checked in 1 file(s): clean", r.stdout)
 
 
 if __name__ == "__main__":
