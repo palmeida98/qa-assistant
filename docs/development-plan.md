@@ -39,7 +39,7 @@
 | 11 | Remote execution: a project's mobile tests run on a GitHub Actions runner (emulator + Claude Code headless) from the workspace's private repository, with builds as releases, the manual login through an issue comment and the results reviewed in a pull request | **Outside this version's scope (08.11.2026):** not a requirement of the assistant used through Claude Code; the code and tests stay, unvalidated and not developed further here. History: 11.0–11.6 done (29.09.2026), validated only against fakes and the fictional golden; 11.7 (a real device without a SIM: the companion driver `tools/android-driver/` and the pilot on the user's phone, run locally) done (12.10.2026); 11.8 (the pilot on a runner, and the optional AVD cache of 11.6) postponed by the user (04.10.2026), then started on a real workspace (13.10.2026): in progress, the end-to-end waits for the user; its prerequisite, the runner's emulator over `mobile.serial` / `mobile.input`, done (13.10.2026) |
 | 12 | `qa-ui`: a local web interface for a workspace — cases in, the suggested types of test, the batch plan, the runs (Claude Code headless and the scripts), the user's approvals and the apply step (`docs/qa-ui.md`) | **Retired (08.11.2026):** no interface of its own is part of the product, and none is promised for a later phase; the code, its tests and its specification were removed (phase 16; they stay in the git history). History: 12.0–12.5 done (08.10.2026), validated against a fake `claude` and the fictional fixture; 12.6 (17.10.2026): the first real batches (a mobile workspace) and the fixes they led to; a real batch on a web site is still the user's to run |
 | 13 | `qa-ui` multi-project hub: discovery, Projects, in-hub navigation, management screens | **Retired (08.11.2026):** the hub is not developed and its code is removed; 13.4–13.7 are cancelled, not postponed. History: 13.0–13.1 done (21.10.2026); 13.2–13.3 done (22.10.2026; merged 27.10.2026, PR #36); 13.4–13.7 not yet completed |
-| 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4 |
+| 14 | `/analyze-tickets`: read-only ticket analysis with a local memory | 14.1 done (01.11.2026; merged, PR #37); the real read of each service is 15.4; 14.2 shorter block of `context.md` (20.11.2026) |
 | 15 | Central skills and project workspaces: finding the framework, selecting a project, the skills' contract, a memory that does not rewind, a usable verification prompt, the impact on cases | 15.0–15.3 and 15.5 done (01.11.2026); 15.4: Azure DevOps through a browser done, its API route and Jira pending; 15.6 audit and 15.7 consolidation done (01.11.2026); 15.8 daily use of the mobile flow done (02.11.2026) |
 
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
@@ -1812,6 +1812,17 @@ partial read; the memory inside the workspace; nothing written to a tracker.
       the technique first (methodology §15). Tried on 01.11.2026 in a browser without a session: only the 203 sign-in
       answer was seen, no ticket.
 
+### 14.2 A shorter tickets block in `context.md` — done 20.11.2026
+Why: the block is read on every request of a workspace (it sits in `context.md`), and on a real workspace with a few weeks
+of checks it reached about 13 KB, a third of that file. The history it repeated already lives in `memory/`.
+- [x] `docs/technique-tickets.md`: only the newest go in the block — up to 5 scope rows (was 15), 10 tickets (was 30) and
+      5 open questions, conflicts and proposed actions per list (was 20), each saying how many more exist and where.
+- [x] `adapters/tickets/memory.py` (`MAX_SCOPE_ROWS`, `MAX_TICKET_ROWS`) and `adapters/tickets/render.py`
+      (`MAX_CONTEXT_ITEMS`); the rest of the block and every byte outside it unchanged.
+- [x] `tests/test_tickets_memory.py`: the limits and the "more in memory/" lines; the tickets suites and
+      `test_compact_context` pass (222 tests).
+- [x] Measured read only on a real workspace before the change: the block from about 13.2 KB to 4.8 KB.
+
 ## Phase 15 — Central skills and project workspaces
 
 Why: the framework should work as a central library of skills that finds the selected project, runs only what is authorised, and keeps results and memory in that workspace. Approved by the user (specification of 01.11.2026). Not in this phase, kept in the backlog unless a dependency shows up: finishing the hub, a cloud migration, new types of test, a writing pilot of Jira or Azure DevOps, the remote end-to-end.
@@ -1991,6 +2002,7 @@ the device tool inside and outside the sandbox; the model and budget of the skil
 
 | Date | Change |
 |---|---|
+| 2026-11-20 | 14.2: the tickets block of `context.md` keeps only the newest (5 scope rows, 10 tickets, 5 items per list), each with how many more exist in `memory/`. |
 | 2026-11-09 | Phase 17: 17.1–17.4 merged (PRs #9–#12); 17.4's remainder and 17.5 in review (PR #13); 17.6–17.9 pending; 17.3b design only. |
 | 2026-11-09 | Phase 17 registered (17.0): output, traceability and write safety, from a real two-platform mobile test; tasks 17.1–17.9 grouped by dependency; 17.1 (traceable results) in review. 17.4: the output layer in review (branch `phase-17/pr-4-output-layer`, on 17.3). |
 | 2026-11-08 | Phase 16 (consolidation for the proof of concept) and the product scope: Claude Code with eight skills, no interface of its own; `qa-ui`, the hub and remote execution outside this version; the three trackers in scope, with their real state in `tracker-validation.md`. |

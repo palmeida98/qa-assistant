@@ -47,8 +47,8 @@ CHECK_ID = re.compile(r"\d{8}-\d{6}(-\d+)?")
 ANALYSIS_FILE = re.compile(r"(\d{8}-\d{6}(?:-\d+)?)\.analysis(?:-(\d+))?\.md")
 MAX_CHECKS = 300            # the newest ones looked at to work out what is current
 WINDOWS_MAX_PATH = 260
-MAX_SCOPE_ROWS = 15
-MAX_TICKET_ROWS = 30
+MAX_SCOPE_ROWS = 5         # the block of context.md is read on every request: only the newest, the rest stay in memory/
+MAX_TICKET_ROWS = 10
 
 
 def safe_path(workspace: str, *parts: str) -> str:

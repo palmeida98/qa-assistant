@@ -1055,3 +1055,23 @@ class WholeAnalysisTouchesNothingOutside(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContextBlockKeepsOnlyTheNewest(unittest.TestCase):
+    """The block of context.md is read on every request: only the newest rows and items, the rest pointed to in memory/."""
+
+    def test_the_lists_stop_at_the_limit_and_say_how_many_more(self):
+        from adapters.tickets import render
+        n = render.MAX_CONTEXT_ITEMS
+        state = {"newest": None, "scopes": [], "tickets": [],
+                 "questions": [f"Q{i}" for i in range(n + 3)], "conflicts": [f"C{i}" for i in range(n)], "actions": []}
+        text = render.context_block(state)
+        self.assertIn(f"- Q{n - 1}", text)
+        self.assertNotIn(f"- Q{n}", text)
+        self.assertIn("- and 3 more in memory/tickets/", text)
+        self.assertIn(f"- C{n - 1}", text)
+        self.assertEqual(text.count(" more in memory/tickets/"), 1)
+
+    def test_the_limits(self):
+        from adapters.tickets import render
+        self.assertEqual((memory.MAX_SCOPE_ROWS, memory.MAX_TICKET_ROWS, render.MAX_CONTEXT_ITEMS), (5, 10, 5))

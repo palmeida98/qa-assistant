@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (tickets block of context.md, 2026-11-20)
+- The `/analyze-ticket` block of `context.md` keeps only the newest: up to 5 scope rows (was 15), 10 tickets (was 30)
+  and 5 open questions, conflicts and proposed actions per list (was 20), each with how many more exist and where. The
+  block is read on every request of the workspace; the full history stays in `memory/`.
+
 ### Changed (methodology migration notes, 2026-11-17)
 - The version notes of `docs/methodology.md` (v1 → v2 up to v2.14 → v2.15) moved word for word to
   `docs/history/methodology-migration-notes.md`; the methodology keeps a one-line pointer, so the notes are no longer
