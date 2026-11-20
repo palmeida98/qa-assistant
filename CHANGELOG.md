@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   and 5 open questions, conflicts and proposed actions per list (was 20), each with how many more exist and where. The
   block is read on every request of the workspace; the full history stays in `memory/`.
 
+### Added (denylist whole-word entries, 2026-11-17)
+- `scripts/check_denylist.py`: an entry written `word:<term>` matches only as a whole word, case-insensitive: no letter
+  or digit may touch it on either side. Hyphen, underscore, dot, slash, spaces and other punctuation are separators, so
+  `word:shopx` blocks `shopx-sim-q1`, `qa_shopx_id` and `acme/shopx`, but not `shopxes` or `KEY_SHOPXY`. For a short name
+  that is also part of common words. Plain entries keep matching anywhere, as before; `word:` without a term is a broken
+  list (exit 4). Tests in `tests/test_denylist.py` with fictional terms.
+
 ### Changed (methodology migration notes, 2026-11-17)
 - The version notes of `docs/methodology.md` (v1 → v2 up to v2.14 → v2.15) moved word for word to
   `docs/history/methodology-migration-notes.md`; the methodology keeps a one-line pointer, so the notes are no longer

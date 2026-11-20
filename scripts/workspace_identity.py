@@ -4,7 +4,7 @@ The identity of a workspace and the workspace a session is open in (technique-wo
 A workspace MAY declare who it is in its project.yaml:
 
     workspace:
-      id: "lia"            # stable, unique among the workspaces of one person: [a-z0-9][a-z0-9._-]{0,63}
+      id: "shop"           # stable, unique among the workspaces of one person: [a-z0-9][a-z0-9._-]{0,63}
       kind: "real"         # real | simulation
 
 The name in `project:` is only informative: two folders can carry the same project name (the real workspace and a
@@ -39,7 +39,7 @@ def problems(proj: dict) -> list[str]:
         out.append(f"workspace: unknown key(s) {extra}; only id and kind (technique-workspaces.md 4.1)")
     wid = block.get("id")
     if not isinstance(wid, str) or not ID.fullmatch(wid):
-        out.append("workspace.id must be a stable id of lower-case letters, digits, '.', '_' or '-' (e.g. \"lia\")")
+        out.append("workspace.id must be a stable id of lower-case letters, digits, '.', '_' or '-' (e.g. \"shop\")")
     if block.get("kind") not in KINDS:
         out.append(f"workspace.kind must be one of {list(KINDS)}")
     return out

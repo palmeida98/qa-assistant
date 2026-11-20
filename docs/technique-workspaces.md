@@ -84,15 +84,15 @@ A workspace may declare who it is, in `project.yaml` (optional, since 15.11.2026
 
 ```yaml
 workspace:
-  id: "lia"          # stable; lower-case letters, digits, '.', '_' or '-'; unique among one person's workspaces
+  id: "shop"         # stable; lower-case letters, digits, '.', '_' or '-'; unique among one person's workspaces
   kind: "real"       # real | simulation
 ```
 
 - **The name is only informative.** `project:` can be the same in the real workspace and in a copy made to simulate
-  (both «LIA»). The identity tells them apart; the real path tells apart two folders even when a copy kept the real
+  (both «SHOP»). The identity tells them apart; the real path tells apart two folders even when a copy kept the real
   identity (the list marks two folders with the same `id`: give the copy its own `id` and `kind: simulation`).
 - **New simulations** are copies made under `~/qa-simulations/<name>/`, outside the root of workspaces, with their own
-  `workspace.id` and `kind: simulation`. A copy already inside the root (e.g. `qa-workspaces/lia-sim-q1`) is not moved;
+  `workspace.id` and `kind: simulation`. A copy already inside the root (e.g. `qa-workspaces/shop-sim-q1`) is not moved;
   give it its identity when it is next used.
 - **Making a simulation** (the procedure): copy the workspace under `~/qa-simulations/<name>/`, and **before resuming
   any PBI there** change its `project.yaml` to its own `workspace.id` and `kind: simulation`. Its records copied from the
@@ -108,7 +108,7 @@ workspace:
 - **The session's workspace.** The folder a session was opened in, or its nearest parent with a `project.yaml`, is the
   session's workspace (`workspace_identity.session_workspace`). The preflight (section 6) compares it with the target,
   real paths normalised: the same workspace or any subfolder of it passes; another workspace stops with exit 5, even
-  when both are called «LIA» and even when the target was given by path. A session outside every workspace (a CLI or
+  when both are called «SHOP» and even when the target was given by path. A session outside every workspace (a CLI or
   CI started elsewhere with an explicit target, or the framework's checkout) is not stopped. `pbi_state.py` applies the
   same rule in code (exit 6), so a record is never created or changed from the wrong session even if a skill skipped
   its preflight; the other scripts take the workspace as their first argument and do not check the session.
