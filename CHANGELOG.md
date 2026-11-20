@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (tickets block of context.md, 2026-11-20)
+- The `/analyze-ticket` block of `context.md` keeps only the newest: up to 5 scope rows (was 15), 10 tickets (was 30)
+  and 5 open questions, conflicts and proposed actions per list (was 20), each with how many more exist and where. The
+  block is read on every request of the workspace; the full history stays in `memory/`.
+
 ### Added (denylist whole-word entries, 2026-11-17)
 - `scripts/check_denylist.py`: an entry written `word:<term>` matches only as a whole word, case-insensitive: no letter
   or digit may touch it on either side. Hyphen, underscore, dot, slash, spaces and other punctuation are separators, so

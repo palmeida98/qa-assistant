@@ -16,6 +16,7 @@ READINESS_TEXT = {"ready": "Ready to run, once the user asks", "partial": "Parti
                   "below, and only the verifiable part can run", "blocked": "Execution is blocked: nothing can run until "
                   "what is below is solved"}
 MAX_LISTED = 50
+MAX_CONTEXT_ITEMS = 5       # open questions, conflicts and actions per list in the block of context.md
 
 
 def one_line(text, limit: int = 200) -> str:
@@ -383,9 +384,9 @@ def context_block(state: dict) -> str:
     for title, items in (("Open questions", state.get("questions")), ("Open conflicts", state.get("conflicts")),
                          ("Proposed actions, none executed", state.get("actions"))):
         if items:
-            lines += ["", f"{title}:"] + [f"- {i}" for i in items[:20]]
-            if len(items) > 20:
-                lines.append(f"- and {len(items) - 20} more (see the tickets' memory)")
+            lines += ["", f"{title}:"] + [f"- {i}" for i in items[:MAX_CONTEXT_ITEMS]]
+            if len(items) > MAX_CONTEXT_ITEMS:
+                lines.append(f"- and {len(items) - MAX_CONTEXT_ITEMS} more in memory/tickets/")
     if any(r["outcome"] != "complete" for r in rows):
         lines += ["", ("A row that is not complete did not read everything: see its record before concluding anything. "
                   "Its references stay at the last complete read.")]
