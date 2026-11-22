@@ -167,6 +167,9 @@ checkout; nothing is installed for the user and the system Python is never used 
   commentary of each step.
 - Interrupt before the report only when: the work is blocked, a login, a consent, a permission or another action of the
   user is needed, an approval is needed to go on, or a decision that stops the work is needed.
+- Output budget: no message between the start and the final report except the interruptions above; the final report
+  fits about 40 lines, and what is longer (tables, lists of cases, texts to approve) goes in a file of the workspace
+  that the report names, with only what needs an approval shown in full.
 - The project's own rules prevail (§8): in particular its language and its approvals.
 
 ## 15. Partial batches, proof, criteria and approval files (batch 2, phase A, 10.11.2026)

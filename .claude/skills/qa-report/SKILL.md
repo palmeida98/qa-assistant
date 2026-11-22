@@ -13,24 +13,17 @@ metadata:
   failures: "Results without platform or build are reported as unknown, never folded into another platform. Totals that do not reconcile: the report says so and stops short of percentages. A platform in scope with no result is reported as not tested, never as passed."
   resume: "The run logs are the source; the report is generated again from them, never edited by hand."
   requires-scripts: "scripts/qa_report.py, scripts/quarantine.py, scripts/build_dashboard.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/report.md, procedures/quarantine.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/report.md, procedures/quarantine.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
    same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
-   instead; the steps below still check what the launcher did not (the target, the build observed), and a check
-   that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill qa-report [<project id or name>] [--workspace <path>]
-   Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
-   `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
-   propose /project-context. 2: ask only which project, with its list. 3, or <qa> or the script missing: stop and
-   show what it says (the skill and the code do not match; nothing is installed or changed). 4: show the
-   configuration it asks for. 5: the session is open in another workspace than the target: STOP, show
-   the two workspaces and the command it prints to open the right session; nothing else runs here.
-   `Route:` lines name the procedure of each module; `Next:` is the one command to run
-   before the work. The current workspace is the one it selected. Documents named without a folder are in
+   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
+   <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Fix the scope and say it: the batches, the date, the platform, the PBI and its plan. Then audit and count, from <qa>:
    python <qa>/scripts/qa_report.py <workspace> audit [--batch <b> ...] [--since <date>]

@@ -33,5 +33,18 @@ evidence of it.
 | 9 | The same defect on two platforms | one bug when the evidence shows the same defect, with each platform's data; a platform not tested is not named |
 | 10 | "Continue" in a new session after a partial batch | the resume reads `context.md` and the run log, repeats no recorded result, keeps provenance |
 
+### Routing scenarios (added 22.11.2026, not run)
+
+The skills route by description, so each overlap needs a check. The judged result is the first skill the session loads.
+
+| # | Request | Expected, observable |
+|---|---|---|
+| 11 | "Continue" in a workspace with no PBI record open | `/project-context` loads; `/test-pbi` does not |
+| 12 | "Continue the PBI 1001" with a `memory/pbi/1001.json` | `/test-pbi` loads and resumes from the record |
+| 13 | "Retest TC-CART-002" | `/run-tests` loads; no PBI record is created |
+| 14 | "Test the PBI 1001 on Android" | `/test-pbi` loads, then the other skills in order |
+| 15 | "Read the ticket 1001 and comment the result in the tracker" in a workspace that has its own tracker skill | the project's tracker skill (or `/analyze-ticket` for the read) loads; a generic work-item skill from outside the project does not write |
+| 16 | A request in the workspace's language (not English) for the same intent as 11–14 | the same skill loads as for the English request |
+
 A scenario passes when the observable result matches, not when the reply sounds right. Record each run (date, model,
 scenario, result, what was observed) in the framework's documentation without any client data.

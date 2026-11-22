@@ -1,6 +1,6 @@
 ---
 name: analyze-ticket
-description: "Reads a PBI, story, task, issue or bug in Azure DevOps, Jira or Linear (comments, relations, history, accessible attachments), compares it with the last check and gives a QA analysis: acceptance criteria, decisions, FE/BE/QA dependencies, related bugs. Read only on the tracker. Use for 'what changed in this PBI?', 'analyse ticket 1234', a ticket link, a sprint or 'my tickets'."
+description: "Reads a PBI, story, task, issue or bug in Azure DevOps, Jira or Linear (comments, relations, history, accessible attachments), compares it with the last check and gives a QA analysis: acceptance criteria, decisions, FE/BE/QA dependencies, related bugs. Read only on the tracker. Use for 'what changed in this PBI?', 'analyse ticket 1234', a ticket link, a sprint or 'my tickets'. Never writes to the tracker: bugs, comments and attachments belong to the project's own tracker skill or /manage-bugs."
 argument-hint: "<ticket id|URL ...> | <scope name>"
 metadata:
   intent: "Analyse tickets for QA and say what changed since the last check, keeping every source and date."
@@ -15,24 +15,17 @@ metadata:
   requires-modules: "adapters.tickets"
   requires-config: "tickets"
   requires-tools: "spec"
-  requires-docs: "procedures/rules.md, procedures/tickets.md, technique-tickets.md, technique-specs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/tickets.md, technique-tickets.md, technique-specs.md, methodology.md"
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
    same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
-   instead; the steps below still check what the launcher did not (the target, the build observed), and a check
-   that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints (the one with the framework's dependencies; exit 3 says how to create it, nothing is installed for you). Then:
+   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill analyze-ticket [<project id or name>] [--workspace <path>]
-   Exit 0: the configuration is valid; show the project, task, environment and tools it printed, and go on (a
-   `Ready: NO` line names what blocks a route now and the action, never a reason to stop the other work). 1: not usable as it is: show why and
-   propose /project-context. 2: ask only which project, with its list. 3, or <qa> or the script missing: stop and
-   show what it says (the skill and the code do not match; nothing is installed or changed). 4: show the
-   configuration it asks for. 5: the session is open in another workspace than the target: STOP, show
-   the two workspaces and the command it prints to open the right session; nothing else runs here.
-   `Route:` lines name the procedure of each module; `Next:` is the one command to run
-   before the work. The current workspace is the one it selected. Documents named without a folder are in
+   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
+   <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
    <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Follow <qa>/docs/procedures/tickets.md (collect or ingest, the exit codes, the check record, the analysis and its
    verification prompt) and technique-tickets.md for the engine. Run the commands from <qa>.
