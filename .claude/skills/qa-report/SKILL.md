@@ -17,42 +17,28 @@ metadata:
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
-   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
+   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI) uses those paths
    instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
-   ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
+   ../../../qa-assistant from the workspace (../../qa-assistant when directly under the root; in the demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill qa-report [<project id or name>] [--workspace <path>]
-   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
+   Exit 0: show it and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
    <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
-   <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
-1. Fix the scope and say it: the batches, the date, the platform, the PBI and its plan. Then audit and count, from <qa>:
+   <qa>/docs/, and the rules of <qa>/docs/procedures/rules.md apply to every step below.
+1. Fix and say the scope (batches, date, platform, PBI, plan). Then audit and count, from <qa>:
    python <qa>/scripts/qa_report.py <workspace> audit [--batch <b> ...] [--since <date>]
    python <qa>/scripts/qa_report.py <workspace> totals [--batch <b> ...] [--since <date>] [--plan batches/<p>.yaml]
-   An audit problem (Question open, evidence missing, a case repeated, a result whose only evidence is marked invalid) is reported as an open inconsistency; evidence marked invalid is named apart (kept on file, not proof), never counted as valid. The audit prints a summary by default (`--detail` lists every batch and flag).
+   An audit problem (Question open, evidence missing, a case repeated, a result whose only evidence is invalid) is an open inconsistency; invalid evidence is named apart, never counted as valid. `--detail` lists every batch and flag.
 2. Keep apart: historical results (older runs), recent results (the current result of each case), retests (before ->
-   after with builds) and coverage still missing (planned and not run). With quarantines (procedures/quarantine.md),
-   the reports of step 4 carry their own "Quarantine" section, in the same scope: the cases left out by each batch's
-   plan (not run, with the reason and the bug's link: never Pass, never in the run counts), the known failures
-   observed and the retests run (counted as recorded; a pass waits for the QA's decision; a different failure goes to
-   the normal review). It is never written by hand; `quarantine.py <workspace> report [--batch <b> ...]` shows the
-   same rows in the terminal. Every total names its scope and every
-   percentage its denominator; platforms and builds are never added into one figure, and nothing seen on one
-   platform or build is said of another.
-3. The rest of the report comes from the records, with their sources: per feature or acceptance criterion, the cases
-   and their current result; open and new bugs (from the run logs and the bug review); blocked cases with the reason,
-   a block of the environment and a failure of the tool apart from a Fail; inconclusive results (Question); the
-   platforms and builds in scope that were not tested; the limits of the evidence (a result whose evidence is
-   missing or does not show it); risks (uncovered criteria, Fails without a bug, results on an old build, unknown
-   platform or build) and the residual risk.
-4. Write the reports: exports/<stem>.summary.md (short) and exports/<stem>.technical.md (complete), from the same run
-   logs and audit; the project's `output.reports` chooses which (both by default):
+   after with builds) and coverage still missing (planned and not run). Quarantine (procedures/quarantine.md) has its
+   own section in the step 4 reports, never written by hand (`quarantine.py <workspace> report` shows the rows). Every total names its scope and every percentage its denominator; platforms and builds are
+   never added into one figure, and nothing seen on one platform or build is said of another.
+3. The rest comes from the records, with sources: per feature or acceptance criterion, the cases
+   and their current result; open and new bugs; blocked cases with the reason (environment and tool failures apart from a Fail); Question results; platforms and builds not tested; the limits of the evidence; risks (uncovered
+   criteria, Fails without a bug, old build, unknown platform or build) and the residual risk.
+4. Write exports/<stem>.summary.md (short) and exports/<stem>.technical.md (complete) from the same run logs and
+   audit (`output.reports` chooses which; both by default):
    python <qa>/scripts/qa_report.py <workspace> report [--batch <b> ...] [--since <date>] [--platform <p>] [--plan batches/<p>.yaml] [--name <stem>]
-   One step: both files include the quarantine section when the scope has quarantine data, and none otherwise;
-   running it again rewrites the same files (never a second section). Add to the technical report what only the
-   records of the session hold (features, bugs, risks), never the quarantine rows. `totals --output`
-   still gives the totals part alone. For an Excel project the dashboard is procedures/report.md section B: it writes
-   dashboard.html and reads the workbook without saving it; a summary whose formulas are wrong is reported, and fixed
-   at /checkpoint.
-5. In the conversation, a short summary for the team, professional and structured, in the workspace's language: scope
-   and date, per platform the build and the totals with denominators, main bugs, blockers, next steps. Ready to paste;
-   the user decides where it goes.
+   Add to the technical report only what the session's records hold, never the quarantine rows. For an Excel project
+   the dashboard is procedures/report.md section B; a summary with wrong formulas is reported, and fixed at /checkpoint.
+5. In the conversation, a short professional summary for the team, in the workspace's language: scope and date, per
+   platform the build and the totals with denominators, main bugs, blockers, next steps. Ready to paste; the user decides where it goes.

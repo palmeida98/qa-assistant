@@ -15,102 +15,35 @@ metadata:
   resume: "memory/pbi/<pbi>.json: the steps done (with what proves them), the baseline of the plan, the bugs published, the open items (what waits on whom) and the intermediate checkpoints."
   requires-scripts: "scripts/pbi_state.py, scripts/approvals.py, scripts/workspace_select.py, scripts/qa_python.py"
   requires-tools: "spec"
-  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/approvals.md, procedures/quarantine.md, skills-guide.md, technique-specs.md, methodology.md"
+  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/approvals.md, procedures/quarantine.md, procedures/test-pbi-detail.md, skills-guide.md, technique-specs.md, methodology.md"
 ---
 
-0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
-   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
-   instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
-   ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
+0. Preflight (read only), once per skill and workspace in a session. A run started by a launcher that already validated the workspace
+   uses its paths instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else
+   "root" in ~/.claude/skills/.qa-assistant-source.json, else ../../../qa-assistant from the workspace (../../qa-assistant when the
+   project is directly under the root; in the demo, ../..). `python` below is what `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill test-pbi [<project id or name>] [--workspace <path>]
-   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
-   <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
-   <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
-1. Parameters: the PBI (an id or key, or a link of a source configured in tickets:, Linear's .../issue/<KEY>/<slug>
-   included; any other host is refused), the QA
-   task if any, and the platforms (android, ios, web, api; by default those of the project's modules, said aloud).
-   An invalid one: refuse with the expected form `/test-pbi <PBI> [QA task] [android|ios|web|api]` and stop.
-2. Open or resume the record, from <qa>:
+   Exit 0: show it, go on. Other exits and `Route:`/`Next:`/`Ready:`: <qa>/docs/procedures/preflight.md.
+   <qa> or the script missing, or exit 3: stop, show it. Bare document names are in <qa>/docs/ (procedures/ inside it); the rules of <qa>/docs/procedures/rules.md apply to every step below.
+1. Parameters: the PBI (id, key or link of a source in tickets:; another host is refused), QA task, the platforms (default: the project's modules). Invalid: refuse with `/test-pbi <PBI> [QA task] [android|ios|web|api]` and stop.
+2. Open or resume the record:
    python <qa>/scripts/pbi_state.py <workspace> start <pbi> [--task <id>] [--dev-task <id> ...] [--platform <p> ...]
-   It shows each step (context, analyze, plan, run:<platform>, bugs, report, checkpoint) with its status and what
-   proves it, then the same state block as show and mark: `Next:` is the first step that can run (or an open item
-   this session can do), `Waiting on the QA` / `Waiting on the team` list the open items with what is missing and who
-   unblocks them, `Blocked:` the steps to go back to once their reason is gone, and `Published:` what already reached
-   the tracker. A step `done` is not done again and a publication listed is never repeated. "no work available in this
-   session" means that everything left waits on someone: say what, never "nothing pending" (that is said only when
-   the record says it).
-   `--dev-task` (repeatable) records the development tasks the caller gave; read each one on the tracker (read only), check that it is a child of the PBI, and name the source of the build that contains it (team, release note, commit or the QA's confirmation): the latest build alone does not prove it.
-   A record made in a workspace with an identity (technique-workspaces.md 4.1) keeps it; exit 6 means the session or
-   the record belongs to another workspace: STOP, show what it printed (the recorded origin and the current workspace)
-   and never rewrite, copy or bind the record to go on. A record without identity is read as before; binding it
-   (`bind --as <id> --decided-by <QA>`) is the QA's decision.
-3. Resuming a record with a plan: run /analyze-ticket again (it shows only the differences) and, for mobile, the
-   device check; then
-   python <qa>/scripts/pbi_state.py <workspace> check <pbi> --ticket <id>=<revision> [--ticket <task>=<rev> ...]
-   --build <platform>=<observed> [--environment <key>] --check <the /analyze-ticket check id>
-   Give every ticket and build of the baseline (the PBI and its tasks: a change in a task does not change the PBI's
-   revision). Exit 1 lists what changed and the steps to review: present it and ask before re-planning; once the
-   user agrees, the same command with --reopen puts those steps back to pending. Exit 3 is "not concluded": say what
-   could not be compared, never "nothing changed". Results of an old build stay valid for that build; a new run on
-   another build is a new batch. A build is required to contain the change being tested (a build confirmed with it),
-   not a number higher than some other build. When the plan cites `spec_refs` (technique-specs.md), the same command
-   compares them (`--spec-root <export folder>` reads another export than the project's): a scenario whose rule
-   changed or was removed is named and reviewed before the plan is reused, a rule with the same text in a new
-   revision of its file changes nothing, and what could not be verified leaves its scenarios pending review and
-   the check "not concluded" (section 5). A source of another kind than `export` is compared by hand, rule by rule.
-4. Run the steps through their skills, never copying their procedures, and after each one mark it with what proves it:
+   Follow its state block; a `done` step is not redone. Read each `--dev-task` on the tracker, check it is a child of the PBI, name
+   the source of the build containing it. Exit 6: STOP, show it, never rewrite the record.
+3. Resuming a record with a plan: /analyze-ticket again, the mobile device check, then `pbi_state.py ... check`. Exit 1: present the
+   changes, ask before re-planning; exit 3: "not concluded". detail: <qa>/docs/procedures/test-pbi-detail.md section 1.
+4. Run the steps through their skills, marking each:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> <step> done --ref <file, check id or batch>
-   - context: /project-context.
-   - analyze: /analyze-ticket on the PBI and its tasks (FE, BE, QA), decisions and related bugs.
-   - plan: /plan-tests for the PBI and the platforms; its review shows the cases a quarantine covers (bug, reason,
-     scope, exit condition) and the QA's choice per case (left out or directed retest; procedures/quarantine.md). On
-     resuming, `quarantine.py scope --plan` says whether that choice still holds for the build observed now. The request to test the PBI covers the plan: present it and go
-     on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, and say
-     which rule). A choice or a confirmation the plan waits on is an open item on the step plan (`open ... --kind
-     approval --step plan --by qa`), and plan is marked done only after the QA gave it and the plan file passes its
-     checks (`scope --plan` exit 0). With `policy.approvals.plan: required` (procedures/approvals.md section 5) the
-     plan is approved per batch with approvals.py review-plan / approve-plan (STOP for the QA's explicit message),
-     and `mark <pbi> plan done` is refused until every platform in scope has a valid plan decision for its batch or
-     its run step was formally skipped (`mark <pbi> run:<p> skipped --note "<why, who decided>"`). Once the plan stands:
-     python <qa>/scripts/pbi_state.py <workspace> baseline <pbi> --ticket <id>=<revision> --build <p>=<observed>
-     [--environment <key>] [--spec-plan <the plan file, when it has spec_refs>]
-   - run:<platform>: /run-tests, one platform at a time, on the platforms the request named, and only when the state
-     block's `Next:` names run:<platform>. While it is listed under `Pending, waiting on an earlier step` (the plan not
-     done, or waiting on the QA), /run-tests is not called: say what it waits on and go on only with the independent
-     work. A separate approval per platform only when the workspace's rules ask for it. An approval still valid is not
-     asked again on resuming. With `policy.approvals.plan: required`, before the first action on the device:
-     python <qa>/scripts/approvals.py <workspace> check-plan --batch <batch> --build <observed>; anything but `valid`
-     STOPS (back to the plan step with what it shows). The plan decision is not a run authorisation: with
-     `policy.approvals.run: per-platform` that one is asked and checked separately, and without it the run
-     confirmation the workspace's rules ask for is still asked; run:<platform> goes on only when both are valid.
-   - bugs: /manage-bugs, one review for all failures of the PBI (its approval before anything reaches the tracker).
-   - report: /qa-report scoped to the PBI's batches and plan.
-   - checkpoint: /checkpoint, the one that closes the flow (the intermediate checkpoints of a long run do not mark it).
-5. A step that cannot go on: mark <pbi> <step> blocked --note "<reason>" and continue with the independent work
-   already authorised (another platform, the analysis, the report of what exists, the local proposals and dry runs).
-   Record each decision or operation that waits on someone as soon as it appears, with a stable id (for a bug, its
-   draft id `<batch>/<case>`), what is missing and who unblocks it (procedures/rules.md section 7):
-   python <qa>/scripts/pbi_state.py <workspace> open <pbi> <item> --kind <approval|publish|apply|dependency|question> --missing "<what>" --unblocks "<who>" [--by <assistant|qa|team>] [--step <step>]
-   On resuming, change that same item, never open another one for it:
-   python <qa>/scripts/pbi_state.py <workspace> update <pbi> <item> [--missing "<what>"] [--unblocks "<who>"] [--by <who acts>]
-   and close it only with a verifiable confirmation (the dry run and the apply of the workbook, the record of the
-   QA's answer; for an approval or a question, who gave it):
-   python <qa>/scripts/pbi_state.py <workspace> close <pbi> <item> --ref "<proof>" [--decided-by "<who>"]
-   An open item is not an approval: an approval exists only when the QA gives it explicitly for the set shown, and a
-   resume never replaces the confirmation of a plan, a run or a write, nor the checks of the adapters and the write
-   guard (the dry run's token, the approved hash).
-6. A bug or a comment published to the tracker (only on the user's explicit request), once the tracker shows it:
-   python <qa>/scripts/pbi_state.py <workspace> published <pbi> <batch>/<case> <tracker key> --confirmed-by <proof>
-   (<proof>: the check id that read the bug back, or tracker/sent/<batch>.json)
-   Exit 1 means it was already published (or that key belongs to another draft): update the existing one, never
-   publish it again. A proposal is never recorded here: proposals live in the run log until the review. It closes
-   only the open item whose id is that draft; the others stay open. While the tracker or its write guard is out of
-   reach the item stays open (update it with what was tried), and the independent work goes on.
-7. Saving the progress is not closing the flow. With work still open, /checkpoint saves an intermediate checkpoint:
-   python <qa>/scripts/pbi_state.py <workspace> saved <pbi> --ref context.md [--note "<what is left>"]
-   The step checkpoint is marked done only by the checkpoint that closes the flow, and the record refuses it (exit 4)
-   while a step is pending or blocked or an item is open; only the QA's explicit decision closes with them:
-   python <qa>/scripts/pbi_state.py <workspace> mark <pbi> checkpoint done --ref context.md --close-with-open --decided-by "<the QA>"
-   End with the /qa-report summary of the PBI and the record's state block. The autonomy of the tests never commits,
-   pushes or syncs anything: those follow their own rules (rules.md section 5).
+   - context: /project-context. analyze: /analyze-ticket.
+   - plan: /plan-tests (quarantine review: procedures/quarantine.md). The request to test the PBI covers the plan: present it and go
+     on, unless it widens the scope or the workspace's CLAUDE.md asks for a confirmation (then STOP for it, saying which rule). Mark plan done
+     once its pending choice is given (detail: section 2).
+   - run:<platform>: /run-tests, one platform at a time, when `Next:` names it. With `policy.approvals.plan: required`, before the first
+     device action `approvals.py <workspace> check-plan --batch <batch> --build <observed>`: anything but `valid` STOPS. It is not a run
+     authorisation: the run confirmation the workspace's rules ask for is still asked.
+   - bugs: /manage-bugs. report: /qa-report. checkpoint: /checkpoint (closes the flow).
+5. A step that cannot go on: `mark <pbi> <step> blocked --note "<reason>"`; independent work goes on. Waiting items are open
+   items, not approvals (rules.md section 7; detail: section 3).
+6. Publish a bug or comment only on the user's explicit request, then `published` (detail: section 3).
+7. Saving progress is not closing the flow (rules.md section 7). End with the /qa-report summary and state block. Tests never commit,
+   push or sync (rules.md section 5).

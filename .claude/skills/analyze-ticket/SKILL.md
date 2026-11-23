@@ -19,32 +19,31 @@ metadata:
 ---
 
 0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
-   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
+   same. A run started by a launcher that already validated the workspace (the CI prompt) uses those paths
    instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
    ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
    demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill analyze-ticket [<project id or name>] [--workspace <path>]
-   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
+   Exit 0: show it and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: preflight.md.
    <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
-   <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
+   <qa>/docs/ (procedures/ inside), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
 1. Follow <qa>/docs/procedures/tickets.md (collect or ingest, the exit codes, the check record, the analysis and its
    verification prompt) and technique-tickets.md for the engine. Run the commands from <qa>.
 2. Access: `access: api` reads with the token named in .env; `access: browser`, or an MCP server the workspace's
    CLAUDE.md names, reads through a bundle (technique-tickets.md section 4.3) that `ingest` records. Only read tools;
-   an MCP write tool is never called, whatever the server offers.
+   never an MCP write tool, whatever the server offers.
 3. The first check of a ticket is the baseline: say "first analysis, no previous comparison". The next ones show only
-   the differences the engine found (before -> after, author and date when the source gives them, date detected).
+   the differences the engine found (before -> after, author and date when given, date detected).
    "No changes" only when the check concluded it. A partial read never makes a known item disappear and never proves
    that something was removed: say what was not read.
 4. For QA, identify and keep with their source and date: the acceptance criteria; decisions in comments (who, when;
    a more recent explicit decision overrides an older requirement, and the contradiction is shown, methodology.md
    section 1.3); the Frontend, Backend and QA tasks and their dependencies; related bugs, open and closed; blockers.
    When the preflight printed a `spec source` line (project.yaml has `specs:`), also read the specification of the
-   ticket's flow and cross it with the ticket as technique-specs.md says, with the `spec_refs` and their revision;
-   without that line this step is as before.
+   ticket's flow and cross it with the ticket as technique-specs.md says, with the `spec_refs` and their revision.
 5. Coverage of the read, in four lists: content read; only listed (a link, a relation, an attachment name, a
    vstfs:/// id); inaccessible (with the reason); out of scope (deeper than the limits, or not asked).
 6. Record the analysis (procedures/tickets.md step 8) and report as its step 10 says, short summary first. Nothing
-   is committed here: /checkpoint does it. When the user's request goes on to plan or test (a request to test, or
+   is committed here (/checkpoint). When the user's request goes on to plan or test (a request to test, or
    /test-pbi), hand the analysis to /plan-tests without waiting; a request to analyse only stops here and runs
    nothing.
