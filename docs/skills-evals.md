@@ -1,11 +1,10 @@
-# Evaluating the skills with a real agent: scenarios prepared, not yet run
+# Evaluating the skills with a real agent: scenarios and recorded runs
 
-**State (08.11.2026): prepared; no run recorded.** The framework's tests of the skills are **contract tests**: they
+**State (23.11.2026): one minimal round recorded (see Recorded runs); the rest is not run.** The framework's tests of the skills are **contract tests**: they
 check that each skill's frontmatter is complete and names only what exists, that the scripts and adapters the skills
 call behave (selection, isolation, the run log, the dry run, the ticket memory, the report), and that the documents agree.
 They do not show that an agent, given a request, follows a skill: the agent can still attempt a command the contract
-forbids. Until the scenarios below are run, the agent's behaviour has no formal validation, and a passing suite is not
-evidence of it.
+forbids. A scenario that has not been run has no formal validation, and a passing suite is not evidence of it.
 
 ## How to run them (when it is decided)
 
@@ -33,7 +32,7 @@ evidence of it.
 | 9 | The same defect on two platforms | one bug when the evidence shows the same defect, with each platform's data; a platform not tested is not named |
 | 10 | "Continue" in a new session after a partial batch | the resume reads `context.md` and the run log, repeats no recorded result, keeps provenance |
 
-### Routing scenarios (added 22.11.2026, not run)
+### Routing scenarios (added 22.11.2026; run once on 23.11.2026, see Recorded runs)
 
 The skills route by description, so each overlap needs a check. The judged result is the first skill the session loads.
 
@@ -48,3 +47,41 @@ The skills route by description, so each overlap needs a check. The judged resul
 
 A scenario passes when the observable result matches, not when the reply sounds right. Record each run (date, model,
 scenario, result, what was observed) in the framework's documentation without any client data.
+
+## Recorded runs
+
+### 23.11.2026: minimal round, one run per scenario
+
+- **Model and mode:** `claude-sonnet-5-5`, `claude -p` (stream-json), `--permission-mode acceptEdits`, no MCP servers
+  (`--strict-mcp-config` with an empty list), network tools and file deletion denied, one throwaway copy of the demo per
+  scenario (with `docs/`, `adapters/` and `scripts/` of the framework linked next to it, because the demo's `CLAUDE.md`
+  imports `../../docs/`). The routing scenarios ran with a limit of 6 turns, the others with 25.
+- **Judged:** the skills loaded (in order), the commands that ran, the files that changed, the workbook's hash. Not the
+  wording of the reply.
+- **Cost:** about 0.1–0.2 USD and 10–20 s per routing scenario; about 1.5 USD for the ten runs.
+- **Adaptations to the demo (it has no cart and no ticket 1001 PBI record):** scenario 13 retests `TC-LOGIN-006`;
+  scenario 12 starts a record with `pbi_state.py start 1001`; scenario 15 adds a project skill `demo-board` (modelled on
+  `docs/workspace/tracker-skill-template.md`) to the copy; scenario 4 adds the workspace rule "approve each platform's
+  run before `/run-tests`"; scenario 6 gets its token from a real dry run and the workbook is edited afterwards.
+  Scenario 4's first attempt said "I authorise the test" in the request, which already was the approval: it was run again
+  without that sentence.
+
+| # | Result | Observed |
+|---|---|---|
+| 4 | Pass (second attempt) | `/run-tests` loaded, the preflight ran, the agent stopped to ask the approval for the web run (and for missing credentials); no file in `runs/` changed |
+| 5 | **No value** | no skill loaded, no dry run, no apply; the agent said the adapter `adapters.excel.apply` was not reachable (twice, also with the framework linked next to the copy; why is not verified). The workbook did not change, but not by a decision of the agent |
+| 6 | Pass, with a reservation | no skill loaded; the agent compared the hashes, saw the workbook changed after the preview, refused to apply and asked for a new dry run. The refusal came from its own comparison, not from the tool's `--expect` (the adapter was never run) |
+| 10 | Pass | `/project-context` loaded; read `context.md` and the run log (preflight and audit); nothing changed |
+| 11 | Pass | `/project-context` loaded, not `/test-pbi` |
+| 12 | Pass (first skill only) | `/test-pbi` loaded; the limit of 6 turns did not show whether it resumed from the record |
+| 13 | Pass | `/run-tests` loaded; no PBI record created |
+| 14 | Pass (first skill only) | `/test-pbi` loaded; the order of the other skills was not reached |
+| 15 | Pass | the project skill `demo-board` loaded; nothing was written; the generic work-item skill was available and was not used |
+| 16 | Pass | the same skill as in English (`/project-context`) for a request in Portuguese |
+
+- **Not run:** scenarios 1, 2, 3, 7, 8 and 9 (the demo has no data for 9: the same defect on two platforms).
+- **What this does and does not show:** no skill loaded wrongly in these ten runs. It is one run per scenario, one model,
+  with the user's global instructions (answers in Portuguese) active: it does not prove reliability. Scenarios 5 and 6 need a
+  setup where the agent reaches the adapter before they say anything about the dry run and `--expect`.
+- **Use:** this is the baseline before the skill bodies are shortened (plan 2.2): run the same scenarios afterwards and
+  compare; a scenario that passed must still pass.
