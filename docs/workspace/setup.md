@@ -64,6 +64,10 @@ python -m playwright install chromium                 # or the browser in access
 qa-audit doctor
 ```
 
+`playwright` is pinned in `pyproject.toml` (1.65.2); after a change of the pin, install the browsers again, because each
+version downloads its own builds. A browser that `qa-audit doctor` marks with `!` does not start on this computer; one
+working browser is enough.
+
 ## 6. Android (module `mobile`)
 
 1. **Java 17** (Maestro needs it): `winget install --id Microsoft.OpenJDK.17 -e`.
