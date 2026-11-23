@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (Playwright 1.65.2, 2026-11-23)
+- Python `playwright` moved from 1.63.0 to 1.65.2 (`pyproject.toml`). Reason: the Firefox build of 1.63.0 (Firefox 155
+  Nightly) did not start on macOS 27.2 (`Could not find profile folder`, also when run by hand); 1.65.2 ships Firefox 159
+  and starts. `qa-audit doctor` is ready with Chromium 159, Firefox 159 and WebKit 27.2; the unit tests and
+  `scripts/golden_check.py` pass. The Node pin of `examples/demo/e2e` (`@playwright/test` 1.63.0) is separate and
+  unchanged. After updating, run `python -m playwright install chromium firefox webkit` again.
+
 ### Changed (tickets block of context.md, 2026-11-20)
 - The `/analyze-ticket` block of `context.md` keeps only the newest: up to 5 scope rows (was 15), 10 tickets (was 30)
   and 5 open questions, conflicts and proposed actions per list (was 20), each with how many more exist and where. The
