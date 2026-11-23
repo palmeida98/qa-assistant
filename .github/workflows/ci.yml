@@ -364,8 +364,8 @@ jobs:
           target="$RUNNER_TEMP/skills"; mkdir -p "$target"
           .venv/bin/python scripts/sync_skills.py --apply --allow-worktree --target "$target"
           .venv/bin/python scripts/sync_skills.py --target "$target"
-          test "$(ls -d "$target"/*/ | wc -l)" = 8
-          for skill in project-context analyze-ticket plan-tests run-tests manage-bugs qa-report checkpoint test-pbi; do
+          test "$(ls -d "$target"/*/ | wc -l)" = 9
+          for skill in project-context analyze-ticket plan-tests run-tests manage-bugs qa-report checkpoint test-pbi playwright-tests; do
             echo "::group::preflight $skill"
             .venv/bin/python scripts/workspace_select.py preflight --skill "$skill" --workspace examples/demo
             echo "::endgroup::"
