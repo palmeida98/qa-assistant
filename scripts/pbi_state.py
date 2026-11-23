@@ -372,7 +372,18 @@ def state_lines(doc: dict) -> list[str]:
     return lines
 
 
-def start(workspace: str, pbi: str, task: str | None, platforms: list[str]) -> tuple[dict, bool]:
+def _dev_tasks(values, workspace: str | None = None) -> list[str]:
+    """The development tasks given with --dev-task (ids or links), in order, without repeats."""
+    out: list[str] = []
+    for v in values or []:
+        i = pbi_id(v, workspace)
+        if i not in out:
+            out.append(i)
+    return out
+
+
+def start(workspace: str, pbi: str, task: str | None, platforms: list[str],
+          dev_tasks: list[str] | None = None) -> tuple[dict, bool]:
     with workspace_lock(workspace):
         doc = load(workspace, pbi)
         created = doc is None
@@ -387,13 +398,21 @@ def start(workspace: str, pbi: str, task: str | None, platforms: list[str]) -> t
         if task and doc.get("task") and doc["task"] != task:
             raise UsageError(f"PBI {pbi} is recorded with the QA task {doc['task']}, not {task}")
         doc["task"] = doc.get("task") or task
+        dev = list(dev_tasks or [])
+        if pbi in dev or (doc["task"] and doc["task"] in dev):
+            raise UsageError(f"a development task cannot be the PBI or the QA task ({pbi}, {doc['task'] or '-'})")
+        new_dev = [d for d in dev if d not in doc.get("dev_tasks", [])]
+        if new_dev:
+            doc["dev_tasks"] = doc.get("dev_tasks", []) + new_dev
+            if not created:
+                _event(doc, f"development tasks added: {', '.join(new_dev)}")
         added = [p for p in platforms if p not in doc["platforms"]]
         doc["platforms"] += added
         if added and not created:
             _event(doc, f"platforms added: {', '.join(added)}")
         for name in step_names(doc["platforms"]):
             doc["steps"].setdefault(name, {"status": "pending"})
-        if created or added:
+        if created or added or new_dev:
             save(workspace, doc)
     return doc, created
 
@@ -859,6 +878,9 @@ def _approval_lines(workspace: str | None, doc: dict) -> list[str]:
 def render(doc: dict, workspace: str | None = None) -> str:
     lines = [f"PBI {doc['pbi']}" + (f" · QA task {doc['task']}" if doc.get("task") else "")
              + f" · platforms: {', '.join(doc['platforms']) or 'none yet'}", _binding_line(doc)]
+    if doc.get("dev_tasks"):
+        lines.insert(1, "Development tasks: " + ", ".join(doc["dev_tasks"])
+                     + " (the build that contains each one is checked with its own source: see `check`)")
     for name in step_names(doc["platforms"]):
         s = doc["steps"].get(name, {"status": "pending"})
         extra = "".join(f" · {k}: {s[k]}" for k in ("ref", "note", "at") if s.get(k))
@@ -878,6 +900,7 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("start")
     p.add_argument("pbi")
     p.add_argument("--task")
+    p.add_argument("--dev-task", action="append", help="a development task (FE/BE) of the PBI; repeatable")
     p.add_argument("--platform", action="append")
     p = sub.add_parser("show")
     p.add_argument("pbi")
@@ -946,7 +969,7 @@ def main(argv=None) -> int:
             raise UsageError(f"{ws} has no project.yaml: not a workspace")
         pbi = pbi_id(a.pbi, ws)
         if a.command == "start":
-            doc, created = start(ws, pbi, a.task, _platforms(a.platform))
+            doc, created = start(ws, pbi, a.task, _platforms(a.platform), _dev_tasks(a.dev_task, ws))
             print(("created" if created else "resumed") + f": {path_of(ws, pbi)}")
             print(render(doc, ws))
             return 0

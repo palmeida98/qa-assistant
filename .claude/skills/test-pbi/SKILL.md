@@ -32,7 +32,7 @@ metadata:
    task if any, and the platforms (android, ios, web, api; by default those of the project's modules, said aloud).
    An invalid one: refuse with the expected form `/test-pbi <PBI> [QA task] [android|ios|web|api]` and stop.
 2. Open or resume the record, from <qa>:
-   python <qa>/scripts/pbi_state.py <workspace> start <pbi> [--task <id>] [--platform <p> ...]
+   python <qa>/scripts/pbi_state.py <workspace> start <pbi> [--task <id>] [--dev-task <id> ...] [--platform <p> ...]
    It shows each step (context, analyze, plan, run:<platform>, bugs, report, checkpoint) with its status and what
    proves it, then the same state block as show and mark: `Next:` is the first step that can run (or an open item
    this session can do), `Waiting on the QA` / `Waiting on the team` list the open items with what is missing and who
@@ -40,6 +40,7 @@ metadata:
    the tracker. A step `done` is not done again and a publication listed is never repeated. "no work available in this
    session" means that everything left waits on someone: say what, never "nothing pending" (that is said only when
    the record says it).
+   `--dev-task` (repeatable) records the development tasks the caller gave; read each one on the tracker (read only), check that it is a child of the PBI, and name the source of the build that contains it (team, release note, commit or the QA's confirmation): the latest build alone does not prove it.
    A record made in a workspace with an identity (technique-workspaces.md 4.1) keeps it; exit 6 means the session or
    the record belongs to another workspace: STOP, show what it printed (the recorded origin and the current workspace)
    and never rewrite, copy or bind the record to go on. A record without identity is read as before; binding it

@@ -30,8 +30,11 @@ class Sync(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_it(self, *args):
+        # the suite also runs from worktrees and detached CI checkouts: allow them here; the refusal has its own test
+        extra = ["--allow-worktree"] if "--apply" in args and "--refuse-worktree" not in args else []
+        args = [a for a in args if a != "--refuse-worktree"]
         with contextlib.redirect_stdout(io.StringIO()) as out:
-            rc = ss.main(["--target", self.target, *args])
+            rc = ss.main(["--target", self.target, *extra, *args])
         return rc, out.getvalue()
 
     def test_empty_target_is_out_of_sync_without_writing(self):
@@ -134,6 +137,25 @@ class Sync(unittest.TestCase):
             rc, out = self.run_it("--apply")
         self.assertNotIn("nothing was merged", out)
 
+    def test_apply_from_a_worktree_or_another_branch_is_refused_without_the_flag(self):
+        err = io.StringIO()
+        with mock.patch("common.git_state", return_value={"commit": "abc", "branch": "feature", "dirty": False}), \
+                contextlib.redirect_stderr(err):
+            rc, _ = self.run_it("--apply", "--refuse-worktree")
+        self.assertEqual(rc, 2)
+        self.assertIn("Nothing was copied", err.getvalue())
+        self.assertIn("--allow-worktree", err.getvalue())
+        self.assertFalse(os.path.exists(os.path.join(self.target, ss.RECORD)))
+        with mock.patch("common.git_state", return_value={"commit": "abc", "branch": "main", "dirty": False}), \
+                mock.patch("common.main_checkout", return_value=ss.ROOT):
+            rc, _ = self.run_it("--apply", "--refuse-worktree")
+        self.assertEqual(rc, 0)
+        with mock.patch("common.git_state", return_value={"commit": "abc", "branch": "main", "dirty": False}), \
+                mock.patch("common.main_checkout", return_value="/somewhere/else"), \
+                contextlib.redirect_stderr(io.StringIO()):
+            rc, _ = self.run_it("--apply", "--refuse-worktree")
+        self.assertEqual(rc, 2)
+
     def test_a_skill_whose_code_is_not_in_this_checkout_is_refused(self):
         with tempfile.TemporaryDirectory() as src:
             os.makedirs(os.path.join(src, "needs-code"))
@@ -187,7 +209,8 @@ class Version2(unittest.TestCase):
 
     def run_it(self, *args):
         with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
-            rc = ss.main(["--target", self.target, *args])
+            extra = ["--allow-worktree"] if "--apply" in args else []
+            rc = ss.main(["--target", self.target, *extra, *args])
         return rc, out.getvalue()
 
     def test_the_eight_are_installed_and_a_second_run_changes_nothing(self):
@@ -250,7 +273,7 @@ class Version2(unittest.TestCase):
             err = io.StringIO()
             with mock.patch.object(ss, "SOURCE", src), contextlib.redirect_stderr(err), \
                     contextlib.redirect_stdout(io.StringIO()):
-                rc = ss.main(["--target", self.target, "--apply"])
+                rc = ss.main(["--target", self.target, "--apply", "--allow-worktree"])
         self.assertEqual(rc, 2)
         self.assertIn("document docs/procedures/nothing.md", err.getvalue())
         self.assertEqual(os.listdir(self.target), [])

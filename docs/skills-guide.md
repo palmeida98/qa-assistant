@@ -119,6 +119,7 @@ git -C <qa> worktree add <folder outside /tmp> <feature-branch>      # once; a f
 python <folder>/scripts/device.py <workspace> --platform ios check  # run the script of the branch, with <qa>'s Python
 ```
 
+- `sync_skills.py --apply` refuses a worktree or a branch other than `main` unless `--allow-worktree` is given; `workspace_select.py where` warns when the folder the skills came from no longer exists or has moved to another commit.
 - Never run `sync_skills.py --apply` from that worktree: an older branch installs its own skills next to these
   (version 1 names come back, a skill with the same name is overwritten) and records itself as their source. A skill
   whose copy was overwritten then stops at its preflight with exit 3 ("the global copy of /<skill> differs"), and

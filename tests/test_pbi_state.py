@@ -53,6 +53,31 @@ class PbiState(unittest.TestCase):
         self.assertEqual(doc["task"], "1240")
         self.assertIn("run:ios", doc["steps"])
 
+    def test_dev_tasks_are_recorded_deduplicated_and_added_later(self):
+        code, out = self.run_("start", "1234", "--task", "1240", "--dev-task", "1250", "--dev-task", "1251",
+                              "--dev-task", "1250", "--platform", "android")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.record()["dev_tasks"], ["1250", "1251"])
+        self.assertIn("Development tasks: 1250, 1251", out)
+        code, out = self.run_("start", "1234", "--dev-task", "1252")
+        self.assertEqual(code, 0)
+        doc = self.record()
+        self.assertEqual(doc["dev_tasks"], ["1250", "1251", "1252"])
+        self.assertTrue(any("development tasks added: 1252" in h["event"] for h in doc["history"]))
+
+    def test_a_record_without_dev_tasks_stays_as_before(self):
+        self.run_("start", "1234", "--platform", "android")
+        self.assertNotIn("dev_tasks", self.record())
+        _code, out = self.run_("start", "1234", "--platform", "android")
+        self.assertNotIn("Development tasks", out)
+
+    def test_a_dev_task_cannot_be_the_pbi_or_the_qa_task_and_must_be_an_id(self):
+        code, out = self.run_("start", "1234", "--task", "1240", "--dev-task", "1240")
+        self.assertNotEqual(code, 0)
+        self.assertIn("cannot be the PBI or the QA task", out)
+        code, out = self.run_("start", "1234", "--dev-task", "not an id")
+        self.assertNotEqual(code, 0)
+
     def test_a_link_gives_the_id_and_another_host_shape_is_refused(self):
         with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
             f.write("tickets:\n  sources:\n    boards: {service: azure-devops, organization_url: "
