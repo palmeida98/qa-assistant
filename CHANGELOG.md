@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (CI rebuilt for one-person use, 2026-11-23)
+- Two workflows instead of three. `ci.yml`: `lint-secrets` (ruff + detect-secrets), `tests` (the Excel golden and the whole
+  unit suite on Ubuntu with LibreOffice; only Windows-only skips allowed) and `install` (clean install, fixture audit, every
+  skill synced and preflighted; `main` and manual runs only). `qa-audit.yml`: the engine's integration tests, Chromium by
+  default, all three browsers on demand, only when the engine or its tests change.
+- Removed: `tests-macos`, `windows-only-tests`, the Windows suite workflow and its known-failures list, the separate
+  `golden` job, the `changes` job and the `ci-status` aggregate, the `demo-e2e` workflow (it never ran: no secrets) and
+  Dependabot with the SHA pins (actions on major tags). `tests/test_ci_filter.py` now checks `qa-audit.yml`'s path filter
+  and the shape of both workflows. Reasons in `docs/ci.md`.
+
 ### Changed (tickets block of context.md, 2026-11-20)
 - The `/analyze-ticket` block of `context.md` keeps only the newest: up to 5 scope rows (was 15), 10 tickets (was 30)
   and 5 open questions, conflicts and proposed actions per list (was 20), each with how many more exist and where. The

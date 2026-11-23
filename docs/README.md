@@ -15,7 +15,7 @@ Read only what the current task needs. This proposed index does not move or repl
 | Website audit engine | [User guide](qa-audit-guide.md), [specification](qa-audit.md) |
 | Reproducible fictional walkthrough | [Demo walkthrough](demo-walkthrough.md) |
 | Tracker state: implemented, tested, piloted | [Tracker validation](tracker-validation.md) |
-| CI jobs, what "green" means, Windows and `demo-e2e` | [CI](ci.md) |
+| CI jobs, what "green" means and what is not covered | [CI](ci.md) |
 | Applying a run log from a workspace's GitHub Actions (manual, dry run first) | [Workspace CI](workspace/ci/README.md#applying-a-run-log) |
 | Agent-behaviour scenarios (prepared, not run) | [Skills evals](skills-evals.md) |
 | Framework development and history | [Development plan](development-plan.md), [changelog](../CHANGELOG.md) |
