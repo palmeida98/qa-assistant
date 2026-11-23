@@ -399,6 +399,24 @@ class Worktree(Base):
         self.assertTrue(ws._inside(info["imports"]["adapters"], ROOT))
         self.assertEqual(info["workspaces_root"]["source"], "--root")
 
+    def test_where_warns_when_the_folder_the_skills_came_from_is_gone_or_moved(self):
+        target = os.path.join(self.tmp, "global-skills")
+        os.makedirs(target)
+
+        def printed(record):
+            with open(os.path.join(target, sync_skills.RECORD), "w", encoding="utf-8") as f:
+                json.dump(record, f)
+            info = ws.where(root_arg=self.root, environ={}, config_path=self.config, target=target)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ws._print_where(info)
+            return buf.getvalue()
+
+        gone = printed({"root": os.path.join(self.tmp, "removed-worktree"), "commit": "abc1234", "branch": "main"})
+        self.assertIn("no longer exists", gone)
+        moved = printed({"root": ROOT, "commit": "0000000", "branch": "main"})
+        self.assertIn("synced at 0000000", moved)
+
     def test_where_reports_the_commit_guards_without_the_terms(self):
         import check_denylist as cd
         listing = os.path.join(self.tmp, "denylist.txt")

@@ -46,7 +46,7 @@ class InstallSmoke(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(self.target)), [])          # a dry run copies nothing
         for skill in SKILLS:
             self.assertIn(f"missing    {skill}", dry.stdout)
-        applied = self.run_script("sync_skills.py", "--apply", "--target", self.target)
+        applied = self.run_script("sync_skills.py", "--apply", "--allow-worktree", "--target", self.target)
         self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
         installed = [d for d in os.listdir(self.target) if os.path.isdir(os.path.join(self.target, d))]
         self.assertEqual(sorted(installed), SKILLS)

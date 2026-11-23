@@ -209,9 +209,30 @@ def _print_where(info: dict) -> None:
     print(f"Global skills: {info['skills']['target']}, " + (
         f"last synced from {record.get('root')} (branch {record.get('branch')}, commit {record.get('commit')}) at "
         f"{record.get('synced_at')}{extra}" if record else "no record of where they came from"))
+    if record and record.get("root"):
+        if not os.path.isdir(record["root"]):
+            print(f"  WARNING: the folder the skills came from no longer exists ({record['root']}): sync them from the "
+                  "main checkout (python scripts/sync_skills.py --apply)")
+        else:
+            head = _head_commit(record["root"])
+            recorded = record.get("commit") or ""
+            if head and recorded and not (head.startswith(recorded) or recorded.startswith(head)):
+                print(f"  note: that folder is now at {head}; the skills were synced at {recorded} (the installed "
+                      "skills are the ones of the recorded commit until the next sync)")
     for name, state in (info["skills"].get("state") or {}).items():
         if state not in ("same", "foreign"):
             print(f"  skill {name}: {state} against this checkout (python scripts/sync_skills.py --apply)")
+
+
+def _head_commit(root: str) -> str:
+    """The short HEAD of a checkout, or '' when git cannot say (read only)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False,
+                           timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return r.stdout.strip() if r.returncode == 0 else ""
 
 
 # --- the root of workspaces ----------------------------------------------------------------------------------------

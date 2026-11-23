@@ -17,7 +17,7 @@ link is never written through nor removed.
 they came from (root, branch, commit), so a skill finds the code that matches it
 (technique-workspaces.md section 9). It refuses a skill whose requires-modules or
 requires-scripts are not in this checkout, and only SKILL.md is ever copied. It
-never merges anything: syncing from a worktree or another branch is said aloud.
+never merges anything: --apply from a worktree or a branch other than main is refused unless --allow-worktree is given.
 
 Exit codes: 0 in sync (or copied with --apply) · 1 differences to apply ·
 2 no skills in the repository, or a skill whose code is not in this checkout
@@ -192,6 +192,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Syncs .claude/skills/ with ~/.claude/skills/.")
     ap.add_argument("--apply", action="store_true", help="copy the different or missing skills, remove retired ones, "
                                                          "and record this checkout as their source")
+    ap.add_argument("--allow-worktree", action="store_true",
+                    help="allow --apply from a worktree or a branch other than main (the workspaces then run this "
+                         "checkout's code until the next sync, and removing the worktree leaves the skills without a source)")
     ap.add_argument("--target", default=TARGET, help="folder of the global skills (default ~/.claude/skills)")
     a = ap.parse_args(argv)
     if not os.path.isdir(SOURCE):
@@ -217,10 +220,10 @@ def main(argv=None) -> int:
             return 0
         print(f"{len(pending)} skill(s) to sync: run with --apply")
         return 1
-    return _apply(state, pending, a.target)
+    return _apply(state, pending, a.target, a.allow_worktree)
 
 
-def _apply(state: dict[str, str], pending: list[str], target: str) -> int:
+def _apply(state: dict[str, str], pending: list[str], target: str, allow_worktree: bool = False) -> int:
     try:
         broken = {n: missing_code(ROOT, skill_doc(os.path.join(SOURCE, n, "SKILL.md"))) for n, st in state.items()
                   if st != "retired"}
@@ -233,9 +236,15 @@ def _apply(state: dict[str, str], pending: list[str], target: str) -> int:
             print(f"ERROR: {name} needs {', '.join(missing)}, not in this checkout ({ROOT})", file=sys.stderr)
         print("Nothing was copied: an installed skill must find its code.", file=sys.stderr)
         return 2
+    record = source_record()
+    if not allow_worktree and (record["worktree"] or (record["branch"] and record["branch"] not in DEFAULT_BRANCHES)):
+        print(f"ERROR: {ROOT} is a worktree or on branch {record['branch']!r}, not the main checkout on "
+              "main or master: the installed skills would depend on a folder that is removed with the "
+              "worktree. Nothing was copied. Merge to main and sync from the main checkout, or pass --allow-worktree "
+              "if this is on purpose.", file=sys.stderr)
+        return 2
     done = apply(state, SOURCE, target) if pending else []
     previous = read_record(target) or {}
-    record = source_record()
     # the names this framework installed over time, so a later retirement removes only its own skills
     record["installed_before"] = sorted(set(previous.get("installed_before") or []) | set(previous.get("skills") or {})
                                         | set(record["skills"]))
@@ -250,7 +259,7 @@ def _apply(state: dict[str, str], pending: list[str], target: str) -> int:
     elif record.get("uncommitted") is None:
         print("note: git could not say whether there are changes not committed; the commit may not be the whole content")
     if record["worktree"] or (record["branch"] and record["branch"] not in DEFAULT_BRANCHES):
-        print("warning: this is a worktree or another branch: the workspaces run this checkout's code until the next "
+        print("warning: --allow-worktree: this is a worktree or another branch: the workspaces run this checkout's code until the next "
               "sync; nothing was merged")
     return 0
 
