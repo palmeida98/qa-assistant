@@ -362,7 +362,7 @@ jobs:
           .venv/bin/python -m pip install --quiet -r requirements.txt
           export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
           target="$RUNNER_TEMP/skills"; mkdir -p "$target"
-          .venv/bin/python scripts/sync_skills.py --apply --target "$target"
+          .venv/bin/python scripts/sync_skills.py --apply --allow-worktree --target "$target"
           .venv/bin/python scripts/sync_skills.py --target "$target"
           test "$(ls -d "$target"/*/ | wc -l)" = 8
           for skill in project-context analyze-ticket plan-tests run-tests manage-bugs qa-report checkpoint test-pbi; do
