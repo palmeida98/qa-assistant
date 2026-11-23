@@ -16,7 +16,7 @@ tools and the skills; each workspace holds its requirements, configuration, memo
 The main flow is **resume the project → analyse the ticket → plan → run → prepare bugs → report → save the state**.
 Each step is a skill of its own; `/test-pbi` runs the flow for one PBI or requirement and can be resumed.
 
-## 2. The eight skills
+## 2. The nine skills
 
 | Skill | Owns | Main outputs | Writes (without asking) |
 |---|---|---|---|
@@ -24,12 +24,13 @@ Each step is a skill of its own; `/test-pbi` runs the flow for one PBI or requir
 | `/analyze-ticket` | Reading a PBI, story, task, issue or bug (Azure DevOps, Jira or Linear), its comments, relations, history and accessible attachments; the difference from the last check | An analysis with sources and dates; what changed | `memory/` and the tickets block of `context.md` |
 | `/plan-tests` | Coverage, priorities, preconditions, data, expected results, traceability to requirements and existing cases | An analysis file, proposed cases, a batch plan by risk | `analysis/`; `batches/` at once under a request to test, after the confirmation under a request to plan or when the project's rules ask for one |
 | `/run-tests` | Running cases or a plan on mobile (Android, iOS), web or API with the tools available; results and evidence | Results in the run log, evidence | `runs/`, `evidence/` |
+| `/playwright-tests` | Writing Playwright specs (level N2) in the workspace's `e2e/` for cases of the library, running them with the native runner, fixing the specs that are wrong, one result per case | Specs, run log results, traces and captures of failures | `e2e/`, `runs/`, `evidence/` |
 | `/manage-bugs` | Investigating failures, duplicates, bug proposals for a batch review | Bug proposals, one per problem | The run log item of the case (`new_defect` / `bug`, with `run_log.py attach`) after approval |
 | `/qa-report` | Auditing the records and reporting by platform, build, feature, result and risk | A technical report and a short summary | `exports/` (the report file); `dashboard.html` for an Excel project (the workbook only read) |
 | `/checkpoint` | Validating and saving the session; the resume point; what is still to apply or publish | `context.md` updated; the pending list | `context.md`, `archive/context/` (compaction); a local commit only when the project's rules say so |
 | `/test-pbi` | Coordinating the skills above for one PBI, with a resume record | The flow's state and the final report | `memory/pbi/<id>.json` plus what each step writes |
 
-Each skill keeps its own procedure; `/test-pbi` names the skills, it never copies their steps.
+`/playwright-tests` joined on 23.11.2026 (the flow is unchanged: it is the deterministic route of `/run-tests` for web cases that passed twice; technique-browser.md §13; `/test-pbi` still names the eight of the flow). Each skill keeps its own procedure; `/test-pbi` names the skills, it never copies their steps.
 
 ## 3. Shared rules, written once
 
@@ -119,7 +120,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 
 | Behaviour | Test |
 |---|---|
-| The eight skills are discovered, installed, recorded with their origin; other skills are kept | `test_sync_skills.py`, `test_skills.py` |
+| The nine skills are discovered, installed, recorded with their origin; other skills are kept | `test_sync_skills.py`, `test_skills.py` |
 | Each contract is complete; every script, module and document named exists | `test_skills.py` |
 | The workspace selected is the only one written; two projects never share memory | `test_workspace_select.py` |
 | A second, fictional workspace works with no tie to a real project | `test_skill_flows.py` |
@@ -144,7 +145,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A bug added after the run keeps the result's evidence, time and run block; one artefact shared by cases is named by each | `test_run_log.py` |
 | Bugs grouped across platforms only on evidence; differences kept apart; a tool block is never a defect | `test_skills.py` (`Autonomy`) |
 | A web-only project is asked for no mobile tool | `test_workspace_select.py` |
-| The eight skills install into a temporary folder and their preflight runs on a fictional workspace, with nothing outside it touched | `test_install_smoke.py` (and the CI's `install` job) |
+| The nine skills install into a temporary folder and their preflight runs on a fictional workspace, with nothing outside it touched | `test_install_smoke.py` (and the CI's `install` job) |
 | `/analyze-ticket` and `/test-pbi` run on the fictional demo's two ticket checks, with no credentials | `test_tickets_demo.py` |
 | The documented walkthrough (preflight, tickets, run log, dry run, totals) runs as written | `test_demo_walkthrough.py` |
 

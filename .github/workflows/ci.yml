@@ -354,7 +354,7 @@ jobs:
           echo "qa-audit exit code: $code"
           test "$code" = 1
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
-      # plan F20: the eight skills installed from the clean clone into a temporary folder (never ~/.claude), and the
+      # plan F20: the nine skills installed from the clean clone into a temporary folder (never ~/.claude), and the
       # preflight of each on the fictional demo workspace; nothing outside $RUNNER_TEMP is read or written
       # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Quick start)
       - name: Skills sync and preflight (isolated)
@@ -370,7 +370,7 @@ jobs:
             .venv/bin/python scripts/workspace_select.py preflight --skill "$skill" --workspace examples/demo
             echo "::endgroup::"
           done
-          echo "**install: skills synced to a temporary folder and preflight passed for the eight skills on examples/demo.**" >> "$GITHUB_STEP_SUMMARY"
+          echo "**install: skills synced to a temporary folder and preflight passed for the nine skills on examples/demo.**" >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the audit report of a failed run
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

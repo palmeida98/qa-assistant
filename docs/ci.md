@@ -16,7 +16,7 @@ credentials and actions pinned to a commit SHA:
 | `windows-only-tests` | only the two tests that exist for Windows |
 | `golden` | the Excel golden and the LibreOffice-dependent tests |
 | `qa-audit` (Chromium, Firefox, WebKit) | the audit engine against a local fixture site, plus a cross-engine comparison |
-| `install` | a clean clone: the audit of the fixture site, the eight skills synced to a temporary folder and their preflight on the demo |
+| `install` | a clean clone: the audit of the fixture site, the nine skills synced to a temporary folder and their preflight on the demo |
 | `ci-status` | one aggregate result: success only when every job above succeeded (or, for the browsers, was skipped by design) |
 
 - **Pull request vs `main`.** On a pull request the three browser jobs (about 80% of the runner minutes) run only when it touches

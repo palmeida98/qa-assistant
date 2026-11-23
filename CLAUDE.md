@@ -2,9 +2,9 @@
 
 References:
 - @docs/methodology.md — universal methodology
-- docs/skills-spec.md — the eight skills, what each owns, their contract and helpers (read when touching `.claude/skills/` or `docs/procedures/`); guide for people: docs/skills-guide.md
+- docs/skills-spec.md — the nine skills, what each owns, their contract and helpers (read when touching `.claude/skills/` or `docs/procedures/`); guide for people: docs/skills-guide.md
 - docs/procedures/ — the long procedures the skills read (`rules.md` is shared by all of them)
-- docs/technique-browser.md — browser automation technique (read when running browser batches; `/run-tests`, `/project-context`)
+- docs/technique-browser.md — browser automation technique (read when running browser batches or writing Playwright specs; `/run-tests`, `/playwright-tests`, `/project-context`)
 - docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/manage-bugs`)
 - docs/technique-jira-xray.md — Jira + Xray tracker adapter technique, with the common contract of the tracker adapters in §2 (read when `tracker: jira`, or when touching `adapters/tracker/` or `adapters/jira/`; built in plan 10.2)
 - docs/technique-azure-devops.md — Azure DevOps (Test Plans + Boards) tracker adapter technique (read when `tracker: azure-devops`, or when touching `adapters/azure_devops/`; built in plan 10.3)
@@ -21,7 +21,7 @@ References:
 - docs/demo-walkthrough.md, docs/skills-evals.md — the reproducible fictional walkthrough (run by a test) and the agent-behaviour scenarios prepared but not yet run
 
 ## Fixed rules
-- The product is the eight skills used through Claude Code. It has no hub, web interface, graphical application or launcher of its own, and none is promised for a later phase (decision of 08.11.2026; the earlier `qa-ui` was removed and stays in the git history). Reports a command produces (HTML, Excel) are outputs, not an interface.
+- The product is the nine skills used through Claude Code. It has no hub, web interface, graphical application or launcher of its own, and none is promised for a later phase (decision of 08.11.2026; the earlier `qa-ui` was removed and stays in the git history). Reports a command produces (HTML, Excel) are outputs, not an interface.
 - Never write client data (URLs, accounts, names, credentials) in this repository.
 - Follow the hierarchy of sources of truth of the methodology (section 1.3).
 - A project workspace always lives outside this repository, under the root of workspaces (qa-workspaces/ by default).

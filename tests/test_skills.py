@@ -27,6 +27,7 @@ CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approva
 METHODOLOGY = os.path.join(DOCS, "methodology.md")
 EIGHT = ["analyze-ticket", "checkpoint", "manage-bugs", "plan-tests", "project-context", "qa-report", "run-tests",
          "test-pbi"]
+NINE = sorted([*EIGHT, "playwright-tests"])      # the eight of the flow and the Playwright specs skill (N2)
 VERSION_1 = ("project-onboarding", "analyze-tickets", "analyze-feature", "generate-cases", "plan-batch", "run-batch",
              "test-api", "audit-accessibility", "test-mobile", "log-bug", "end-session", "dashboard")
 
@@ -64,8 +65,8 @@ def all_procedures() -> list[str]:
 
 
 class Skills(unittest.TestCase):
-    def test_the_eight_skills_and_nothing_else(self):
-        self.assertEqual(names(), EIGHT)
+    def test_the_nine_skills_and_nothing_else(self):
+        self.assertEqual(names(), NINE)
 
     def test_valid_frontmatter_with_name_and_description(self):
         for name in names():
