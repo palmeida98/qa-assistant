@@ -1,6 +1,6 @@
 # Evaluating the skills with a real agent: scenarios and recorded runs
 
-**State (23.11.2026): one minimal round recorded (see Recorded runs); the rest is not run.** The framework's tests of the skills are **contract tests**: they
+**State (23.11.2026): two minimal rounds recorded (before and after shortening the skills; see Recorded runs); the rest is not run.** The framework's tests of the skills are **contract tests**: they
 check that each skill's frontmatter is complete and names only what exists, that the scripts and adapters the skills
 call behave (selection, isolation, the run log, the dry run, the ticket memory, the report), and that the documents agree.
 They do not show that an agent, given a request, follows a skill: the agent can still attempt a command the contract
@@ -85,3 +85,26 @@ scenario, result, what was observed) in the framework's documentation without an
   setup where the agent reaches the adapter before they say anything about the dry run and `--expect`.
 - **Use:** this is the baseline before the skill bodies are shortened (plan 2.2): run the same scenarios afterwards and
   compare; a scenario that passed must still pass.
+
+### 23.11.2026: second round, after shortening the skills (plan 2.2)
+
+The same ten scenarios, the same harness, model and limits, against the skills synced from `main` at `ebacb6f` (each
+`SKILL.md` at most 800 words; the long detail of five of them in `docs/procedures/<skill>-detail.md`). One run each; about
+1.2 USD.
+
+| # | Before | After | Same? |
+|---|---|---|---|
+| 4 | Pass: `/run-tests`, stopped to ask the platform approval, `runs/` untouched | the same: `/run-tests`, asked the approval of the web run (and the missing credentials), `runs/` untouched | yes |
+| 5 | No value (adapter not reachable, no skill) | the same: no skill, no dry run, no apply, workbook unchanged; the agent again did not find the adapter | yes |
+| 6 | Pass, with a reservation (own hash comparison, adapter never run) | the same: refused because the workbook hash differs from the preview's, adapter never run | yes |
+| 10 | Pass: `/project-context` | the same, 13 turns instead of 15 | yes |
+| 11–16 | `/project-context`, `/test-pbi`, `/run-tests`, `/test-pbi`, the project's tracker skill, `/project-context` | the same skill first in each of the six | yes |
+
+- **Result:** no scenario that passed before failed after: the first skill loaded, the files changed (none) and the workbook's
+  hash are the same in all ten. The turns differ by a few (5 and 6 took more, 10 fewer); this is not a measured effect.
+- **Not shown:** scenarios 5 and 6 still do not reach the adapter, so they say nothing yet about the dry run and
+  `--expect`; 12 and 14 are judged on the first skill only. What the detail files hold (for example `approvals.py check`
+  in `run-tests-detail.md`) was not exercised by any of these runs: nothing reached the step that needs it. One run per
+  scenario, one model: a difference smaller than the run-to-run variation would not show.
+- **Next:** a scenario that reaches a step whose command now lives in a detail file (an approved platform run, then
+  `approvals.py record-run`), and a setup in which the agent reaches the Excel adapter.
