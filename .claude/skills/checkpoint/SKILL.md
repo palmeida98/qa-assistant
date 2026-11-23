@@ -14,66 +14,36 @@ metadata:
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
   requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/quarantine.py, scripts/qa_python.py"
-  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/apply.md, procedures/quarantine.md, methodology.md, technique-excel.md"
+  requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/apply.md, procedures/quarantine.md, procedures/checkpoint-detail.md, methodology.md, technique-excel.md"
   requires-tools: "git"
 ---
 
-0. Preflight (read only), once per skill and workspace in a session while project.yaml and the checkout stay the
-   same. A run started by a launcher that already validated the workspace (the prompt of the workspace's CI: it names the workspace and qa-assistant and allows no other command) uses those paths
-   instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa>, the root of qa-assistant: $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
-   ../../../qa-assistant from the workspace (../../qa-assistant when the project is directly under the root; in the
-   demo, ../..). `python` in every command below is the interpreter that `python3 <qa>/scripts/qa_python.py` prints. Then:
+0. Preflight (read only), once per skill and workspace in a session. A run started by a launcher that already validated the workspace uses those paths
+   instead; a check that cannot run leaves its cases Blocked, never assumed. Otherwise find <qa> (the root of qa-assistant): $QA_ASSISTANT_ROOT, else "root" in ~/.claude/skills/.qa-assistant-source.json, else
+   ../../../qa-assistant from the workspace. `python` below is what `python3 <qa>/scripts/qa_python.py` prints. Then:
    python <qa>/scripts/workspace_select.py preflight --skill checkpoint [<project id or name>] [--workspace <path>]
-   Exit 0: show what it printed and go on. Any other exit, and the `Route:`, `Next:` and `Ready:` lines: <qa>/docs/procedures/preflight.md.
-   <qa> or the script missing, or exit 3: stop and show what it says (nothing is installed or changed). Documents named without a folder are in
-   <qa>/docs/ (procedures/ inside it), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
-1. Save every result of the session not yet in a run log, with run_log.py (procedures/apply.md steps 1 to 3); evidence
-   or a bug for a result already there with run_log.py attach, which keeps the rest of it. Never write to history/.
-   A Question stays Question, with its concrete question, until the user answers it (the answer, its reason and who
-   decided it are asked, never assumed): then python <qa>/scripts/run_log.py <workspace> resolve <batch> <case>
-   <status> --reason "<why>" --decided-by "<who>" [--decision-source "<where>"] [--into <new batch>] keeps the
-   observation, its time and evidence and records the decision (procedures/apply.md section "Resolving a Question");
-   a batch already applied needs --into, and that batch is applied with its own dry run and approval. Recording the
-   decision is not applying it, and it never replaces an approval the project's own rules ask for (for example the
-   workspace's CLAUDE.md or context.md requiring a specific decision, a dry run review or an approval per platform):
-   those rules still prevail and are asked as written. Steps 1 to 4 are local and need no approval; applying
-   (step 5) and publishing are separate acts with their own.
-2. Validate, read only:
-   python <qa>/scripts/qa_report.py <workspace> audit --since <date of the session>
-   Every evidence file named must exist; Questions and proposed bugs are listed; a batch with a problem is not
-   applied. Check also that context.md says nothing the records contradict (a case "pending" that has a result, a
-   task "done" without one).
-3. Update context.md (methodology.md section 12.2; procedures/apply.md steps 4 to 5a) with localised edits that keep
-   independent content: a short resume point (what was done, the exact point reached per platform and the build of
-   each run); decisions with who and when; blockers with what unblocks them; pending items with their dates (a past
-   time is history, never rewritten as a schedule); open questions; validation state. A decision is never dropped:
-   older entries go word for word to archive/context/ with compact_context.py, and context.md says where.
-4. Show what is recorded locally and what is still pending, as a list: batches not applied (and the dry run to run);
-   bugs to review or to publish; tracker comments the user asked for and not yet published; files not committed
-   (git status, read only); commits not pushed (python <qa>/scripts/workspace_git.py <workspace> status).
-5. Applying to the workbook or the tracker only after the user confirms that batch: procedures/apply.md steps 7 and
-   7a. Excel: python -m adapters.excel.apply <workspace> <batch> --dry-run, show the cells, counts and problems it
-   lists, then after the approval the apply with --expect <token>, repeating the SAME --label, --reported-by, --now and
-   --no-recalc the dry run was given (the token `v2-...` covers them and the workbook it resolved, shown as an absolute
-   path: a different option, another workbook, or a token from before it, is refused before any write: preview again,
-   and ask again; an approval of that same preview, still valid, is not asked a second time). A write without --expect
-   is refused; an explicit --workbook or QA_WORKBOOK must be inside the workspace and agree with the batch's route
-   (technique-excel.md section 1.2); to simulate, copy the whole workspace and pass the copy as the workspace.
-   Jira / Azure DevOps: dry run, approval, --yes. The exit codes as written there. The workspace's own rule on
-   workbooks wins when stricter.
+   Exit 0: go on; other exits, `Route:`, `Next:`, `Ready:`: <qa>/docs/procedures/preflight.md.
+   <qa> or the script missing, or exit 3: stop and show it. Documents named without a folder are in
+   <qa>/docs/ (procedures/ inside), and the rules of <qa>/docs/procedures/rules.md apply to every step below.
+1. Save every result of the session not yet in a run log with run_log.py (apply.md steps 1 to 3; attach for evidence or a bug). Never write to history/. A Question stays Question until the user answers it; then run_log.py resolve (apply.md, "Resolving a Question"), which is not applying and never replaces an
+   approval the project's rules ask for. Steps 1 to 4 need none.
+2. Validate (read only): python <qa>/scripts/qa_report.py <workspace> audit --since <date of the session>
+   Evidence must exist; a batch with a problem is not applied; context.md must not contradict the records.
+3. Update context.md (methodology.md section 12.2; apply.md steps 4 to 5a), localised edits: resume point (per
+   platform, with the build), decisions, blockers, open questions, pending items with their dates (a past time is
+   history, never rewritten as a schedule). A decision is never dropped: compact_context.py archives it word for word.
+4. List what is recorded locally and what is pending: batches not applied, bugs to review or publish, comments not
+   published, files not committed, commits not pushed (python <qa>/scripts/workspace_git.py <workspace> status).
+5. Apply to the workbook or tracker only after the user confirms that batch (apply.md steps 7 and 7a, their exit
+   codes). Dry run, then after the approval the apply with --expect <token> (or --yes)
+   and the SAME options; a stale preview is asked again, an approval of that same preview, still valid, is not
+   asked a second time. A stricter workspace rule wins.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes
-   it part of the checkpoint (procedures/apply.md step 6); push only when the user says so (step 6a).
+   it part of the checkpoint (apply.md step 6); push only when the user says so (step 6a).
 7. Under /test-pbi, saving the progress is not closing the flow (procedures/rules.md section 7). Each item of step 4
-   that waits on someone (a dry run to approve, a bug to publish, a dependency, a question) is an open item of the
-   PBI's record: update the one already there, or open it with a stable id, never a second one for the same work;
-   close it only with a verifiable confirmation (`pbi_state.py close`, with who decided for an approval or a question).
-   An intermediate checkpoint, with work still open:
+   that waits on someone is an open item of the PBI's record (never a second for the same work), closed only with
+   a verifiable confirmation. With work open:
    python <qa>/scripts/pbi_state.py <workspace> saved <pbi> --ref context.md [--note "<what is left>"]
-   Only the checkpoint that closes the PBI's flow (after its report, with nothing pending, blocked or open) marks:
+   Only the checkpoint that closes the flow (nothing open) marks:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> checkpoint done --ref context.md
-   The record refuses it (exit 4) while work is open; never mark the step done to save progress. Closing with work
-   open is the QA's explicit decision only: add --close-with-open --decided-by "<the QA>" (what stayed open is kept).
-   Saving or resuming never replaces an approval: the dry run and its token, and the write guard's approved content,
-   are asked and checked as in step 5. A quarantine waiting on the QA (proposed, a retest that passed, a proposed end;
-   python <qa>/scripts/quarantine.py <workspace> report) is an open item of approval for the QA, closed only after
-   quarantine.py decide with the QA's confirmation (procedures/quarantine.md).
+   Never mark it done to save progress. Closing with work open, quarantine: procedures/checkpoint-detail.md.
