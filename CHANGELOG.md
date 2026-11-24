@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (CLAUDE.md of the framework repository, 2026-11-24)
+- `CLAUDE.md` rewritten for the framework development session it is loaded in: what the repository is and is not (workspace
+  sessions never load it), seven fixed rules, a map, what to read when, how to change a skill, scripts by purpose, tests
+  and commits. The list of references and scripts is kept, now grouped; no behaviour changes.
+
 ### Removed (`/test-pbi`, 2026-11-24)
 - The `/test-pbi` skill and `docs/procedures/test-pbi-detail.md`: the framework is eight skills again. `scripts/pbi_state.py`,
   `memory/pbi/<id>.json` and what depends on them (`/checkpoint` step 7, `/manage-bugs` publication record, run approvals,
