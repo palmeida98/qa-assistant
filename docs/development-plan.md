@@ -2002,6 +2002,7 @@ the device tool inside and outside the sandbox; the model and budget of the skil
 
 | Date | Change |
 |---|---|
+| 2026-11-24 | `CLAUDE.md` reviewed against the code: the methodology is no longer imported in framework sessions (methodology §0), the skills' 800-word budget (2.2) is in `skills-spec.md` §4 and tested, `pbi_state.py` no longer names `/test-pbi` as its driver. |
 | 2026-11-20 | 14.2: the tickets block of `context.md` keeps only the newest (5 scope rows, 10 tickets, 5 items per list), each with how many more exist in `memory/`. |
 | 2026-11-09 | Phase 17: 17.1–17.4 merged (PRs #9–#12); 17.4's remainder and 17.5 in review (PR #13); 17.6–17.9 pending; 17.3b design only. |
 | 2026-11-09 | Phase 17 registered (17.0): output, traceability and write safety, from a real two-platform mobile test; tasks 17.1–17.9 grouped by dependency; 17.1 (traceable results) in review. 17.4: the output layer in review (branch `phase-17/pr-4-output-layer`, on 17.3). |

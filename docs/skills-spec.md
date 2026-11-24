@@ -56,7 +56,8 @@ The frontmatter keeps the contract of `technique-workspaces.md` §8 (`intent`, `
 | `routes` | `/run-tests` only: `module: procedure` pairs separated by `;`. The preflight prints the route and the tools of each active module |
 
 The body starts with step 0 (find `<qa>`, run the preflight), then numbered steps. A skill folder holds only
-`SKILL.md`. Step 0 is written in each skill, not referred to: it is what finds `<qa>`, so an installed copy can
+`SKILL.md`, of at most 800 words (`wc -w`, frontmatter included; plan 2.2, 23.11.2026): longer steps go to
+`procedures/<skill>-detail.md`. Step 0 is written in each skill, not referred to: it is what finds `<qa>`, so an installed copy can
 resolve every other document. Paths named in a prompt skip the search, never the checks; only a launcher that
 validated the workspace and allows no other command (the workspace's CI) replaces the
 preflight, and the skill's own steps check what it did not (the target, the build observed).

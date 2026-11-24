@@ -1,5 +1,6 @@
 """
-The progress of one PBI through /test-pbi, so the flow can stop and resume in another session (skills-spec.md §5).
+The progress of one PBI, so the flow can stop and resume in another session (skills-spec.md §5). No skill drives it since
+/test-pbi was removed on 24.11.2026; the record and its commands stay.
 
     python scripts/pbi_state.py <workspace> start <pbi> [--task ID] [--platform P ...]
     python scripts/pbi_state.py <workspace> show <pbi> [--json]
@@ -894,7 +895,7 @@ def render(doc: dict, workspace: str | None = None) -> str:
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="python scripts/pbi_state.py", description="The progress of one PBI (/test-pbi).")
+    ap = argparse.ArgumentParser(prog="python scripts/pbi_state.py", description="The progress of one PBI (no skill drives it since /test-pbi was removed).")
     ap.add_argument("workspace")
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("start")

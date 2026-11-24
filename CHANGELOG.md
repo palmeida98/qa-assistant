@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (CLAUDE.md review, 2026-11-24)
+- `CLAUDE.md` no longer imports `docs/methodology.md` (about 49 KB in every framework session): the fixed rules keep what
+  binds development (§1.2, §1.3, §1.4, §15) and "Read when needed" names the methodology before changing the method or a
+  universal layer. Methodology §0 says so; workspaces keep importing it. The file was checked against the code: every
+  script, adapter entry point and subcommand is listed by purpose (added `workspace_identity.py`, `install.sh`,
+  `device_ios.py`, `ios_diagnose.py`, `apk_manifest.py`, `slack_build_messages.py`, `ci_test_summary.py`, the Excel
+  `add_columns`/`annotate`/`reconcile` modules), and the commit convention matches practice.
+- The 800-word budget of a `SKILL.md` moved from `CLAUDE.md` to `docs/skills-spec.md` §4 and is now tested
+  (`tests/test_skills.py`, `test_each_skill_stays_within_its_word_budget`).
+- `scripts/pbi_state.py`: docstring and `--help` no longer say a skill drives it.
+
 ### Changed (demo `.mcp.json` for macOS and Linux, 2026-11-24)
 - `examples/demo/.mcp.json` starts the Playwright MCP with `"command": "npx"` (was `cmd /c npx`, which only exists on
   Windows: on macOS the server failed with `ENOENT ... cmd`). Same package, version and options
