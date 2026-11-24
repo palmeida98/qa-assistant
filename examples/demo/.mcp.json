@@ -6,7 +6,7 @@
       "args": [
         "/c",
         "npx",
-        "@playwright/mcp@0.0.82",
+        "@playwright/mcp@0.0.86",
         "--secrets",
         ".env",
         "--isolated"
