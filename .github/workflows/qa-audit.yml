@@ -1,0 +1,110 @@
+# The qa-audit engine's integration tests against the local fixture site (docs/qa-audit.md, docs/ci.md).
+# - Runs only when a push to main or a pull request touches what these tests depend on (the `paths` below, kept honest by
+#   tests/test_ci_filter.py), and on demand. Being a separate workflow, a change that does not touch them shows no check
+#   at all, never a "skipped" one.
+# - Chromium by default: the whole discovery with QA_AUDIT_TEST_ENGINES=chromium. A manual run with engines=all adds
+#   Firefox and WebKit (only their own test classes) and the cross-engine comparison, for a change to the engine's
+#   browser handling.
+# - An engine that cannot start is a failure (QA_AUDIT_REQUIRE_ENGINES), and a -k that selects nothing exits 5.
+name: qa-audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/integration/**"
+      - "tests/fixtures/**"
+      - "scripts/ci_test_summary.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/qa-audit.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/integration/**"
+      - "tests/fixtures/**"
+      - "scripts/ci_test_summary.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/qa-audit.yml"
+  workflow_dispatch:
+    inputs:
+      engines:
+        description: "Browsers to test"
+        type: choice
+        options: [chromium, all]
+        default: chromium
+
+concurrency:
+  group: qa-audit-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  qa-audit:
+    name: qa-audit (${{ matrix.engine }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: ${{ fromJSON(inputs.engines == 'all' && '["chromium","firefox","webkit"]' || '["chromium"]') }}
+    env:
+      QA_AUDIT_REQUIRE_ENGINES: "1"
+      ALL: ${{ inputs.engines == 'all' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .[visual]
+      - name: Playwright browsers
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          if [ "$ENGINE" = chromium ] && [ "$ALL" = true ]; then
+            python -m playwright install --with-deps chromium firefox webkit
+          else
+            python -m playwright install --with-deps "$ENGINE"
+          fi
+      - run: qa-audit doctor --no-color
+      # xvfb: the manual login method opens the browser visibly (docs/qa-audit.md 20)
+      - run: sudo apt-get install -y -q xvfb
+      - name: Integration tests (${{ matrix.engine }})
+        env:
+          QA_AUDIT_TEST_ENGINES: ${{ matrix.engine }}
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          set -o pipefail
+          case "$ENGINE" in
+            chromium) xvfb-run -a python -m unittest discover -s tests/integration -v 2>&1 | tee integration.log ;;
+            firefox)  xvfb-run -a python -m unittest discover -s tests/integration -v -k Firefox 2>&1 | tee integration.log ;;
+            webkit)   xvfb-run -a python -m unittest discover -s tests/integration -v -k Webkit 2>&1 | tee integration.log ;;
+          esac
+      - name: Counts and skips in the summary
+        if: ${{ !cancelled() }}
+        run: python scripts/ci_test_summary.py integration.log --title "qa-audit integration (${{ matrix.engine }})"
+      - name: Cross-engine comparison (chromium, firefox, webkit)
+        if: ${{ matrix.engine == 'chromium' && inputs.engines == 'all' }}
+        env:
+          QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
+        run: |
+          set -o pipefail
+          xvfb-run -a python -m unittest discover -s tests/integration -v -k CompatibilityRun 2>&1 | tee cross-engine.log
+          python scripts/ci_test_summary.py cross-engine.log --title "qa-audit cross-engine comparison"
+      - name: Keep the logs of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: qa-audit-logs-${{ matrix.engine }}
+          path: |
+            integration.log
+            cross-engine.log
+          if-no-files-found: ignore
+          retention-days: 7

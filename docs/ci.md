@@ -1,51 +1,61 @@
 # CI
 
-<!-- Moved from the README on 17.11.2026, unchanged except for the heading and the relative links. -->
+The CI is sized for how the framework is really used: **one person, on macOS, with this GitHub repository as a backup and a
+proof of concept** (no other contributors, no branch protection, public). The local `pre-commit` (denylist, ruff, the Excel
+golden, the unit tests) is the first barrier; the CI is the copy that runs off the machine, so a commit made with the hooks
+skipped, or on a machine without LibreOffice, is still checked. It was rebuilt on 23.11.2026 from seven jobs and three
+workflows (see *What was removed* below).
 
+The README badge shows the **CI workflow** on `main`. Both workflows use a read-only token, never persist the checkout's
+credentials and pin the official actions to their major tag (`actions/checkout@v7`, ...).
 
-The README badge shows the **CI workflow** ([`ci.yml`](../.github/workflows/ci.yml)) on `main` and nothing else: it says nothing
-about the Windows suite or `demo-e2e`, which are separate workflows below.
+## Workflows
 
-CI runs on every pull request, on push to `main` and on demand (`workflow_dispatch`), with a read-only token, no persisted
-credentials and actions pinned to a commit SHA:
+**[`ci.yml`](../.github/workflows/ci.yml)** — every pull request, every push to `main`, and on demand:
 
-| Job | What |
+| Job | What | When |
+|---|---|---|
+| `lint-secrets` | ruff and detect-secrets with the baseline (same versions as `.pre-commit-config.yaml`) | always |
+| `tests` | the Excel golden (`scripts/golden_check.py`) and the **whole** unit suite on Ubuntu **with LibreOffice**, so the recalculation tests run too | always |
+| `install` | a clean clone: `scripts/install.sh`, an audit of the fixture site (exit 1 expected from the planted defects), and every skill of `.claude/skills/` synced to a temporary folder and preflighted on `examples/demo` | `main` and manual runs only |
+
+**[`qa-audit.yml`](../.github/workflows/qa-audit.yml)** — the audit engine's integration tests against the local fixture site:
+
+- Runs on a push to `main` or a pull request **only when it touches** `src/`, `tests/integration/`, `tests/fixtures/`,
+  `scripts/ci_test_summary.py`, `pyproject.toml`, `requirements.txt` or the workflow itself (kept honest by
+  `tests/test_ci_filter.py`), and on demand. A change that touches none of these shows no `qa-audit` check at all.
+- **Chromium** by default. A manual run with `engines: all` (Actions → qa-audit → Run workflow) adds Firefox and WebKit and
+  the cross-engine comparison: use it after a change to how the engine drives the browsers.
+
+## What "green" means
+
+Each test job writes its counts and its skips by reason to the run summary (`scripts/ci_test_summary.py`) and fails when no
+test ran or a skip has a reason that is not allowed. In `tests` the only allowed skip is a test that exists only for
+Windows. A skipped test proves nothing.
+
+## What is not covered, on purpose
+
+- **macOS.** It is where the framework is developed and used, and the local `pre-commit` runs the suite there.
+- **Windows.** Not used; unconfirmed. The two Windows-only tests are skipped (allowed) on Linux.
+- **The demo's end-to-end specs** (`examples/demo/e2e`, Playwright against a public practice site). They need three demo
+  logins and a third-party site; run them locally (`npm ci && npx playwright test` in that folder, with the
+  `DEMO_SAUCE_*` variables set). No end-to-end coverage is claimed from the CI.
+- **The personal denylist** runs only in the local `pre-commit` (the list lives outside the repository).
+
+## What was removed on 23.11.2026, and why
+
+| Removed | Why |
 |---|---|
-| `lint`, `secrets` | ruff; detect-secrets with a baseline |
-| `tests` (Ubuntu), `tests-macos` | the whole unit suite |
-| `windows-only-tests` | only the two tests that exist for Windows |
-| `golden` | the Excel golden and the LibreOffice-dependent tests |
-| `qa-audit` (Chromium, Firefox, WebKit) | the audit engine against a local fixture site, plus a cross-engine comparison |
-| `install` | a clean clone: the audit of the fixture site, the eight skills synced to a temporary folder and their preflight on the demo |
-| `ci-status` | one aggregate result: success only when every job above succeeded (or, for the browsers, was skipped by design) |
+| `tests-macos` | duplicated the local machine, where `pre-commit` already runs the suite |
+| `windows-only-tests`, the *Windows suite* workflow and `.github/known-failures-windows.txt` | Windows is not used |
+| `golden` as its own job | folded into `tests`, which now installs LibreOffice: one suite run, no LibreOffice skips |
+| the three browsers on every engine change, `changes` and the `qa-audit` aggregate | Chromium by default, the other two on demand; a workflow-level path filter replaces the `changes` job |
+| `ci-status` | an aggregate meant for branch protection, which a one-person backup repository does not use |
+| `demo-e2e` workflow | its secrets were never set, so it never ran a spec; the specs stay runnable locally |
+| `.github/dependabot.yml` and the SHA pins | a monthly pull request to bump pins is noise here; official actions on major tags need no bumps |
 
-- **Pull request vs `main`.** On a pull request the three browser jobs (about 80% of the runner minutes) run only when it touches
-  `src/`, the integration tests or the fixture site, the summary script they call, the dependency files or `.github/` (job
-  `changes`; checked by `tests/test_ci_filter.py`); otherwise `qa-audit` reports "skipped by design" and `ci-status` still
-  passes. `main` and manual runs always run everything. A pull request keeps one run (a newer push cancels the older); `main`
-  runs are never cancelled.
-- **`ci-status` is not enforced yet.** It is meant to be the single check to require, but on 11.11.2026 `main` has no branch
-  protection and no ruleset (checked through the GitHub API), so nothing blocks a merge on it today.
-- **What "green" means.** Each test job writes its counts and skips by reason to the run summary and fails if no test ran or a
-  skip has a reason that is not allowed (`golden`: no skip at all). A skipped test proved nothing.
-- **Windows is unconfirmed, and separate.** The **Windows suite** workflow
-  ([`windows-suite.yml`](../.github/workflows/windows-suite.yml)) runs the whole suite on Windows and is not part of `ci-status`. Since
-  11.11.2026 it passes with no known failure left (the list in [`.github/known-failures-windows.txt`](../.github/known-failures-windows.txt)
-  is empty; a failure that is not on it is reported as new), **but with skips**: the destructive-command guard is a POSIX hook, so
-  its tests are skipped there, and the Excel recalculation tests need LibreOffice, which that runner does not have. A skipped test
-  proves nothing, so a green Windows run does not show that those parts work on Windows, and Windows stays unconfirmed.
-- **`demo-e2e` is a separate workflow** ([`demo-e2e.yml`](../.github/workflows/demo-e2e.yml)), not a CI check: Playwright specs against
-  a public practice site, started by hand or weekly when the repository variable `DEMO_E2E_SCHEDULE` is `true`. It needs the
-  three repository secrets (named in the header of the workflow file); without them it fails with a clear message. No end-to-end coverage is claimed until it has run with executed specs.
+`scripts/ci_test_summary.py` keeps its `--known-failures` option (tested), though no workflow uses it now.
 
-**Dated results** (commit `e83d9b2`, 11.11.2026): CI [run 43004572200](https://github.com/palmeida98/qa-assistant/actions/runs/43004572200)
-succeeded: Ubuntu 1846 tests run, 0 failed, 23 skipped; macOS 1846 run, 0 failed, 24 skipped; `golden` 44 run, 0 skipped;
-`windows-only-tests` 2 run. **Windows suite** [run 43004572292](https://github.com/palmeida98/qa-assistant/actions/runs/43004572292)
-succeeded: 1846 run, 0 failed, 43 skipped (11 guard tests that are POSIX only, 21 that need LibreOffice, 6 that use shell-script fake
-interpreters, 3 `time.tzset`, 1 permissions, 1 `/proc`), no known and no new failure. Earlier the same day that workflow was red
-(commit `2307430`: 13 failures, [run 42957805113](https://github.com/palmeida98/qa-assistant/actions/runs/42957805113)); six were test
-path-separator problems and seven the POSIX-only guard. `demo-e2e` has not been observed running. Numbers change with the code: each run's summary has its own counts. Local and CI environments differ in some
-versions (for example Pillow and LibreOffice); `python scripts/workspace_select.py where` prints the difference.
-
-Privacy guards on every commit: detect-secrets with a baseline and a private denylist kept outside the repository (a missing or
-unreadable list is reported, never called clean). Hooks can be bypassed and CI runs after a push, so review stays necessary.
+Privacy guards on every commit: detect-secrets with a baseline and a private denylist kept outside the repository (a missing
+or unreadable list is reported, never called clean). Hooks can be bypassed and CI runs after a push, so review stays
+necessary.

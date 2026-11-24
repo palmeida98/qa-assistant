@@ -1,7 +1,7 @@
 """docs/workspace/ci/apply.yml, the template of a workspace's `QA apply` workflow: it applies one run log only when asked
 (workflow_dispatch), after a dry run, with the approval typed and (Excel) the reviewed preview token, and it pushes a NEW branch,
 never main. The structure is checked always; the shell blocks of the template are run end to end on the fictional demo
-workspace with a local fake remote when LibreOffice is there (the golden job). Nothing real, no network.
+workspace with a local fake remote when LibreOffice is there (the CI tests job). Nothing real, no network.
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
 """
@@ -110,7 +110,7 @@ def step(wf, job, prefix):
     raise KeyError(prefix)
 
 
-@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's golden job)")
+@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's tests job)")
 @unittest.skipIf(sys.platform == "win32", "the bash blocks of a Linux runner")
 class EndToEnd(unittest.TestCase):
     """The template's own shell blocks, on a copy of the fictional demo with a local fake remote."""

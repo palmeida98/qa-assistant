@@ -2,7 +2,7 @@
 
 python -m unittest discover -s tests   (from the root of qa-assistant)
 The WithLibreOffice class recalculates real formulas and only runs where there is
-LibreOffice (locally and in the CI's golden job); the others do not need it:
+LibreOffice (locally and in the CI's tests job); the others do not need it:
 they write numbers into the summary instead of formulas.
 """
 
@@ -171,7 +171,7 @@ class Percentage(Base):
             ExcelAdapter.from_dict(cfg_with_percentage(not_run_status="MadeUp"))
 
 
-@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's golden job)")
+@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's tests job)")
 class WithLibreOffice(Base):
     def test_real_formulas_match_after_the_recalculation(self):
         self.assertTrue(self.ad.recalc()["ok"])

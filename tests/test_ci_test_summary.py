@@ -27,7 +27,7 @@ OK
 """
 
 SKIP_LOG = """test_a (mod.A.test_a) ... ok
-test_b (mod.A.test_b) ... skipped "needs LibreOffice (runs in the CI's golden job)"
+test_b (mod.A.test_b) ... skipped "needs LibreOffice (runs in the CI's tests job)"
 test_c (mod.A.test_c) ... skipped 'the NUL device of Windows'
 test_d (mod.A.test_d) ... skipped 'a reason nobody planned'
 
@@ -120,7 +120,7 @@ class Summary(unittest.TestCase):
 
     def test_skip_reasons_are_grouped_with_quotes_inside(self):
         _, out, _, _ = run(SKIP_LOG)
-        self.assertIn("1 × needs LibreOffice (runs in the CI's golden job)", out)
+        self.assertIn("1 × needs LibreOffice (runs in the CI's tests job)", out)
         self.assertIn("1 × the NUL device of Windows", out)
 
     def test_only_allowed_reasons_pass(self):
