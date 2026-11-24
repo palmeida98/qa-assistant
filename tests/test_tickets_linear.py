@@ -474,7 +474,7 @@ class BrowserOrMcpRoute(LinearBase):
 
 
 class SkillPath(LinearBase):
-    """/analyze-ticket -> /plan-tests -> /test-pbi on a fictional issue."""
+    """/analyze-ticket -> /plan-tests on a fictional issue."""
 
     def test_analysis_of_a_linear_check_is_recorded(self):
         fake = self.fake()

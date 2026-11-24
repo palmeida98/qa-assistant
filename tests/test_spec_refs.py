@@ -229,7 +229,7 @@ class SpecRefs(unittest.TestCase):
             code = sr.main([self.ws, "compare", "analysis/plan.md"])
         self.assertEqual((code, out.getvalue().strip()), (0, "the workspace has no specs: section: nothing to compare"))
 
-    # --- the resume of /test-pbi
+    # --- the resume of a PBI record
 
     def run_(self, *args):
         out = io.StringIO()

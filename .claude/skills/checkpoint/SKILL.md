@@ -8,7 +8,7 @@ metadata:
   config: "run_log; the tracker's section (excel:, jira:, azure_devops:); the workspace's CLAUDE.md rules on commits and approvals."
   tools: "run_log.py, qa_report.py audit, compact_context.py, workspace_git.py status; the adapters for applying."
   outputs: "context.md updated; the consistency check; the pending list (batches to apply, bugs to review or publish, comments, uncommitted files, commits not pushed)."
-  writes: "runs/ (results not yet saved), context.md, archive/context/ (compaction), under /test-pbi memory/pbi/<pbi>.json (open items, intermediate checkpoints); the workbook or the tracker only after confirmation; a commit only when the user or the workspace's CLAUDE.md asks for it."
+  writes: "runs/ (results not yet saved), context.md, archive/context/ (compaction), memory/pbi/<pbi>.json (open items, intermediate checkpoints); the workbook or the tracker only after confirmation; a commit only when the user or the workspace's CLAUDE.md asks for it."
   approvals: "Saving and validating the local state (run log, context.md, the audit): none. Applying: the user confirms the batch after the dry run; a confirmation of the same preview whose token is still valid is not asked again. Commit: the user or the workspace's rules. Push: only when the user says so."
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
@@ -40,7 +40,7 @@ metadata:
    asked a second time. A stricter workspace rule wins.
 6. Running this skill does not commit or push. Commit only when the user asks or the workspace's CLAUDE.md makes
    it part of the checkpoint (apply.md step 6); push only when the user says so (step 6a).
-7. Under /test-pbi, saving the progress is not closing the flow (procedures/rules.md section 7). Each item of step 4
+7. With a PBI record, saving the progress is not closing the flow (procedures/rules.md section 7). Each item of step 4
    that waits on someone is an open item of the PBI's record (never a second for the same work), closed only with
    a verifiable confirmation. With work open:
    python <qa>/scripts/pbi_state.py <workspace> saved <pbi> --ref context.md [--note "<what is left>"]

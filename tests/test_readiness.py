@@ -65,8 +65,8 @@ class Environment(unittest.TestCase):
 
 class Names(unittest.TestCase):
     def test_an_unknown_or_retired_skill_says_what_exists(self):
-        _, instruction, _, _ = wsel.check_skill("tset-pbi", ROOT, "/nowhere", ROOT)
-        self.assertIn("/test-pbi", instruction)
+        _, instruction, _, _ = wsel.check_skill("run-test", ROOT, "/nowhere", ROOT)
+        self.assertIn("/run-tests", instruction)
         self.assertNotIn("git -C", instruction)                 # no update would help a typo
         _, instruction, _, _ = wsel.check_skill("test-api", ROOT, "/nowhere", ROOT)
         self.assertIn("/run-tests", instruction)

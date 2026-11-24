@@ -44,6 +44,5 @@ metadata:
 5. Coverage of the read, in four lists: content read; only listed (a link, a relation, an attachment name, a
    vstfs:/// id); inaccessible (with the reason); out of scope (deeper than the limits, or not asked).
 6. Record the analysis (procedures/tickets.md step 8) and report as its step 10 says, short summary first. Nothing
-   is committed here (/checkpoint). When the user's request goes on to plan or test (a request to test, or
-   /test-pbi), hand the analysis to /plan-tests without waiting; a request to analyse only stops here and runs
+   is committed here (/checkpoint). When the user's request goes on to plan or test (a request to test), hand the analysis to /plan-tests without waiting; a request to analyse only stops here and runs
    nothing.

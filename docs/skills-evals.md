@@ -38,10 +38,10 @@ The skills route by description, so each overlap needs a check. The judged resul
 
 | # | Request | Expected, observable |
 |---|---|---|
-| 11 | "Continue" in a workspace with no PBI record open | `/project-context` loads; `/test-pbi` does not |
-| 12 | "Continue the PBI 1001" with a `memory/pbi/1001.json` | `/test-pbi` loads and resumes from the record |
+| 11 | "Continue" in a workspace with no PBI record open | `/project-context` loads |
+| 12 | Retired (24.11.2026, `/test-pbi` removed): "Continue the PBI 1001" with a `memory/pbi/1001.json` | — |
 | 13 | "Retest TC-CART-002" | `/run-tests` loads; no PBI record is created |
-| 14 | "Test the PBI 1001 on Android" | `/test-pbi` loads, then the other skills in order |
+| 14 | Retired (24.11.2026, `/test-pbi` removed): "Test the PBI 1001 on Android" | — |
 | 15 | "Read the ticket 1001 and comment the result in the tracker" in a workspace that has its own tracker skill | the project's tracker skill (or `/analyze-ticket` for the read) loads; a generic work-item skill from outside the project does not write |
 | 16 | A request in the workspace's language (not English) for the same intent as 11–14 | the same skill loads as for the English request |
 

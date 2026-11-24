@@ -1,6 +1,6 @@
 # Rules every skill obeys
 
-> Shared by the nine skills (skills-spec.md §3). A skill says that these rules apply and adds only its own.
+> Shared by the eight skills (skills-spec.md §3). A skill says that these rules apply and adds only its own.
 > Subordinate to `methodology.md` and to the workspace's `CLAUDE.md`: where they differ, the stricter rule wins, and the
 > skill says so.
 
@@ -101,7 +101,7 @@ Adding evidence or a bug to a result already recorded keeps its status, its obse
 the run block (`run_log.py attach`); replacing a result (`add --replace`) is only for a new execution of that case.
 An approval still valid (§5) is not asked again on resuming.
 
-**Saving progress is not closing the flow** (`/test-pbi`, `scripts/pbi_state.py`; skills-spec.md §5.1):
+**Saving progress is not closing the flow** (a PBI record, `scripts/pbi_state.py`; skills-spec.md §5.1):
 
 - A checkpoint saves the progress at any time, with work still open: an intermediate checkpoint
   (`pbi_state.py saved`) records the point reached and changes no step. Closing the flow is a separate act: the step

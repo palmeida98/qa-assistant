@@ -936,9 +936,9 @@ class TwoProjects(Base):
 
 
 class SpecSourceInThePreflight(Base):
-    """docs/technique-specs.md: the three skills that read a specification show where it is, only with specs:."""
+    """docs/technique-specs.md: the skills that read a specification show where it is, only with specs:."""
     PRIVATE = "https://private.example/spec/k3y-NOT-TO-BE-SHOWN"
-    SKILLS = ("analyze-ticket", "plan-tests", "test-pbi")
+    SKILLS = ("analyze-ticket", "plan-tests")
 
     def test_without_specs_the_preflight_is_as_before(self):
         make_project(self.root, "demo/shop", tickets={"sources": {"boards": BOARDS}})

@@ -1,6 +1,6 @@
 # Skills guide
 
-> How to use the nine skills of version 2 (skills-spec.md) in any workspace. Examples use the fictional **Demo Shop**
+> How to use the eight skills of version 2 (skills-spec.md) in any workspace. Examples use the fictional **Demo Shop**
 > (`DS-12` is a story, `TC-CART-003` a case).
 
 ## 1. The flow
@@ -8,11 +8,9 @@
 ```text
 /project-context ──► /analyze-ticket ──► /plan-tests ──► /run-tests ──► /manage-bugs ──► /qa-report ──► /checkpoint
        resume            what changed        by risk ▲        per platform     batch review       totals        resume point
-                                                     └──── /test-pbi runs this flow for one PBI and resumes it ────┘
 ```
 
-Each skill can be used alone. `/test-pbi` keeps a record (`memory/pbi/<id>.json`) so it can stop at any step and
-continue in another session.
+Each skill can be used alone; `/checkpoint` keeps the resume point for another session.
 
 **What a request authorises** (`procedures/rules.md` §5 and §8). "Test DS-12 on Android" covers the analysis, a plan
 by risk, the run on Android in the test environment and the local records (run log, evidence, checkpoint), without
@@ -34,7 +32,6 @@ names the rules in force.
 | `/manage-bugs` | "Prepare the bugs of the last batch." | `/manage-bugs DS12_ios` |
 | `/qa-report` | "Prepare the Android and iOS status for the team." | `/qa-report since 2026-11-01` |
 | `/checkpoint` | "Save the state, I'm leaving." | `/checkpoint` |
-| `/test-pbi` | "Test PBI DS-12 on Android." | `/test-pbi DS-12 android` |
 
 ## 3. Routing by natural language, and its limits
 
@@ -44,8 +41,8 @@ preflight, which selects the workspace and checks the tools. Limits seen in prac
 - **The descriptions are in English** (the framework's language); a request in another language ("continua", "testa este PBI no iPhone") is matched by its meaning, which works in practice but is less certain than the skill's name.
 - **Matching is a judgement of the model, not a rule.** A vague request ("look at this") may get no skill, or the
   closest one. Naming the skill (`/run-tests`) always works.
-- **`/test-pbi` is never chosen on its own** for a request that only asks one step: "what changed in DS-12" is
-  `/analyze-ticket`, "test DS-12" is `/test-pbi`.
+- **One request, one step:** "what changed in DS-12" is `/analyze-ticket`; "test DS-12" starts with `/plan-tests` and
+  `/run-tests`, each named when the work moves on.
 - **A new session is needed to see new or changed skills.** Claude Code reads `~/.claude/skills/` when a session
   starts.
 - **The preflight decides the project, not the wording.** Two projects with a similar name are a question; a skill
@@ -76,7 +73,7 @@ From the root of qa-assistant:
 
 ```bash
 python scripts/sync_skills.py            # compares, writes nothing
-python scripts/sync_skills.py --apply    # installs the nine skills in ~/.claude/skills/
+python scripts/sync_skills.py --apply    # installs the eight skills in ~/.claude/skills/
 python scripts/workspace_select.py where # what runs: checkout, branch, commit, local changes, the record of the skills
 ```
 
@@ -87,8 +84,7 @@ prints "PLUS N file(s) not committed" when that is so: the commit alone is never
 same commands with `python` from the virtual environment.
 
 **Start test (a new session):** open Claude Code in a workspace and ask "where were we?". Expected: `/project-context`
-runs, its preflight prints the project and the framework, and the answer is the resume summary. Then type
-`/test-pbi` with no argument: it must refuse with the expected form.
+runs, its preflight prints the project and the framework, and the answer is the resume summary. 
 
 ### Daily commands (from the root of qa-assistant, with its `.venv` Python)
 

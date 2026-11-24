@@ -651,11 +651,10 @@ class OnlyPlan(Base):
         self.assertEqual(self.plan_cli().returncode, 0)
         self.assertEqual(self.add_cli().returncode, 0)                        # no run decision is required
         self.assertEqual([e["gate"] for e in self.ledger()], ["plan"])
-        for skill in ("run-tests", "test-pbi"):
-            with open(os.path.join(ROOT, ".claude", "skills", skill, "SKILL.md"), encoding="utf-8") as f:
-                text = " ".join(f.read().split())
-            self.assertIn("check-plan", text)
-            self.assertIn("run confirmation the", text)                        # the project's own one is still asked
+        with open(os.path.join(ROOT, ".claude", "skills", "run-tests", "SKILL.md"), encoding="utf-8") as f:
+            text = " ".join(f.read().split())
+        self.assertIn("check-plan", text)
+        self.assertIn("run confirmation the", text)                            # the project's own one is still asked
 
 
 RUN_ONLY = {"approvals": {"run": "per-platform"}}

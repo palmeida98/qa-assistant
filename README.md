@@ -133,7 +133,6 @@ python scripts/workspace_select.py where   # which framework, Python and skill c
 | [`/manage-bugs`](.claude/skills/manage-bugs/SKILL.md) | Investigate failures, search duplicates, propose bugs for one review | proposals in the run log |
 | [`/qa-report`](.claude/skills/qa-report/SKILL.md) | Audit the run logs; reconciled totals per platform and build | a report on request |
 | [`/checkpoint`](.claude/skills/checkpoint/SKILL.md) | Save the session; apply a batch only after you confirm it | `context.md` |
-| [`/test-pbi`](.claude/skills/test-pbi/SKILL.md) | One PBI end to end through the skills above, resumable | `memory/pbi/<id>.json` |
 
 Each skill starts with a preflight that checks its contract against the code and the tools present. A project can add its
 own skills in its workspace; they are documented there.
