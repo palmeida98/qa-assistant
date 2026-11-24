@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Fixed (demo spec import, 2026-11-24)
+- `examples/demo/e2e/specs/a11y-states.spec.ts` imported the audit helper by a relative path into the framework's
+  repository, so a copy of the demo failed to load. The demo now carries a copy of `tools/playwright/qa-audit.ts` in its
+  specs folder (as `technique-browser.md` §13 says), and `tests/test_demo_helper_copy.py` keeps it equal and checks that no
+  demo spec imports outside the workspace. Found by running `/playwright-tests` on a copy of the demo.
+
 ### Changed (`/playwright-tests` scope, 2026-11-24)
 - The preflight of `/playwright-tests` now requires `functional-web` in `modules:` (`requires-config: functional-web`;
   `_config_problems` accepts a module without a section). A mobile project no longer passes it. The skill and its
