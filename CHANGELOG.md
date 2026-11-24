@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (Playwright MCP 0.0.86, 2026-11-24)
+- The Playwright MCP is fixed at `@playwright/mcp@0.0.86` (was 0.0.82) in `examples/demo/.mcp.json`,
+  `docs/procedures/onboarding.md` and the tests of the guards. Checked with a smoke test of the demo's login page, run
+  with the same options as the demo (`--isolated`): navigation, click, typing and screenshot behave as in 0.0.82
+  (clicks and typing take `target`, as in 0.0.82). Not checked: a real login with `--secrets .env` (the demo has no
+  `.env`) nor the rest of the demo flow.
+
 ### Added (`/playwright-tests`, 2026-11-23)
 - A ninth skill, `/playwright-tests`: writes Playwright specs (level N2, `technique-browser.md` §13) in the workspace's
   `e2e/`, runs them with the native runner, classifies and fixes failing specs (test bug, environment, application) in

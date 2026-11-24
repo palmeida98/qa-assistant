@@ -85,9 +85,9 @@
 5. If a browser module is active (e.g. functional-web), register the Playwright MCP IN THE WORKSPACE
    (technique-browser.md section 1, level N1). The command runs from the workspace's folder, because
    --scope project writes .mcp.json in the current folder:
-   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.82 --secrets .env --isolated
+   - Windows: claude mcp add playwright --scope project -- cmd /c npx @playwright/mcp@0.0.86 --secrets .env --isolated
      (without "cmd /c" Claude Code cannot launch npx on Windows)
-   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.82 --secrets .env --isolated
+   - Linux/macOS: claude mcp add playwright --scope project -- npx @playwright/mcp@0.0.86 --secrets .env --isolated
    (fixed version, the same as in examples/demo/.mcp.json; never @latest: technique-browser.md section 1.
    --secrets .env: at login the variable's NAME is written and the MCP puts the value; the assistant
    never reads the value: technique-browser.md section 3. --isolated: a clean browser profile in each
