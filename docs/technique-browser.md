@@ -206,6 +206,8 @@ In the conversion:
 - credentials and URLs read from environment variables, never written in the spec;
 - the specs live in the project's workspace (or in the company's repository), **not** in `qa-assistant`.
 
+The skill that does the conversion, runs the specs and records their results is `/playwright-tests` (`procedures/playwright-tests-detail.md`).
+
 **Auditing states in the middle of a spec.** A state that only exists after interacting (step 2 of a checkout, an error message, an open dialog) can be audited by the `qa-audit` engine without it touching the page (`docs/qa-audit.md` §22):
 
 - copy `tools/playwright/qa-audit.ts` from `qa-assistant` into the workspace's specs folder;

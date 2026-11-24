@@ -1,4 +1,4 @@
-"""The flow of the eight skills (docs/skills-spec.md section 6) in a second, fictional workspace with no tie to any
+"""The flow of the nine skills (docs/skills-spec.md section 6) in a second, fictional workspace with no tie to any
 real project: selection and isolation between two projects, the ticket analysis over time (first check, no change,
 a change, a partial read), results recorded once per case, the resume of /test-pbi, the report and the checkpoint.
 Every command the skills run is run here on temporary folders; the real ~/.claude and workspaces are never touched.
@@ -37,7 +37,7 @@ with open(os.path.join(ROOT, "adapters", "excel", "example.yaml"), encoding="utf
     CFG = yaml.safe_load(_f)
 
 EIGHT = ("project-context", "analyze-ticket", "plan-tests", "run-tests", "manage-bugs", "qa-report", "checkpoint",
-         "test-pbi")
+         "test-pbi", "playwright-tests")
 BOARDS = {"service": "azure-devops", "access": "api", "organization_url": ORG, "project": "Demo Shop",
           "pat_var": "DS_ADO_PAT"}
 T1, T2, T3, T4 = "2026-11-01T10:00:00", "2026-11-02T10:00:00", "2026-11-03T10:00:00", "2026-11-04T10:00:00"

@@ -12,6 +12,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
   (clicks and typing take `target`, as in 0.0.82). Not checked: a real login with `--secrets .env` (the demo has no
   `.env`) nor the rest of the demo flow.
 
+### Added (`/playwright-tests`, 2026-11-23)
+- A ninth skill, `/playwright-tests`: writes Playwright specs (level N2, `technique-browser.md` §13) in the workspace's
+  `e2e/`, runs them with the native runner, classifies and fixes failing specs (test bug, environment, application) in
+  at most three rounds and records one result per case in the run log. Detail in `docs/procedures/playwright-tests-detail.md`.
+  Based on a third-party playwright-tester skill, adapted: specs stay in the workspace, no application code is edited,
+  installs ask first, no swarm of writers. The tests, the methodology's stage table and the guides count nine skills.
+
 ### Changed (CI rebuilt for one-person use, 2026-11-23)
 - Two workflows instead of three. `ci.yml`: `lint-secrets` (ruff + detect-secrets), `tests` (the Excel golden and the whole
   unit suite on Ubuntu with LibreOffice; only Windows-only skips allowed) and `install` (clean install, fixture audit, every
