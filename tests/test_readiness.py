@@ -52,6 +52,16 @@ class Environment(unittest.TestCase):
         self.assertTrue(got["maestro"][0])
         self.assertIn("not needed", got["maestro"][1])
 
+    def test_maestro_without_java_is_not_ready(self):
+        # 24.11.2026: Maestro on the PATH, the Java it needs missing (a stub java on a Mac)
+        proj = {"modules": ["mobile"], "mobile": {"platform": "android", "app_id": "a", "input": "adb"}}
+        with mock.patch.object(vp, "which", return_value="/x/maestro"), \
+                mock.patch.object(vp, "java_ready", return_value=(False, "Maestro needs Java 17+")), \
+                mock.patch.object(vp, "android_tools", return_value={"adb": "/x/adb"}):
+            got = {t: (ok, d) for ok, t, d in vp.environment("/nowhere", proj) if t == "maestro"}
+        self.assertFalse(got["maestro"][0])
+        self.assertIn("Java 17+", got["maestro"][1])
+
     def test_maestro_is_required_with_adb_input(self):
         got = self.lines({"platform": "android", "app_id": "a", "serial": "S1", "input": "adb"})
         self.assertFalse(got["maestro"][0])

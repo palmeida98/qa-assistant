@@ -24,7 +24,8 @@
    Blocked (environment) -- never Pass. Record platform, OS, device and app version.
 4. Flows in <workspace>/<flows>/, one per case, with the ID in the name (TC-MOB-003_cart.yaml), ending
    with the assertion of the expected result. If they are missing, write them as a PROPOSAL from the
-   approved cases (section 4) and show them before using them. Credentials only as ${MAESTRO_<VAR>}, with
+   approved cases (section 4) and show them before using them; writing and fixing flows is /maestro-tests
+   (procedures/maestro-tests-detail.md). Credentials only as ${MAESTRO_<VAR>}, with
    the variable listed in mobile.variables; never written in the flow nor passed with -e.
 5. Run: python scripts/run_mobile.py <workspace> [flows...] --output runs/mobile_<YYYYMMDD>_<nn>.json
    (each flow: a path, relative to the workspace or to the flows folder, or just the case ID, e.g. TC-MOB-003;

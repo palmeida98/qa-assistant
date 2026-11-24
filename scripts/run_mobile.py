@@ -21,13 +21,19 @@ Runs a workspace's Maestro flows and links each result to its test case
   Blocked case.
 - The case is the prefix of the flow's file name (TC-MOB-003_cart.yaml ->
   TC-MOB-003).
+- The device: --serial, else $QA_MOBILE_SERIAL, else mobile.serial (Android; on iOS only --serial), passed to
+  Maestro as --device; with no serial and several devices connected nothing runs (code 2): Maestro would ask
+  which one and wait. A serial that is not connected is no target (code 3).
+- Maestro needs Java: with none answering (JAVA_HOME or `java -version`), nothing runs (code 2), never a Blocked
+  case (common.java_ready).
 - Credentials: each variable listed in mobile.variables goes from .env to an
   environment variable MAESTRO_<VAR>, which the flow reads as ${MAESTRO_<VAR>};
   never through the command line. The report's messages are redacted.
 
 Exit codes:
   0  flows run (Fail results are results, not errors)
-  2  invalid configuration, flow not found or Maestro not installed (nothing run)
+  2  invalid configuration, flow not found, Maestro or Java not installed, several devices and no --serial
+     (nothing run)
   3  no target (no device/emulator) or Maestro produced no report:
      the cases are Blocked by environment
 """
@@ -53,6 +59,7 @@ from common import (
     OutsideWorkspace,
     Redactor,
     find_adb,
+    java_ready,
     mobile_target,
     read_project,
     read_workspace_env,
@@ -124,7 +131,9 @@ def maestro_environment(workspace: str, variables: list[str]) -> tuple[dict, dic
     return extra, secrets
 
 
-def target_available(platform: str) -> tuple[bool, str]:
+def target_available(platform: str, serial: str | None = None) -> tuple[bool, str]:
+    """(target ready, what it is). Android: the device `serial` when given, else the only one connected; several
+    connected and no serial is a UsageError (Maestro would ask which one and wait until the timeout)."""
     if platform == "web":
         return True, "Maestro Web (beta) in Chrome"
     if platform == "android":
@@ -133,13 +142,35 @@ def target_available(platform: str) -> tuple[bool, str]:
             return False, "adb not found (no Android SDK)"
         out = subprocess.run([adb, "devices"], capture_output=True, text=True, check=False).stdout
         devices = [ln.split()[0] for ln in out.splitlines()[1:] if ln.strip().endswith("device")]
-        return (True, f"android: {', '.join(devices)}") if devices else (False, "no Android device/emulator connected")
+        if not devices:
+            return False, "no Android device/emulator connected"
+        if serial:
+            return (True, f"android: {serial}") if serial in devices else (
+                False, f"device {serial} not connected (connected: {', '.join(devices)})")
+        if len(devices) > 1:
+            raise UsageError(f"several devices connected ({', '.join(devices)}): choose one with --serial or "
+                             "QA_MOBILE_SERIAL")
+        return True, f"android: {devices[0]}"
     xcrun = shutil.which("xcrun")
     if not xcrun:
         return False, "xcrun not found (iOS only on macOS with Xcode)"
     out = subprocess.run([xcrun, "simctl", "list", "devices", "booted"], capture_output=True, text=True,
                          check=False).stdout
     return ("Booted" in out, "iOS simulator booted" if "Booted" in out else "no iOS simulator booted")
+
+
+def device_of(platform: str, mobile: dict, serial: str | None) -> str | None:
+    """The device Maestro is told to use: Android by common.mobile_target (--serial > QA_MOBILE_SERIAL >
+    mobile.serial); iOS only an explicit --serial (a simulator's UDID); the web none."""
+    if platform == "android":
+        return mobile_target(mobile, serial, "adb")[0]
+    return serial if platform == "ios" else None
+
+
+def needs_java() -> None:
+    ok, detail = java_ready()
+    if not ok:
+        raise UsageError(detail)
 
 
 def read_junit(xml_txt: str, red: Redactor) -> list[dict]:
@@ -183,6 +214,7 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
         maestro = shutil.which("maestro")
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")
+        needs_java()
         # only the variables the helper uses: a runner's .env holds only ci.secrets (11.8 pilot: the login flow
         # needs the e-mail, not the password nor the phone of mobile.variables)
         with open(path, encoding="utf-8") as f:
@@ -194,9 +226,9 @@ def run_helper(workspace: str, flow: str, serial: str | None = None) -> tuple[in
                         if v not in secrets and (env_ws.get(v) or os.environ.get(v))})
         # the input does not matter to Maestro: "adb" so that a QA_MOBILE_INPUT for device.py is not read here
         serial, _ = mobile_target(read_project(workspace).get("mobile") or {}, serial, "adb")
+        ok, target = target_available(cfg["platform"], serial if cfg["platform"] == "android" else None)
     except UsageError as e:
         return 2, str(e)
-    ok, target = target_available(cfg["platform"])
     if not ok:
         return 3, f"no target: {target}"
     code, output = run_maestro([maestro, *(["--device", str(serial)] if serial else []), "test",
@@ -232,7 +264,8 @@ def main(argv=None) -> int:
     ap.add_argument("--output", help="JSON report (inside the workspace)")
     ap.add_argument("--helper", metavar="FLOW", help="run one helper flow (flows/_<name>.yaml), not a case: no "
                                                      "result recorded")
-    ap.add_argument("--serial", help="with --helper: the device (default: $QA_MOBILE_SERIAL, else mobile.serial)")
+    ap.add_argument("--serial", help="the device (default: $QA_MOBILE_SERIAL, else mobile.serial; iOS: a simulator's "
+                                     "UDID, only when given)")
     a = ap.parse_args(argv)
     if a.helper:
         if a.flows or a.output:
@@ -257,12 +290,14 @@ def main(argv=None) -> int:
         maestro = shutil.which("maestro")
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")
+        needs_java()
         extra, secrets = maestro_environment(a.workspace, cfg["variables"])
-    except UsageError as e:
+        device = device_of(cfg["platform"], read_project(a.workspace).get("mobile") or {}, a.serial)
+        ok, target = target_available(cfg["platform"], device if cfg["platform"] == "android" else None)
+    except (UsageError, ValueError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     red = Redactor(secrets, sensitive=True)
-    ok, target = target_available(cfg["platform"])
     rep = {"platform": cfg["platform"], "target": target, "ts": datetime.now().isoformat(timespec="seconds")}
     if not ok:
         rep["results"] = [{"case": case_of_flow(f), "flow": os.path.basename(f), "suggested_status": "Blocked",
@@ -272,7 +307,8 @@ def main(argv=None) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             junit = os.path.join(tmp, "junit.xml")
             try:
-                r = subprocess.run([maestro, "test", *flows, "--format", "junit", "--output", junit],
+                r = subprocess.run([maestro, *(["--device", str(device)] if device else []), "test", *flows,
+                                    "--format", "junit", "--output", junit],
                                    capture_output=True, text=True, encoding="utf-8", errors="replace",
                                    env={**os.environ, **extra}, timeout=cfg["timeout"], check=False)
                 output = r.stdout + r.stderr

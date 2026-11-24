@@ -125,7 +125,7 @@ A free Apple account signs for 7 days: after that the person installs WDA again 
 | **N1 · Device driver** | `scripts/device.py` (`adb`; Maestro only to type Unicode; or the companion driver with `mobile.input: driver`, §1.2) | Conversational mode (§4.1), on an emulator or a real device — also one that refuses input injection (§1.2) |
 | **N2 · Regression** | The same flows in CI or Maestro Cloud | Smoke and regression |
 
-The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except the demo).
+The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except the demo). The skill that writes them, runs them and records their results is `/maestro-tests` (`procedures/maestro-tests-detail.md`); `/run-tests` runs flows that already exist.
 
 ---
 
@@ -135,6 +135,7 @@ The flows live **in the workspace** (`flows/`), never in `qa-assistant` (except 
 2. Confirm the environment: the app installed is the **test build** (not the store's), or the URL is the test environment's. If it looks like production, stop and ask.
 3. Confirm the target: `adb devices` (Android) or `xcrun simctl list` (iOS) shows the expected device/emulator. With no target, the native cases are **Blocked** (environment), never Pass.
 4. Record the app version, OS and device.
+5. Maestro needs Java 17+: `JAVA_HOME` set to a JDK, or a `java -version` that answers (on macOS `/usr/bin/java` is only a stub). Without it `run_mobile.py` exits 2 and runs nothing, and the preflight's `maestro` line says so. With several devices connected, name one with `--serial` (else `QA_MOBILE_SERIAL`, else `mobile.serial`): Maestro would otherwise ask which one and wait.
 
 ---
 

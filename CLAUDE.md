@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- This repository is the **universal library** that QA work in project workspaces runs on: the eight skills
+- This repository is the **universal library** that QA work in project workspaces runs on: the nine skills
   (`.claude/skills/`), the procedures and techniques they read (`docs/`), and the tested scripts and adapters they call
   (`scripts/`, `adapters/`). It also hosts `qa-audit` (`src/qa_audit`), a standalone website audit engine.
 - It is used **from the workspaces**, never the other way round. A workspace session runs the global copy of the skills
@@ -13,7 +13,7 @@
 - QA work on a project (analyse a ticket, plan, run, report, checkpoint) is **not** done here: point the user to a
   session opened in that project's workspace (`python scripts/workspace_select.py list`).
 - `examples/demo/` is the only workspace inside this repository: fictional, used to develop and validate the framework.
-- The product is the eight skills used through Claude Code: no hub, web interface or launcher of its own (decision of
+- The product is the nine skills used through Claude Code: no hub, web interface or launcher of its own (decision of
   08.11.2026). The HTML and Excel files a command produces are outputs, not an interface.
 
 ## Fixed rules
@@ -40,10 +40,10 @@
 
 | Where | What |
 |---|---|
-| `.claude/skills/<skill>/SKILL.md` | The eight skills; the contract is in the frontmatter |
+| `.claude/skills/<skill>/SKILL.md` | The nine skills; the contract is in the frontmatter |
 | `docs/README.md` | Documentation index: which document answers which need |
 | `docs/skills-spec.md`, `docs/skills-guide.md` | What each skill owns and its contract; the guide for people |
-| `docs/procedures/` | Long procedures the skills read; `rules.md` is shared by all eight, `<skill>-detail.md` holds a skill's long steps |
+| `docs/procedures/` | Long procedures the skills read; `rules.md` is shared by all nine, `<skill>-detail.md` holds a skill's long steps |
 | `docs/technique-*.md` | Technical how-to per module, tracker and concern |
 | `docs/project.yaml`, `docs/context-template.md`, `docs/workspace/` | Templates copied into a workspace (settings, `gitignore`, setup, resume, CI, tracker skill) |
 | `adapters/` | `excel/`, `tracker/` (common base), `jira/`, `azure_devops/`, `tickets/` (read only), `case_headers.py` |
@@ -66,7 +66,7 @@ Read the document before changing what it governs; do not rely on a summary here
 - Setup, pre-commit guards, the denylist, adding an audit module, dependencies: `CONTRIBUTING.md`
 - CI jobs, what "green" means, what is not covered: `docs/ci.md`
 - Test modules (methodology §4.1): `technique-browser.md` (also the specs of `/playwright-tests`), `technique-api.md`,
-  `technique-accessibility.md`, `technique-mobile.md`
+  `technique-accessibility.md`, `technique-mobile.md` (also the flows of `/maestro-tests`)
 - Trackers: `technique-excel.md`, `technique-jira-xray.md` (§2: common contract of tracker adapters),
   `technique-azure-devops.md`, `docs/tracker-validation.md` (what each has really been piloted on)
 - Tickets and specifications: `technique-tickets.md`, `technique-specs.md`

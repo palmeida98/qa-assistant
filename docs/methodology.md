@@ -106,6 +106,7 @@ Each stage has a corresponding skill in Claude Code, which is also where a reque
 | Analysis, case design and batch planning | `/plan-tests` | Requirements apart from assumptions, existing cases reused, proposals without duplicates, batches with order and scope |
 | Execution and classification (mobile, web, API, accessibility) | `/run-tests` | Observed results and evidence per platform and build |
 | Deterministic web regression: Playwright specs in the workspace (level N2) | `/playwright-tests` | Specs in `e2e/`, results per case and evidence of failures |
+| Deterministic mobile regression: Maestro flows in the workspace (level N2) | `/maestro-tests` | Flows in the flows folder, results per case and evidence of failures |
 | Bug management | `/manage-bugs` | Duplicate search and bug proposals for one batch review |
 | Validation and report | `/qa-report` | Reconciled totals per platform and build, risks, a summary for the team; the Excel dashboard |
 | Checkpoint: save progress or close a session | `/checkpoint` | State kept, pending application listed, application once authorised |

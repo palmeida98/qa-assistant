@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added (`/maestro-tests`, 2026-11-24)
+- A ninth skill, `/maestro-tests`: the mobile counterpart of `/playwright-tests`. It writes Maestro flows (level N2,
+  technique-mobile.md §2 and §4) in the workspace's flows folder for cases with a deterministic expected result, reads
+  the app before writing (read only, one named step at a time, never a control that deletes, sends or confirms while
+  exploring), runs them with `run_mobile.py`, classifies and fixes failing flows in at most three rounds and records one
+  result per case in the run log. Detail in `docs/procedures/maestro-tests-detail.md`. Prompted by a real mobile project
+  that wanted to replace step-by-step screenshots with assertions.
+
+### Fixed (`run_mobile.py`, 2026-11-24)
+- Case runs now pass `--device` to Maestro (`--serial`, else `QA_MOBILE_SERIAL`, else `mobile.serial`, as helper flows
+  already did); with several devices connected and none chosen nothing runs (exit 2) instead of Maestro waiting for an
+  answer until the timeout, and a serial that is not connected is no target (exit 3).
+- Maestro without a Java that answers (macOS's `/usr/bin/java` stub) exits 2 with what to set (`JAVA_HOME`), instead of
+  every flow ending Blocked with a message about java.com; the preflight's `maestro` line reports it
+  (`common.java_ready`).
+
 ### Changed (CLAUDE.md review, 2026-11-24)
 - `CLAUDE.md` no longer imports `docs/methodology.md` (about 49 KB in every framework session): the fixed rules keep what
   binds development (§1.2, §1.3, §1.4, §15) and "Read when needed" names the methodology before changing the method or a

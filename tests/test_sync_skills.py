@@ -196,9 +196,9 @@ def read(path: str) -> str:
 
 
 class Version2(unittest.TestCase):
-    """Skills version 2 (docs/skills-spec.md): the eight skills installed, repeatably, with their origin."""
+    """Skills version 2 (docs/skills-spec.md): the nine skills installed, repeatably, with their origin."""
     EIGHT: ClassVar[set] = {"project-context", "analyze-ticket", "plan-tests", "run-tests", "manage-bugs", "qa-report", "checkpoint",
-             "playwright-tests"}
+             "playwright-tests", "maestro-tests"}
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -213,7 +213,7 @@ class Version2(unittest.TestCase):
             rc = ss.main(["--target", self.target, *extra, *args])
         return rc, out.getvalue()
 
-    def test_the_eight_are_installed_and_a_second_run_changes_nothing(self):
+    def test_the_nine_are_installed_and_a_second_run_changes_nothing(self):
         self.assertEqual(self.run_it("--apply")[0], 0)
         installed = {n for n in os.listdir(self.target) if os.path.isfile(os.path.join(self.target, n, "SKILL.md"))}
         self.assertEqual(installed, self.EIGHT)
