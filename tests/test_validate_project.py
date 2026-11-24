@@ -309,10 +309,10 @@ class Validate(unittest.TestCase):
         # lessons of the pilot (25.09.2026): fixed version, --secrets .env and --isolated
         mcp = os.path.join(self.tmp.name, ".mcp.json")
         cases = {
-            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env", "--isolated"]': [],
+            '["/c", "npx", "@playwright/mcp@0.0.86", "--secrets", ".env", "--isolated"]': [],
             '["/c", "npx", "@playwright/mcp@latest", "--secrets", ".env", "--isolated"]': ["without a fixed version"],
-            '["/c", "npx", "@playwright/mcp@0.0.82", "--isolated"]': ["--secrets .env is missing"],
-            '["/c", "npx", "@playwright/mcp@0.0.82", "--secrets", ".env"]': ["--isolated is missing"],
+            '["/c", "npx", "@playwright/mcp@0.0.86", "--isolated"]': ["--secrets .env is missing"],
+            '["/c", "npx", "@playwright/mcp@0.0.86", "--secrets", ".env"]': ["--isolated is missing"],
         }
         for args, expected in cases.items():
             with self.subTest(args=args):
