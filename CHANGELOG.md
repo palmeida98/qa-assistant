@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (demo `.mcp.json` for macOS and Linux, 2026-11-24)
+- `examples/demo/.mcp.json` starts the Playwright MCP with `"command": "npx"` (was `cmd /c npx`, which only exists on
+  Windows: on macOS the server failed with `ENOENT ... cmd`). Same package, version and options
+  (`@playwright/mcp@0.0.86 --secrets .env --isolated`). On Windows Claude Code still cannot launch `npx` directly, so
+  there the server is registered with `cmd /c` as in `docs/procedures/onboarding.md`, in a local override and not in
+  this file.
+
 ### Changed (`/playwright-tests` scope, 2026-11-24)
 - The preflight of `/playwright-tests` now requires `functional-web` in `modules:` (`requires-config: functional-web`;
   `_config_problems` accepts a module without a section). A mobile project no longer passes it. The skill and its
