@@ -561,6 +561,21 @@ class Preflight(Base):
         self.assertNotIn(SECRET, text)
         self.assertNotIn("shop.example", text)     # the keys of the environments: their addresses need not be shown
 
+    def test_playwright_tests_needs_the_functional_web_module(self):
+        # the preflight of a web-only skill must not pass for a mobile project (found on a real mobile workspace)
+        make_project(self.root, "demo/shop")                                             # modules: functional-web
+        make_project(self.root, "demo/app", modules=["mobile", "exploratory"],
+                     mobile={"platform": "android", "flows": "flows/"})
+        code, report = self.preflight("playwright-tests", "demo/shop")
+        self.assertEqual(code, ws.OK, report["problems"])
+        code, report = self.preflight("playwright-tests", "demo/app")
+        self.assertEqual(code, ws.NOT_USABLE)
+        self.assertEqual(len(report["problems"]), 1)
+        self.assertIn("the module functional-web is not in modules: of project.yaml", report["problems"][0])
+        self.assertIn("mobile, exploratory", report["problems"][0])
+        code, report = self.preflight("run-tests", "demo/app")                           # the other skills are unchanged
+        self.assertNotIn("functional-web", " ".join(report["problems"]))
+
     def test_it_writes_nothing(self):
         make_project(self.root, "demo/shop", env=f"DS_PAT={SECRET}\n", tickets={"sources": {"boards": BOARDS}})
         before = tree(self.root)

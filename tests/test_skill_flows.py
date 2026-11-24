@@ -100,7 +100,11 @@ class SecondWorkspace(unittest.TestCase):
         for skill in EIGHT:
             with self.subTest(skill=skill):
                 code, report = self.preflight(skill, "demo/shop")
-                self.assertEqual(code, ws.OK, report.get("problems") or report.get("instruction"))
+                if skill == "playwright-tests":      # the fictional shop is mobile and api: no web module
+                    self.assertEqual(code, ws.NOT_USABLE)
+                    self.assertIn("functional-web", report["problems"][0])
+                else:
+                    self.assertEqual(code, ws.OK, report.get("problems") or report.get("instruction"))
                 self.assertEqual(report["project"]["path"], self.shop)
 
     def test_the_same_folder_name_in_two_companies_is_a_question_and_nothing_is_chosen(self):

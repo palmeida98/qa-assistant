@@ -551,11 +551,15 @@ def _config_problems(tokens: list[str], workspace: str, proj: dict) -> list[str]
         elif token == "excel":
             if proj.get("tracker") != "excel":
                 problems.append(f"this skill is for tracker: excel, and this project has {proj.get('tracker')!r}")
-        else:   # a module with its own section
-            if token not in (proj.get("modules") or []):
-                problems.append(f"the module {token} is not in modules: of project.yaml")
-            elif not proj.get(token):
-                problems.append(f"the module {token} is active but the section {token}: is empty")
+        else:   # a module, with its own section when validate_project.MODULES names one (functional-web has none)
+            import validate_project
+            modules = [str(m) for m in proj.get("modules") or []]
+            section = (validate_project.MODULES.get(token) or (token, None))[0]
+            if token not in modules:
+                problems.append(f"the module {token} is not in modules: of project.yaml (modules: "
+                                f"{', '.join(modules) or 'none'})")
+            elif section and not proj.get(section):
+                problems.append(f"the module {token} is active but the section {section}: is empty")
     return problems
 
 

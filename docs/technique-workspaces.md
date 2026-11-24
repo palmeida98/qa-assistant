@@ -198,7 +198,7 @@ Each skill's frontmatter has a `metadata` map of plain strings, the **single sou
 | `intent`, `inputs`, `config`, `tools`, `outputs`, `writes`, `approvals`, `failures`, `resume` | The contract, for people and for the agent |
 | `requires-modules` | Python modules of the framework it needs (comma-separated) |
 | `requires-scripts` | Scripts it runs, relative to `<qa>` |
-| `requires-config` | What `project.yaml` must have: `tickets`, `api`, `accessibility`, `mobile`, `excel` |
+| `requires-config` | What `project.yaml` must have: `tickets`, `excel`, or an active module (`api`, `accessibility`, `mobile` with their section; `functional-web`, which has none, only has to be in `modules:`) |
 | `requires-tools` | Lines of `validate_project.environment()` it needs, plus `mcp` for a browser MCP named in `.mcp.json` |
 | `requires-project` | `valid` (the default), or `any` for a skill that can start from an empty folder |
 | `requires-docs` | Documents of `<qa>/docs/` it reads (e.g. `procedures/run-mobile.md`); a missing one stops the installation and the preflight |

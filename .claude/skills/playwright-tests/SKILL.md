@@ -6,6 +6,7 @@ metadata:
   intent: "Turn approved web cases into deterministic specs (level N2), run them natively and record each case's result with its evidence."
   inputs: "Cases of the library or a planned batch (their steps and expected result), the test environment and its roles from project.yaml."
   config: "environments and roles (functional-web); the evidence policy."
+  requires-config: "functional-web"
   tools: "node and npx with @playwright/test pinned in <workspace>/e2e/; run_log.py for every result."
   outputs: "Spec files and config in <workspace>/e2e/, a run log with one result per case, traces and captures of failures as evidence, a short summary."
   writes: "e2e/, runs/ and evidence/ of the selected workspace only; never qa-assistant, never the application's code."
@@ -28,12 +29,12 @@ metadata:
    <qa>/docs/procedures/rules.md apply to every step below. Commands: procedures/playwright-tests-detail.md.
 1. Scope: the cases (ids, a batch, or a feature's cases) and the test environment. Read each case's steps and expected
    result from the library; the expected result comes from the case, never from what the application does now
-   (methodology section 5.3). A case not in the library: /plan-tests first. Candidates by technique-browser.md section 13;
-   a case never run by an agent can still be authored when the user asks, but it is not called a regression until it passes.
+   (methodology section 5.3). A case not in the library: /plan-tests first. Candidates by technique-browser.md section 13.
 2. Prepare e2e/ in the workspace (not in qa-assistant, not in the application's repository): config, pinned
    @playwright/test, credentials and base URL only from environment variables named in .env, never written in a spec.
-   Confirm the URL is a test environment of project.yaml (technique-browser.md section 2) before any run. Installing is
-   a download: ask first.
+   Confirm the URL is a test environment of project.yaml before any run. Installing is
+   a download: ask first. A workspace with its own e2e/ scripts or conventions, or whose CLAUDE.md says how specs
+   run, keeps them: follow those, and stop where they conflict with these steps.
 3. Author: one spec file per feature, one test per case, the case id first in the title (`TC-… · title`), locators by
    role, label or text before CSS, independent tests. Existing
    specs are read first and extended. A doubt about the expected result is a Question, not a guess.
@@ -46,4 +47,4 @@ metadata:
    evidence, the run block with the environment and the build OBSERVED). The title's id must exist in the library.
    Fail: never create or publish a bug here.
 7. End with /checkpoint and a summary: cases per status, flaky, Blocked with the reason, Questions, specs written or
-   changed, the commands run, the run log's path.
+   changed, commands run, the run log path.

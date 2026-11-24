@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (`/playwright-tests` scope, 2026-11-24)
+- The preflight of `/playwright-tests` now requires `functional-web` in `modules:` (`requires-config: functional-web`;
+  `_config_problems` accepts a module without a section). A mobile project no longer passes it. The skill and its
+  procedure say that a workspace's own `e2e/` suite and conventions win. Found by reading two real workspaces.
+
 ### Changed (CLAUDE.md of the framework repository, 2026-11-24)
 - `CLAUDE.md` rewritten for the framework development session it is loaded in: what the repository is and is not (workspace
   sessions never load it), seven fixed rules, a map, what to read when, how to change a skill, scripts by purpose, tests

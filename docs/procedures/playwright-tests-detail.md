@@ -6,6 +6,17 @@
 > skill; the swarm of sub-agents writing specs at once was left out, because one writer at a time per workspace holds
 > (technique-workspaces.md section 7).
 
+## When it does not apply
+
+- The project must have `functional-web` in `modules:`; the preflight stops with a problem otherwise (a mobile or API
+  project has its own route in `/run-tests`).
+- A workspace that already has a suite of its own in `e2e/` (its own scripts, convention, run command, gates or
+  redaction of the output) or whose `CLAUDE.md` says how specs are written and run keeps it. The workspace's rules win
+  (rules.md section 8): this skill then writes nothing there and follows theirs; where the two conflict, for example
+  traces or `run_log.py`, stop and say which rule was followed. A real workspace with its own suite, gates and record
+  showed this on 24.11.2026: the skill added nothing, and its defaults (traces on failure, `runs/batch_*.json`) would
+  have broken the project's privacy and record rules.
+
 ## Why a skill of its own
 
 `/run-tests` drives a browser through the agent (level N1): every click costs tokens and the run is not repeatable.
