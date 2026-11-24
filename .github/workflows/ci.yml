@@ -1,16 +1,13 @@
-# The framework's CI: lint, unit tests (Linux; macOS; the Windows-only tests), secrets, the Excel golden, the qa-audit engine in three
-# browsers and a clean install, on each pull request and on main.
-# - A pull request runs once, through its pull request (not also on push), and a newer push cancels the older run.
-#   main and manual runs are never cancelled: each commit keeps its own result (a merge used to cancel the previous
-#   main run and leave "cancelled" instead of a result).
-# - The three browser jobs are 80% of the runner minutes: on a pull request they run when it touches what they test
-#   (see the `changes` job). main and a manual run always run everything.
-# - `ci-status` is the single check to require when protecting main (see docs/ci.md).
-# - The personal denylist does not run here on purpose -- it lives only in the local pre-commit.
-# - The end-to-end specs against a public practice site are a separate workflow (demo-e2e.yml): they need secrets
-#   and a third-party site, so they are not part of the required checks.
-# Actions are pinned to a full commit SHA (the comment says the tag it was resolved from); .github/dependabot.yml
-# keeps them current.
+# The framework's CI (docs/ci.md), sized for its real use: one person, on macOS, with this repository as a backup and a
+# proof of concept. The local pre-commit (denylist, ruff, golden, unit tests) is the first barrier; this is the copy that
+# runs off the machine, so a commit made with the hooks skipped, or on a machine without LibreOffice, is still checked.
+# - lint-secrets: ruff and detect-secrets (the repository is public: a leaked secret is the worst outcome)
+# - tests: the whole unit suite on Linux WITH LibreOffice, so the golden and the recalculation tests run here and no
+#   skip is allowed except the tests that exist only for Windows
+# - install: a clean clone installs, audits the fixture site and syncs and preflights every skill; only on main and on
+#   demand (it is the "resume on another computer" path, methodology 12.3, not something a pull request needs)
+# The qa-audit browser tests are a separate workflow (qa-audit.yml) with a path filter. main has no branch protection,
+# so no aggregate "required" check is kept. The personal denylist does not run here on purpose: it lives only locally.
 name: CI
 
 on:
@@ -20,179 +17,36 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  changes:
-    # does this pull request touch what the browser jobs test or run? (src/, the integration tests and the fixture site,
-    # the summary script they call, the dependency files, the CI itself). tests/test_ci_filter.py keeps this list honest. Any doubt -- an error, main, a manual run -- means yes.
+  lint-secrets:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      engine: ${{ steps.filter.outputs.engine }}
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - id: filter
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PATTERN: '^(src/|tests/integration/|tests/fixtures/|scripts/ci_test_summary\.py$|pyproject\.toml$|requirements\.txt$|\.github/)'
-        run: |
-          engine=true
-          files=""
-          if [ "$EVENT" = pull_request ]; then
-            if files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
-              if printf '%s\n' "$files" | grep -Eq "$PATTERN"; then engine=true; else engine=false; fi
-            else
-              engine=true
-            fi
-          fi
-          echo "engine=$engine" >> "$GITHUB_OUTPUT"
-          {
-            echo "### changes"
-            echo "- browser engine tests needed: **$engine** (event: $EVENT)"
-            if [ -n "$files" ]; then echo "- files changed: $(printf '%s\n' "$files" | wc -l | tr -d ' ')"; fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  lint:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install ruff==0.16.8
+      # same versions as .pre-commit-config.yaml
+      - run: pip install ruff==0.16.8 pre-commit==4.7.0
       - run: ruff check --output-format github .
+      - run: pre-commit run detect-secrets --all-files --show-diff-on-failure
 
   tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements.txt
-      # extra of the visual engine (Pillow): without it the image comparison tests would be skipped
-      - run: pip install pillow==12.3.0
-      - name: Unit tests
-        run: |
-          set -o pipefail
-          python -m unittest discover -s tests -v 2>&1 | tee unit.log
-      # the counts and the skips (with their reasons) go to the run's summary, and a skip with another reason, or a
-      # run that executed nothing, fails the check: "OK" alone hides what was not run.
-      # Allowed here: LibreOffice (these tests run in the `golden` job) and the two tests that only make sense on Windows.
-      - name: Counts and skips in the summary
-        if: ${{ !cancelled() }}
-        run: python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, ubuntu)" --allow-skip "needs LibreOffice" --allow-skip "Windows"
-      - name: Keep the log of a failed run
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: unit-log-ubuntu
-          path: unit.log
-          retention-days: 7
-
-  tests-macos:
-    # the whole suite on macOS, where the framework is developed and used; on Linux alone this was never executed.
-    # Allowed skips: LibreOffice (golden job), the Windows-only tests and the one that reads /proc (Linux).
-    runs-on: macos-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements.txt pillow==12.3.0
-      - name: Unit tests
-        run: |
-          set -o pipefail
-          python -m unittest discover -s tests -v 2>&1 | tee unit.log
-      - name: Counts and skips in the summary
-        if: ${{ !cancelled() }}
-        run: python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, macOS)" --allow-skip "needs LibreOffice" --allow-skip "Windows" --allow-skip "\\(Linux\\)"
-      - name: Keep the log of a failed run
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: unit-log-macos
-          path: unit.log
-          retention-days: 7
-
-  windows-only-tests:
-    # ONLY the two tests that exist for Windows (so this check says nothing about the rest of the suite on Windows: that is the
-    # separate "Windows suite" workflow, which stays UNCONFIRMED); the two tests (they are skipped everywhere else, so they had never run): the extended
-    # form of a path and the real NUL device. --max-skips 0: if they are skipped here, the check fails.
-    # NOT the whole suite: that is the separate Windows suite workflow (it passes, with skips, and is not required).
-    runs-on: windows-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements.txt
-      - name: Windows-only tests
-        run: |
-          set -o pipefail
-          PYTHONUTF8=1 python -m unittest -v tests.test_common.ExtendedLengthPaths.test_a_path_answered_in_extended_form_is_still_inside_the_workspace tests.test_workspace_ci.IsTerminal.test_the_real_nul_device_is_not_a_console 2>&1 | tee unit.log
-      - name: Counts and skips in the summary
-        if: ${{ !cancelled() }}
-        run: |
-          python scripts/ci_test_summary.py unit.log --title "Windows-only tests (not the whole suite)" --max-skips 0 --banner "Scope: only the 2 tests that exist for Windows. Windows is UNCONFIRMED: see the Windows suite workflow."
-      - name: Keep the log of a failed run
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: unit-log-windows
-          path: unit.log
-          retention-days: 7
-
-  secrets:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
-      - run: pip install pre-commit==4.7.0
-      # only the detect-secrets hook of .pre-commit-config.yaml (same version and baseline)
-      - run: pre-commit run detect-secrets --all-files --show-diff-on-failure
-
-  golden:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -200,153 +54,46 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libreoffice-calc-nogui
-      - run: pip install -r requirements.txt
-      - run: python scripts/golden_check.py
-      # tests that recalculate real formulas (summary vs direct count), the rebuild of the demo
-      # (versioned workbook = builder + batches; plan 7.6) and the real golden's mechanism with fictional
-      # data (plan 7.3); in the tests job they are skipped
-      # tests.test_excel_recalc_flows: cases added and a batch applied with the real recalculation, through the commands
-      # the skills call; skipped in the tests job (no LibreOffice), so they run here and are never silently skipped:
-      # --max-skips 0 makes any skip here a failure
-      - name: LibreOffice-dependent tests
+      # Pillow: the visual engine's extra, without it the image comparison tests would be skipped
+      - run: pip install -r requirements.txt pillow==12.3.0
+      - name: Excel golden (fictional)
+        run: python scripts/golden_check.py
+      - name: Unit tests (the whole suite)
         run: |
           set -o pipefail
-          python -m unittest tests.test_summary tests.test_demo_reproducible tests.test_golden_real tests.test_excel_recalc_flows tests.test_apply_template -v 2>&1 | tee golden-unit.log
+          python -m unittest discover -s tests -v 2>&1 | tee unit.log
+      # counts and skips by reason go to the run summary; a run that executed nothing, or a skip with any reason other
+      # than Windows, fails the check: "OK" alone hides what was not run
       - name: Counts and skips in the summary
         if: ${{ !cancelled() }}
-        run: python scripts/ci_test_summary.py golden-unit.log --title "LibreOffice-dependent tests (golden)" --max-skips 0
+        run: python scripts/ci_test_summary.py unit.log --title "unit tests (tests/, ubuntu + LibreOffice)" --allow-skip "Windows"
       - name: Keep the log of a failed run
         if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7
         with:
-          name: golden-log
-          path: golden-unit.log
+          name: unit-log
+          path: unit.log
           retention-days: 7
-
-  qa-audit-engine:
-    # qa-audit engine (plan 8.2): integration tests against the local site, one job per engine in parallel (in
-    # series they took 17-19 minutes, about 5-6 per engine). Together the three jobs run every test of the suite:
-    # - chromium: the whole discovery with QA_AUDIT_TEST_ENGINES=chromium, so the tests that are not per engine
-    #   (CheckOpenPage, ReportInBrowser, and any new one) run here; then the cross-engine CompatibilityRun with the
-    #   three engines (skipped in the first command, which has one engine only)
-    # - firefox, webkit: only that engine's classes (matrix.classes: -k Firefox, -k Webkit; the test module generates
-    #   them as <Engine><Suffix>)
-    # An engine that cannot start is a failure (QA_AUDIT_REQUIRE_ENGINES), and a -k that selects nothing exits 5.
-    # Skipped on a pull request that does not touch the engine (`changes`); the `qa-audit` job below says so.
-    name: qa-audit (${{ matrix.engine }})
-    needs: changes
-    if: ${{ needs.changes.outputs.engine == 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - engine: chromium
-          - engine: firefox
-            classes: Firefox
-          - engine: webkit
-            classes: Webkit
-    env:
-      QA_AUDIT_REQUIRE_ENGINES: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e .[visual]
-      # the browser downloads take about 10 s of this step and the system libraries the rest: no browser cache
-      - name: Playwright browsers
-        run: |
-          if [ "${{ matrix.engine }}" = chromium ]; then
-            python -m playwright install --with-deps chromium firefox webkit
-          else
-            python -m playwright install --with-deps "${{ matrix.engine }}"
-          fi
-      - run: qa-audit doctor --no-color
-      # xvfb: the manual login method opens the browser visibly (docs/qa-audit.md 20)
-      - run: sudo apt-get install -y -q xvfb
-      - name: Integration tests (${{ matrix.engine }})
-        env:
-          QA_AUDIT_TEST_ENGINES: ${{ matrix.engine }}
-          CLASSES: ${{ matrix.classes }}
-        run: |
-          set -o pipefail
-          if [ -z "$CLASSES" ]; then
-            xvfb-run -a python -m unittest discover -s tests/integration -v 2>&1 | tee integration.log
-          else
-            xvfb-run -a python -m unittest discover -s tests/integration -v -k "$CLASSES" 2>&1 | tee integration.log
-          fi
-      - name: Counts and skips in the summary
-        if: ${{ !cancelled() }}
-        run: python scripts/ci_test_summary.py integration.log --title "qa-audit integration (${{ matrix.engine }})"
-      - name: Cross-engine comparison (chromium, firefox, webkit)
-        if: matrix.engine == 'chromium'
-        env:
-          QA_AUDIT_TEST_ENGINES: chromium,firefox,webkit
-        run: |
-          set -o pipefail
-          xvfb-run -a python -m unittest discover -s tests/integration -v -k CompatibilityRun 2>&1 | tee cross-engine.log
-      - name: Counts and skips of the cross-engine comparison
-        if: ${{ matrix.engine == 'chromium' && !cancelled() }}
-        run: python scripts/ci_test_summary.py cross-engine.log --title "qa-audit cross-engine comparison"
-      - name: Keep the logs of a failed run
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: qa-audit-logs-${{ matrix.engine }}
-          path: |
-            integration.log
-            cross-engine.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-  qa-audit:
-    # one status under the job's former name, whatever the matrix. Success when every engine succeeded, or when the
-    # engine jobs were skipped because the pull request does not touch what they test; never success when they were
-    # skipped for any other reason, or when one failed (a run cancelled by a newer push is not reported as a failure)
-    needs: [changes, qa-audit-engine]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Every engine passed, or none was needed
-        env:
-          CHANGES: ${{ needs.changes.result }}
-          NEEDED: ${{ needs.changes.outputs.engine }}
-          RESULT: ${{ needs.qa-audit-engine.result }}
-        run: |
-          echo "changes: $CHANGES; engine tests needed: $NEEDED; qa-audit-engine: $RESULT"
-          test "$CHANGES" = success
-          if [ "$NEEDED" = true ]; then test "$RESULT" = success; else test "$RESULT" = skipped; fi
-          {
-            echo "### qa-audit"
-            if [ "$NEEDED" = true ]; then echo "- the three engines ran and passed"; else echo "- **skipped by design**: this pull request touches nothing the browser tests depend on"; fi
-          } >> "$GITHUB_STEP_SUMMARY"
 
   install:
-    # plan 8.9: clean checkout -> scripts/install.sh -> audit of the local fixture site
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: ./scripts/install.sh --with-deps
-      - name: audit of the local site (code 1 expected from the planted defects)
+      - name: Audit of the local site (code 1 expected from the planted defects)
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory tests/fixtures/site > /dev/null 2>&1 &
           for i in $(seq 1 30); do
             curl -fsS -o /dev/null http://127.0.0.1:8765/ && break
             sleep 1
           done
-          curl -fsS -o /dev/null http://127.0.0.1:8765/
           set +e
           .venv/bin/qa-audit http://127.0.0.1:8765/ --max-pages 8 --delay-ms 0 --no-color --output "$RUNNER_TEMP/out" --baseline-dir "$RUNNER_TEMP/baselines"
           code=$?
@@ -354,9 +101,8 @@ jobs:
           echo "qa-audit exit code: $code"
           test "$code" = 1
           ls "$RUNNER_TEMP"/out/*/report.html "$RUNNER_TEMP"/out/*/results.json
-      # plan F20: the nine skills installed from the clean clone into a temporary folder (never ~/.claude), and the
-      # preflight of each on the fictional demo workspace; nothing outside $RUNNER_TEMP is read or written
-      # install.sh installs only the qa-audit engine; the skills' scripts need requirements.txt too (README, Quick start)
+      # every skill of .claude/skills synced into a temporary folder (never ~/.claude) and preflighted on the fictional
+      # demo workspace; install.sh installs only the qa-audit engine, the skills' scripts need requirements.txt too
       - name: Skills sync and preflight (isolated)
         run: |
           .venv/bin/python -m pip install --quiet -r requirements.txt
@@ -364,43 +110,20 @@ jobs:
           target="$RUNNER_TEMP/skills"; mkdir -p "$target"
           .venv/bin/python scripts/sync_skills.py --apply --allow-worktree --target "$target"
           .venv/bin/python scripts/sync_skills.py --target "$target"
-          test "$(ls -d "$target"/*/ | wc -l)" = 9
-          for skill in project-context analyze-ticket plan-tests run-tests manage-bugs qa-report checkpoint test-pbi playwright-tests; do
+          expected=$(ls -d .claude/skills/*/ | wc -l)
+          test "$(ls -d "$target"/*/ | wc -l)" = "$expected"
+          for dir in .claude/skills/*/; do
+            skill=$(basename "$dir")
             echo "::group::preflight $skill"
             .venv/bin/python scripts/workspace_select.py preflight --skill "$skill" --workspace examples/demo
             echo "::endgroup::"
           done
-          echo "**install: skills synced to a temporary folder and preflight passed for the nine skills on examples/demo.**" >> "$GITHUB_STEP_SUMMARY"
+          echo "**install: $expected skills synced to a temporary folder and preflighted on examples/demo.**" >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the audit report of a failed run
         if: ${{ failure() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7
         with:
           name: install-audit-out
           path: ${{ runner.temp }}/out
           if-no-files-found: ignore
           retention-days: 7
-
-  ci-status:
-    # the single check to require when protecting main: success only when every job above ended in success (the engine
-    # jobs through `qa-audit`, which is also a success when they were skipped by design). A job that was skipped, failed
-    # or cancelled for any other reason makes this check fail, so no path filter can leave a required check "Pending".
-    needs: [changes, lint, tests, tests-macos, windows-only-tests, secrets, golden, qa-audit, install]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Every job succeeded
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-          needs = json.loads(os.environ["NEEDS"])
-          lines = [f"{name}: {info['result']}" for name, info in needs.items()]
-          print("\n".join(lines))
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write("### ci-status\n" + "\n".join(f"- {line}" for line in lines) + "\n")
-              f.write("\n**Windows is UNCONFIRMED**: `windows-only-tests` covers 2 tests only; the whole suite is the separate "
-                      "*Windows suite* workflow, which is not part of this check and whose skipped tests prove nothing on Windows.\n")
-          sys.exit(0 if all(i["result"] == "success" for i in needs.values()) else 1)
-          PY

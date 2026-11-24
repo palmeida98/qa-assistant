@@ -6,7 +6,7 @@ python -m unittest discover -s tests   (from the root of qa-assistant)
   (--no-recalc).
 - Demo: rebuilding the demo in a temporary folder (builder + batches of runs/)
   gives exactly the cells of the versioned workbook. Needs LibreOffice: in the CI
-  it runs in the golden job; in the tests job it is skipped.
+  it runs in the CI tests job, which has LibreOffice.
 """
 
 import contextlib
@@ -83,7 +83,7 @@ class Now(unittest.TestCase):
         self.assertTrue(any(f"[{NOW[:10]}, batch]" in v for v in every))  # default label
 
 
-@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's golden job)")
+@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's tests job)")
 class Demo(unittest.TestCase):
     def test_the_rebuild_gives_the_cells_of_the_versioned_workbook(self):
         with tempfile.TemporaryDirectory() as tmp:

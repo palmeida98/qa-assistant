@@ -5,7 +5,7 @@ With fictional data (fixture and batch of the fictional golden), in a temporary
 workspace: the mechanism must pass when after.xlsx matches, fail pointing at the
 cell when it does not, and refuse incomplete folders. A batch from before the
 translation (plan 8.11) is converted in memory and keeps its identity. Needs
-LibreOffice (apply recalculates): in the CI it runs in the golden job.
+LibreOffice (apply recalculates): in the CI it runs in the tests job.
 """
 
 import contextlib
@@ -72,7 +72,7 @@ def make_after(folder: str, batch_file: str) -> str:
     return os.path.join(folder, CFG["file"])
 
 
-@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's golden job)")
+@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's tests job)")
 class RealGolden(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -153,7 +153,7 @@ class RealGolden(unittest.TestCase):
         self.assertEqual(rc, 2)
 
 
-@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's golden job)")
+@unittest.skipUnless(has_libreoffice(), "needs LibreOffice (runs in the CI's tests job)")
 class RealGoldenFromBeforeTheTranslation(unittest.TestCase):
     """A workspace converted by migrate_workspace.py: its golden keeps the old batch (lote_*.json, old keys),
     whose hash is the batch's identity recorded in the workbook's control sheet."""

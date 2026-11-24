@@ -151,8 +151,8 @@ own skills in its workspace; they are documented there.
 - **Excel:** used on real projects. **Azure DevOps** guarded comments, attachments and bug creation: used on one real
   project. **Jira + Xray** and the other Azure DevOps writes: tested with fakes only. **Linear:** read only. Details:
   [docs/tracker-validation.md](docs/tracker-validation.md).
-- **CI:** lint, secret scan, the unit suite on Linux and macOS, the Excel golden and the audit engine on three browsers.
-  Windows is unconfirmed. Details: [docs/ci.md](docs/ci.md).
+- **CI:** lint, secret scan, the Excel golden and the whole unit suite on Linux with LibreOffice, a clean install on `main`,
+  and the audit engine on Chromium when it changes. macOS is checked locally; Windows is not. Details: [docs/ci.md](docs/ci.md).
 - **Not evaluated:** whether an agent follows a skill in a real session ([docs/skills-evals.md](docs/skills-evals.md):
   scenarios prepared, not run).
 
