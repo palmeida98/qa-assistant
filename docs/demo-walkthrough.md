@@ -36,7 +36,7 @@ python -m adapters.tickets "$WORK" ingest "$WORK/tickets/bundle_check2.json" --n
 The first check is `first`; the second is `changes`: the PBI's state and acceptance criteria changed, a comment was
 added, and its QA task changed. The engine compares; it never interprets the ticket text. The result is in
 `$WORK/memory/` (the references and a dated record of each check), never in a tracker. `/analyze-ticket` and
-`/test-pbi` use this memory; a real project uses `access: api` or a logged-in browser instead of these bundles.
+`/plan-tests` use this memory; a real project uses `access: api` or a logged-in browser instead of these bundles.
 
 ## 3. The run log: a pass, and a failure with a proposed bug
 

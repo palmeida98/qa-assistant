@@ -2,7 +2,7 @@
 
 References:
 - @docs/methodology.md — universal methodology
-- docs/skills-spec.md — the nine skills, what each owns, their contract and helpers (read when touching `.claude/skills/` or `docs/procedures/`); guide for people: docs/skills-guide.md
+- docs/skills-spec.md — the skills, what each owns, their contract and helpers (read when touching `.claude/skills/` or `docs/procedures/`); guide for people: docs/skills-guide.md
 - docs/procedures/ — the long procedures the skills read (`rules.md` is shared by all of them)
 - docs/technique-browser.md — browser automation technique (read when running browser batches or writing Playwright specs; `/run-tests`, `/playwright-tests`, `/project-context`)
 - docs/technique-excel.md — Excel workbook automation technique (read when touching the adapter or applying batches; `/checkpoint`, `/manage-bugs`)
@@ -10,7 +10,7 @@ References:
 - docs/technique-azure-devops.md — Azure DevOps (Test Plans + Boards) tracker adapter technique (read when `tracker: azure-devops`, or when touching `adapters/azure_devops/`; built in plan 10.3)
 - docs/technique-workspaces.md — finding the framework, selecting a project, isolation, the skills' contract and sync (read when a skill's preflight fails, or when touching `scripts/workspace_select.py`, `scripts/sync_skills.py` or a skill's frontmatter; plan phase 15)
 - docs/technique-tickets.md — read-only ticket analysis in Azure DevOps, Jira and Linear, what changed and the workspace's `memory/` (read for `/analyze-ticket`, or when touching `adapters/tickets/`; plan phases 14 and 15)
-- docs/technique-specs.md — the optional functional specification source (`specs:` in project.yaml): finding a rule from the index, citing it with its revision, crossing it with the tracker, divergences, a changed revision and evidence of background jobs (read for `/analyze-ticket`, `/plan-tests`, `/test-pbi` when a workspace has `specs:`)
+- docs/technique-specs.md — the optional functional specification source (`specs:` in project.yaml): finding a rule from the index, citing it with its revision, crossing it with the tracker, divergences, a changed revision and evidence of background jobs (read for `/analyze-ticket`, `/plan-tests` when a workspace has `specs:`)
 - docs/technique-api.md — API testing technique (read when the `api` module is active; `/run-tests`)
 - docs/technique-accessibility.md — WCAG 2.1 AA accessibility technique (read when the `accessibility` module is active; `/run-tests`)
 - docs/technique-mobile.md — mobile technique with Maestro (read when the `mobile` module is active; `/run-tests`)
@@ -21,7 +21,7 @@ References:
 - docs/demo-walkthrough.md, docs/skills-evals.md — the reproducible fictional walkthrough (run by a test) and the agent-behaviour scenarios prepared but not yet run
 
 ## Fixed rules
-- The product is the nine skills used through Claude Code. It has no hub, web interface, graphical application or launcher of its own, and none is promised for a later phase (decision of 08.11.2026; the earlier `qa-ui` was removed and stays in the git history). Reports a command produces (HTML, Excel) are outputs, not an interface.
+- The product is the skills used through Claude Code. It has no hub, web interface, graphical application or launcher of its own, and none is promised for a later phase (decision of 08.11.2026; the earlier `qa-ui` was removed and stays in the git history). Reports a command produces (HTML, Excel) are outputs, not an interface.
 - Never write client data (URLs, accounts, names, credentials) in this repository.
 - Follow the hierarchy of sources of truth of the methodology (section 1.3).
 - A project workspace always lives outside this repository, under the root of workspaces (qa-workspaces/ by default).
@@ -45,7 +45,7 @@ Each script's docstring and `--help` give its flags and exit codes: read them be
 - `scripts/build_dashboard.py <workspace> [--open]` — the workspace's `dashboard.html` (`/qa-report`, Excel only)
 - `scripts/workspace_select.py where|list|resolve|preflight|skills|set-root` — which framework really runs (and the commit guards: hooks installed, private denylist configured), the projects under the root with their status, which one a request means, and whether a skill can run there (read only, apart from `set-root`)
 - `scripts/qa_report.py <workspace> totals|audit` — reconciled totals per platform and build, and the audit of run logs, evidence and application (`/qa-report`, `/checkpoint`; read only)
-- `scripts/pbi_state.py <workspace> start|show|mark|baseline|check|published` — the resume record of `/test-pbi` (`memory/pbi/<id>.json`)
+- `scripts/pbi_state.py <workspace> start|show|mark|baseline|check|published` — the resume record of one PBI (`memory/pbi/<id>.json`; no skill drives it since `/test-pbi` was removed on 24.11.2026)
 - `python scripts/sync_skills.py --apply` — run after changing a skill: the workspaces use the global copy in `~/.claude/skills/`, and the record next to it says which checkout it came from
 - `qa-audit …` (`pip install -e .` first; `qa-audit doctor`, or `python -m qa_audit doctor` when the `qa-audit` launcher points at a Python that is gone), `scripts/update_axe.py` — the audit engine (docs/qa-audit.md)
 - Tests: `python -m unittest discover -s tests` and `python scripts/golden_check.py` (needs LibreOffice); a workspace's real golden: `--dir <workspace>/golden/<batch>` (methodology §15). Engine integration tests: `python -m unittest discover -s tests/integration` (browsers must be able to start: outside the Bash sandbox)

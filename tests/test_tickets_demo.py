@@ -1,4 +1,4 @@
-"""The fictional ticket demo of examples/demo (plan F19): /analyze-ticket and /test-pbi can be shown with no
+"""The fictional ticket demo of examples/demo (plan F19): /analyze-ticket and the PBI record can be shown with no
 credentials and no tracker.
 
 The demo's `tickets:` source uses the browser route, so a bundle goes through `ingest`: two fictional checks
@@ -79,7 +79,7 @@ class TicketDemo(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.ws, "tracker")))
 
     def test_the_preflight_of_both_skills_passes_on_the_demo(self):
-        for skill in ("analyze-ticket", "test-pbi"):
+        for skill in ("analyze-ticket", "plan-tests"):
             with self.subTest(skill=skill):
                 r = run(os.path.join("scripts", "workspace_select.py"), "preflight", "--skill", skill,
                         "--workspace", self.ws, home=self.tmp.name)

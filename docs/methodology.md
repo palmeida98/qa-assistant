@@ -1,7 +1,7 @@
 # Core Methodology
 
 > **Layer 1 — Universal QA methodology**
-> Version 2.15 · 2026-11-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; eight skills with shared procedures (`skills-spec.md`) since 06.11.2026; a request to test that authorises its own scope, evidence by risk and one bug per problem since 08.11.2026; a project's `context.md` may be its main document, with permanent rules in preserved sections, since 08.11.2026 (v2.14).
+> Version 2.15 · 2026-11-08 · Replaces the version used in Claude.ai Projects; in English since plan 8.11; tracker adapters for Jira (Xray) and Azure DevOps since plan phase 10; remote execution in the workspace's CI since plan phase 11; approved cases added to an Excel workbook through the adapter since plan 10.6; runs started from the local interface since plan phase 12; exploratory charters on the app of a mobile project since plan 12.6; read-only ticket analysis with a local memory since plan phase 14; finding the framework and selecting a project, for any skill, since plan phase 15; one writer at a time per workspace since plan 15.6; an analysis kept in the workspace since plan 15.7; a run log that checks its cases and keeps its run block, and a context kept short, since plan 15.8; skills with shared procedures (`skills-spec.md`) since 06.11.2026; a request to test that authorises its own scope, evidence by risk and one bug per problem since 08.11.2026; a project's `context.md` may be its main document, with permanent rules in preserved sections, since 08.11.2026 (v2.14).
 >
 > This document applies to **every** project and **every** company. It does not, and cannot, contain information specific to a project, client or company. The examples use a fictional project, the **Demo Shop**.
 
@@ -109,7 +109,6 @@ Each stage has a corresponding skill in Claude Code, which is also where a reque
 | Bug management | `/manage-bugs` | Duplicate search and bug proposals for one batch review |
 | Validation and report | `/qa-report` | Reconciled totals per platform and build, risks, a summary for the team; the Excel dashboard |
 | Checkpoint: save progress or close a session | `/checkpoint` | State kept, pending application listed, application once authorised |
-| The whole flow for one PBI, resumable | `/test-pbi` | Each step through the skills above, with a record of what is done |
 
 Version 2 of the skills (2026-11-06; `skills-spec.md`, `skills-guide.md`) replaced the thirteen skills of version 1; the long procedures they held are in `procedures/`.
 

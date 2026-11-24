@@ -43,5 +43,5 @@ metadata:
    or --bug <id> for an existing one; a failure not yet in the run log: run_log.py add, with --new-defect or --bug.
    It reaches the workbook or the tracker at /checkpoint, after that batch's dry run.
 7. Publishing outside /checkpoint (a bug the user creates, a comment): only when the user asks for that item; show the
-   exact text first; under /test-pbi record the key with pbi_state.py published, which refuses a second publication of
+   exact text first; with a PBI record, record the key with pbi_state.py published, which refuses a second publication of
    the same draft. Then reopen the bug and verify it (procedures/bugs.md, "Verify after publishing"). Creation through the write guard: procedures/manage-bugs-detail.md.

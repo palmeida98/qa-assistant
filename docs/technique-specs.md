@@ -1,6 +1,6 @@
 # Functional specification sources
 
-> Read by /analyze-ticket, /plan-tests and /test-pbi when the workspace's project.yaml has a `specs:` section.
+> Read by /analyze-ticket and /plan-tests when the workspace's project.yaml has a `specs:` section.
 > Without that section nothing here applies and the skills work as before: the tracker and the documents the
 > workspace names stay the sources (planning.md step A.2).
 > The rule of `procedures/rules.md` §17 applies to the specification's text exactly as to the tracker's.
@@ -68,7 +68,7 @@ marked as QA text, and every transcription is compared with its source before de
 ## 5. A revision that changes
 
 - /analyze-ticket compares the revision recorded by the previous check with the current one and shows what changed.
-- /test-pbi, resuming a plan whose `spec_refs` have another revision now: before reusing the plan, list the rules
+- A PBI record, resuming a plan whose `spec_refs` have another revision now: before reusing the plan, list the rules
   that changed between the two revisions and the scenarios and cases that cite them. Those cases are reviewed (and
   their expected result updated or set to a question) before they run again; the others are reused as they are.
 - `scripts/spec_refs.py` does this comparison for an `export` source, and `pbi_state.py check` runs it when the

@@ -83,13 +83,13 @@ class Identity(Base):
 
     def test_a_session_in_the_simulation_asking_for_the_real_workspace_by_path_stops_before_any_write(self):
         before = tree(self.tmp)
-        code, report = self.preflight("test-pbi", workspace=self.real, cwd=os.path.join(self.sim))
+        code, report = self.preflight("plan-tests", workspace=self.real, cwd=os.path.join(self.sim))
         self.assertEqual(code, ws.WRONG_SESSION, report["problems"])
         self.assertEqual(report["session"]["session"], self.sim)
         self.assertEqual(report["session"]["target"], self.real)
         self.assertIn(f"cd {self.real} && claude", report["problems"][0])
         # by name too, and whatever the names are
-        code, _ = self.preflight("test-pbi", "shop", cwd=self.sim)
+        code, _ = self.preflight("plan-tests", "shop", cwd=self.sim)
         self.assertEqual(code, ws.WRONG_SESSION)
         # the code behind the skill refuses as well: no record is created from the wrong session
         r = self.pbi(self.real, "start", "42434", "--platform", "ios", cwd=self.sim)
@@ -99,7 +99,7 @@ class Identity(Base):
 
     def test_a_copy_that_kept_the_real_identity_is_still_another_folder(self):
         clone = make_project(self.root, "shop-copy", **REAL)
-        code, report = self.preflight("test-pbi", workspace=self.real, cwd=clone)
+        code, report = self.preflight("plan-tests", workspace=self.real, cwd=clone)
         self.assertEqual(code, ws.WRONG_SESSION)
         self.assertIn("same identity", report["problems"][0])
 
@@ -109,7 +109,7 @@ class Identity(Base):
             self.assertEqual(selection.outcome, "ambiguous")
             self.assertIn(self.real, selection.message)
             self.assertIn(clone, selection.message)
-        code, report = self.preflight("test-pbi", "shop")
+        code, report = self.preflight("plan-tests", "shop")
         self.assertEqual(code, ws.AMBIGUOUS)
         self.assertIn("declared by 2 folders", report["message"])
         self.assertEqual(self.resolve(workspace=clone).candidate.path, clone)      # a path still chooses
@@ -124,7 +124,7 @@ class Identity(Base):
         before = tree(self.root)
         for kw in ({"hint": "shop"}, {"workspace": self.real}):
             hint = kw.pop("hint", None)
-            code, report = self.preflight("test-pbi", hint, cwd=inside, **kw)
+            code, report = self.preflight("plan-tests", hint, cwd=inside, **kw)
             self.assertEqual(code, ws.WRONG_SESSION, report["problems"])
         self.assertEqual(self.pbi(self.real, "start", "1", cwd=inside).returncode, 6)
         self.assertEqual(tree(self.root), before)
@@ -164,7 +164,7 @@ class Identity(Base):
         env = {**os.environ, ws.CONFIG_ENV: self.config, "PYTHONIOENCODING": "utf-8", ws.ROOT_ENV: self.root}
         env.pop("PYTHONPATH", None)
         r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "workspace_select.py"), "preflight", "--skill",
-                            "test-pbi", "--workspace", self.real], cwd=self.sim, env=env, capture_output=True,
+                            "plan-tests", "--workspace", self.real], cwd=self.sim, env=env, capture_output=True,
                            text=True, encoding="utf-8", check=False)
         self.assertEqual(r.returncode, ws.WRONG_SESSION, r.stdout + r.stderr)
         for text in ("STOP: the session is open in another workspace",

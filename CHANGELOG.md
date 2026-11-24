@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Removed (`/test-pbi`, 2026-11-24)
+- The `/test-pbi` skill and `docs/procedures/test-pbi-detail.md`: the framework is eight skills again. `scripts/pbi_state.py`,
+  `memory/pbi/<id>.json` and what depends on them (`/checkpoint` step 7, `/manage-bugs` publication record, run approvals,
+  workspace identity, `spec_refs`) stay for now, with no skill driving them; removing them is a separate change. Tests,
+  methodology stage table, spec, guides and README updated; scenarios 12 and 14 of `docs/skills-evals.md` are retired.
+
 ### Changed (`/playwright-tests`, unknown build, 2026-11-24)
 - `docs/procedures/playwright-tests-detail.md`: what to do when the application shows no version: no `--build`, the results
   keep an unknown build (never attributed to the current one) and the summary says so. Replaces a sentence that said the

@@ -25,9 +25,8 @@ DOCS = os.path.join(ROOT, "docs")
 PROCEDURES = os.path.join(DOCS, "procedures")
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
 METHODOLOGY = os.path.join(DOCS, "methodology.md")
-EIGHT = ["analyze-ticket", "checkpoint", "manage-bugs", "plan-tests", "project-context", "qa-report", "run-tests",
-         "test-pbi"]
-NINE = sorted([*EIGHT, "playwright-tests"])      # the eight of the flow and the Playwright specs skill (N2)
+SKILLS_LIST = ["analyze-ticket", "checkpoint", "manage-bugs", "plan-tests", "playwright-tests", "project-context", "qa-report",
+               "run-tests"]
 VERSION_1 = ("project-onboarding", "analyze-tickets", "analyze-feature", "generate-cases", "plan-batch", "run-batch",
              "test-api", "audit-accessibility", "test-mobile", "log-bug", "end-session", "dashboard")
 
@@ -65,8 +64,8 @@ def all_procedures() -> list[str]:
 
 
 class Skills(unittest.TestCase):
-    def test_the_nine_skills_and_nothing_else(self):
-        self.assertEqual(names(), NINE)
+    def test_the_eight_skills_and_nothing_else(self):
+        self.assertEqual(names(), SKILLS_LIST)
 
     def test_valid_frontmatter_with_name_and_description(self):
         for name in names():
@@ -195,15 +194,6 @@ class Routing(unittest.TestCase):
 
 
 class Flow(unittest.TestCase):
-    def test_test_pbi_coordinates_the_other_skills_without_copying_them(self):
-        text = skill_text("test-pbi")
-        for other in EIGHT:
-            if other != "test-pbi":
-                with self.subTest(skill=other):
-                    self.assertIn(f"/{other}", text)
-        self.assertNotIn("adapters.excel.apply", text)         # applying is /checkpoint's (procedures/apply.md)
-        self.assertNotIn("bug-search", text)                    # the search is /manage-bugs'
-
     def test_the_helpers_named_in_the_skills_parse(self):
         import pbi_state
         import qa_report
@@ -267,9 +257,6 @@ class Autonomy(unittest.TestCase):
         stop = step7.index("STOP")
         self.assertLess(go_on, stop)                       # the STOP is the second branch, not the default
         self.assertIn("a workspace whose rules ask for a confirmation", step7[go_on:stop + 5])
-        pbi = flat(skill_text("test-pbi"))
-        self.assertNotIn("STOP for the user's approval. Once approved", pbi)
-        self.assertIn("The request to test the PBI covers the plan", pbi)
         run = flat(skill_text("run-tests"))
         self.assertIn("the run follows the plan without asking to approve it again", run)
         self.assertNotIn("after the user approves it for the platform named", plan)
@@ -289,7 +276,7 @@ class Autonomy(unittest.TestCase):
                 self.assertIn(needle, section)
         self.assertIn("each rule of the workspace's CLAUDE.md, or of a file it imports, that asks for more",
                       flat(skill_text("project-context")))
-        for name in ("plan-tests", "run-tests", "test-pbi"):
+        for name in ("plan-tests", "run-tests"):
             with self.subTest(skill=name):
                 self.assertRegex(flat(skill_text(name)), r"CLAUDE\.md asks for (more|a confirmation|that approval|one)")
 

@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: "Runs approved test cases or a planned batch on mobile (Android or iOS), web or an API with the tools available, and records results and evidence in the run log. Use for 'test the Account flow on the iPhone', 'run the batch', 'retest TC-…', 'test the API'. Several PBIs or a whole PBI end to end is /test-pbi; analysing or planning only is /analyze-ticket or /plan-tests."
+description: "Runs approved test cases or a planned batch on mobile (Android or iOS), web or an API with the tools available, and records results and evidence in the run log. Use for 'test the Account flow on the iPhone', 'run the batch', 'retest TC-…', 'test the API'. Analysing or planning only is /analyze-ticket or /plan-tests."
 argument-hint: "<batch name | TC-… ids> [android|ios|web|api]"
 metadata:
   intent: "Run cases on the platform approved, classify each result and record it with its evidence."

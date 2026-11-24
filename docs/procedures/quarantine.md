@@ -1,6 +1,6 @@
 # Bugs in quarantine (13.11.2026)
 
-Read by `/plan-tests`, `/test-pbi`, `/run-tests`, `/manage-bugs`, `/qa-report` and `/checkpoint` when the workspace has a
+Read by `/plan-tests`, `/run-tests`, `/manage-bugs`, `/qa-report` and `/checkpoint` when the workspace has a
 register of quarantines. A workspace without one works exactly as before.
 
 ## 1. What it is, and what it is not
@@ -45,7 +45,7 @@ skills read, and the tag is never written by them.
 
 `propose` writes only a proposal (the assistant may); `decide` is run only after the QA said so in the session.
 
-## 3. Planning (`/plan-tests`, `/test-pbi`)
+## 3. Planning (`/plan-tests`)
 
 `scope` lists, for the platform, build and environment of the batch, the active quarantines and the cases they cover: the
 bug and its link, the reason, the scope and the exit condition. The plan's review shows them, and the QA chooses per case:
@@ -90,6 +90,6 @@ quarantine never reduces the coverage of what it does not cover.
 - `/qa-report` (`quarantine.py report`) shows apart: the cases **left out by quarantine** (with the reason and the bug's
   link, outside the counts of run cases), the **known failures observed** and the **retests run** (passed: decision
   pending; failed differently: normal review). Totals stay those of `qa_report.py`.
-- `/checkpoint` (under `/test-pbi`): each decision that waits on the QA — a proposed quarantine, a retest that passed, a
+- `/checkpoint` (with a PBI record): each decision that waits on the QA — a proposed quarantine, a retest that passed, a
   proposed end — is an open item of the PBI's record (`pbi_state.py open … --kind approval --by qa`), closed only with the
   `decide` that the QA confirmed.

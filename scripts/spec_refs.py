@@ -1,6 +1,6 @@
 """
 The specification references (`spec_refs`) of a plan: cite a rule, and compare a plan with the specification available
-on a resume (docs/technique-specs.md sections 4 and 5; /test-pbi step 3).
+on a resume (docs/technique-specs.md sections 4 and 5).
 
     python scripts/spec_refs.py <workspace> cite <path>#<rule id> [<path>#<rule id> ...] [--spec-root DIR]
     python scripts/spec_refs.py <workspace> compare <plan> [--spec-root DIR] [--json]

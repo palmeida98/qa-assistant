@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: "Selects or sets up a QA workspace and resumes it: the current state, decisions, blockers, the tools really available and the next actions. Use when the user says 'continue', 'resume', 'where were we', 'what is pending', opens a project, or a folder has no project.yaml yet. Resuming the record of one PBI is /test-pbi, not this skill; running cases is /run-tests."
+description: "Selects or sets up a QA workspace and resumes it: the current state, decisions, blockers, the tools really available and the next actions. Use when the user says 'continue', 'resume', 'where were we', 'what is pending', opens a project, or a folder has no project.yaml yet. Running cases is /run-tests."
 argument-hint: "[project id or name]"
 metadata:
   intent: "Select the workspace (or set up a new one) and present where it stands and what to do next."
@@ -45,5 +45,5 @@ metadata:
    decisions in force (who, when); the rules in force for this project (rules.md sections 5 and 8): what a request
    to test covers on its own, and each rule of the workspace's CLAUDE.md, or of a file it imports, that asks for more, named with its file; one project's rules are never applied to another; blockers; pending items (dates, what unblocks each); open questions;
    tools (verified / only configured); and one to three next actions, each with the skill that does it
-   (/analyze-ticket, /plan-tests, /run-tests, /manage-bugs, /qa-report, /checkpoint, /test-pbi).
+   (/analyze-ticket, /plan-tests, /run-tests, /manage-bugs, /qa-report, /checkpoint).
 6. Ask nothing else unless the next action needs a user decision.
