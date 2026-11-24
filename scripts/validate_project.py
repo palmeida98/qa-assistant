@@ -620,6 +620,12 @@ def which(name: str) -> str | None:
     return shutil.which(name)
 
 
+def java_ready() -> tuple[bool, str]:
+    """Whether the Java that Maestro needs answers (common.java_ready)."""
+    from common import java_ready as _java_ready
+    return _java_ready()
+
+
 def python_version() -> tuple[int, ...]:
     return tuple(sys.version_info[:3])
 
@@ -808,7 +814,8 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
         except ValueError:
             input_now = None
         if exe:
-            add((True, "maestro", exe))
+            java, detail = java_ready()
+            add((java, "maestro", exe if java else f"{exe}, but {detail}"))
         elif platform == "android" and input_now == "adb":
             add((False, "maestro", ("install the Maestro CLI (https://maestro.mobile.dev; it needs Java 17+): "
                                     "mobile.input adb runs the flows with it")))

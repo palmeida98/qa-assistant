@@ -1,6 +1,6 @@
 # Skills guide
 
-> How to use the eight skills of version 2 (skills-spec.md) in any workspace. Examples use the fictional **Demo Shop**
+> How to use the nine skills of version 2 (skills-spec.md) in any workspace. Examples use the fictional **Demo Shop**
 > (`DS-12` is a story, `TC-CART-003` a case).
 
 ## 1. The flow
@@ -29,6 +29,7 @@ names the rules in force.
 | `/plan-tests` | "Plan the tests of the checkout coupon for Android and iOS." | `/plan-tests DS-12 android ios` |
 | `/run-tests` | "Test the Account flow on the iPhone." | `/run-tests batch DS12_ios` |
 | `/playwright-tests` | "Automate the login cases with Playwright." | `/playwright-tests TC-LOGIN-001 TC-LOGIN-002` |
+| `/maestro-tests` | "Automate the cart cases of the app with Maestro." | `/maestro-tests TC-MOB-003 TC-MOB-004 android` |
 | `/manage-bugs` | "Prepare the bugs of the last batch." | `/manage-bugs DS12_ios` |
 | `/qa-report` | "Prepare the Android and iOS status for the team." | `/qa-report since 2026-11-01` |
 | `/checkpoint` | "Save the state, I'm leaving." | `/checkpoint` |
@@ -73,7 +74,7 @@ From the root of qa-assistant:
 
 ```bash
 python scripts/sync_skills.py            # compares, writes nothing
-python scripts/sync_skills.py --apply    # installs the eight skills in ~/.claude/skills/
+python scripts/sync_skills.py --apply    # installs the nine skills in ~/.claude/skills/
 python scripts/workspace_select.py where # what runs: checkout, branch, commit, local changes, the record of the skills
 ```
 

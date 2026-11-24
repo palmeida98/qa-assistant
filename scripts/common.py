@@ -55,6 +55,29 @@ def find_adb() -> str | None:
                  if r and os.path.isfile(os.path.join(r, "platform-tools", name))), None)
 
 
+JAVA_HINT = ("Maestro needs Java 17+ and no Java answers here (macOS's /usr/bin/java is only a stub): install a JDK "
+             "and set JAVA_HOME to it, e.g. JAVA_HOME=\"$(brew --prefix openjdk)\" (technique-mobile.md §3)")
+
+
+def java_ready() -> tuple[bool, str]:
+    """(whether a Java runtime answers, where or what to do). JAVA_HOME with a bin/java wins; else `java -version` on
+    the PATH must exit 0. Maestro is found on the PATH even when the Java it needs is missing, and then every flow
+    fails with a message about java.com that looks like an environment block (found on a Mac, 24.11.2026)."""
+    exe = "java.exe" if os.name == "nt" else "java"
+    home = os.environ.get("JAVA_HOME", "").strip()
+    if home and os.path.isfile(os.path.join(home, "bin", exe)):
+        return True, f"JAVA_HOME={home}"
+    java = shutil.which("java")
+    if java:
+        try:
+            r = subprocess.run([java, "-version"], capture_output=True, text=True, timeout=20, check=False)
+            if r.returncode == 0:
+                return True, java
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return False, JAVA_HINT
+
+
 class OutsideWorkspace(ValueError):
     """A path to write leaves the workspace or enters history/ (technique-workspaces.md section 7)."""
 

@@ -414,6 +414,7 @@ class Environment(unittest.TestCase):
         self.found = dict(self.ALL)
         self.android = {"adb": "/sdk/platform-tools/adb", "emulator": "/sdk/emulator/emulator"}
         self.skills = {"checkpoint": "same", "run-batch": "same"}
+        self.java = True
         clean = {k: v for k, v in os.environ.items() if k not in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")}
         patcher = mock.patch.dict(os.environ, clean, clear=True)
         patcher.start()
@@ -421,7 +422,8 @@ class Environment(unittest.TestCase):
         for name, fake in [("which", lambda n: self.found.get(n)), ("python_version", lambda: (3, 12, 1)),
                            ("soffice", lambda: self.found.get("soffice", "/opt/soffice")),
                            ("android_tools", lambda: dict(self.android)), ("qa_audit_installed", lambda: True),
-                           ("playwright_browsers", lambda: {"chromium"}), ("skills_state", lambda: self.skills)]:
+                           ("playwright_browsers", lambda: {"chromium"}), ("skills_state", lambda: self.skills),
+                           ("java_ready", lambda: (self.java, "JAVA_HOME=/jdk" if self.java else "needs Java 17+"))]:
             patcher = mock.patch.object(vp, name, fake)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -531,6 +533,13 @@ class Environment(unittest.TestCase):
         # a real device: no emulator needed
         c = self.checks(modules=["mobile"], mobile={**MOBILE, "serial": "R58M123ABC"})
         self.assertTrue(c["emulator"][0])
+
+    def test_maestro_without_java_is_not_ready(self):
+        # 24.11.2026: Maestro on the PATH and a stub java (macOS): the flows would all fail
+        self.java = False
+        ok, detail = self.checks(modules=["mobile"], mobile={"platform": "android", "app_id": "a"})["maestro"]
+        self.assertFalse(ok)
+        self.assertIn("/bin/maestro, but needs Java 17+", detail)
 
     def test_mobile_input_driver_is_read_on_the_device(self):
         """mobile.input driver (plan 11.7): the companion driver installed and its service on, read with adb."""

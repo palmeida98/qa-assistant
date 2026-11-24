@@ -25,8 +25,8 @@ DOCS = os.path.join(ROOT, "docs")
 PROCEDURES = os.path.join(DOCS, "procedures")
 CONTRACT = ("intent", "inputs", "config", "tools", "outputs", "writes", "approvals", "failures", "resume")
 METHODOLOGY = os.path.join(DOCS, "methodology.md")
-SKILLS_LIST = ["analyze-ticket", "checkpoint", "manage-bugs", "plan-tests", "playwright-tests", "project-context", "qa-report",
-               "run-tests"]
+SKILLS_LIST = ["analyze-ticket", "checkpoint", "maestro-tests", "manage-bugs", "plan-tests", "playwright-tests",
+               "project-context", "qa-report", "run-tests"]
 VERSION_1 = ("project-onboarding", "analyze-tickets", "analyze-feature", "generate-cases", "plan-batch", "run-batch",
              "test-api", "audit-accessibility", "test-mobile", "log-bug", "end-session", "dashboard")
 
@@ -64,7 +64,7 @@ def all_procedures() -> list[str]:
 
 
 class Skills(unittest.TestCase):
-    def test_the_eight_skills_and_nothing_else(self):
+    def test_the_nine_skills_and_nothing_else(self):
         self.assertEqual(names(), SKILLS_LIST)
 
     def test_valid_frontmatter_with_name_and_description(self):

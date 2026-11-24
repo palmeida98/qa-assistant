@@ -55,6 +55,9 @@ class Workspace(unittest.TestCase):
         patcher = mock.patch.object(rm, "find_adb", lambda: rm.shutil.which("adb"))
         patcher.start()
         self.addCleanup(patcher.stop)
+        java = mock.patch.object(rm, "java_ready", return_value=(True, "JAVA_HOME=/jdk"))   # this computer's Java is not read
+        java.start()
+        self.addCleanup(java.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.ws = self.tmp.name
         os.makedirs(os.path.join(self.ws, "flows"))
@@ -172,6 +175,68 @@ class Workspace(unittest.TestCase):
         self.assertIn("TC-MOB-001: Pass", out)
         self.assertIn("TC-MOB-002: Fail", out)
         self.assertNotIn("fictional-password-9", out)
+
+    # --- the device and Java (24.11.2026: a Mac with a stub java, a phone and an emulator connected)
+
+    def adb_devices(self, *serials):
+        listing = "List of devices attached\n" + "".join(f"{s}\tdevice\n" for s in serials)
+        calls = []
+
+        def run(cmd, **kw):
+            if cmd[1:] == ["devices"]:
+                return mock.Mock(stdout=listing, stderr="", returncode=0)
+            calls.append(cmd)
+            with open(cmd[cmd.index("--output") + 1], "w", encoding="utf-8") as f:
+                f.write(JUNIT)
+            return mock.Mock(stdout="", stderr="")
+        return run, calls
+
+    def test_without_java_nothing_runs_and_it_is_not_a_blocked_case(self):
+        with mock.patch.object(rm, "java_ready", return_value=(False, "Maestro needs Java 17+")), \
+                mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm.subprocess, "run") as run:
+            rc, out, err = self.run_it("--output", "runs/m.json")
+            self.assertEqual(rm.run_helper(self.ws, self.helper())[0], 2)
+        self.assertEqual(rc, 2)
+        self.assertIn("Java 17+", err)
+        self.assertNotIn("Blocked", out)
+        run.assert_not_called()
+        self.assertFalse(os.path.exists(os.path.join(self.ws, "runs", "m.json")))
+
+    def test_the_cases_run_on_the_device_given(self):
+        with open(os.path.join(self.ws, "project.yaml"), "a", encoding="utf-8") as f:
+            f.write("  serial: R58M\n  input: driver\n")        # a phone that cannot run Maestro
+        run, calls = self.adb_devices("R58M", "emulator-5554")
+        clean = {k: v for k, v in os.environ.items() if k not in ("QA_MOBILE_SERIAL", "QA_MOBILE_INPUT")}
+        with mock.patch.object(rm.shutil, "which", side_effect=lambda n: n), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run), \
+                mock.patch.dict(os.environ, clean, clear=True):
+            rc, out, _ = self.run_it("--serial", "emulator-5554")
+            self.assertEqual(rc, 0)
+            self.assertIn("target: android: emulator-5554", out)
+            rc, _, _ = self.run_it()                                    # mobile.serial when no flag
+        self.assertEqual(rc, 0)
+        self.assertEqual([c[c.index("--device") + 1] for c in calls], ["emulator-5554", "R58M"])
+
+    def test_several_devices_and_no_serial_runs_nothing(self):
+        run, calls = self.adb_devices("R58M", "emulator-5554")
+        clean = {k: v for k, v in os.environ.items() if k != "QA_MOBILE_SERIAL"}
+        with mock.patch.object(rm.shutil, "which", side_effect=lambda n: n), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run), \
+                mock.patch.dict(os.environ, clean, clear=True):
+            rc, _, err = self.run_it()
+        self.assertEqual(rc, 2)
+        self.assertIn("several devices connected", err)
+        self.assertEqual(calls, [])
+
+    def test_a_serial_that_is_not_connected_is_no_target(self):
+        run, calls = self.adb_devices("emulator-5554")
+        with mock.patch.object(rm.shutil, "which", side_effect=lambda n: n), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run):
+            rc, out, _ = self.run_it("--serial", "R58M")
+        self.assertEqual(rc, 3)
+        self.assertIn("device R58M not connected", out)
+        self.assertEqual(calls, [])
 
     # --- helper flows (plan 11.2)
 

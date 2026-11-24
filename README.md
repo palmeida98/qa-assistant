@@ -130,6 +130,7 @@ python scripts/workspace_select.py where   # which framework, Python and skill c
 | [`/plan-tests`](.claude/skills/plan-tests/SKILL.md) | Coverage by requirement and platform, reuse of cases, batches | `analysis/`, `batches/` |
 | [`/run-tests`](.claude/skills/run-tests/SKILL.md) | Run approved cases (mobile, web, API, accessibility) with evidence | `runs/`, `evidence/` |
 | [`/playwright-tests`](.claude/skills/playwright-tests/SKILL.md) | Write and run Playwright specs (level N2) for web cases and record their results | `e2e/`, `runs/`, `evidence/` |
+| [`/maestro-tests`](.claude/skills/maestro-tests/SKILL.md) | Write and run Maestro flows (level N2) for mobile cases and record their results | `flows/`, `runs/`, `evidence/` |
 | [`/manage-bugs`](.claude/skills/manage-bugs/SKILL.md) | Investigate failures, search duplicates, propose bugs for one review | proposals in the run log |
 | [`/qa-report`](.claude/skills/qa-report/SKILL.md) | Audit the run logs; reconciled totals per platform and build | a report on request |
 | [`/checkpoint`](.claude/skills/checkpoint/SKILL.md) | Save the session; apply a batch only after you confirm it | `context.md` |

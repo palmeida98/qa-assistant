@@ -1,6 +1,6 @@
 # Rules every skill obeys
 
-> Shared by the eight skills (skills-spec.md §3). A skill says that these rules apply and adds only its own.
+> Shared by the nine skills (skills-spec.md §3). A skill says that these rules apply and adds only its own.
 > Subordinate to `methodology.md` and to the workspace's `CLAUDE.md`: where they differ, the stricter rule wins, and the
 > skill says so.
 

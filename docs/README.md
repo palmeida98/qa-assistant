@@ -4,7 +4,7 @@ Read only what the current task needs. This proposed index does not move or repl
 
 | Need | Main reference |
 |---|---|
-| Choose one of the eight skills | [Skills guide](skills-guide.md) |
+| Choose one of the nine skills | [Skills guide](skills-guide.md) |
 | Skill ownership and dependency contract | [Skills specification](skills-spec.md) |
 | Universal QA method and source hierarchy | [Methodology](methodology.md) |
 | Shared approval and evidence rules | [Shared rules](procedures/rules.md) |

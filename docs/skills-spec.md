@@ -16,7 +16,7 @@ tools and the skills; each workspace holds its requirements, configuration, memo
 The main flow is **resume the project → analyse the ticket → plan → run → prepare bugs → report → save the state**.
 Each step is a skill of its own.
 
-## 2. The eight skills
+## 2. The nine skills
 
 | Skill | Owns | Main outputs | Writes (without asking) |
 |---|---|---|---|
@@ -25,11 +25,12 @@ Each step is a skill of its own.
 | `/plan-tests` | Coverage, priorities, preconditions, data, expected results, traceability to requirements and existing cases | An analysis file, proposed cases, a batch plan by risk | `analysis/`; `batches/` at once under a request to test, after the confirmation under a request to plan or when the project's rules ask for one |
 | `/run-tests` | Running cases or a plan on mobile (Android, iOS), web or API with the tools available; results and evidence | Results in the run log, evidence | `runs/`, `evidence/` |
 | `/playwright-tests` | Writing Playwright specs (level N2) in the workspace's `e2e/` for cases of the library, running them with the native runner, fixing the specs that are wrong, one result per case | Specs, run log results, traces and captures of failures | `e2e/`, `runs/`, `evidence/` |
+| `/maestro-tests` | Writing Maestro flows (level N2) in the workspace's flows folder for mobile cases with a deterministic expected result, running them with `run_mobile.py`, fixing the flows that are wrong, one result per case | Flows, run log results, the report and captures of failures | the flows folder, `runs/`, `evidence/` |
 | `/manage-bugs` | Investigating failures, duplicates, bug proposals for a batch review | Bug proposals, one per problem | The run log item of the case (`new_defect` / `bug`, with `run_log.py attach`) after approval |
 | `/qa-report` | Auditing the records and reporting by platform, build, feature, result and risk | A technical report and a short summary | `exports/` (the report file); `dashboard.html` for an Excel project (the workbook only read) |
 | `/checkpoint` | Validating and saving the session; the resume point; what is still to apply or publish | `context.md` updated; the pending list | `context.md`, `archive/context/` (compaction); a local commit only when the project's rules say so |
 
-`/playwright-tests` joined on 23.11.2026 (the flow is unchanged: it is the deterministic route of `/run-tests` for web cases that passed twice; technique-browser.md §13). `/test-pbi` (coordinating the skills for one PBI) was removed on 24.11.2026; `scripts/pbi_state.py` and its record stay (§5.1) and no skill drives them. Each skill keeps its own procedure.
+`/playwright-tests` joined on 23.11.2026 (the flow is unchanged: it is the deterministic route of `/run-tests` for web cases that passed twice; technique-browser.md §13), and `/maestro-tests`, its mobile counterpart, on 24.11.2026 (technique-mobile.md §2 and §4). `/test-pbi` (coordinating the skills for one PBI) was removed on 24.11.2026; `scripts/pbi_state.py` and its record stay (§5.1) and no skill drives them. Each skill keeps its own procedure.
 
 ## 3. Shared rules, written once
 
@@ -120,7 +121,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 
 | Behaviour | Test |
 |---|---|
-| The eight skills are discovered, installed, recorded with their origin; other skills are kept | `test_sync_skills.py`, `test_skills.py` |
+| The nine skills are discovered, installed, recorded with their origin; other skills are kept | `test_sync_skills.py`, `test_skills.py` |
 | Each contract is complete; every script, module and document named exists | `test_skills.py` |
 | The workspace selected is the only one written; two projects never share memory | `test_workspace_select.py` |
 | A second, fictional workspace works with no tie to a real project | `test_skill_flows.py` |
@@ -145,7 +146,7 @@ skill, what it asks, whether it stops for an approval) are a separate evaluation
 | A bug added after the run keeps the result's evidence, time and run block; one artefact shared by cases is named by each | `test_run_log.py` |
 | Bugs grouped across platforms only on evidence; differences kept apart; a tool block is never a defect | `test_skills.py` (`Autonomy`) |
 | A web-only project is asked for no mobile tool | `test_workspace_select.py` |
-| The eight skills install into a temporary folder and their preflight runs on a fictional workspace, with nothing outside it touched | `test_install_smoke.py` (and the CI's `install` job) |
+| The nine skills install into a temporary folder and their preflight runs on a fictional workspace, with nothing outside it touched | `test_install_smoke.py` (and the CI's `install` job) |
 | `/analyze-ticket` and `/plan-tests` run on the fictional demo's two ticket checks, with no credentials | `test_tickets_demo.py` |
 | The documented walkthrough (preflight, tickets, run log, dry run, totals) runs as written | `test_demo_walkthrough.py` |
 

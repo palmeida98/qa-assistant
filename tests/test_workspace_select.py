@@ -576,6 +576,18 @@ class Preflight(Base):
         code, report = self.preflight("run-tests", "demo/app")                           # the other skills are unchanged
         self.assertNotIn("functional-web", " ".join(report["problems"]))
 
+    def test_maestro_tests_needs_the_mobile_module(self):
+        # the mobile counterpart of /playwright-tests (24.11.2026): a web-only project is not served
+        make_project(self.root, "demo/shop")                                             # modules: functional-web
+        make_project(self.root, "demo/app", modules=["mobile", "exploratory"],
+                     mobile={"platform": "android", "flows": "flows/"})
+        code, report = self.preflight("maestro-tests", "demo/app")
+        self.assertEqual(code, ws.OK, report["problems"])
+        self.assertIn("maestro", {x["tool"].split(" ")[0] for x in report["tools"]})
+        code, report = self.preflight("maestro-tests", "demo/shop")
+        self.assertEqual(code, ws.NOT_USABLE)
+        self.assertIn("the module mobile is not in modules: of project.yaml", report["problems"][0])
+
     def test_it_writes_nothing(self):
         make_project(self.root, "demo/shop", env=f"DS_PAT={SECRET}\n", tickets={"sources": {"boards": BOARDS}})
         before = tree(self.root)
