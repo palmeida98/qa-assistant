@@ -9,7 +9,7 @@
 
 ## 0. How to use this document
 
-- Claude reads this document as a permanent reference (imported by the `CLAUDE.md` of the `qa-assistant` repository).
+- In a project's workspace, Claude reads this document as a permanent reference: the workspace's `CLAUDE.md` imports it (template: `context-template.md`). In a framework development session it is not imported: the `CLAUDE.md` of `qa-assistant` keeps the rules that bind development (§1.2, §1.3, §1.4, §15) and names this document to read before changing what it governs.
 - What is here is **the method**: what is done, in what order and with what criteria.
 - The **technical how** is in the test modules (layer 2), for example `technique-browser.md`.
 - The **what of each project** is in the project's workspace (layer 4): `CLAUDE.md`, `project.yaml` and `context.md`.

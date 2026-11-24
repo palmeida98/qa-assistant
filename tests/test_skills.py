@@ -152,6 +152,12 @@ class Skills(unittest.TestCase):
             with self.subTest(skill=name):
                 self.assertEqual(os.listdir(os.path.join(SKILLS, name)), ["SKILL.md"])
 
+    def test_each_skill_stays_within_its_word_budget(self):
+        # skills-spec.md section 4: at most 800 words, counted as `wc -w` does (frontmatter included)
+        for name in names():
+            with self.subTest(skill=name), open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8") as f:
+                self.assertLessEqual(len(f.read().split()), 800)
+
     def test_no_skill_or_procedure_sends_to_a_version_1_skill(self):
         for label, text in [(n, skill_text(n)) for n in names()] + [(p, procedure(p)) for p in all_procedures()]:
             body = re.sub(r"\(from /[a-z-]+\)", "", text)       # the headings that say where a procedure came from
