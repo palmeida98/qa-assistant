@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (`/playwright-tests`, unknown build, 2026-11-24)
+- `docs/procedures/playwright-tests-detail.md`: what to do when the application shows no version: no `--build`, the results
+  keep an unknown build (never attributed to the current one) and the summary says so. Replaces a sentence that said the
+  run block was Blocked. Found by running the skill on the demo.
+
 ### Changed (Playwright MCP 0.0.86, 2026-11-24)
 - The Playwright MCP is fixed at `@playwright/mcp@0.0.86` (was 0.0.82) in `examples/demo/.mcp.json`,
   `docs/procedures/onboarding.md` and the tests of the guards. Checked with a smoke test of the demo's login page, run

@@ -60,8 +60,13 @@ From `<workspace>/e2e`:
 
 Select with `--grep "TC-LOGIN"` or a spec path; `--project=chromium` while developing. Use `--headed` only when the user
 asks to watch. The runner parallelises by itself; sub-agents are not needed to run. Record the **build observed**
-(footer, About page, response header; technique-browser.md section 2) before the first result: unknown is Blocked for
-the run block, never assumed.
+(footer, About page, response header; technique-browser.md section 2) before the first result.
+
+**Unknown build.** When the application shows no version (a public practice site, for example), do not invent one and do
+not pass `--build`: the results are recorded without it, and `qa_report.py audit` lists them with "no build in the run
+block". Such a result has an unknown build: it is never attributed to the current build nor counted in a build's
+coverage (methodology section 7.1). Say so in the summary, and ask the user for the build only when the project's
+rules or the tracker (jira, azure-devops) require one.
 
 ## From the runner's result to the run log
 
