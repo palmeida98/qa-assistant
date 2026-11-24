@@ -114,7 +114,7 @@ class Skills(unittest.TestCase):
                 self.assertEqual(sync_skills.missing_code(ROOT, doc), [])
                 self.assertLessEqual(set(sync_skills.listed(doc, "requires-tools")), known_tools)
                 self.assertLessEqual(set(sync_skills.listed(doc, "requires-config")),
-                                     {"tickets", "excel", *(s for s, _ in validate_project.MODULES.values() if s)})
+                                     {"tickets", "excel", *validate_project.MODULES})
                 self.assertIn((doc.get("metadata") or {}).get("requires-project", "valid"), ("valid", "any"))
 
     def test_every_skill_reads_the_shared_rules_and_declares_its_documents(self):
