@@ -60,6 +60,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from common import (
     OutsideWorkspace,
     Redactor,
+    atomic_write,
     find_adb,
     java_ready,
     mobile_target,
@@ -216,6 +217,28 @@ def read_junit(xml_txt: str, red: Redactor) -> list[dict]:
     return res
 
 
+TEXT_EVIDENCE = (".json", ".log", ".txt", ".xml", ".yaml", ".yml", ".md")
+
+
+def redact_tree(folder: str, red: Redactor) -> int:
+    """Redacts, in place, the text files Maestro wrote into an evidence folder. Maestro puts every MAESTRO_<VAR> it was
+    given, passwords included, in clear text in each flow's commands.json and in its logs (seen 27.11.2026): the folder
+    must never keep a value of .env. Returns how many files changed."""
+    changed = 0
+    for directory, _, names in os.walk(folder):
+        for name in names:
+            if not name.lower().endswith(TEXT_EVIDENCE):
+                continue
+            path = os.path.join(directory, name)
+            with open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            clean = red.text(text)
+            if clean != text:
+                atomic_write(path, clean)
+                changed += 1
+    return changed
+
+
 def run_maestro(cmd: list[str], env: dict, timeout: int) -> tuple[int, str]:
     """Runs Maestro (the tests replace it): (exit code, stdout + stderr)."""
     try:
@@ -365,6 +388,8 @@ def main(argv=None) -> int:
                 output = r.stdout + r.stderr
             except subprocess.TimeoutExpired:
                 output = f"timeout of {cfg['timeout']} s"
+            if keep:
+                redact_tree(keep, red)          # Maestro's own commands.json and logs hold the variables, even after a timeout
             if os.path.isfile(junit):
                 with open(junit, encoding="utf-8") as f:
                     text = f.read()

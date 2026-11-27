@@ -237,6 +237,32 @@ class Workspace(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("no flow has the tags", err)
 
+    def test_maestros_own_files_in_the_evidence_folder_never_keep_a_secret(self):
+        self.project("web")
+
+        def run_maestro(cmd, **kw):
+            with open(cmd[cmd.index("--output") + 1], "w", encoding="utf-8") as f:
+                f.write(JUNIT)
+            folder = next(a.split("=", 1)[1] for a in cmd if a.startswith("--test-output-dir="))
+            flow = os.path.join(folder, "run", "TC-MOB-001_login")
+            os.makedirs(os.path.join(flow, "logs"))
+            for name, text in (("commands.json", '{"env": {"MAESTRO_SHOP_P": "fictional-password-9"}}'),
+                               ("logs/maestro.log", "typed fictional-password-9"), ("shot.png", "fictional-password-9")):
+                with open(os.path.join(flow, name), "w", encoding="utf-8") as f:
+                    f.write(text)
+            return mock.Mock(stdout="", stderr="")
+
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run_maestro):
+            rc, _, _ = self.run_it("--evidence-dir", "evidence/b1/maestro")
+        self.assertEqual(rc, 0)
+        base = os.path.join(self.ws, "evidence", "b1", "maestro", "run", "TC-MOB-001_login")
+        for name in ("commands.json", os.path.join("logs", "maestro.log")):
+            with open(os.path.join(base, name), encoding="utf-8") as f:
+                self.assertNotIn("fictional-password-9", f.read(), name)
+        with open(os.path.join(base, "shot.png"), encoding="utf-8") as f:       # a binary type is not touched
+            self.assertIn("fictional-password-9", f.read())
+
     def test_bad_tags_a_helper_with_tags_and_an_evidence_folder_outside_the_workspace_exit_2(self):
         self.project("web")
         for args in (["--include-tags", "a b"], ["--exclude-tags", "x;rm"], ["--helper", "_h.yaml", "--include-tags", "a"]):
