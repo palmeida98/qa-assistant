@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -41,6 +40,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import workspace_git as wg
 from apk_manifest import ManifestError, read_manifest
 from common import OutsideWorkspace, read_project, sha256_file, workspace_path
+from common import gh as common_gh
 from setup_emulator import PROD
 
 SOURCE = re.compile(r"^release\s+(\S+)$")
@@ -64,12 +64,8 @@ class Failed(Exception):
 # --- the door to gh (the tests replace it) ----------------------------------------------------------------------
 
 def gh(*args: str) -> subprocess.CompletedProcess | None:
-    """Runs gh; None when it is not installed."""
-    exe = shutil.which("gh")
-    if not exe:
-        return None
-    return subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          check=False, timeout=900)
+    """Runs gh with the long timeout that a download needs; None when it is not installed (the tests replace it)."""
+    return common_gh(*args, timeout=900)
 
 
 def gh_ok(*args: str) -> str:

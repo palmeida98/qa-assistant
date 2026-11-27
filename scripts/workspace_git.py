@@ -47,7 +47,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from common import read_env, read_project, variable_names
+from common import gh, read_env, read_project, variable_names
 
 TEMPLATE = os.path.join(ROOT, "docs", "workspace", "gitignore")
 LIMIT = 50 * 1024 * 1024
@@ -88,15 +88,6 @@ def git_ok(workspace: str, *args: str) -> str:
     if r.returncode != 0:
         raise Failed(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r.stdout
-
-
-def gh(*args: str) -> subprocess.CompletedProcess | None:
-    """Runs gh; None when it is not installed."""
-    exe = shutil.which("gh")
-    if not exe:
-        return None
-    return subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          check=False, timeout=120)
 
 
 def file_size(path: str) -> int:

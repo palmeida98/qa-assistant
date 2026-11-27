@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import device as dv
 import run_mobile
+from common import monotonic as now
 from common import read_project
 from workspace_build import UsageError as BuildUsage
 from workspace_build import repository
@@ -76,10 +77,6 @@ def gh_api(method: str, path: str, fields: dict | None = None):
     if r.returncode != 0:
         raise Blocked(f"GitHub API {method} {path}: {(r.stderr or r.stdout).strip()[:200]}")
     return json.loads(r.stdout) if r.stdout.strip() else None
-
-
-def now() -> float:
-    return time.monotonic()
 
 
 def pause(s: float) -> None:

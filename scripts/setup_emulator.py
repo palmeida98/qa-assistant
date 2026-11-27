@@ -55,6 +55,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from apk_manifest import ManifestError, read_manifest
+from common import monotonic as now
 from common import read_project, sh_quote, sha256_file
 
 DEFAULT_IMAGE = "system-images;android-35;google_apis;x86_64"
@@ -113,10 +114,6 @@ def log_tail(path: str, lines: int = 25) -> str:
     except OSError:
         return ""
     return "\n".join(tail)
-
-
-def now() -> float:
-    return time.monotonic()
 
 
 def pause(s: float) -> None:

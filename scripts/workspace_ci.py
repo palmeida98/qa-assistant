@@ -71,7 +71,7 @@ sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
 
 import run_log
 import workspace_git as wg
-from common import env_quoted, read_project, read_workspace_env
+from common import env_quoted, gh, read_project, read_workspace_env
 
 TEMPLATE_DIR = os.path.join(ROOT, "docs", "workspace", "ci")
 # template -> where install copies it in the workspace
@@ -99,17 +99,6 @@ class Failed(Exception):
 
 
 # --- the doors to the outside (the tests replace them) ----------------------------------------------------------
-
-def gh(*args: str, interactive: bool = False) -> subprocess.CompletedProcess | None:
-    """Runs gh (None when not installed). interactive: gh talks to the terminal (e.g. asks for a secret's value)."""
-    exe = shutil.which("gh")
-    if not exe:
-        return None
-    if interactive:
-        return subprocess.run([exe, *args], check=False)
-    return subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          check=False, timeout=120)
-
 
 WINDOWS = sys.platform == "win32"   # a constant, so the tests can simulate Windows without changing sys.platform
 
