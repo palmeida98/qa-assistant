@@ -147,7 +147,11 @@ Without flows it runs every flow named after a case. Exit 0: flows ran (a Fail i
 Maestro, Java or device choice (nothing ran); 3: no target or no report (Blocked, environment). The report gives a
 suggested status and Maestro's message per case. With `--evidence-dir evidence/<batch>/maestro` Maestro writes its
 screenshots, recordings and logs there and the JUnit report is kept as `junit.xml` (secrets redacted); without it Maestro
-keeps its screenshots of failures in `~/.maestro/tests/`. Screens can show a credential or personal data: review the
+keeps its screenshots of failures in `~/.maestro/tests/`.
+Maestro writes every `MAESTRO_<VAR>` it was given, passwords included, in clear text in each flow's `commands.json` and in
+its logs: `run_mobile.py` redacts the text files of `--evidence-dir` with the `.env` values after the run (also after a
+timeout), but not the PNG captures and not Maestro's own `~/.maestro/tests/`, which stays outside the workspace and
+must never be copied into it. Screens can show a credential or personal data: review the
 folder before it is shared or committed (the workspace's `.gitignore` decides what is versioned).
 
 ## From the report to the run log

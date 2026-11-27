@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Fixed (secrets in Maestro's evidence, 2026-11-27)
+- `run_mobile.py --evidence-dir`: Maestro writes every `MAESTRO_<VAR>` (passwords included) in clear text in each flow's
+  `commands.json` and in its logs; the text files of the evidence folder are now redacted with the `.env` values after
+  the run, also after a timeout.
+
 ### Changed (iOS scope, 2026-11-27)
 - iOS runs only on a simulator (decision of the user). A physical iPhone through WebDriverAgent is no longer a supported
   target: `technique-mobile.md` §1.5 says so, tasks 17.7 and 17.8 are cancelled, a case that needs a real iPhone is Blocked
