@@ -52,6 +52,8 @@ import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
+import yaml
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
@@ -174,6 +176,30 @@ def needs_java() -> None:
         raise UsageError(detail)
 
 
+# what Maestro says when the device or its driver failed, not the application: a Blocked case, never a Fail
+# (rules.md: a tool failure is never a defect). Seen on a real iOS simulator and Maestro Web, 27.11.2026.
+TOOL_FAILURE = re.compile(r"DeviceUnreachable|Connection refused|driver not ready|session not created|"
+                          r"Could not start a new session|Unknown error", re.IGNORECASE)
+
+
+def flow_tags(path: str) -> list[str]:
+    """The `tags:` of a flow's header (the part before `---`); [] when it has none or cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            head = f.read().split("\n---", 1)[0]
+        tags = (yaml.safe_load(head) or {}).get("tags")
+    except (OSError, yaml.YAMLError, AttributeError):
+        return []
+    return [str(t) for t in tags] if isinstance(tags, list) else []
+
+
+def selected_by_tags(path: str, include: str | None, exclude: str | None) -> bool:
+    tags = set(flow_tags(path))
+    if include and not tags & set(include.split(",")):
+        return False
+    return not (exclude and tags & set(exclude.split(",")))
+
+
 def read_junit(xml_txt: str, red: Redactor) -> list[dict]:
     res = []
     for tc in ET.fromstring(xml_txt).iter("testcase"):
@@ -182,9 +208,10 @@ def read_junit(xml_txt: str, red: Redactor) -> list[dict]:
             failure = tc.find("error")
         ok = tc.get("status", "SUCCESS") == "SUCCESS" and failure is None
         file = tc.get("file") or tc.get("name") or ""
-        res.append({"case": case_of_flow(file), "flow": file, "suggested_status": "Pass" if ok else "Fail",
-                    "message": red.text((failure.text or failure.get("message") or "").strip())
-                    if failure is not None else "",
+        message = red.text((failure.text or failure.get("message") or "").strip()) if failure is not None else ""
+        status = "Pass" if ok else ("Blocked" if TOOL_FAILURE.search(message) else "Fail")
+        res.append({"case": case_of_flow(file), "flow": file, "suggested_status": status,
+                    "message": (f"tool: {message}" if status == "Blocked" and not ok else message),
                     "time_s": float(tc.get("time") or 0)})
     return res
 
@@ -302,6 +329,11 @@ def main(argv=None) -> int:
         no_case = [os.path.basename(f) for f in flows if not case_of_flow(f)]
         if no_case:
             raise UsageError(f"flows without a case ID in the name: {no_case} (a helper flow, not a case: --helper)")
+        if a.include_tags or a.exclude_tags:
+            flows = [f for f in flows if selected_by_tags(f, a.include_tags, a.exclude_tags)]
+            if not flows:
+                raise UsageError("no flow has the tags asked for (--include-tags / --exclude-tags): see the `tags:` "
+                                 "of the flows' headers")
         maestro = shutil.which("maestro")
         if not maestro:
             raise UsageError("maestro not found -- install the Maestro CLI")

@@ -178,6 +178,9 @@ class Workspace(unittest.TestCase):
 
     def test_tags_and_the_evidence_folder_reach_maestro_and_the_junit_is_kept_redacted(self):
         self.project("web")
+        for name in ("TC-MOB-001_login", "TC-MOB-002_locked"):
+            with open(os.path.join(self.ws, "flows", f"{name}.yaml"), "w", encoding="utf-8") as f:
+                f.write("url: https://example.com\ntags: [smoke, android]\n---\n- launchApp\n")
         seen = []
 
         def run_maestro(cmd, **kw):
@@ -199,6 +202,40 @@ class Workspace(unittest.TestCase):
             kept = f.read()
         self.assertNotIn("fictional-password-9", kept)
         self.assertIn("evidence: evidence/b1/maestro", out)
+
+    def test_a_device_or_driver_failure_is_blocked_never_fail(self):
+        xml = JUNIT.replace('Assertion is false: "fictional-password-9" is visible',
+                            "maestro.DeviceUnreachableException: Device became unreachable during viewHierarchy")
+        res = {r["case"]: r for r in rm.read_junit(xml, Redactor({}))}
+        self.assertEqual(res["TC-MOB-002"]["suggested_status"], "Blocked")
+        self.assertTrue(res["TC-MOB-002"]["message"].startswith("tool: "))
+        self.assertEqual(res["TC-MOB-001"]["suggested_status"], "Pass")
+        # a real assertion failure stays a Fail
+        res = {r["case"]: r for r in rm.read_junit(JUNIT, Redactor({}))}
+        self.assertEqual(res["TC-MOB-002"]["suggested_status"], "Fail")
+
+    def test_a_flow_left_out_by_the_tags_is_not_reported_as_blocked(self):
+        self.project("web")
+        for name, tags in (("TC-MOB-001_login", "[smoke]"), ("TC-MOB-002_locked", "[slow]")):
+            with open(os.path.join(self.ws, "flows", f"{name}.yaml"), "w", encoding="utf-8") as f:
+                f.write(f"url: https://example.com\ntags: {tags}\n---\n- launchApp\n")
+        only_one = JUNIT.replace(JUNIT[JUNIT.index('    <testcase id="TC-MOB-002'):JUNIT.index('    <testcase id="TC-MOB-001')], "")
+
+        def run_maestro(cmd, **kw):
+            with open(cmd[cmd.index("--output") + 1], "w", encoding="utf-8") as f:
+                f.write(only_one)
+            return mock.Mock(stdout="", stderr="")
+
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run_maestro):
+            rc, out, _ = self.run_it("--include-tags", "smoke")
+        self.assertEqual(rc, 0)
+        self.assertIn("TC-MOB-001: Pass", out)
+        self.assertNotIn("TC-MOB-002", out)
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"):       # no flow has the tag: nothing runs
+            rc, _, err = self.run_it("--include-tags", "nothing-has-this")
+        self.assertEqual(rc, 2)
+        self.assertIn("no flow has the tags", err)
 
     def test_bad_tags_a_helper_with_tags_and_an_evidence_folder_outside_the_workspace_exit_2(self):
         self.project("web")

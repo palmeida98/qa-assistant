@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Fixed (Maestro validated on an emulator, 2026-11-27)
+- `run_mobile.py`: a device or driver failure in Maestro's report is suggested as Blocked (`tool: …`), no longer as Fail;
+  with `--include-tags`/`--exclude-tags` a flow left out is neither run nor reported as Blocked, and no flow matching the
+  tags is a usage error (exit 2).
+
 ### Changed (2026-11-27)
 - `/checkpoint` lists what `_arquivo/` holds without a reason (`archive_check.py`, read only) in its summary.
 
