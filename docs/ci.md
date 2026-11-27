@@ -42,8 +42,8 @@ Windows. A skipped test proves nothing.
   `demo-e2e.yml` (restored on 27.11.2026): started by hand (Actions > demo-e2e > Run workflow) and, once the repository
   variable `DEMO_E2E_SCHEDULE` is `true`, every Monday. It needs the secrets `DEMO_SAUCE_STANDARD_USER`,
   `DEMO_SAUCE_LOCKED_OUT_USER` and `DEMO_SAUCE_PASSWORD` (the values the practice site shows on its own login page); without
-  them it **fails** with "NOT RUN", never green. It has not run yet: until the secrets are set and one run is green, no
-  end-to-end coverage is claimed from the CI. Locally: `npm ci && npx playwright test` in that folder.
+  them it **fails** with "NOT RUN", never green. It ran green on 27.11.2026 (4 specs, run 46024020607, after the three
+  secrets were set); that is the only end-to-end coverage the CI claims, and only when started. Locally: `npm ci && npx playwright test` in that folder.
 - **The personal denylist** runs only in the local `pre-commit` (the list lives outside the repository).
 
 ## What was removed on 23.11.2026, and why

@@ -52,7 +52,7 @@ flowchart LR
    reviewed token (Excel) or `--yes` after the dry run (Jira, Azure DevOps) writes, and a stale preview is refused.
 5. **Report.** Totals are reconciled per platform and build from the run logs, not from memory.
 
-**Built with:** Python 3.12, Claude Code skills (Markdown contracts), openpyxl, Playwright, axe-core, Maestro (mobile),
+**Built with:** Python 3.12, Claude Code skills (Markdown contracts), openpyxl, Playwright (and its CLI), axe-core, Maestro (mobile),
 the Jira/Xray and Azure DevOps REST APIs, GitHub Actions.
 
 ## Quick start
@@ -129,7 +129,7 @@ python scripts/workspace_select.py where   # which framework, Python and skill c
 | [`/analyze-ticket`](.claude/skills/analyze-ticket/SKILL.md) | Read a ticket in Azure DevOps, Jira or Linear and say what changed | `memory/`, never the tracker |
 | [`/plan-tests`](.claude/skills/plan-tests/SKILL.md) | Coverage by requirement and platform, reuse of cases, batches | `analysis/`, `batches/` |
 | [`/run-tests`](.claude/skills/run-tests/SKILL.md) | Run approved cases (mobile, web, API, accessibility) with evidence | `runs/`, `evidence/` |
-| [`/playwright-tests`](.claude/skills/playwright-tests/SKILL.md) | Write and run Playwright specs (level N2) for web cases and record their results | `e2e/`, `runs/`, `evidence/` |
+| [`/playwright-tests`](.claude/skills/playwright-tests/SKILL.md) | Write and run Playwright specs (level N2) for web cases, discovering locators with the Playwright CLI, and record their results | `e2e/`, `runs/`, `evidence/` |
 | [`/maestro-tests`](.claude/skills/maestro-tests/SKILL.md) | Write and run Maestro flows (level N2) for mobile cases and record their results | `flows/`, `runs/`, `evidence/` |
 | [`/manage-bugs`](.claude/skills/manage-bugs/SKILL.md) | Investigate failures, search duplicates, propose bugs for one review | proposals in the run log |
 | [`/qa-report`](.claude/skills/qa-report/SKILL.md) | Audit the run logs; reconciled totals per platform and build | a report on request |
@@ -137,6 +137,37 @@ python scripts/workspace_select.py where   # which framework, Python and skill c
 
 Each skill starts with a preflight that checks its contract against the code and the tools present. A project can add its
 own skills in its workspace; they are documented there.
+
+For mobile, Android runs on an emulator or a device and iOS only on a simulator.
+
+## Layout
+
+The framework and the projects are kept apart: this repository holds method and code; each project is a private git
+repository of its own, found by the skills at run time and never copied into the framework.
+
+```text
+qa-assistant/                    this repository (public, no client data)
+  .claude/skills/<skill>/        the nine skills (SKILL.md contracts), synced to ~/.claude/skills/
+  scripts/                       the tested scripts the skills call (run_log, workspace_*, run_mobile, pw_cli, …)
+  adapters/                      Excel, Jira/Xray and Azure DevOps writers (dry run first) and the ticket readers
+  src/qa_audit/                  the standalone website audit engine
+  docs/                          methodology, techniques, procedures, workspace templates, plan
+  examples/demo/                 a fictional workspace used by the quick start, the tests and the CI
+  tests/                         the unit and integration suite
+
+<root>/<project>/                one folder per project, outside this repository (e.g. ~/workspaces/shop/)
+  repo/                          the workspace: a private git repository, where Claude Code is opened
+    CLAUDE.md  project.yaml  context.md
+    memory/  analysis/  batches/  runs/  evidence/  workbook/ or tracker/
+    e2e/ (Playwright)  flows/ (Maestro)  history/ (immutable)  archive/
+  _tools/                        project integrations that never go to git (MCP launchers, token guards)
+  _dados/                        the project's real data, when it has some (optional)
+  _arquivo/                      the one archive outside git, with an INDICE.md (optional)
+```
+
+`python scripts/workspace_init.py <project>` creates a project folder (a dry run without `--yes`) and
+`python scripts/workspace_select.py list` shows the projects under the root. Details:
+[technique-workspaces.md](docs/technique-workspaces.md) §4.2.
 
 ## What you approve
 
@@ -152,9 +183,13 @@ own skills in its workspace; they are documented there.
   project. **Jira + Xray** and the other Azure DevOps writes: tested with fakes only. **Linear:** read only. Details:
   [docs/tracker-validation.md](docs/tracker-validation.md).
 - **CI:** lint, secret scan, the Excel golden and the whole unit suite on Linux with LibreOffice, a clean install on `main`,
-  and the audit engine on Chromium when it changes. macOS is checked locally; Windows is not. Details: [docs/ci.md](docs/ci.md).
-- **Not evaluated:** whether an agent follows a skill in a real session ([docs/skills-evals.md](docs/skills-evals.md):
-  scenarios prepared, not run).
+  and the audit engine on Chromium when it changes. The demo's Playwright specs run on demand in `demo-e2e` (green on
+  27.11.2026: 4 specs). macOS is checked locally; Windows is not. Details: [docs/ci.md](docs/ci.md).
+- **Mobile and web tools:** Maestro was validated on an Android emulator and in a real project's batch (27.11.2026); on iOS
+  it failed to start on the simulator used, so no iOS result is claimed. The Playwright CLI door (`scripts/pw_cli.py`) was
+  piloted in a real workspace and measured against the MCP ([technique-browser.md](docs/technique-browser.md) §16).
+- **Barely evaluated:** whether an agent follows a skill in a real session. Three minimal rounds are recorded, one run per
+  scenario; the rest is prepared, not run ([docs/skills-evals.md](docs/skills-evals.md)).
 
 The repository also contains `qa-audit`, a standalone website audit engine (accessibility, keyboard, passive security,
 performance): [guide](docs/qa-audit-guide.md).
