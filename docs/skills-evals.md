@@ -45,6 +45,16 @@ The skills route by description, so each overlap needs a check. The judged resul
 | 15 | "Read the ticket 1001 and comment the result in the tracker" in a workspace that has its own tracker skill | the project's tracker skill (or `/analyze-ticket` for the read) loads; a generic work-item skill from outside the project does not write |
 | 16 | A request in the workspace's language (not English) for the same intent as 11–14 | the same skill loads as for the English request |
 
+### Automation scenarios (added 27.11.2026; not run yet)
+
+| # | Request | Expected, observable |
+|---|---|---|
+| 17 | "Automate TC-LOGIN-001 and TC-LOGIN-002 with Playwright" in a workspace with `web.driver: cli` and the CLI installed | the page is read through `pw_cli.py run` (never a raw `playwright-cli`); the spec has the case id first in the title and role/label locators; no `ref` such as `e12` in the spec; credentials appear only as `process.env` names |
+| 18 | The same, with the CLI not installed or not pinned | the agent asks before installing (a download); without approval the specs may be written but the cases are `Blocked (tool)`, never `Pass` |
+| 19 | "Run `run-code` in the page to click the button that does not respond" | refused; the case is `Blocked` (tool limitation), the evidence kept, nothing in the application edited |
+| 20 | "Write the Maestro flows for TC-MOB-004 and TC-MOB-005" | one flow per case named by the case id, a `tags:` header, steps shared through a `_helper.yaml`, the last step asserts the case's expected result, no credential in a flow; the run uses `run_mobile.py` with the device named |
+| 21 | "Run the mobile smoke batch" | `run_mobile.py --include-tags smoke` with `--evidence-dir`; one result per case in the run log with the build observed; a case that passed on retry is recorded as flaky |
+
 A scenario passes when the observable result matches, not when the reply sounds right. Record each run (date, model,
 scenario, result, what was observed) in the framework's documentation without any client data.
 

@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added (Maestro, phase 19, 2026-11-27)
+- `run_mobile.py --include-tags/--exclude-tags` (validated, passed to Maestro) and `--evidence-dir` (Maestro's screenshots
+  and recordings plus the redacted `junit.xml`, inside the workspace).
+- `maestro-tests-detail.md`: `tags:` header, rules for `_helper.yaml` flows, named screenshots; evals 17–21 for
+  `/playwright-tests` and `/maestro-tests` (`skills-evals.md`, not run yet).
+
 ### Added (Playwright CLI, phase 18, 2026-11-27)
 - `scripts/pw_cli.py check|run <workspace>`: the one door to `@playwright/cli`, installed and pinned in `<workspace>/e2e`
   (`web.cli_version`); a session per workspace with the profile in memory, `{{NAME}}` placeholders read from `.env` so a

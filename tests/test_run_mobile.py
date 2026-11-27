@@ -176,6 +176,41 @@ class Workspace(unittest.TestCase):
         self.assertIn("TC-MOB-002: Fail", out)
         self.assertNotIn("fictional-password-9", out)
 
+    def test_tags_and_the_evidence_folder_reach_maestro_and_the_junit_is_kept_redacted(self):
+        self.project("web")
+        seen = []
+
+        def run_maestro(cmd, **kw):
+            seen.append(cmd)
+            with open(cmd[cmd.index("--output") + 1], "w", encoding="utf-8") as f:
+                f.write(JUNIT)
+            return mock.Mock(stdout="", stderr="")
+
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"), \
+                mock.patch.object(rm.subprocess, "run", side_effect=run_maestro):
+            rc, out, _ = self.run_it("--include-tags", "smoke,android", "--exclude-tags", "slow",
+                                     "--evidence-dir", "evidence/b1/maestro")
+        keep = os.path.join(self.ws, "evidence", "b1", "maestro")
+        self.assertEqual(rc, 0)
+        self.assertIn("--include-tags=smoke,android", seen[0])
+        self.assertIn("--exclude-tags=slow", seen[0])
+        self.assertIn(f"--test-output-dir={keep}", seen[0])
+        with open(os.path.join(keep, "junit.xml"), encoding="utf-8") as f:
+            kept = f.read()
+        self.assertNotIn("fictional-password-9", kept)
+        self.assertIn("evidence: evidence/b1/maestro", out)
+
+    def test_bad_tags_a_helper_with_tags_and_an_evidence_folder_outside_the_workspace_exit_2(self):
+        self.project("web")
+        for args in (["--include-tags", "a b"], ["--exclude-tags", "x;rm"], ["--helper", "_h.yaml", "--include-tags", "a"]):
+            with self.subTest(args=args), self.assertRaises(SystemExit) as e:
+                self.run_it(*args)
+            self.assertEqual(e.exception.code, 2)
+        with mock.patch.object(rm.shutil, "which", return_value="maestro"):
+            rc, _, err = self.run_it("--evidence-dir", "../outside")
+        self.assertEqual(rc, 2)
+        self.assertIn("outside the workspace", err)
+
     # --- the device and Java (24.11.2026: a Mac with a stub java, a phone and an emulator connected)
 
     def adb_devices(self, *serials):
