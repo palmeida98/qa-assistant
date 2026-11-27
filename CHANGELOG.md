@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (gh and now, 2026-11-27)
+- `common.gh` (with `interactive` and `timeout`) replaces the copies in `workspace_git.py`, `workspace_ci.py` and
+  `workspace_build.py` (which keeps a one-line door with the 900 s timeout); `common.now_iso` and `common.monotonic` replace
+  the `now()` of `quarantine.py`, `pbi_state.py`, `remote_login.py` and `setup_emulator.py`. No change of behaviour.
+
 ### Changed (consolidation of duplicated helpers, 2026-11-27)
 - `common.sha256_file` and `common.sh_quote` replace the copies in `build_driver.py`, `setup_emulator.py`, `workspace_build.py`
   and `device.py`; `ado_guard_launch.py` reads its `KEY=value` files with `common.read_env` instead of its own parser.

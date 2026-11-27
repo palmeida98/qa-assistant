@@ -43,7 +43,6 @@ import os
 import re
 import sys
 import urllib.parse
-from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
@@ -57,6 +56,7 @@ from common import (
     workspace_lock,
     workspace_path,
 )
+from common import now_iso as now
 
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")
 ACTIONS = {"activate": ("proposed", "active"), "reject": ("proposed", "rejected"), "lift": ("active", "lifted")}
@@ -68,10 +68,6 @@ class UsageError(Exception):
 
 class Refused(Exception):
     """A change the register refuses (code 1): nothing was written."""
-
-
-def now() -> str:
-    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def path_of(workspace: str) -> str:

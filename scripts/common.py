@@ -562,6 +562,28 @@ def read_env(path: str) -> dict[str, str]:
     return out
 
 
+def gh(*args: str, interactive: bool = False, timeout: int = 120) -> subprocess.CompletedProcess | None:
+    """Runs the GitHub CLI; None when it is not installed. interactive: gh talks to the terminal (it asks for a secret's
+    value). The scripts that call it re-export it under their own name, so a test replaces the door of one script."""
+    exe = shutil.which("gh")
+    if not exe:
+        return None
+    if interactive:
+        return subprocess.run([exe, *args], check=False)
+    return subprocess.run([exe, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          check=False, timeout=timeout)
+
+
+def now_iso() -> str:
+    """The local time with its offset, to the second (a record's time: quarantine, PBI state)."""
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def monotonic() -> float:
+    """A clock for measuring waits; the scripts re-export it as `now` so a test replaces the time of one script."""
+    return time.monotonic()
+
+
 def sha256_file(path: str) -> str:
     """The SHA-256 of a file, read in blocks (APKs are large)."""
     h = hashlib.sha256()

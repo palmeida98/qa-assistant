@@ -83,7 +83,6 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "scripts")]
@@ -97,6 +96,7 @@ from common import (
     workspace_lock,
     workspace_path,
 )
+from common import now_iso as now
 
 STEPS = ("context", "analyze", "plan", "run", "bugs", "report", "checkpoint")
 STATUSES = ("pending", "done", "blocked", "skipped")
@@ -124,10 +124,6 @@ class CannotClose(Exception):
 
 class WrongWorkspace(Exception):
     """The session or the record belongs to another workspace (code 6): nothing was written."""
-
-
-def now() -> str:
-    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _hosts(workspace: str | None) -> set[str]:
