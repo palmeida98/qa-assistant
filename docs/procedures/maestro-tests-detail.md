@@ -114,6 +114,13 @@ appId: com.demoshop.app
   `optional: true` on an assertion.
 - Independence: each flow creates the data it changes, and removes it when it can; no flow depends on another's data
   or order. Reused steps go to a helper flow (`runFlow: _open_account.yaml`).
+- Tags: the header of a flow lists `tags: [smoke, android]` (platform and priority; the case id is the file name).
+  `run_mobile.py --include-tags smoke,android --exclude-tags slow` runs a batch by tag; a flow without tags runs only
+  when no `--include-tags` is given.
+- Helpers (`flows/_<name>.yaml`: login, language, permissions) hold steps only, never an assertion of a case, and take
+  their values from `${MAESTRO_<VAR>}` or `env:` of the `runFlow` that calls them. A case is one flow that calls the
+  helpers it needs; `run_mobile.py --helper _<name>.yaml` tries one helper alone and records nothing.
+- Screenshots that are evidence: `- takeScreenshot: TC-MOB-004_cancel` (the case id first, then the step).
 - Credentials: `${MAESTRO_<VAR>}` with the variable in `mobile.variables`; never written in a flow, never `-e`.
 - The expected value in an assertion is the case's, not what the app showed when the flow was written.
 
@@ -125,7 +132,10 @@ From `<qa>`, with the workspace's absolute path:
 
 Without flows it runs every flow named after a case. Exit 0: flows ran (a Fail is a result); 2: configuration, flow,
 Maestro, Java or device choice (nothing ran); 3: no target or no report (Blocked, environment). The report gives a
-suggested status and Maestro's message per case; Maestro keeps its screenshots of failures in `~/.maestro/tests/`.
+suggested status and Maestro's message per case. With `--evidence-dir evidence/<batch>/maestro` Maestro writes its
+screenshots, recordings and logs there and the JUnit report is kept as `junit.xml` (secrets redacted); without it Maestro
+keeps its screenshots of failures in `~/.maestro/tests/`. Screens can show a credential or personal data: review the
+folder before it is shared or committed (the workspace's `.gitignore` decides what is versioned).
 
 ## From the report to the run log
 

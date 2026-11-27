@@ -45,6 +45,7 @@
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
 | 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
 | 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 (pilot on a real workspace) waits for the user |
+| 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 (real batch) and 19.6 (iOS decision) wait for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -2016,10 +2017,27 @@ specification is `docs/technique-browser.md` §16.
 | 18.6 Guards | `guard_destructive.py` refuses a raw `playwright-cli` `run-code`, `eval`, `install`, `kill-all`, `--persistent` and `--host`; the door refuses them too (`eval`/`run-code` only with `--allow-eval` after the user's approval) | Done (27.11.2026) |
 | 18.7 Pilot | one batch on a real workspace that already has its own `e2e/`: tokens and time against the MCP; the result in `tracker-validation.md` | Waits for the user |
 
+## Phase 19 — Maestro (27.11.2026)
+
+Goal: make `/maestro-tests` ready for real batches. Most of the machinery existed (flows named by case, `MAESTRO_<VAR>`
+from `.env`, JUnit read by `run_mobile.py`, `--helper`); this phase adds what was missing and records what only a real
+device can settle.
+
+| Task | Scope | State |
+|---|---|---|
+| 19.1 Real validation | the LIA wave-3 batch on an emulator and a simulator; what passed written in `tracker-validation.md`. Needs Java and a device: Maestro is installed here but Java is not | Waits for the user |
+| 19.2 Shared helpers | `_<name>.yaml` helpers with steps only, no case assertions; values from `${MAESTRO_<VAR>}` or `env:` (`maestro-tests-detail.md`) | Done (27.11.2026) |
+| 19.3 Data and secrets | already in place: `.env` → `MAESTRO_<VAR>` in the process environment, never `-e` on the command line, redaction of JUnit and messages | Done before (24.11.2026), checked |
+| 19.4 Evidence | `run_mobile.py --evidence-dir`: Maestro's screenshots and recordings and the redacted `junit.xml` kept in the workspace; named screenshots `TC-…_<step>` | Done (27.11.2026) |
+| 19.5 Tags and batches | `--include-tags` / `--exclude-tags` (validated) passed to Maestro; `tags:` in the flow header | Done (27.11.2026) |
+| 19.6 iOS | close 17.7–17.9 (WebDriverAgent) or declare "iOS only on a simulator" | Waits for the user's decision |
+| 19.7 Evals | scenarios 17–21 in `skills-evals.md` for `/playwright-tests` and `/maestro-tests` (written, not run) | Done (27.11.2026) |
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Phase 19 (Maestro): 19.2–19.5 and 19.7 done; 19.1 (real batch, needs Java and a device) and 19.6 (iOS) wait for the user. |
 | 2026-11-27 | Phase 18 (Playwright CLI): 18.1–18.6 done; pilot 18.7 waits for the user. |
 | 2026-11-24 | `CLAUDE.md` reviewed against the code: the methodology is no longer imported in framework sessions (methodology §0), the skills' 800-word budget (2.2) is in `skills-spec.md` §4 and tested, `pbi_state.py` no longer names `/test-pbi` as its driver. |
 | 2026-11-20 | 14.2: the tickets block of `context.md` keeps only the newest (5 scope rows, 10 tickets, 5 items per list), each with how many more exist in `memory/`. |

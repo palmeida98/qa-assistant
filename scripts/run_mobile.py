@@ -67,6 +67,7 @@ from common import (
 )
 
 PLATFORMS = ("android", "ios", "web")
+TAGS = re.compile(r"[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+)*")
 CASE = re.compile(r"^([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+)")
 
 
@@ -266,7 +267,20 @@ def main(argv=None) -> int:
                                                      "result recorded")
     ap.add_argument("--serial", help="the device (default: $QA_MOBILE_SERIAL, else mobile.serial; iOS: a simulator's "
                                      "UDID, only when given)")
+    ap.add_argument("--include-tags", metavar="TAGS", help="only flows with one of these tags (comma separated; the "
+                                                           "`tags:` of a flow's header), e.g. smoke,android")
+    ap.add_argument("--exclude-tags", metavar="TAGS", help="skip flows with one of these tags")
+    ap.add_argument("--evidence-dir", metavar="DIR", help="keep Maestro's screenshots and recordings and the JUnit "
+                                                          "report in this folder (inside the workspace, e.g. "
+                                                          "evidence/<batch>/maestro)")
     a = ap.parse_args(argv)
+    for opt in ("include_tags", "exclude_tags"):
+        value = getattr(a, opt)
+        if value is not None and not TAGS.fullmatch(value):
+            ap.error(f"--{opt.replace('_', '-')}: tags separated by commas, letters, digits, '-', '_' or '.' "
+                     f"(got {value!r})")
+    if a.helper and (a.include_tags or a.exclude_tags or a.evidence_dir):
+        ap.error("--helper runs one flow: no tags and no --evidence-dir")
     if a.helper:
         if a.flows or a.output:
             ap.error("--helper runs one flow and records nothing: no other flows, no --output")
@@ -275,6 +289,7 @@ def main(argv=None) -> int:
         return code
     try:
         target_path = report_path(a.workspace, a.output) if a.output else None      # refused before anything runs
+        keep = workspace_path(a.workspace, a.evidence_dir) if a.evidence_dir else None
     except OutsideWorkspace as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
@@ -307,7 +322,11 @@ def main(argv=None) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             junit = os.path.join(tmp, "junit.xml")
             try:
-                r = subprocess.run([maestro, *(["--device", str(device)] if device else []), "test", *flows,
+                tags = [f"--{k}-tags={v}" for k, v in (("include", a.include_tags), ("exclude", a.exclude_tags)) if v]
+                if keep:
+                    os.makedirs(keep, exist_ok=True)
+                    tags += [f"--test-output-dir={keep}"]
+                r = subprocess.run([maestro, *(["--device", str(device)] if device else []), "test", *flows, *tags,
                                     "--format", "junit", "--output", junit],
                                    capture_output=True, text=True, encoding="utf-8", errors="replace",
                                    env={**os.environ, **extra}, timeout=cfg["timeout"], check=False)
@@ -316,7 +335,12 @@ def main(argv=None) -> int:
                 output = f"timeout of {cfg['timeout']} s"
             if os.path.isfile(junit):
                 with open(junit, encoding="utf-8") as f:
-                    rep["results"] = read_junit(f.read(), red)
+                    text = f.read()
+                rep["results"] = read_junit(text, red)
+                if keep:
+                    with open(os.path.join(keep, "junit.xml"), "w", encoding="utf-8") as f:
+                        f.write(red.text(text))             # the evidence file never holds a secret
+                    rep["evidence_dir"] = os.path.relpath(keep, a.workspace)
                 code = 0
             else:
                 rep["results"] = []
@@ -339,6 +363,8 @@ def main(argv=None) -> int:
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=1)
         print(f"report: {target_path}")
+    if rep.get("evidence_dir"):
+        print(f"evidence: {rep['evidence_dir']}")
     return code
 
 
