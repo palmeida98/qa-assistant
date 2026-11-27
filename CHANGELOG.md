@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (2026-11-27)
+- `/checkpoint` lists what `_arquivo/` holds without a reason (`archive_check.py`, read only) in its summary.
+
 ### Added (Maestro, phase 19, 2026-11-27)
 - `run_mobile.py --include-tags/--exclude-tags` (validated, passed to Maestro) and `--evidence-dir` (Maestro's screenshots
   and recordings plus the redacted `junit.xml`, inside the workspace).
