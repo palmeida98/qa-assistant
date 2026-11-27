@@ -44,7 +44,7 @@
 
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
 | 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
-| 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 (pilot on a real workspace) waits for the user |
+| 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 isolated pilot done, the comparison with the MCP and a real-workspace pilot are open |
 | 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 (real batch) and 19.6 (iOS decision) wait for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
@@ -2015,7 +2015,7 @@ specification is `docs/technique-browser.md` §16.
 | 18.4 `project.yaml` | `web.driver`, `web.cli_version` validated by `validate_project.py`; the environment lists `playwright-cli`; the preflight prints `Route: … (web.driver: cli)` and needs the CLI instead of the MCP | Done (27.11.2026) |
 | 18.5 Demo and tests | the demo pins `@playwright/cli` (package.json, lock) and declares `web:`; unit tests with a fake runner; an integration test with the real CLI on a `data:` page (skipped when not installed). **The `demo-e2e` CI job is not restored:** it needs a third-party site and demo logins (`docs/ci.md`) | Done (27.11.2026) |
 | 18.6 Guards | `guard_destructive.py` refuses a raw `playwright-cli` `run-code`, `eval`, `install`, `kill-all`, `--persistent` and `--host`; the door refuses them too (`eval`/`run-code` only with `--allow-eval` after the user's approval) | Done (27.11.2026) |
-| 18.7 Pilot | one batch on a real workspace that already has its own `e2e/`: tokens and time against the MCP; the result in `tracker-validation.md` | Waits for the user |
+| 18.7 Pilot | **Isolated pilot done (27.11.2026):** a copy of the demo workspace outside any real workspace, the public practice site, `pw_cli.py` with `{{NAME}}` placeholders: login, add to cart, open cart, 12 commands, 6.0 s, 2,927 characters returned to the agent, the 4 snapshots (0.6–5.6 k characters) on disk only, the cart page showing the item; no secret in the output or in the evidence. **Not measured:** the same flow through the Playwright MCP (no MCP session here), so the token and time comparison is still open. **Real workspace pilot:** not done, by the user's decision (the project's own rules: its own runner, DEV only with a session authorisation, traces and captures masked) | Isolated part done; real pilot open |
 
 ## Phase 19 — Maestro (27.11.2026)
 
@@ -2037,6 +2037,7 @@ device can settle.
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | 18.7: pilot on an isolated copy of the demo (12 CLI commands, 6.0 s, 2,927 characters to the agent); MCP comparison and a real-workspace pilot still open. |
 | 2026-11-27 | Phase 19 (Maestro): 19.2–19.5 and 19.7 done; 19.1 (real batch, needs Java and a device) and 19.6 (iOS) wait for the user. |
 | 2026-11-27 | Phase 18 (Playwright CLI): 18.1–18.6 done; pilot 18.7 waits for the user. |
 | 2026-11-24 | `CLAUDE.md` reviewed against the code: the methodology is no longer imported in framework sessions (methodology §0), the skills' 800-word budget (2.2) is in `skills-spec.md` §4 and tested, `pbi_state.py` no longer names `/test-pbi` as its driver. |
