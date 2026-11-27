@@ -60,10 +60,11 @@ In this order, each named in the output as the source of the value:
 
 ## 4. Discovery
 
-`discover(root)` looks at two layouts, without following links (or junctions):
+`discover(root)` looks at three layouts, without following links (or junctions):
 
 - `<root>/<project>/project.yaml`: a project whose id is `<project>`; its subfolders are not looked at;
-- `<root>/<company>/<project>/`: a project whose id is `<company>/<project>`, for each subfolder of a folder without its own `project.yaml`;
+- `<root>/<project>/repo/project.yaml` (the **project folder** layout, recommended): the workspace is the `repo/` folder, a git repository of its own, and its id is `<project>`. The siblings of `repo/` hold what must stay outside git: `_tools/` (integrations of the project), `_dados/` (data), `_arquivo/` (archive with an `INDICE.md`); they start with `_` and are ignored. The name `repo` is reserved for this layout: a `<company>/repo` project is read as the project folder of `<company>` when `repo/project.yaml` exists;
+- `<root>/<company>/<project>/`: a project whose id is `<company>/<project>`, for each subfolder of a folder without its own `project.yaml` (and without `repo/project.yaml`);
 - a folder with no `project.yaml` and no subfolder is a new project, id `<folder>`.
 
 Any folder name is accepted, spaces and accents included; a folder starting with `.` or `_` (`.git`, `_scratch`) is ignored. Three things stay apart: the **id** (`<company>/<project>`, the relative path, compared with the list and never joined into a path), the **name shown** (`project:` of `project.yaml`) and the **real path**. A name once had to be letters, digits, `.`, `_`, `-` only because of how ids were built; the routes encode each part and a test goes through them with a space, an accent and a `#`. A command typed in a shell needs the path in quotes.
@@ -78,6 +79,22 @@ Any folder name is accepted, spaces and accents included; a folder starting with
 `valid` says the configuration is well formed, not that the tools are there: that is `preflight`.
 
 **Listing reads only each `project.yaml`.** It never opens tickets, evidence, workbooks, `.env` or memory, and it shows the name, the id, the status and the path relative to the root. Listing does not authorise reading more.
+
+### 4.2 The project folder layout
+
+```text
+<root>/<project>/
+    repo/        the workspace, a private git repository: CLAUDE.md, project.yaml, context.md, memory/, analysis/, batches/,
+                 runs/, evidence/, history/, archive/, tracker/ or workbook/, e2e/ (Playwright), flows/ (Maestro)
+    _tools/      integrations of this project that must not be committed (MCP launchers, token helpers, guards)
+    _dados/      real data of the project, when it has some (optional)
+    _arquivo/    the one archive, with an INDICE.md saying what each item is and when it can go
+```
+
+`python scripts/workspace_init.py <project> [--yes]` creates it (a dry run without `--yes`; it never overwrites and never
+creates the root), then `workspace_git.py <root>/<project>/repo init` and `/project-context`. Backups of a workbook are
+not folders: the workbook is committed, and the previous result of an apply stays in `apply --keep-previous`.
+Anything archived gets a line in `_arquivo/INDICE.md`; what has no line is a candidate to delete.
 
 ### 4.1 Identity of a workspace and the session's workspace
 

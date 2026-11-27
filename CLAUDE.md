@@ -92,7 +92,7 @@ Read each script's docstring and `--help` before using it (flags, exit codes). `
 `python3 scripts/qa_python.py` prints; `python3 scripts/qa_python.py run <script|-m module> ...` runs with it.
 
 - **Framework and selection**: `workspace_select.py where|list|resolve|preflight|skills|set-root`, `sync_skills.py`,
-  `workspace_identity.py`, `validate_project.py <ws> [--environment]`, `migrate_workspace.py`, `workspace_git.py`,
+  `workspace_identity.py`, `workspace_init.py <project>` (a new workspace in the project folder layout), `validate_project.py <ws> [--environment]`, `migrate_workspace.py`, `workspace_git.py`,
   `install.sh` / `install.ps1`
 - **Run records**: `run_log.py` (results, evidence, times, Questions, bugs; examples in `docs/skills-guide.md`),
   `approvals.py`, `quarantine.py`, `spec_refs.py`, `ac_coverage.py`, `check_approval_files.py`, `compact_context.py`,
