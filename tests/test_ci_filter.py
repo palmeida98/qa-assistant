@@ -80,9 +80,18 @@ class EnginePathFilter(unittest.TestCase):
 
 
 class Workflows(unittest.TestCase):
-    def test_only_the_two_workflows_of_docs_ci_exist(self):
+    def test_only_the_workflows_of_docs_ci_exist(self):
         found = sorted(f for f in os.listdir(WORKFLOWS) if f.endswith((".yml", ".yaml")))
-        self.assertEqual(found, ["ci.yml", "qa-audit.yml"])
+        self.assertEqual(found, ["ci.yml", "demo-e2e.yml", "qa-audit.yml"])
+
+    def test_demo_e2e_is_opt_in_and_never_green_without_its_secrets(self):
+        wf = load(os.path.join(WORKFLOWS, "demo-e2e.yml"))
+        triggers = wf.get("on", wf.get(True))  # YAML reads a bare `on` as True
+        self.assertEqual(set(triggers), {"workflow_dispatch", "schedule"})  # never a push or a pull request
+        self.assertEqual(wf["permissions"], {"contents": "read"})
+        steps = "\n".join(s.get("run", "") for s in wf["jobs"]["demo-e2e"]["steps"])
+        self.assertIn("exit 1", steps)  # missing secrets fail, they do not skip
+        self.assertIn("DEMO_SAUCE_PASSWORD", steps)
 
     def test_ci_jobs_and_read_only_token(self):
         ci = load(CI)

@@ -37,9 +37,13 @@ Windows. A skipped test proves nothing.
 
 - **macOS.** It is where the framework is developed and used, and the local `pre-commit` runs the suite there.
 - **Windows.** Not used; unconfirmed. The two Windows-only tests are skipped (allowed) on Linux.
-- **The demo's end-to-end specs** (`examples/demo/e2e`, Playwright against a public practice site). They need three demo
-  logins and a third-party site; run them locally (`npm ci && npx playwright test` in that folder, with the
-  `DEMO_SAUCE_*` variables set). No end-to-end coverage is claimed from the CI.
+- **The demo's end-to-end specs** (`examples/demo/e2e`, Playwright against a public practice site) are **not part of the
+  pull-request checks**: they need three demo logins and a third-party site. They have their own workflow,
+  `demo-e2e.yml` (restored on 27.11.2026): started by hand (Actions > demo-e2e > Run workflow) and, once the repository
+  variable `DEMO_E2E_SCHEDULE` is `true`, every Monday. It needs the secrets `DEMO_SAUCE_STANDARD_USER`,
+  `DEMO_SAUCE_LOCKED_OUT_USER` and `DEMO_SAUCE_PASSWORD` (the values the practice site shows on its own login page); without
+  them it **fails** with "NOT RUN", never green. It has not run yet: until the secrets are set and one run is green, no
+  end-to-end coverage is claimed from the CI. Locally: `npm ci && npx playwright test` in that folder.
 - **The personal denylist** runs only in the local `pre-commit` (the list lives outside the repository).
 
 ## What was removed on 23.11.2026, and why
@@ -51,7 +55,7 @@ Windows. A skipped test proves nothing.
 | `golden` as its own job | folded into `tests`, which now installs LibreOffice: one suite run, no LibreOffice skips |
 | the three browsers on every engine change, `changes` and the `qa-audit` aggregate | Chromium by default, the other two on demand; a workflow-level path filter replaces the `changes` job |
 | `ci-status` | an aggregate meant for branch protection, which a one-person backup repository does not use |
-| `demo-e2e` workflow | its secrets were never set, so it never ran a spec; the specs stay runnable locally |
+| `demo-e2e` workflow | its secrets were never set, so it never ran a spec. **Restored on 27.11.2026** (manual and opt-in weekly, fails without its secrets) |
 | `.github/dependabot.yml` and the SHA pins | a monthly pull request to bump pins is noise here; official actions on major tags need no bumps |
 
 `scripts/ci_test_summary.py` keeps its `--known-failures` option (tested), though no workflow uses it now.

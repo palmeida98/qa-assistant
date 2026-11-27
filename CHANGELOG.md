@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added / Changed (plan 17.6, 17.9, demo-e2e, 2026-11-27)
+- `docs/technique-mobile.md` §1.6: the constraints of the agent's shell and the procedure to compare a device tool inside
+  and outside the sandbox (plan 17.9).
+- `docs/skills-evals.md`: scenarios 17–21 and a re-run of 10, 11, 13 and 16, recorded without client data, with the harness
+  fixes they needed (plan 17.6).
+- `.github/workflows/demo-e2e.yml` restored (manual, weekly when `DEMO_E2E_SCHEDULE` is `true`; fails without its three
+  `DEMO_SAUCE_*` secrets). Not run yet: the secrets are the user's to set (`docs/ci.md`).
+
 ### Changed (gh and now, 2026-11-27)
 - `common.gh` (with `interactive` and `timeout`) replaces the copies in `workspace_git.py`, `workspace_ci.py` and
   `workspace_build.py` (which keeps a one-line door with the 900 s timeout); `common.now_iso` and `common.monotonic` replace

@@ -124,6 +124,25 @@ A free Apple account signs for 7 days: after that the person installs WDA again 
 
 **Privacy.** The iPhone is the person's own. `dump`, `shot`, `send`, `tap`, `type`, `swipe`, `back` and `clear` act only when `/wda/activeAppInfo` reports `app_id` in the foreground (never `com.apple.springboard`: it also shows the person's notification banners and the app switcher, so a system alert or a banner over the app makes the command refuse, and the person answers it); otherwise exit 3 and nothing was read. Creating a WDA session happens only after that check, so a refused command never touches another app. The text refused when it holds a `.env` value is the same as on Android.
 
+### 1.6 The agent's shell: constraints and the sandbox
+
+The commands in this document are written for a person's terminal. An agent's Bash tool is narrower, and a command that works in a terminal can fail there for a reason that has nothing to do with the device or the app.
+
+**Constraints to expect (and how the examples are written for them):**
+
+- **One command per call.** Examples are single commands run from the repository root; a compound command (`cd x && y`, `;`, `|`, `sleep`) may be denied, so the scripts take the workspace as an argument and need no `cd`. Chain by calling the script again, not by piping.
+- **Only the framework's scripts, not the tool under them.** In a restricted environment (headless runs, §11.3) `adb`, `xcrun` or `maestro` called directly can be refused while `device.py`, `run_mobile.py` and `pw_cli.py` are allowed. Use the script that wraps the tool; a refused raw call is not a device fault.
+- **The sandbox can hide devices and processes.** A sandboxed shell may not reach the USB bus, the `adb` server socket, an emulator's ports or a browser process (`spawn UNKNOWN`, `docs/qa-audit.md`). Then a device or emulator that is plainly connected reads as `no-device` or `offline`.
+- **Secrets and output.** A tool that echoes its variables (Maestro writes `MAESTRO_<VAR>` in clear text) leaves them in its own logs; clean them after a real run. Never print a `.env` value to prove a point.
+
+**Comparing a device tool inside and outside the sandbox.** Before reporting a tool as broken, or blocking a batch for it, find out whether the sandbox is the cause. Use the same read-only command in both places and compare the outputs, not the impressions:
+
+1. Pick a read-only probe with no side effects: `device.py <workspace> check` (or `adb devices` for the raw layer, `pw_cli.py <workspace> check` for the browser CLI).
+2. Run it inside the agent's shell and save the output and exit code.
+3. Run the **same** command outside the sandbox (the person's terminal, or the tool's own approval to leave it) and save the same two things. Never loosen the sandbox or the permission mode for this: the person runs it, or approves one call.
+4. Compare. Same output: the cause is the device or the tool, go on with §1.3. Different (empty device list, `spawn` or socket errors, permission denied inside; ready outside): the sandbox is the cause. Record it in the run log as **Blocked (environment)** with that reason, and ask the person to run the step outside.
+5. Do not repeat a state-changing command (install, grant, a test run) in both places: compare with probes, then run the real command once, where it works.
+
 ---
 
 ## 2. Execution levels
