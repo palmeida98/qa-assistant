@@ -7,7 +7,8 @@ from tickets: analyse a ticket, plan by risk, run the approved cases, review the
 Every result is traceable to a case, a build and its evidence, and **nothing is written to a workbook or a tracker until a
 person approves the exact preview**.
 
-> **Status:** proof of concept (November 2026), used by its author on real projects. **License:** proprietary, publicly
+> **Status:** proof of concept (state of 27 November 2026: 9 skills, 44 scripts, 2,150+ automated tests, CI green), used by its
+> author on real projects. **License:** proprietary, publicly
 > viewable but not open source ([LICENSE](LICENSE)). Real projects, credentials, evidence and results live in private
 > workspaces, never in this repository.
 
