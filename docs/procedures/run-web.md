@@ -9,7 +9,7 @@
    each case come from <workspace>/tracker/cases.json (refreshed by /plan-tests), by the tracker's ID.
 2. Confirm the environment against project.yaml (technique-browser.md section 2) and that the credential
    variables of the batch's roles exist in .env (only that they exist; never show values).
-3. Use the Playwright MCP (level N1, technique-browser.md section 1). If it is not connected, stop and tell
+3. For a case that already passed twice, prefer the specs of /playwright-tests (level N2). Otherwise use the Playwright MCP (level N1, technique-browser.md section 1). If it is not connected, stop and tell
    the user how to connect it (/mcp), or use another available browser, recording the environment difference.
 4. Follow technique-browser.md for authentication (one login per role), locators and verification.
 5. Apply the decision rules of methodology.md section 8 (Pass/Fail/N-A/Blocked/Question), with the

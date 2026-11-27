@@ -44,5 +44,10 @@ app/
 # personal Claude Code settings (the shared ones, .claude/settings.json, are committed)
 .claude/settings.local.json
 
+# Playwright (/playwright-tests): dependencies and run output; the specs and package.json are committed
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+
 __pycache__/
 .DS_Store

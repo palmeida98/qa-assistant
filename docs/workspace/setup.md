@@ -32,7 +32,7 @@ must all answer.
 ## 2. `qa-assistant`
 
 ```bash
-mkdir -p ~/qa && cd ~/qa                               # qa-assistant and qa-workspaces/ live side by side
+mkdir -p ~/qa && cd ~/qa                               # qa-assistant and the workspaces root live side by side (the root is whatever `set-root` says)
 gh repo clone <owner>/qa-assistant
 cd qa-assistant
 pip install -r requirements.txt                       # the Excel adapter and the scripts
