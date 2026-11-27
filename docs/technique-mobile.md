@@ -11,7 +11,7 @@
 
 ## 0. Scope
 
-- Native and hybrid apps on **Android** and **iOS**, driven by **Maestro flows** (YAML), or on Android by the **device driver** (`scripts/device.py`) in **conversational mode** when the app's content is generated (§4.1).
+- Native and hybrid apps on **Android** (emulator or device) and **iOS** (simulator only, §1.5), driven by **Maestro flows** (YAML), or on Android by the **device driver** (`scripts/device.py`) in **conversational mode** when the app's content is generated (§4.1).
 - The web in a mobile context, through **Maestro Web** (beta) when there is no device; the result is valid for the web flow, **not** for the native app.
 - Gestures, permissions, deep links, offline and background states, differences between platforms.
 - It does **not** cover performance, battery nor active security tests of the app.
@@ -92,6 +92,16 @@ Exit 0 when ready, 3 when not (the first blocker on stderr). `--batch <name>` al
 The permanent files do not repeat a build number. `CLAUDE.md` says where it comes from (`mobile.build`); a checkpoint may keep a line "last observed build" in `context.md`, which is a summary and is replaced by the next one; the history of builds is in the run logs.
 
 ### 1.5 An iPhone through WebDriverAgent
+
+> **Decision of 27.11.2026: iOS runs only on a simulator.** A physical iPhone is not a supported target of the
+> framework: no new work and no maintenance of this section (phase 17 tasks 17.7–17.9 are cancelled). iOS cases run on
+> an iOS simulator through Maestro (`scripts/run_mobile.py --serial <simulator UDID>`); a case that needs a real iPhone
+> (sensors, camera, push notifications, a build that only installs on a device) is `Blocked` (environment) with the
+> reason "iOS runs only on a simulator". The code below (`device.py` with WebDriverAgent, `device_ios.py`,
+> `ios_diagnose.py`) stays as it is, tested against fakes, for a project that decides to use it; the framework does not
+> promise it works on the next iOS or Xcode. Real runs of the simulator path: a simulator is heavy on a Mac with 8 GB of
+> memory and on iOS 27 the XCTest driver needed `MAESTRO_DRIVER_STARTUP_TIMEOUT=240000` (see
+> `procedures/maestro-tests-detail.md`).
 
 A real iPhone cannot be driven through `adb`. `device.py` drives it through **WebDriverAgent** (WDA, the XCUITest server of Appium): a small test runner, signed by the person's Apple team, that serves taps, swipes, text, the accessibility tree and screenshots over HTTP. The same subcommands and the same privacy rule as on Android (§4.1); Maestro is not used on a physical iPhone.
 

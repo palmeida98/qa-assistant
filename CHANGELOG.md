@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (iOS scope, 2026-11-27)
+- iOS runs only on a simulator (decision of the user). A physical iPhone through WebDriverAgent is no longer a supported
+  target: `technique-mobile.md` §1.5 says so, tasks 17.7 and 17.8 are cancelled, a case that needs a real iPhone is Blocked
+  (environment). No code was removed.
+
 ### Fixed (Maestro validated on an emulator, 2026-11-27)
 - `run_mobile.py`: a device or driver failure in Maestro's report is suggested as Blocked (`tool: …`), no longer as Fail;
   with `--include-tags`/`--exclude-tags` a flow left out is neither run nor reported as Blocked, and no flow matching the
