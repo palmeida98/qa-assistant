@@ -45,7 +45,7 @@
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
 | 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
 | 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 isolated pilot done, the comparison with the MCP and a real-workspace pilot are open |
-| 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 validated on an emulator, a real project batch and 19.6 (iOS decision) wait for the user |
+| 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 validated on an emulator and 19.6 decided (iOS only on a simulator); a real project batch waits for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1993,8 +1993,8 @@ tasks, and the run-log changes (17.1) come before them.
 | 17.4 Output layer and approval cards | 17.3 | `output:` in `project.yaml` with framework defaults; shared formatting; a short preflight; the dry run as a short card plus a file with the complete values; a summary mode of the audit; the three build lines of a device check. Done in 17.4: preflight, dry run (card + file), `run_log add/plan/progress`, one-time notices; the audit's summary mode and the build lines of the check remain | Done in two PRs: output layer (PR #12) and the audit summary plus the three build lines of the check (PR #13, in review) |
 | 17.5 Progress and reports | 17.1, 17.4 | a progress view per batch; a summary and a technical report generated from the run log, the evidence and the dry run | In review (PR #13): progress per batch (`run_log progress`, PR #12); `qa_report.py report` writes the summary and the technical report; the audit presents valid, invalid and missing evidence apart |
 | 17.6 Skills and specification | 17.1–17.5 | an output budget in the nine skills and in `docs/skills-spec.md` §3 and §6; scenarios for `docs/skills-evals.md` | In progress (22.11.2026): budget in `rules.md` §14 and `skills-spec.md` §3; step 0 shortened to `procedures/preflight.md`; routing descriptions with exclusions; routing scenarios 11–16 written and run once on 23.11.2026 (all pass; `docs/skills-evals.md`); 2.2 done on 23.11.2026: the eight skills are ≤ 800 words (`wc -w`, frontmatter included) with the long detail of five of them in `docs/procedures/<skill>-detail.md`; the second eval round (same scenarios) is still to run |
-| 17.7 iOS: screen, build and waiting | 17.4 | the build read without the WebDriverAgent; `home` and `activate`; waiting for a device | Pending |
-| 17.8 WebDriverAgent operation | — | backoff and a limit in the launcher, a warning before the profile expires (`doctor`) | Pending |
+| 17.7 iOS: screen, build and waiting | 17.4 | the build read without the WebDriverAgent; `home` and `activate`; waiting for a device | Cancelled (27.11.2026: iOS only on a simulator, 19.6) |
+| 17.8 WebDriverAgent operation | — | backoff and a limit in the launcher, a warning before the profile expires (`doctor`) | Cancelled (27.11.2026: iOS only on a simulator, 19.6) |
 | 17.9 Documentation and checks | — | the constraints of the agent's shell in the examples; the procedure to compare a device tool inside and outside the sandbox | Pending |
 
 **Decided later (not part of this phase until then):** a script to measure tokens and time from a session's transcript; the test of
@@ -2030,13 +2030,14 @@ device can settle.
 | 19.3 Data and secrets | already in place: `.env` → `MAESTRO_<VAR>` in the process environment, never `-e` on the command line, redaction of JUnit and messages | Done before (24.11.2026), checked |
 | 19.4 Evidence | `run_mobile.py --evidence-dir`: Maestro's screenshots and recordings and the redacted `junit.xml` kept in the workspace; named screenshots `TC-…_<step>` | Done (27.11.2026) |
 | 19.5 Tags and batches | `--include-tags` / `--exclude-tags` (validated) passed to Maestro; `tags:` in the flow header | Done (27.11.2026) |
-| 19.6 iOS | close 17.7–17.9 (WebDriverAgent) or declare "iOS only on a simulator" | Waits for the user's decision |
+| 19.6 iOS | **Decided (user, 27.11.2026): iOS only on a simulator.** A physical iPhone (WebDriverAgent) is no supported target: 17.7 and 17.8 cancelled, the code and its fake-based tests stay unchanged; a case that needs a real iPhone is Blocked (environment) with that reason (`technique-mobile.md` §1.5). 17.9 stays with its documentation part | Done (27.11.2026) |
 | 19.7 Evals | scenarios 17–21 in `skills-evals.md` for `/playwright-tests` and `/maestro-tests` (written, not run) | Done (27.11.2026) |
 
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | 19.6 decided by the user: iOS only on a simulator; 17.7 and 17.8 (WebDriverAgent) cancelled; the physical-iPhone code stays untouched. |
 | 2026-11-27 | 19.1: Maestro validated on an Android emulator; `run_mobile.py` now suggests Blocked for device/driver failures and leaves out of the report the flows excluded by tags. |
 | 2026-11-27 | 18.7: pilot on an isolated copy of the demo (12 CLI commands, 6.0 s, 2,927 characters to the agent); MCP comparison and a real-workspace pilot still open. |
 | 2026-11-27 | Phase 19 (Maestro): 19.2–19.5 and 19.7 done; 19.1 (real batch, needs Java and a device) and 19.6 (iOS) wait for the user. |
