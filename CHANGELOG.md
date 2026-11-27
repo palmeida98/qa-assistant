@@ -11,7 +11,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 - `docs/skills-evals.md`: scenarios 17–21 and a re-run of 10, 11, 13 and 16, recorded without client data, with the harness
   fixes they needed (plan 17.6).
 - `.github/workflows/demo-e2e.yml` restored (manual, weekly when `DEMO_E2E_SCHEDULE` is `true`; fails without its three
-  `DEMO_SAUCE_*` secrets). Not run yet: the secrets are the user's to set (`docs/ci.md`).
+  `DEMO_SAUCE_*` secrets). Ran green on 27.11.2026 (4 specs) once the secrets were set (`docs/ci.md`).
 
 ### Changed (gh and now, 2026-11-27)
 - `common.gh` (with `interactive` and `timeout`) replaces the copies in `workspace_git.py`, `workspace_ci.py` and
