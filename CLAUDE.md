@@ -96,7 +96,7 @@ Read each script's docstring and `--help` before using it (flags, exit codes). `
   `install.sh` / `install.ps1`
 - **Run records**: `run_log.py` (results, evidence, times, Questions, bugs; examples in `docs/skills-guide.md`),
   `approvals.py`, `quarantine.py`, `spec_refs.py`, `ac_coverage.py`, `check_approval_files.py`, `compact_context.py`,
-  `pbi_state.py` (no skill drives it since `/test-pbi` was removed on 24.11.2026)
+  `pbi_state.py` (no skill creates a PBI record since `/test-pbi` was removed on 24.11.2026; `/checkpoint` and `/manage-bugs` only update one that exists)
 - **Reports**: `qa_report.py <ws> totals|audit|report`, `build_dashboard.py`
 - **Adapters**: `python -m adapters.excel.inspect|add_cases|add_columns|annotate|reconcile|apply`,
   `python -m adapters.tracker <ws> check|import-cases|export-cases|apply|bug-search`,

@@ -51,8 +51,8 @@ Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 →
 
 ## Product scope (decision of 08.11.2026)
 
-- **What the product is:** a QA assistant used exclusively through Claude Code, with eight skills (`/project-context`,
-  `/analyze-ticket`, `/plan-tests`, `/run-tests`, `/manage-bugs`, `/qa-report`, `/checkpoint`, `/test-pbi`) over project workspaces
+- **What the product is:** a QA assistant used exclusively through Claude Code, with nine skills (`/project-context`,
+  `/analyze-ticket`, `/plan-tests`, `/run-tests`, `/playwright-tests`, `/maestro-tests`, `/manage-bugs`, `/qa-report`, `/checkpoint`; `/test-pbi` was removed on 24.11.2026) over project workspaces
   that live outside this repository. It has **no hub, web interface, graphical application or launcher of its own**, and none
   is promised for a later phase. HTML or Excel reports that a command produces (`scripts/build_dashboard.py`,
   `scripts/qa_report.py`, `qa-audit`'s report) remain outputs, not a management interface.
@@ -1963,7 +1963,7 @@ findings relevant to the framework are recorded here, in generic terms.
   annotated tag `archive/ios-wda-backend-20261031`, which holds both of its commits), `claude/ci-optimisation`,
   two `claude/*` task branches, `reset-skills` and `plan/qa-hub` on the remote,
   and the merged local ones.
-- **Not removed (still open):** the worktree `.claude/worktrees/qa-assistant-skills-config-a2fbfd` and its branch
+- **Not removed at the time (since removed, 27.11.2026):** the worktree `.claude/worktrees/qa-assistant-skills-config-a2fbfd` and its branch
   `claude/qa-assistant-analysis-7549a1`, because a session was working in it; and the local branches `plan/qa-hub` and `reset-skills`,
   whose remote branches are gone (the approval named the remote ones).
 
@@ -1990,7 +1990,7 @@ tasks, and the run-log changes (17.1) come before them.
 | 17.3 Excel writes | — | `add_cases --expect` and the workspace lock; the final recalculation put in place in one step; `apply --keep-previous` (the previous result stays in the notes). **Split at implementation:** `apply --only/--skip` is its own task (17.3b, pending a design decision): a batch is «applied» by its name (the control sheet, `run_log`, the report), so a batch applied with a subset would count its left-out results as applied | Merged (09.11.2026, PR #11); `apply --only/--skip` split out as 17.3b (design in `docs/design-17.3b-partial-apply.md`, two decisions open, not implemented) |
 | 17.4 Output layer and approval cards | 17.3 | `output:` in `project.yaml` with framework defaults; shared formatting; a short preflight; the dry run as a short card plus a file with the complete values; a summary mode of the audit; the three build lines of a device check. Done in 17.4: preflight, dry run (card + file), `run_log add/plan/progress`, one-time notices; the audit's summary mode and the build lines of the check remain | Done in two PRs: output layer (PR #12) and the audit summary plus the three build lines of the check (PR #13, in review) |
 | 17.5 Progress and reports | 17.1, 17.4 | a progress view per batch; a summary and a technical report generated from the run log, the evidence and the dry run | In review (PR #13): progress per batch (`run_log progress`, PR #12); `qa_report.py report` writes the summary and the technical report; the audit presents valid, invalid and missing evidence apart |
-| 17.6 Skills and specification | 17.1–17.5 | an output budget in the eight skills and in `docs/skills-spec.md` §3 and §6; scenarios for `docs/skills-evals.md` | In progress (22.11.2026): budget in `rules.md` §14 and `skills-spec.md` §3; step 0 shortened to `procedures/preflight.md`; routing descriptions with exclusions; routing scenarios 11–16 written and run once on 23.11.2026 (all pass; `docs/skills-evals.md`); 2.2 done on 23.11.2026: the eight skills are ≤ 800 words (`wc -w`, frontmatter included) with the long detail of five of them in `docs/procedures/<skill>-detail.md`; the second eval round (same scenarios) is still to run |
+| 17.6 Skills and specification | 17.1–17.5 | an output budget in the nine skills and in `docs/skills-spec.md` §3 and §6; scenarios for `docs/skills-evals.md` | In progress (22.11.2026): budget in `rules.md` §14 and `skills-spec.md` §3; step 0 shortened to `procedures/preflight.md`; routing descriptions with exclusions; routing scenarios 11–16 written and run once on 23.11.2026 (all pass; `docs/skills-evals.md`); 2.2 done on 23.11.2026: the eight skills are ≤ 800 words (`wc -w`, frontmatter included) with the long detail of five of them in `docs/procedures/<skill>-detail.md`; the second eval round (same scenarios) is still to run |
 | 17.7 iOS: screen, build and waiting | 17.4 | the build read without the WebDriverAgent; `home` and `activate`; waiting for a device | Pending |
 | 17.8 WebDriverAgent operation | — | backoff and a limit in the launcher, a warning before the profile expires (`doctor`) | Pending |
 | 17.9 Documentation and checks | — | the constraints of the agent's shell in the examples; the procedure to compare a device tool inside and outside the sandbox | Pending |

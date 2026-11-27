@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Fixed (documentation consistency, phase 20, 2026-11-27)
+- The README, the product scope and task 17.6 of the plan now say nine skills (`/playwright-tests` and `/maestro-tests`
+  included, `/test-pbi` removed).
+- `pbi_state.py`: the docs said no skill drives it; `/checkpoint` and `/manage-bugs` still update an existing PBI record,
+  only none creates one. CLAUDE.md and `skills-spec.md` say so.
+- `docs/design-17.3b-partial-apply.md` (cited by the plan) is now on `main`.
+- `technique-workspaces.md` and `workspace/setup.md`: the hub is no longer mentioned, the layout lists `analysis/`,
+  `archive/`, `e2e/` and `flows/`, and the default root is described as a default (a root set with `set-root` wins).
+- The workspace `.gitignore` template ignores `e2e/node_modules/`, `e2e/test-results/` and `e2e/playwright-report/`;
+  `run-web.md` points to `/playwright-tests`.
+
 ### Added (`/maestro-tests`, 2026-11-24)
 - A ninth skill, `/maestro-tests`: the mobile counterpart of `/playwright-tests`. It writes Maestro flows (level N2,
   technique-mobile.md §2 and §4) in the workspace's flows folder for cases with a deterministic expected result, reads

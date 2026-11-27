@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/palmeida98/qa-assistant/actions/workflows/ci.yml)
 
-Eight [Claude Code](https://claude.com/claude-code) skills and the tested scripts behind them, for a QA engineer who works
+Nine [Claude Code](https://claude.com/claude-code) skills and the tested scripts behind them, for a QA engineer who works
 from tickets: analyse a ticket, plan by risk, run the approved cases, review the failures, report, and save the session.
 Every result is traceable to a case, a build and its evidence, and **nothing is written to a workbook or a tracker until a
 person approves the exact preview**.

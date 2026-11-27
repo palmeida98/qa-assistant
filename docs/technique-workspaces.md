@@ -3,7 +3,7 @@
 > **Layer 2 — How a request finds its framework, its project and its skill**
 > Version 1.0 · 2026-11-01 · Plan, phase 15.
 >
-> Project agnostic: the examples use the fictional **Demo Shop**. Subordinate to `methodology.md`. The engine is `scripts/workspace_select.py`, on top of the discovery the hub already used and of `scripts/validate_project.py`.
+> Project agnostic: the examples use the fictional **Demo Shop**. Subordinate to `methodology.md`. The engine is `scripts/workspace_select.py`, on top of the discovery of workspaces and of `scripts/validate_project.py`.
 
 ---
 
@@ -25,7 +25,8 @@ The user picks a project, asks for a task in natural language, and gets traceabl
 ```text
 <framework>/qa-assistant/      .claude/skills/<skill>/SKILL.md, docs/, adapters/, scripts/, tests/
 <workspace-root>/<company>/<project>/   or   <workspace-root>/<project>/
-    CLAUDE.md, project.yaml, context.md, memory/, batches/, runs/, evidence/, tracker/ or workbook/, history/
+    CLAUDE.md, project.yaml, context.md, memory/, analysis/, batches/, runs/, evidence/, tracker/ or workbook/, history/, archive/
+    e2e/ (Playwright specs of /playwright-tests), flows/ (Maestro flows of /maestro-tests; `mobile.flows` in project.yaml)
 ```
 
 The root can have any name. Nothing here creates, renames or migrates a folder.
@@ -53,7 +54,7 @@ In this order, each named in the output as the source of the value:
 1. `--root PATH`;
 2. `$QA_WORKSPACES_ROOT`;
 3. `workspaces_root` in `~/.qa-assistant/config.json` (`python scripts/workspace_select.py set-root PATH`, which refuses a folder that does not exist or lies inside the framework);
-4. `qa-workspaces/` next to the **main checkout**, so a worktree finds the same root as its main checkout.
+4. `qa-workspaces/` next to the **main checkout** (the default only; a root set with `set-root`, e.g. `~/workspaces`, wins), so a worktree finds the same root as its main checkout.
 
 **A root is never created.** One that does not exist is an error that names where the value came from and how to set it, because a wrongly resolved path must not leave an empty root in the wrong place.
 
