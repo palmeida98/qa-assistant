@@ -105,7 +105,7 @@ Read each script's docstring and `--help` before using it (flags, exit codes). `
 - **Execution**: `api_request.py`, `audit_a11y.py`, `device.py` (Android; iOS through `device_ios.py`,
   `ios_diagnose.py`), `run_mobile.py`, `setup_emulator.py`, `apk_manifest.py`, `build_driver.py`, `workspace_build.py`,
   `workspace_ci.py`, `remote_login.py`, `build_candidates.py` (with `slack_build_messages.py`, offline)
-- **Guards**: `guard_destructive.py`, `ado_write_guard.py`, `check_denylist.py`
+- **Guards**: `guard_destructive.py`, `ado_write_guard.py` (started by `ado_guard_launch.py <workspace>`), `check_denylist.py`; `archive_check.py` lists what `_arquivo/` holds without a reason
 - **Engine and CI**: `qa-audit ...` (`pip install -e .`; `qa-audit doctor`), `update_axe.py`, `ci_test_summary.py`
 
 ## Tests and checks

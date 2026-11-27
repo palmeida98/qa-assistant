@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added (launcher and archive check, 2026-11-27)
+- `scripts/ado_guard_launch.py <workspace> [--check]`: one launcher of the Azure DevOps write guard for every workspace,
+  configured from the project folder's `_tools/` (outside git); replaces the per-project shell wrappers.
+- `scripts/archive_check.py <workspace>`: lists the items of `_arquivo/` with no `INDICE.md` row (older than 30 days) or
+  whose `Delete after` date has passed; read only.
+
 ### Added (project folder layout, 2026-11-27)
 - Discovery reads `<root>/<project>/repo/project.yaml` as the project `<project>` (the workspace is `repo/`; `_tools/`,
   `_dados/` and `_arquivo/` beside it stay outside git). Existing `<company>/<project>` workspaces are unchanged.
