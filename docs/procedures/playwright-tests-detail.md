@@ -49,6 +49,24 @@ writing is spent on the cases that deserve it (technique-browser.md section 13);
 package, version and what is downloaded before asking. Offline or refused: the cases are Blocked (tool), the specs may
 still be written. `validate_project.py --environment` reports whether `node` exists.
 
+## Discovering locators with the CLI (before authoring)
+
+For a page whose locators are not known, read it with the Playwright CLI instead of guessing (technique-browser.md §16).
+Only when `web.cli_version` is pinned in project.yaml and `pw_cli.py check <workspace>` says READY; otherwise write the
+spec from the case and fix it in the rounds of step 5.
+
+```
+python <qa>/scripts/pw_cli.py run <workspace> --batch <batch> -- open <test environment URL>
+python <qa>/scripts/pw_cli.py run <workspace> --batch <batch> -- snapshot
+python <qa>/scripts/pw_cli.py run <workspace> --batch <batch> -- fill e12 "{{SHOP_USER}}"
+python <qa>/scripts/pw_cli.py run <workspace> --batch <batch> -- generate-locator e12
+python <qa>/scripts/pw_cli.py run <workspace> --batch <batch> -- close
+```
+
+Credentials are written as `{{VARIABLE_NAME}}` and never read. Take the role, label or text the snapshot shows and write
+`getByRole`/`getByLabel`/`getByText` (a ref such as `e12` is valid only inside one snapshot, never in a spec). The same
+commands reproduce a failing step in round 5 before the spec is touched. Close the session at the end (`close`).
+
 ## Authoring rules
 
 - Title: `TC-LOGIN-001 · Login with valid credentials`. The id comes first and is exactly the library's; the run log

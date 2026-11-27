@@ -236,6 +236,35 @@ def positive_int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool) and v > 0
 
 
+CLI_VERSION = re.compile(r"\d+\.\d+\.\d+")
+
+
+def web_section(proj: dict) -> tuple[list[str], list[str]]:
+    """The optional web: section (docs/technique-browser.md §16): web.driver says how the agent drives the browser
+    (mcp, the default, or cli) and web.cli_version pins the exact @playwright/cli of <workspace>/e2e."""
+    web = proj.get("web")
+    if web is None:
+        return [], []
+    if not isinstance(web, dict):
+        return ["web: must be a map {driver, cli_version} (technique-browser.md §16)"], []
+    problems, warnings = [], []
+    extra = sorted(set(web) - {"driver", "cli_version"})
+    if extra:
+        warnings.append(f"web: unknown key(s) {extra} (known: ['cli_version', 'driver'])")
+    driver = web.get("driver", "mcp")
+    if driver not in ("mcp", "cli"):
+        problems.append(f"web.driver {driver!r}: mcp (the default) or cli")
+    version = web.get("cli_version")
+    if version is not None and not (isinstance(version, str) and CLI_VERSION.fullmatch(version)):
+        problems.append(f"web.cli_version {version!r}: an exact version as a quoted text, e.g. \"0.1.25\" "
+                        "(never ^, ~ or latest)")
+    if driver == "cli" and version is None:
+        problems.append("web.driver is cli but web.cli_version is missing: pin the version of @playwright/cli")
+    if not ({"functional-web", "exploratory"} & set(proj.get("modules") or [])) and web:
+        warnings.append("web: filled in, but neither 'functional-web' nor 'exploratory' is in 'modules'")
+    return problems, warnings
+
+
 def ci_section(workspace: str, proj: dict) -> tuple[list[str], list[str]]:
     """The optional ci: section (remote execution on a GitHub Actions runner; plan 11.0, technique-mobile.md §11.5):
     a standard runner only (no paid larger runner), limits as positive integers, ci.secrets as names of .env
@@ -558,6 +587,9 @@ def base_problems(proj: dict) -> tuple[list[str], list[str]]:
     p, w = mobile_target(proj)
     problems += p
     warnings += w
+    p, w = web_section(proj)
+    problems += p
+    warnings += w
     return problems, warnings
 
 
@@ -790,6 +822,10 @@ def environment(workspace: str, proj: dict, ci: bool = False) -> list[tuple[bool
     if {"functional-web", "exploratory"} & set(modules):
         exe = which("node")
         add((bool(exe), "node", exe or "the Playwright MCP runs with npx: install Node.js 22+ (https://nodejs.org)"))
+        if (proj.get("web") or {}).get("driver") == "cli":
+            import pw_cli
+            ok, detail = pw_cli.readiness(workspace, proj)
+            add((ok, "playwright-cli", detail))
     if "accessibility" in modules:
         installed = qa_audit_installed()
         add((installed, "qa-audit", "importable" if installed else

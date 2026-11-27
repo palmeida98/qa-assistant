@@ -44,6 +44,7 @@
 
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
 | 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
+| 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 (pilot on a real workspace) waits for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -1998,10 +1999,28 @@ tasks, and the run-log changes (17.1) come before them.
 **Decided later (not part of this phase until then):** a script to measure tokens and time from a session's transcript; the test of
 the device tool inside and outside the sandbox; the model and budget of the skills' agent evaluation (`docs/skills-evals.md`).
 
+## Phase 18 — Playwright CLI (27.11.2026)
+
+Goal: let the agent drive the browser with `@playwright/cli` (short commands, element refs, no tool schemas in the
+context) beside the Playwright MCP, and use it to find locators before `/playwright-tests` writes a spec. One skill
+stays (`/playwright-tests`, at its word limit); the commands live in `procedures/playwright-tests-detail.md`. The
+specification is `docs/technique-browser.md` §16.
+
+| Task | Scope | State |
+|---|---|---|
+| 18.1 Specification | `technique-browser.md` §16: pinned install in `e2e/` (never `-g`, `@latest` or `install --skills`), isolated sessions, secrets only by name, evidence in `evidence/<batch>/cli/`, CLI or MCP | Done (27.11.2026) |
+| 18.2 The door | `scripts/pw_cli.py check\|run` (+ `pw_cli_rules.py`): the CLI installed in `e2e/`, a session per workspace with the profile in memory, `{{NAME}}` placeholders from `.env`, redaction of output and files, named evidence files; real browser verified on the demo | Done (27.11.2026) |
+| 18.3 Skills | `/playwright-tests` discovers locators with `pw_cli.py` (detail: "Discovering locators with the CLI"); `/run-tests` web route follows `web.driver`; `requires-tools` and `requires-scripts` updated | Done (27.11.2026) |
+| 18.4 `project.yaml` | `web.driver`, `web.cli_version` validated by `validate_project.py`; the environment lists `playwright-cli`; the preflight prints `Route: … (web.driver: cli)` and needs the CLI instead of the MCP | Done (27.11.2026) |
+| 18.5 Demo and tests | the demo pins `@playwright/cli` (package.json, lock) and declares `web:`; unit tests with a fake runner; an integration test with the real CLI on a `data:` page (skipped when not installed). **The `demo-e2e` CI job is not restored:** it needs a third-party site and demo logins (`docs/ci.md`) | Done (27.11.2026) |
+| 18.6 Guards | `guard_destructive.py` refuses a raw `playwright-cli` `run-code`, `eval`, `install`, `kill-all`, `--persistent` and `--host`; the door refuses them too (`eval`/`run-code` only with `--allow-eval` after the user's approval) | Done (27.11.2026) |
+| 18.7 Pilot | one batch on a real workspace that already has its own `e2e/`: tokens and time against the MCP; the result in `tracker-validation.md` | Waits for the user |
+
 ## Change log of this plan
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Phase 18 (Playwright CLI): 18.1–18.6 done; pilot 18.7 waits for the user. |
 | 2026-11-24 | `CLAUDE.md` reviewed against the code: the methodology is no longer imported in framework sessions (methodology §0), the skills' 800-word budget (2.2) is in `skills-spec.md` §4 and tested, `pbi_state.py` no longer names `/test-pbi` as its driver. |
 | 2026-11-20 | 14.2: the tickets block of `context.md` keeps only the newest (5 scope rows, 10 tickets, 5 items per list), each with how many more exist in `memory/`. |
 | 2026-11-09 | Phase 17: 17.1–17.4 merged (PRs #9–#12); 17.4's remainder and 17.5 in review (PR #13); 17.6–17.9 pending; 17.3b design only. |

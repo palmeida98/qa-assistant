@@ -17,6 +17,10 @@ evidence: "text"             # or "text+screenshot"
 modules: [functional-web, exploratory, api, accessibility, mobile]
 run_log: "runs/"             # folder of the session's run log (never history/, which is immutable)
 
+web:                         # how the agent drives the browser (docs/technique-browser.md §16)
+  driver: "cli"              # the demo exercises the Playwright CLI; the MCP stays the default of other projects
+  cli_version: "0.1.25"      # exact @playwright/cli of e2e/package.json
+
 api:                         # api module (docs/technique-api.md, plan 3.1)
   base_url: "https://restful-booker.herokuapp.com"
   contract: "https://restful-booker.herokuapp.com/apidoc/index.html"   # published documentation: source of the expected result

@@ -32,6 +32,9 @@ import re
 import shlex
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pw_cli_rules
+
 SEPARATORS = {";", "&&", "||", "|", "&", "\n"}
 WRAPPERS = {"sudo", "command", "env", "time", "nice", "nohup", "exec", "xargs"}
 RM_NAMES = {"rm", "/bin/rm", "/usr/bin/rm", "unlink-r"}
@@ -186,6 +189,9 @@ def check_bash(command: str, session_id: str | None) -> str | None:
                         problem = None
                     if problem:
                         break
+        elif base == "playwright-cli" or (base == "npx" and "playwright-cli" in w[1:3]):
+            args = w[1:] if base == "playwright-cli" else w[w.index("playwright-cli") + 1:]
+            problem = pw_cli_rules.refusal(args)
         else:
             problem = None
         if problem:

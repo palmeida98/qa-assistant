@@ -14,7 +14,7 @@ metadata:
   resume: "The run log of the batch: a case with a result and enough evidence is not run again; a build that changed means a new batch."
   requires-scripts: "scripts/run_log.py, scripts/approvals.py, scripts/device.py, scripts/run_mobile.py, scripts/api_request.py, scripts/audit_a11y.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/approvals.md, procedures/quarantine.md, procedures/run-mobile.md, procedures/run-web.md, procedures/run-api.md, procedures/run-accessibility.md, procedures/run-tests-detail.md, methodology.md"
-  requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, qa-audit, browser, mcp, .env"
+  requires-tools: "maestro, adb, emulator, android-driver, mobile, xcrun, ios-wda, build, node, playwright-cli, qa-audit, browser, mcp, .env"
   routes: "functional-web: procedures/run-web.md; exploratory: procedures/run-web.md; api: procedures/run-api.md; accessibility: procedures/run-accessibility.md; mobile: procedures/run-mobile.md"
   next-check: "yes"
 ---

@@ -8,13 +8,13 @@ metadata:
   config: "environments and roles (functional-web); the evidence policy."
   requires-config: "functional-web"
   tools: "node and npx with @playwright/test pinned in <workspace>/e2e/; run_log.py for every result."
-  outputs: "Spec files and config in <workspace>/e2e/, a run log with one result per case, traces and captures of failures as evidence, a short summary."
+  outputs: "Spec files and config in <workspace>/e2e/, a run log with one result per case, traces and captures of failures as evidence, a summary."
   writes: "e2e/, runs/ and evidence/ of the selected workspace only; never qa-assistant, never the application's code."
   approvals: "A request to automate or run covers authoring and running specs on the environment it names (rules.md section 5). Installing packages or browsers (a download), another environment, a write to a workbook or tracker, a commit or push each ask first. A workspace whose CLAUDE.md asks for more keeps it."
   failures: "No node, package or browser: those cases Blocked (tool), never Pass. A failing spec is classified (test bug, environment, application) before it is touched; three fix rounds at most. A tool failure is never a defect."
   resume: "e2e/ and the run log: a case with a result and a spec that has not changed is not run again; a build that changed means a new batch."
-  requires-scripts: "scripts/run_log.py, scripts/qa_python.py"
-  requires-tools: "node, .env"
+  requires-scripts: "scripts/run_log.py, scripts/pw_cli.py, scripts/qa_python.py"
+  requires-tools: "node, playwright-cli, .env"
   requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/playwright-tests-detail.md, technique-browser.md, methodology.md"
 ---
 
@@ -37,7 +37,8 @@ metadata:
    run, keeps them: follow those, and stop where they conflict with these steps.
 3. Author: one spec file per feature, one test per case, the case id first in the title (`TC-… · title`), locators by
    role, label or text before CSS, independent tests. Existing
-   specs are read first and extended. A doubt about the expected result is a Question, not a guess.
+   specs are read first and extended. Unknown locators: read the page with pw_cli.py. A doubt about the
+   expected result is a Question.
 4. Run `npx playwright test` from e2e/ (list and JUnit reporters, traces on failure); do not drive the browser by hand.
 5. Failures, at most three rounds, each one named before it is touched: test bug (selector, wait, wrong data: fix the
    spec), environment or tool (retry once, then Blocked), application bug (do not change the spec to make it pass and
@@ -46,5 +47,4 @@ metadata:
 6. Record: mode `flows`, then one run_log.py add per case from the JUnit result (observed text, trace or capture as
    evidence, the run block with the environment and the build OBSERVED). The title's id must exist in the library.
    Fail: never create or publish a bug here.
-7. End with /checkpoint and a summary: cases per status, flaky, Blocked with the reason, Questions, specs written or
-   changed, commands run, the run log path.
+7. End with /checkpoint and a summary: cases per status, flaky, Blocked with the reason, Questions, specs changed, the run log path.

@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added (Playwright CLI, phase 18, 2026-11-27)
+- `scripts/pw_cli.py check|run <workspace>`: the one door to `@playwright/cli`, installed and pinned in `<workspace>/e2e`
+  (`web.cli_version`); a session per workspace with the profile in memory, `{{NAME}}` placeholders read from `.env` so a
+  credential is never read by the assistant, secrets redacted in output and files, `snapshot`/`screenshot`/`pdf` saved as
+  `evidence/<batch>/cli/NNN-<command>.<ext>`; `run-code`/`eval` only with `--allow-eval`; `install`, `kill-all`,
+  `--persistent` and `--host` refused.
+- `project.yaml`: optional `web: {driver: cli|mcp, cli_version}`, validated by `validate_project.py`; with `cli` the
+  preflight needs `playwright-cli` instead of the MCP for the web route.
+- `docs/technique-browser.md` §16 (Playwright CLI); `/playwright-tests` discovers locators with the CLI before writing a
+  spec; `guard_destructive.py` refuses the same risky commands when typed without the door; the demo pins the CLI.
+
 ### Added (launcher and archive check, 2026-11-27)
 - `scripts/ado_guard_launch.py <workspace> [--check]`: one launcher of the Azure DevOps write guard for every workspace,
   configured from the project folder's `_tools/` (outside git); replaces the per-project shell wrappers.
