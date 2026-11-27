@@ -28,7 +28,8 @@
 3. **Validation before adoption** (methodology §15): specification (Markdown) first, then code, then tests, then
    commit. A change is not safe because it looks logically right.
 4. **Sources of truth**: methodology §1.3. Claude's memory is not one.
-5. **Workspaces live outside this repository** (root resolution: `docs/technique-workspaces.md` §3). Development never
+5. **Workspaces live outside this repository**, one folder per project: `<root>/<project>/repo/` (the private git workspace) with
+   `_tools/`, `_dados/` and `_arquivo/` beside it, out of git (`docs/technique-workspaces.md` §4.2; root resolution §3). Development never
    reads or writes a real workspace unless the user names it for that task (e.g. a real golden). Tests use fictional
    fixtures only, never a real workspace or the real `~/.claude`.
 6. **English** for everything in the repository, commit messages included. A project's own names (sheets, columns,
@@ -102,8 +103,8 @@ Read each script's docstring and `--help` before using it (flags, exit codes). `
   `python -m adapters.tracker <ws> check|import-cases|export-cases|apply|bug-search`,
   `python -m adapters.tickets <ws> sources|collect|ingest|analysis`; every write is a dry run first (Excel: preview
   token and `--expect`; trackers: `--yes` only after the user approved the dry run)
-- **Execution**: `pw_cli.py` (Playwright CLI door; `check`/`run`), `api_request.py`, `audit_a11y.py`, `device.py` (Android; iOS through `device_ios.py`,
-  `ios_diagnose.py`), `run_mobile.py`, `setup_emulator.py`, `apk_manifest.py`, `build_driver.py`, `workspace_build.py`,
+- **Execution**: `pw_cli.py` (Playwright CLI door; `check`/`run`), `api_request.py`, `audit_a11y.py`, `device.py` (Android; iOS runs only on a simulator since 27.11.2026, `technique-mobile.md` §1.5; the WebDriverAgent code in `device_ios.py` and
+  `ios_diagnose.py` is kept but is no longer a supported target), `run_mobile.py`, `setup_emulator.py`, `apk_manifest.py`, `build_driver.py`, `workspace_build.py`,
   `workspace_ci.py`, `remote_login.py`, `build_candidates.py` (with `slack_build_messages.py`, offline)
 - **Guards**: `guard_destructive.py`, `ado_write_guard.py` (started by `ado_guard_launch.py <workspace>`), `check_denylist.py`; `archive_check.py` lists what `_arquivo/` holds without a reason
 - **Engine and CI**: `qa-audit ...` (`pip install -e .`; `qa-audit doctor`), `update_axe.py`, `ci_test_summary.py`
