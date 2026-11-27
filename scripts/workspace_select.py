@@ -622,6 +622,16 @@ PLATFORM_TOOLS = {"android": ("maestro", "adb", "emulator", "android-driver", "m
 ROUTE_MODULES = {"accessibility": ("qa_audit",)}
 
 
+WEB_CLI_TOOLS = ("node", "playwright-cli")      # web.driver: cli (technique-browser.md §16) replaces the MCP
+
+
+def route_tools(via: str, proj: dict) -> tuple[str, ...]:
+    """The tool lines a route needs: the web routes drive the browser with the CLI when project.yaml says so."""
+    if via in ("functional-web", "exploratory") and (proj.get("web") or {}).get("driver") == "cli":
+        return WEB_CLI_TOOLS
+    return ROUTE_TOOLS.get(via, ())
+
+
 def parse_routes(spec) -> dict[str, str]:
     """`module: procedure; module: procedure` of a skill's metadata, as a dict."""
     out = {}
@@ -644,6 +654,8 @@ def routes(spec, proj: dict, framework: str) -> list[dict]:
         if not procedure:
             continue
         why = "charters of a mobile project run on the app" if key != module else ""
+        if module in ("functional-web", "exploratory") and (proj.get("web") or {}).get("driver") == "cli":
+            why = "web.driver: cli"
         out.append({"module": module, "procedure": f"docs/{procedure}", "via": key, "why": why,
                     "exists": os.path.isfile(os.path.join(framework, "docs", *procedure.split("/")))})
     return out
@@ -793,13 +805,13 @@ def preflight(skill: str, hint: str | None = None, workspace: str | None = None,
         found = routes(metadata.get("routes"), proj, framework) if metadata.get("routes") else []
         if metadata.get("routes"):
             # a tool of a route the project does not take is not a requirement (a mobile project needs no browser MCP)
-            needed = {t for r in found for t in ROUTE_TOOLS.get(r["via"], ())}
-            every = {t for tools in ROUTE_TOOLS.values() for t in tools}
+            needed = {t for r in found for t in route_tools(r["via"], proj)}
+            every = {t for tools in ROUTE_TOOLS.values() for t in tools} | set(WEB_CLI_TOOLS)
             tokens = [t for t in tokens if t not in every or t in needed]
         report["tools"] = _tool_lines(tokens, project.path, proj)
         if found:
             for r in found:
-                lines = [x for x in report["tools"] if x["tool"].split(" ")[0] in ROUTE_TOOLS.get(r["via"], ())]
+                lines = [x for x in report["tools"] if x["tool"].split(" ")[0] in route_tools(r["via"], proj)]
                 r["missing"] = [x["tool"] for x in lines if not x["ok"]]
                 r["ready"] = _readiness(r["via"], lines)
                 problems = _config_problems([r["module"]], project.path, proj) if r["module"] in (

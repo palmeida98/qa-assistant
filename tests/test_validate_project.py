@@ -358,6 +358,21 @@ class Validate(unittest.TestCase):
         # every key is optional: an empty section is valid (defaults: ubuntu-24.04, 60 min, 150 turns, no login)
         self.assertEqual(self.with_(modules=["mobile"], mobile=self.MOBILE_CI, ci={}), ([], []))
 
+    def test_web_section(self):
+        self.assertEqual(self.with_(web={"driver": "cli", "cli_version": "0.1.25"}), ([], []))
+        self.assertEqual(self.with_(web={"driver": "mcp"}), ([], []))
+        for web, fragment in [({"driver": "playwright"}, "web.driver"),
+                              ({"driver": "cli"}, "web.cli_version is missing"),
+                              ({"driver": "cli", "cli_version": "latest"}, "web.cli_version"),
+                              ({"driver": "cli", "cli_version": "^0.1.25"}, "web.cli_version"),
+                              ({"driver": "cli", "cli_version": 0.1}, "web.cli_version"),
+                              ("cli", "web: must be a map")]:
+            with self.subTest(web=web):
+                problems, _ = self.with_(web=web)
+                self.assertTrue(any(fragment in p for p in problems), (web, problems))
+        _, warnings = self.with_(web={"driver": "mcp", "extra": 1})
+        self.assertTrue(any("unknown key" in w for w in warnings), warnings)
+
     def test_ci_problems(self):
         login = self.CI["login"]
         for ci, fragment in [({"runner": "ubuntu-24.04-4core"}, "ci.runner"),       # a larger runner: paid

@@ -22,6 +22,11 @@ run_log: "runs/"             # folder of the session's run log (never history/, 
 #     android: ["batch_android_*"]
 #     ios: ["batch_ios_*"]
 
+# web: (opt.) how the agent drives the browser (docs/technique-browser.md §16). Without it the Playwright MCP is used.
+# web:
+#   driver: "cli"                # cli (Playwright CLI through scripts/pw_cli.py) | mcp (default)
+#   cli_version: "0.1.25"        # exact @playwright/cli installed in e2e/ (never ^, ~ or latest); needed with cli
+
 # api: only with the api module active (docs/technique-api.md). Never credential values: only variable names.
 api:
   base_url: ""                 # base URL of the TEST environment (relative paths of api_request.py)

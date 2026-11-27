@@ -55,6 +55,13 @@ class Guard(unittest.TestCase):
         for cmd in (f"rm {PROJECT}/a.txt", "ls -la /private/tmp", "git status", "echo rm -rf is dangerous", "rmdir /x/empty"):
             self.assertIsNone(bash(cmd), cmd)
 
+    def test_a_raw_playwright_cli_command_that_runs_code_or_installs_is_refused(self):
+        for cmd in ("playwright-cli run-code 'x'", "npx playwright-cli eval 1", "playwright-cli -s=a install --skills",
+                    "cd e2e && playwright-cli open --persistent"):
+            self.assertIsNotNone(bash(cmd), cmd)
+        for cmd in ("playwright-cli snapshot", "npx playwright test", "playwright-cli -s=a click e3"):
+            self.assertIsNone(bash(cmd), cmd)
+
     def test_without_a_session_id_nothing_is_allowed_and_another_session_is_not_this_one(self):
         self.assertIsNotNone(bash(f"rm -rf {SP}/a", sid=None))
         self.assertIsNotNone(bash(f"rm -rf {SP}/a", sid="x"))

@@ -24,7 +24,7 @@ Always use **the lowest level that allows the expected result to be checked**.
 | Level | Tool | Serves for | Does not serve for |
 |---|---|---|---|
 | **N0 · Static** | HTTP request (fetch) | Page availability, HTTP code, `title`, meta tags, links and anchors, CTAs and footer present in the HTML | Anything that depends on JavaScript, login or interaction |
-| **N1 · Agent** | Playwright MCP | Running batches, flows with login, forms, dynamic states, exploration | Repeated regression in large volume |
+| **N1 · Agent** | Playwright MCP, or the Playwright CLI (§16) | Running batches, flows with login, forms, dynamic states, exploration | Repeated regression in large volume |
 | **N2 · Deterministic** | Playwright specs (TypeScript) | Regression and smoke that run on their own and in CI | New or still unstable features |
 
 Rules:
@@ -250,6 +250,58 @@ The skill that does the conversion, runs the specs and records their results is 
 - [ ] Secondary observations (console, network, accessibility) kept apart from the results
 - [ ] N2 candidates identified
 - [ ] Control passed to `/qa-report`
+
+---
+
+## 16. Playwright CLI (`@playwright/cli`)
+
+A second way for the agent to drive the browser at level N1, and the way to explore before writing an N2 spec. The CLI
+is made for coding agents: short commands (`open`, `goto`, `snapshot`, `click e21`, `fill e35 "…"`), element refs from a
+snapshot, and nothing of a tool schema or a full accessibility tree in the context. The Playwright MCP (§1) stays the
+default and the alternative.
+
+### 16.1 Choosing and installing
+
+- `project.yaml` → `web.driver: cli | mcp` (default `mcp`) and `web.cli_version: "<exact version>"`. With `cli` the
+  preflight prints `Route: functional-web ... (web.driver: cli)`, needs the CLI instead of the MCP, and a missing or
+  different version leaves the cases Blocked (tool), never Pass.
+- Installed **in the workspace**: `cd <workspace>/e2e && npm install -D @playwright/cli@<exact version>` and
+  `npx playwright install chromium`. A download: ask first (rules.md). Never `-g`, never `@latest`: a new version can
+  change a command or the snapshot in the middle of a project; updating is a change of its own.
+- Never `playwright-cli install --skills`: it adds a generic Playwright skill that competes with `/playwright-tests`.
+  The commands that matter are in `procedures/playwright-tests-detail.md`.
+- `python scripts/pw_cli.py check <workspace>` says whether the pinned version is there.
+
+### 16.2 The door: `scripts/pw_cli.py`
+
+Every command goes through `python scripts/pw_cli.py run <workspace> [--batch B] -- <command ...>`, so that:
+
+- the CLI that runs is the one installed in `e2e/` (no `npx` that could fetch another);
+- each workspace has its own session (`-s=qa-<folder>`) with the profile **in memory**: `--persistent` is refused for the
+  same reason `--isolated` is in §1;
+- **the assistant never reads a credential** (§3): in `fill` it writes `{{SHOP_BO_ADMIN_PASS}}`, the door puts the value
+  of that `.env` variable in the command, and every `.env` secret is redacted in the output and in the files written;
+  a name that is not in `.env` stops the command;
+- `run-code` and `eval` (code of your own in the page) are refused unless the user approved it (`--allow-eval`); they
+  are the CLI's way round the rule of §5 against `element.click()` for a click that does not arrive: that case is Blocked;
+- `install` and `kill-all` are refused; `guard_destructive.py` refuses the same commands when typed without the door.
+
+### 16.3 Evidence
+
+`snapshot`, `screenshot` and `pdf` are saved by the door as `evidence/<batch>/cli/NNN-<command>.<ext>` and it prints the
+path to give to `run_log.py add --evidence`. A snapshot is text: it is the evidence of what the page offered (§10), after
+the redaction above. The CLI's own folder `.playwright-cli/` holds raw snapshots and stays out of git (the workspace's
+`.gitignore`).
+
+### 16.4 CLI or MCP
+
+| Use the CLI | Use the MCP |
+|---|---|
+| A long batch, many steps, a limited context; exploring the page to find locators for a spec | Exploratory charters that need the page's structure kept in the conversation; self-healing loops |
+| `playwright-cli generate-locator <ref>` to name an element, then write the locator by role/label/text (§4.2) | The project's CLI is not installed or pinned |
+
+The rules of §2 to §12 apply to both: the environment is confirmed first, one login per role, the expected result is the
+case's, and a tool failure is never a defect (§9).
 
 ---
 

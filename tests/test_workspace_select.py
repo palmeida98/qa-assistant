@@ -722,6 +722,17 @@ class Preflight(Base):
                       out.getvalue())
         self.assertNotIn("[missing] mcp", out.getvalue())
 
+    def test_the_web_route_needs_the_cli_instead_of_the_mcp_when_the_project_says_so(self):
+        make_project(self.root, "demo/cli", modules=["functional-web"], web={"driver": "cli", "cli_version": "0.1.25"})
+        lines = [(True, "node", "/bin/node"), (False, "playwright-cli", "not installed in e2e")]
+        with mock.patch("validate_project.environment", return_value=lines):
+            code, report = self.preflight("run-tests", "demo/cli")
+        self.assertEqual(code, ws.OK)
+        route = report["routes"][0]
+        self.assertEqual(route["why"], "web.driver: cli")
+        self.assertEqual(route["missing"], ["playwright-cli"])             # the MCP is no requirement of this route
+        self.assertNotIn("mcp", {t["tool"] for t in report["tools"]})
+
     def test_a_route_names_its_missing_tools_and_the_others_go_on(self):
         make_project(self.root, "demo/both", modules=["functional-web", "mobile"],
                      mobile={"app_id": "pt.demo.app", "platform": "ios", "flows": "flows"})

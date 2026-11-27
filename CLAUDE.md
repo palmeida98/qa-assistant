@@ -102,7 +102,7 @@ Read each script's docstring and `--help` before using it (flags, exit codes). `
   `python -m adapters.tracker <ws> check|import-cases|export-cases|apply|bug-search`,
   `python -m adapters.tickets <ws> sources|collect|ingest|analysis`; every write is a dry run first (Excel: preview
   token and `--expect`; trackers: `--yes` only after the user approved the dry run)
-- **Execution**: `api_request.py`, `audit_a11y.py`, `device.py` (Android; iOS through `device_ios.py`,
+- **Execution**: `pw_cli.py` (Playwright CLI door; `check`/`run`), `api_request.py`, `audit_a11y.py`, `device.py` (Android; iOS through `device_ios.py`,
   `ios_diagnose.py`), `run_mobile.py`, `setup_emulator.py`, `apk_manifest.py`, `build_driver.py`, `workspace_build.py`,
   `workspace_ci.py`, `remote_login.py`, `build_candidates.py` (with `slack_build_messages.py`, offline)
 - **Guards**: `guard_destructive.py`, `ado_write_guard.py` (started by `ado_guard_launch.py <workspace>`), `check_denylist.py`; `archive_check.py` lists what `_arquivo/` holds without a reason
