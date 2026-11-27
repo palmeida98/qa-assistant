@@ -2,6 +2,9 @@
 
 `scripts/ado_write_guard.py` is a small MCP server (stdio) that is the only write path an agent gets to Azure DevOps. The official `@azure-devops/mcp` server stays read-only for the agent (its write tools are denied in the client and its credential is read-only).
 
+## Launcher (`scripts/ado_guard_launch.py`)
+One launcher serves every workspace, in place of per-project shell wrappers: `python scripts/ado_guard_launch.py <workspace>` starts the guard, `--check` lists what it would use (booleans only, never a secret). The workspace is the `repo/` folder of a project folder (technique-workspaces.md §4.2); the project's decisions live beside it, outside git and outside the framework, in `_tools/`: `ado_guard.conf` (`ORG`, `PROJECT`, `READ_PAT_VAR`, optional `ALLOW_BUG_CREATE=1`, optional `KEYCHAIN_SERVICE`, default `<workspace.id>-ado-write-pat`), `ado_guard_identity` (the GUID), `pat_validade.conf` (expiry dates) and the ledger `ado_guard_created_bugs.json`. The read token comes from the workspace's `.env`, the write token only from the macOS keychain; `ADO_GUARD_*` variables of the caller are never inherited. Bug creation stays disabled unless `ALLOW_BUG_CREATE=1` is in `ado_guard.conf` (the user's standing decision). The MCP entry of a project becomes `python <qa>/scripts/ado_guard_launch.py <workspace>`.
+
 ## The rule it enforces
 A write happens only if the work item is in the configured organisation and project **and** `System.AssignedTo.id` equals the verified identity id (a GUID; display names are never compared). Before each write it reads the item, checks, verifies the content hash the user approved, reads again, and refuses on any difference or any error.
 

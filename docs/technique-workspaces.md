@@ -94,7 +94,7 @@ Any folder name is accepted, spaces and accents included; a folder starting with
 `python scripts/workspace_init.py <project> [--yes]` creates it (a dry run without `--yes`; it never overwrites and never
 creates the root), then `workspace_git.py <root>/<project>/repo init` and `/project-context`. Backups of a workbook are
 not folders: the workbook is committed, and the previous result of an apply stays in `apply --keep-previous`.
-Anything archived gets a line in `_arquivo/INDICE.md`; what has no line is a candidate to delete.
+Anything archived gets a line in `_arquivo/INDICE.md` (with a `Delete after` date); what has no line and is older than 30 days, or whose date has passed, is a candidate to delete. `python scripts/archive_check.py <workspace>` lists them and never deletes.
 
 ### 4.1 Identity of a workspace and the session's workspace
 
