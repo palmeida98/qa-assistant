@@ -141,6 +141,22 @@ class Discovery(Base):
         make_project(self.root, "solo/inner")
         self.assertEqual([c.id for c in ws.discover(self.root)], ["solo"])
 
+    def test_a_project_folder_with_a_repo_workspace_has_the_project_id(self):
+        path = make_project(self.root, "shop/repo")
+        os.makedirs(os.path.join(self.root, "shop", "_tools"))
+        os.makedirs(os.path.join(self.root, "shop", "_dados"))
+        make_project(self.root, "acme/web")
+        found = {c.id: c for c in ws.discover(self.root)}
+        self.assertEqual(sorted(found), ["acme/web", "shop"])
+        self.assertEqual(found["shop"].path, path)
+        self.assertEqual(found["shop"].company, "")
+        self.assertEqual(self.resolve("shop").candidate.path, path)
+        self.assertEqual(ws._at(path, self.root).id, "shop")
+
+    def test_repo_without_project_yaml_stays_a_company_folder(self):
+        os.makedirs(os.path.join(self.root, "shop", "repo"))
+        self.assertEqual([c.id for c in ws.discover(self.root)], ["shop/repo"])
+
     def test_what_is_not_a_project_is_ignored(self):
         make_project(self.root, "demo/shop")
         make_project(self.root, "demo/shop/deeper")

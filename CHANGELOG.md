@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Added (project folder layout, 2026-11-27)
+- Discovery reads `<root>/<project>/repo/project.yaml` as the project `<project>` (the workspace is `repo/`; `_tools/`,
+  `_dados/` and `_arquivo/` beside it stay outside git). Existing `<company>/<project>` workspaces are unchanged.
+- `scripts/workspace_init.py <project>`: creates that layout, with `e2e/` and `flows/` (dry run first, never overwrites).
+  Spec: `docs/technique-workspaces.md` §4.2.
+
 ### Fixed (documentation consistency, phase 20, 2026-11-27)
 - The README, the product scope and task 17.6 of the plan now say nine skills (`/playwright-tests` and `/maestro-tests`
   included, `/test-pbi` removed).

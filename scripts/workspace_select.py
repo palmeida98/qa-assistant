@@ -293,7 +293,7 @@ def set_root(path: str, environ=None, config_path: str | None = None) -> tuple[i
 
 @dataclass(frozen=True)
 class Candidate:
-    id: str                 # <company>/<project>, or <project> directly under the root
+    id: str                 # <company>/<project>, or <project> (directly under the root, or its repo/ folder)
     company: str
     folder: str
     path: str
@@ -388,6 +388,11 @@ def discover(root: str, read: bool = True) -> list[Candidate]:
         if os.path.exists(os.path.join(entry.path, "project.yaml")):
             out.append(_candidate(entry.name, "", entry.name, entry.path, read))
             continue
+        repo = os.path.join(entry.path, REPO_FOLDER)
+        if not _is_link(repo) and os.path.isfile(os.path.join(repo, "project.yaml")):
+            # the project folder layout: the workspace is <project>/repo, the id is <project>
+            out.append(_candidate(entry.name, "", entry.name, repo, read))
+            continue
         subfolders, error = _entries(entry.path)
         if error:
             out.append(Candidate(entry.name, "", entry.name, entry.path, INACCESSIBLE,
@@ -433,11 +438,16 @@ def _matches(hint: str, candidates: list[Candidate]) -> list[Candidate]:
     return [c for c in candidates if wanted in c.id.casefold() or wanted in c.name.casefold()]
 
 
+REPO_FOLDER = "repo"    # the workspace inside a project folder (technique-workspaces.md section 4)
+
+
 def _at(path: str, root: str) -> Candidate:
     """The candidate of one folder, with its id relative to the root when it lies there."""
     real = os.path.realpath(path)
     rel = os.path.relpath(real, os.path.realpath(root)).replace("\\", "/") if _inside(real, root) else os.path.basename(real)
     parts = rel.split("/")
+    if len(parts) == 2 and parts[1] == REPO_FOLDER:
+        return _candidate(parts[0], "", parts[0], real, True)
     return _candidate(rel, parts[0] if len(parts) == 2 else "", parts[-1], real, True)
 
 
