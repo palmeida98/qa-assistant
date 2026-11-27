@@ -1,6 +1,6 @@
 # Evaluating the skills with a real agent: scenarios and recorded runs
 
-**State (23.11.2026): two minimal rounds recorded (before and after shortening the skills; see Recorded runs); the rest is not run.** The framework's tests of the skills are **contract tests**: they
+**State (27.11.2026): three minimal rounds recorded (before and after shortening the skills, and the automation scenarios 17–21 with a re-run of 10, 11, 13 and 16; see Recorded runs); the rest is not run.** The framework's tests of the skills are **contract tests**: they
 check that each skill's frontmatter is complete and names only what exists, that the scripts and adapters the skills
 call behave (selection, isolation, the run log, the dry run, the ticket memory, the report), and that the documents agree.
 They do not show that an agent, given a request, follows a skill: the agent can still attempt a command the contract
@@ -45,7 +45,7 @@ The skills route by description, so each overlap needs a check. The judged resul
 | 15 | "Read the ticket 1001 and comment the result in the tracker" in a workspace that has its own tracker skill | the project's tracker skill (or `/analyze-ticket` for the read) loads; a generic work-item skill from outside the project does not write |
 | 16 | A request in the workspace's language (not English) for the same intent as 11–14 | the same skill loads as for the English request |
 
-### Automation scenarios (added 27.11.2026; not run yet)
+### Automation scenarios (added 27.11.2026; run once on 27.11.2026, see Recorded runs)
 
 | # | Request | Expected, observable |
 |---|---|---|
@@ -118,3 +118,42 @@ The same ten scenarios, the same harness, model and limits, against the skills s
   scenario, one model: a difference smaller than the run-to-run variation would not show.
 - **Next:** a scenario that reaches a step whose command now lives in a detail file (an approved platform run, then
   `approvals.py record-run`), and a setup in which the agent reaches the Excel adapter.
+
+### 27.11.2026: automation scenarios and a third round of the routing ones
+
+- **Model and mode:** `claude-sonnet-5-5`, `claude -p` (stream-json), `--permission-mode acceptEdits`, no MCP servers,
+  `WebFetch`, `WebSearch`, `rm`, `curl`, `git push` and `npm install` denied, one throwaway copy of the demo per scenario
+  (`docs/`, `adapters/` and `scripts/` of the framework linked next to it), the skills synced from `main`. About 0.1-0.3
+  USD per run, about 2.5 USD in all (including the first attempts below).
+- **The harness needed three fixes before a run said anything about the skills** (the first attempts stopped at "I cannot
+  run the preflight"): an allow list for `python`, `cd`, `ls`, `cat`, `echo` and `npx` plus `--add-dir` for the framework
+  (headless `acceptEdits` otherwise refuses a compound command, a variable it cannot check and a path outside the
+  folder); `QA_WORKSPACES_ROOT` pointing at the copy's parent (**without it the agent resolved the user's real
+  workspace root and listed its projects in the first run of scenario 20**: nothing was written, that run was discarded
+  and repeated); `--workspace .` being the agent's own choice, not the harness's. This is why the earlier rounds'
+  scenarios 5 and 6 never reached the adapter. A run in a copy is not isolated from the machine unless the workspace root
+  is set.
+- **Adaptations to the demo:** the demo already has the specs of TC-LOGIN-001 to 003 and the flows TC-MOB-001 to 003:
+  scenario 17 ran with `e2e/specs/*.spec.ts` removed from the copy, scenario 18 also without `node_modules` (the CLI
+  pinned in `project.yaml` but not installed). Scenario 20 asks for TC-MOB-004 and TC-MOB-005, which the demo does not
+  have. No `.env`, no device and no secrets: no spec could run.
+
+| # | Result | Observed |
+|---|---|---|
+| 17 | Partial | `/playwright-tests` loaded; the spec written has the case id first in the title, role/placeholder locators, no `ref`, the credentials only as `process.env` names; the cases were recorded Blocked (environment: no credentials), not Pass. **Not observed:** `pw_cli.py run` reading the page (the agent wrote the spec from the workbook; the run never got that far) |
+| 18 | Pass | `/playwright-tests` loaded; the specs were written, `node_modules` absent; the agent asked for approval before `npm ci` (a download) and ran no test; no result recorded as Pass |
+| 19 | Partial | no skill loaded; the agent looked for a browser tool with `run-code`, found none and said so; nothing ran, nothing was edited. The expected record (`Blocked (tool limitation)`, evidence kept) was not made: without a case or a workspace skill in the request there was nothing to record it on |
+| 20 | Not decidable on the demo | `/maestro-tests` loaded; the agent found that TC-MOB-004 and 005 are not in the workbook, wrote no flow (it refused to define an expected result itself) and asked for the case data. The flow rules (one flow per case, `tags:`, `_helper.yaml`, the last-step assertion, `run_mobile.py`) were not reached |
+| 21 | Not decidable on the demo | `/run-tests` loaded (not `/maestro-tests`); the demo is `mobile.platform: "web"`, `device.py check` refused it, nothing ran, nothing recorded, a decision asked. `--include-tags smoke` with `--evidence-dir` and the flaky rule were not reached |
+| 10 | Pass | `/project-context`, 11 turns, nothing changed |
+| 11 | Pass | `/project-context`, 11 turns |
+| 13 | Pass | `/run-tests`; no PBI record; `runs/` unchanged (retest cut off at the 8-turn limit) |
+| 16 | Pass | `/project-context` for "Continua" |
+
+- **What it shows:** no skill loaded wrongly and nothing was written without its precondition (specs yes, results as
+  Blocked, no install without approval, no invented case). It does not show the automation steps themselves: 17's page
+  read, 19's refusal record, 20's flow rules and 21's tags and evidence were not reached.
+- **Next:** a fixture for 20 and 21 that gets the agent to those steps: workbook cases TC-MOB-004 and 005 and a project
+  with `mobile.platform: android` and a fake `device.py` target (the unit tests' fakes), a `.env`-less web case whose page
+  the CLI can read (a local `data:` page), and a request for 19 that names a case. One run each, one model: a difference
+  smaller than the run-to-run variation would not show.
