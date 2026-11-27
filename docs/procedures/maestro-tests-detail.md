@@ -120,9 +120,22 @@ appId: com.demoshop.app
 - Helpers (`flows/_<name>.yaml`: login, language, permissions) hold steps only, never an assertion of a case, and take
   their values from `${MAESTRO_<VAR>}` or `env:` of the `runFlow` that calls them. A case is one flow that calls the
   helpers it needs; `run_mobile.py --helper _<name>.yaml` tries one helper alone and records nothing.
-- Screenshots that are evidence: `- takeScreenshot: TC-MOB-004_cancel` (the case id first, then the step).
+- Screenshots that are evidence: `- takeScreenshot: TC-MOB-004_cancel` (the case id first, then the step). With
+  `--evidence-dir` they land in `<dir>/<run>/<flow>/takeScreenshot/<name>.png`, with the failure's screenshot and screen
+  hierarchy under `screenshots/` and `screen-hierarchy/` (checked on an Android emulator, 27.11.2026).
 - Credentials: `${MAESTRO_<VAR>}` with the variable in `mobile.variables`; never written in a flow, never `-e`.
 - The expected value in an assertion is the case's, not what the app showed when the flow was written.
+
+## Verified on a real target (27.11.2026)
+
+Maestro 2.12.1, OpenJDK 17 (`JAVA_HOME`), an Android 15 emulator, two cases of a stock app plus one that must fail:
+`--include-tags`, `--exclude-tags`, `--evidence-dir` (JUnit, per-flow folders, logcat), a failing assertion reported as
+Fail with Maestro's message, and a flow left out by tags not reported at all. What did not work on this machine, and is
+therefore not a result: Maestro Web (its bundled ChromeDriver 132 refuses the installed Chrome 158; the flow is
+Blocked, tool) and an iOS 27 simulator (the XCTest driver needed `MAESTRO_DRIVER_STARTUP_TIMEOUT=240000`, worked once,
+then the simulator runtime became unavailable). A device or driver failure (`DeviceUnreachable`, `Connection refused`,
+`driver not ready`, `session not created`) is suggested as Blocked with a `tool:` prefix, never as Fail. Not run: a
+real project's flows on a build of its own app.
 
 ## Running
 

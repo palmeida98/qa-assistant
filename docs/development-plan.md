@@ -45,7 +45,7 @@
 | 16 | Consolidation for the proof of concept: guards, CI honesty, scope, documentation, the three trackers' real state | In progress (08.11.2026): see phase 16 |
 | 17 | Output, traceability and write safety: what a real two-platform mobile test showed (terminal output, results and evidence, Excel writes, devices) | In progress (09.11.2026): 17.0 registered, 17.1 under review; see phase 17 |
 | 18 | Playwright CLI: `@playwright/cli` as the agent's browser driver (`web.driver: cli`) and the way to find locators for `/playwright-tests`, behind one door (`scripts/pw_cli.py`) | In progress (27.11.2026): 18.1–18.6 done; 18.7 isolated pilot done, the comparison with the MCP and a real-workspace pilot are open |
-| 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 (real batch) and 19.6 (iOS decision) wait for the user |
+| 19 | Maestro: tags and evidence folder in `run_mobile.py`, rules for helpers, automation evals | In progress (27.11.2026): 19.2–19.5 and 19.7 done; 19.1 validated on an emulator, a real project batch and 19.6 (iOS decision) wait for the user |
 
 Recommended order: 1.1 → 1.2 → 1.3 → 1.4 → 1.5 → 2.x → 3.x → 4 → 5 → 6. The real pilot (2.4) can move forward in parallel, in its workspace, at any time after 2.2.
 
@@ -2025,7 +2025,7 @@ device can settle.
 
 | Task | Scope | State |
 |---|---|---|
-| 19.1 Real validation | the LIA wave-3 batch on an emulator and a simulator; what passed written in `tracker-validation.md`. Needs Java and a device: Maestro is installed here but Java is not | Waits for the user |
+| 19.1 Real validation | **Maestro itself validated (27.11.2026)** on an Android emulator with a stock app: tags, evidence folder, failing assertion, 6 results consistent (details in `maestro-tests-detail.md`); two bugs found and fixed (tool failures suggested as Fail; a flow left out by tags reported as Blocked). Maestro Web and an iOS 27 simulator did not work on this machine (Chrome 158 vs bundled ChromeDriver 132; simulator runtime lost). **A real project's wave-3 batch is not run:** it needs the build's APK, the user's authorisation for the session and the project's variables | Tool validated; real batch open |
 | 19.2 Shared helpers | `_<name>.yaml` helpers with steps only, no case assertions; values from `${MAESTRO_<VAR>}` or `env:` (`maestro-tests-detail.md`) | Done (27.11.2026) |
 | 19.3 Data and secrets | already in place: `.env` → `MAESTRO_<VAR>` in the process environment, never `-e` on the command line, redaction of JUnit and messages | Done before (24.11.2026), checked |
 | 19.4 Evidence | `run_mobile.py --evidence-dir`: Maestro's screenshots and recordings and the redacted `junit.xml` kept in the workspace; named screenshots `TC-…_<step>` | Done (27.11.2026) |
@@ -2037,6 +2037,7 @@ device can settle.
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | 19.1: Maestro validated on an Android emulator; `run_mobile.py` now suggests Blocked for device/driver failures and leaves out of the report the flows excluded by tags. |
 | 2026-11-27 | 18.7: pilot on an isolated copy of the demo (12 CLI commands, 6.0 s, 2,927 characters to the agent); MCP comparison and a real-workspace pilot still open. |
 | 2026-11-27 | Phase 19 (Maestro): 19.2–19.5 and 19.7 done; 19.1 (real batch, needs Java and a device) and 19.6 (iOS) wait for the user. |
 | 2026-11-27 | Phase 18 (Playwright CLI): 18.1–18.6 done; pilot 18.7 waits for the user. |
