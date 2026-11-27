@@ -118,6 +118,7 @@ from common import (
     read_project,
     read_workspace_env,
     same_build,
+    sh_quote,
     workspace_path,
 )
 
@@ -1009,11 +1010,6 @@ def unwrap(url: str) -> str:
         if target:
             return target[0]
     return url
-
-
-def sh_quote(s: str) -> str:
-    """Single quotes for the device's sh (adb shell joins its arguments into one command line)."""
-    return "'" + s.replace("'", "'\\''") + "'"
 
 
 # --- subcommands ------------------------------------------------------------------------------------------------

@@ -14,6 +14,7 @@ which is on their sys.path).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -559,6 +560,20 @@ def read_env(path: str) -> dict[str, str]:
             k, _, v = line.removeprefix("export ").partition("=")
             out[k.strip()] = env_value(v)
     return out
+
+
+def sha256_file(path: str) -> str:
+    """The SHA-256 of a file, read in blocks (APKs are large)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def sh_quote(s: str) -> str:
+    """Single quotes for the device's sh (adb shell joins its arguments into one command line)."""
+    return "'" + s.replace("'", "'\\''") + "'"
 
 
 def env_inline_comments(path: str) -> list[str]:

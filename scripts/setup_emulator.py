@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import hashlib
 import os
 import re
 import shutil
@@ -56,7 +55,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from apk_manifest import ManifestError, read_manifest
-from common import read_project
+from common import read_project, sh_quote, sha256_file
 
 DEFAULT_IMAGE = "system-images;android-35;google_apis;x86_64"
 DEVICE_PROFILE = "pixel_7"
@@ -194,14 +193,6 @@ def image_installed(sdk: str | None, image: str) -> bool:
     return bool(sdk) and os.path.isdir(os.path.join(sdk, *image.split(";")))
 
 
-def sha256_of(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
 def native_libs(apk: str) -> dict[str, list[zipfile.ZipInfo]]:
     """The APK's native libraries by ABI: {"arm64-v8a": [ZipInfo, ...], ...} (only lib/<abi>/<name>.so)."""
     out: dict[str, list[zipfile.ZipInfo]] = {}
@@ -227,10 +218,6 @@ def arm_only_reason(apk: str) -> str | None:
     if bad:
         return f"unexpected library name {bad[0]!r}: not copied"
     return None
-
-
-def sh_quote(s: str) -> str:
-    return "'" + s.replace("'", "'\\''") + "'"
 
 
 # --- the setup ---------------------------------------------------------------------------------------------------
@@ -483,7 +470,7 @@ class Setup:
             return
         if not os.path.isfile(self.a.apk):
             raise ConfigError(f"--apk {self.a.apk}: the file does not exist")
-        digest = sha256_of(self.a.apk)
+        digest = sha256_file(self.a.apk)
         if self.sha256 and digest != self.sha256:
             raise ConfigError(f"SHA-256 of {os.path.basename(self.a.apk)} is {digest}, mobile.build.sha256 is "
                               f"{self.sha256}: not the build recorded in project.yaml, nothing installed")
@@ -520,7 +507,7 @@ class Setup:
         self.say("done", "build", f"{os.path.basename(self.a.apk)} installed ({why})")
         if os.path.isdir(self.avd_dir()):   # the cold-boot rule compares the snapshot with this record
             with open(os.path.join(self.avd_dir(), "qa-build.txt"), "w", encoding="utf-8") as f:
-                f.write(f"{self.app_id} versionCode {code or 'unknown'} sha256 {sha256_of(self.a.apk)}\n")
+                f.write(f"{self.app_id} versionCode {code or 'unknown'} sha256 {sha256_file(self.a.apk)}\n")
 
     # root (native libraries and the browser)
 
