@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions of th
 
 ## Unreleased
 
+### Changed (consolidation of duplicated helpers, 2026-11-27)
+- `common.sha256_file` and `common.sh_quote` replace the copies in `build_driver.py`, `setup_emulator.py`, `workspace_build.py`
+  and `device.py`; `ado_guard_launch.py` reads its `KEY=value` files with `common.read_env` instead of its own parser.
+  No change of behaviour.
+
 ### Fixed (secrets in Maestro's evidence, 2026-11-27)
 - `run_mobile.py --evidence-dir`: Maestro writes every `MAESTRO_<VAR>` (passwords included) in clear text in each flow's
   `commands.json` and in its logs; the text files of the evidence folder are now redacted with the `.env` values after

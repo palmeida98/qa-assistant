@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import hashlib
 import os
 import re
 import secrets
@@ -42,6 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import setup_emulator as se
+from common import sha256_file
 
 DRIVER = os.path.join(ROOT, "tools", "android-driver")
 KEY_DIR = os.path.join(os.path.expanduser("~"), ".qa-assistant")
@@ -191,14 +191,6 @@ def build(tools: dict, out_dir: str, ks: str, pw: str) -> str:
     return apk
 
 
-def sha256_of(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 16), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
 def push(tools: dict, apk: str, serial: str | None) -> str:
     """'installed' or 'copied' (the person installs it from Download/)."""
     if not tools.get("adb"):
@@ -235,7 +227,7 @@ def main(argv=None) -> int:
         say("done" if created else "ok", "key", ks + (" (new: a device with an older build of the driver needs it "
                                                      "uninstalled first)" if created else ""))
         apk = build(tools, a.out, ks, pw)
-        say("done", "build", f"{apk} sha256 {sha256_of(apk)}")
+        say("done", "build", f"{apk} sha256 {sha256_file(apk)}")
         if a.push:
             how = push(tools, apk, a.serial)
             if how == "installed":

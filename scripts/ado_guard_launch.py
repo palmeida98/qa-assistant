@@ -37,18 +37,6 @@ class Refused(Exception):
     pass
 
 
-def read_pairs(path: str) -> dict[str, str]:
-    out: dict[str, str] = {}
-    if os.path.isfile(path):
-        with open(path, encoding="utf-8-sig") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, value = line.partition("=")
-                    out[key.strip()] = value.strip().strip("\"'")
-    return out
-
-
 def tools_dir(workspace: str) -> str:
     ws = os.path.abspath(workspace)
     if os.path.basename(ws) != "repo":
@@ -70,7 +58,7 @@ def prepare(workspace: str, environ: dict, keychain=None) -> tuple[list[str], di
     import common
     ws = os.path.abspath(workspace)
     tools = tools_dir(ws)
-    conf = read_pairs(os.path.join(tools, "ado_guard.conf"))
+    conf = common.read_env(os.path.join(tools, "ado_guard.conf"))
     unknown = set(conf) - CONF_KEYS
     if unknown:
         raise Refused(f"ado_guard.conf: unknown key(s) {sorted(unknown)} (known: {sorted(CONF_KEYS)})")
@@ -90,7 +78,7 @@ def prepare(workspace: str, environ: dict, keychain=None) -> tuple[list[str], di
     read_pat = common.read_env(os.path.join(ws, ".env")).get(conf["READ_PAT_VAR"], "")
     if read_pat:
         env["ADO_GUARD_READ_PAT"] = read_pat
-    expiry = read_pairs(os.path.join(tools, "pat_validade.conf"))
+    expiry = common.read_env(os.path.join(tools, "pat_validade.conf"))
     for key in ("ADO_GUARD_READ_PAT_EXPIRES", "ADO_GUARD_WRITE_PAT_EXPIRES"):
         if EXPIRY.match(expiry.get(key, "")):
             env[key] = expiry[key]

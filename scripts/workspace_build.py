@@ -40,8 +40,8 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import workspace_git as wg
 from apk_manifest import ManifestError, read_manifest
-from common import OutsideWorkspace, read_project, workspace_path
-from setup_emulator import PROD, sha256_of
+from common import OutsideWorkspace, read_project, sha256_file, workspace_path
+from setup_emulator import PROD
 
 SOURCE = re.compile(r"^release\s+(\S+)$")
 NOTES_SHA = re.compile(r"sha256:\s*([0-9a-fA-F]{64})")
@@ -194,7 +194,7 @@ def cmd_publish(workspace: str, a) -> int:
     if hits and not a.allow_prod:
         raise Refused(f"production build? {hits[0]!r} contains 'prod' or 'release-store': stop and ask "
                       "(technique-mobile.md §3); --allow-prod only with the user's explicit approval")
-    digest = sha256_of(a.apk)
+    digest = sha256_file(a.apk)
     tag = tag_for(manifest)
     version = f"{manifest['version_name']} ({manifest['version_code']})"
     slug = repository(workspace)
@@ -269,7 +269,7 @@ def cmd_fetch(workspace: str, a) -> int:
         apks = sorted(f for f in os.listdir(tmp) if f.lower().endswith(".apk"))
         if len(apks) != 1:
             raise Refused(f"the release {tag} has {len(apks)} APK asset(s), expected one")
-        digest = sha256_of(os.path.join(tmp, apks[0]))
+        digest = sha256_file(os.path.join(tmp, apks[0]))
         if digest != expected:
             raise Refused(f"SHA-256 of {apks[0]} is {digest}, {where} is {expected}: not the recorded build, "
                           "nothing kept")

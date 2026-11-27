@@ -483,5 +483,19 @@ class ReplaceFile(unittest.TestCase):
             common.replace_file("a", "b", attempts=3)
 
 
+
+class Helpers(unittest.TestCase):
+    def test_sha256_file_reads_in_blocks_and_sh_quote_survives_a_quote(self):
+        import hashlib
+        data = b"x" * ((1 << 20) + 5)                    # more than one block
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "big.bin")
+            with open(path, "wb") as f:
+                f.write(data)
+            self.assertEqual(common.sha256_file(path), hashlib.sha256(data).hexdigest())
+        self.assertEqual(common.sh_quote("a b"), "'a b'")
+        self.assertEqual(common.sh_quote("it's"), "'it'\\''s'")
+
+
 if __name__ == "__main__":
     unittest.main()
