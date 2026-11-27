@@ -300,6 +300,8 @@ the redaction above. The CLI's own folder `.playwright-cli/` holds raw snapshots
 | A long batch, many steps, a limited context; exploring the page to find locators for a spec | Exploratory charters that need the page's structure kept in the conversation; self-healing loops |
 | `playwright-cli generate-locator <ref>` to name an element, then write the locator by role/label/text (§4.2) | The project's CLI is not installed or pinned |
 
+Measured on the same 12-step flow (login, add to cart, open the cart; public practice site, 27.11.2026; `@playwright/mcp@0.0.86` against `@playwright/cli@0.1.25`): the MCP returned 16,333 characters of text (its `browser_snapshot` answers inline) and carries 22,260 characters of tool schemas (25 tools) in the context for the whole session; the CLI returned 2,927 characters and keeps each snapshot in a file. If the agent reads every snapshot the two are about equal (13.6 k against 14.2 k); the CLI wins on the schemas and on reading only what is needed (`find`, `snapshot <ref>`, `--depth`). Time was similar (5.0 s in the MCP's calls, 6.0 s in the CLI's, which starts a process per command).
+
 The rules of §2 to §12 apply to both: the environment is confirmed first, one login per role, the expected result is the
 case's, and a tool failure is never a defect (§9).
 
