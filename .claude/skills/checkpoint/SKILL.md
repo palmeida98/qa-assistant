@@ -13,7 +13,7 @@ metadata:
   failures: "An inconsistency (Question open, evidence missing, a case repeated) is shown and the batch is not applied. The adapters' exit codes are followed, nothing is forced."
   resume: "context.md is the resume point; the detail stays in runs/, analysis/, memory/ and archive/context/."
   requires-modules: "adapters.excel, adapters.tracker"
-  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/quarantine.py, scripts/qa_python.py"
+  requires-scripts: "scripts/run_log.py, scripts/qa_report.py, scripts/compact_context.py, scripts/workspace_git.py, scripts/pbi_state.py, scripts/quarantine.py, scripts/archive_check.py, scripts/qa_python.py"
   requires-docs: "procedures/rules.md, procedures/preflight.md, procedures/apply.md, procedures/quarantine.md, procedures/checkpoint-detail.md, methodology.md, technique-excel.md"
   requires-tools: "git"
 ---
@@ -46,4 +46,4 @@ metadata:
    python <qa>/scripts/pbi_state.py <workspace> saved <pbi> --ref context.md [--note "<what is left>"]
    Only the checkpoint that closes the flow (nothing open) marks:
    python <qa>/scripts/pbi_state.py <workspace> mark <pbi> checkpoint done --ref context.md
-   Never mark it done to save progress. Closing with work open, quarantine: procedures/checkpoint-detail.md.
+   Never mark it done to save progress. Closing with work open, quarantine, archive: procedures/checkpoint-detail.md.
